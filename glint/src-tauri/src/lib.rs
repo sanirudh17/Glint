@@ -1,3 +1,4 @@
+mod tray;
 mod window;
 
 // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
@@ -13,6 +14,18 @@ pub fn run() {
             window::focus_main(app);
         }))
         .plugin(tauri_plugin_opener::init())
+        .setup(|app| {
+            tray::build(app.handle())?;
+            Ok(())
+        })
+        .on_window_event(|window, event| {
+            if let tauri::WindowEvent::CloseRequested { api, .. } = event {
+                if window.label() == "main" {
+                    api.prevent_close();
+                    let _ = window.hide();
+                }
+            }
+        })
         .invoke_handler(tauri::generate_handler![greet])
         .run(tauri::generate_context!())
         .expect("error while running Glint");
