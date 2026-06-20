@@ -1,51 +1,29 @@
-import { useState } from "react";
-import reactLogo from "./assets/react.svg";
-import { invoke } from "@tauri-apps/api/core";
-import "./App.css";
+import { useEffect } from "react";
+import { RouterProvider } from "react-router-dom";
+import { router } from "./router";
+import { useAppStore } from "./store/useAppStore";
 
-function App() {
-  const [greetMsg, setGreetMsg] = useState("");
-  const [name, setName] = useState("");
+/**
+ * App — root component.
+ *
+ * Bootstraps the theme on mount (calls Rust settings_get_all, stamps
+ * data-theme onto <html>), then hands off to the router.
+ *
+ * No greet() demo, no network calls.
+ */
+export default function App() {
+  const loadSettings = useAppStore((s) => s.loadSettings);
 
-  async function greet() {
-    // Learn more about Tauri commands at https://tauri.app/develop/calling-rust/
-    setGreetMsg(await invoke("greet", { name }));
-  }
+  useEffect(() => {
+    // Apply dark theme immediately so there's no flash before settings load
+    document.documentElement.dataset.theme = "dark";
 
-  return (
-    <main className="container">
-      <h1>Welcome to Tauri + React</h1>
+    // Load persisted settings from the Rust backend
+    loadSettings().catch(() => {
+      // Backend not ready (e.g., running plain Vite without Tauri).
+      // Fall back to dark theme — already applied above.
+    });
+  }, [loadSettings]);
 
-      <div className="row">
-        <a href="https://vite.dev" target="_blank">
-          <img src="/vite.svg" className="logo vite" alt="Vite logo" />
-        </a>
-        <a href="https://tauri.app" target="_blank">
-          <img src="/tauri.svg" className="logo tauri" alt="Tauri logo" />
-        </a>
-        <a href="https://react.dev" target="_blank">
-          <img src={reactLogo} className="logo react" alt="React logo" />
-        </a>
-      </div>
-      <p>Click on the Tauri, Vite, and React logos to learn more.</p>
-
-      <form
-        className="row"
-        onSubmit={(e) => {
-          e.preventDefault();
-          greet();
-        }}
-      >
-        <input
-          id="greet-input"
-          onChange={(e) => setName(e.currentTarget.value)}
-          placeholder="Enter a name..."
-        />
-        <button type="submit">Greet</button>
-      </form>
-      <p>{greetMsg}</p>
-    </main>
-  );
+  return <RouterProvider router={router} />;
 }
-
-export default App;

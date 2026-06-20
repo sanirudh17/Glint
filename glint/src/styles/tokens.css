@@ -1,0 +1,116 @@
+/*
+ * Glint — Design tokens
+ * Dark-primary. One accent (periwinkle-blue #5B7CFA), used sparingly.
+ * Aesthetic direction: "ink on glass" — surfaces sit above a near-black
+ * substrate via micro-borders, never glows. Monospace for metadata/timestamps
+ * nods to the capture tool DNA; variable-weight Inter for prose.
+ *
+ * NO purple gradients, glow, sparkle icons, or rainbow accents.
+ */
+
+/* ─── Global (theme-independent) ──────────────────────────────────────── */
+:root {
+  /* Spacing — 4-pt grid */
+  --s1: 4px;
+  --s2: 8px;
+  --s3: 12px;
+  --s4: 16px;
+  --s5: 24px;
+  --s6: 32px;
+  --s7: 48px;
+  --s8: 64px;
+
+  /* Radii — restrained, not bubbly */
+  --r1: 4px;
+  --r2: 8px;
+  --r3: 12px;
+
+  /* Type scale — optical, not computed */
+  --fz-xs: 11px;
+  --fz-sm: 12px;
+  --fz-md: 13px;
+  --fz-lg: 15px;
+  --fz-xl: 20px;
+  --fz-2xl: 28px;
+
+  /* Weight — variable font axis */
+  --fw-light:  300;
+  --fw-normal: 400;
+  --fw-medium: 500;
+  --fw-semi:   600;
+
+  /* Line heights */
+  --lh-tight: 1.25;
+  --lh-base:  1.5;
+  --lh-loose: 1.65;
+
+  /* Letter spacing (only for caps/labels) */
+  --ls-label: 0.04em;
+
+  /* Motion — swift, not bouncy */
+  --ease:      cubic-bezier(0.2, 0.6, 0.2, 1);
+  --ease-out:  cubic-bezier(0.0, 0.0, 0.2, 1);
+  --dur:       140ms;
+  --dur-slow:  240ms;
+
+  /* Accent — periwinkle-blue, applied sparingly */
+  --accent:        #5B7CFA;
+  --accent-hover:  #6D8BFA;
+  --accent-subtle: rgba(91, 124, 250, 0.12);
+
+  /* Danger */
+  --danger:        #E5544B;
+  --danger-subtle: rgba(229, 84, 75, 0.10);
+
+  /* Nav rail width */
+  --nav-w: 52px;
+  /* Titlebar height (Tauri custom titlebar) */
+  --titlebar-h: 36px;
+
+  /* Focus ring */
+  --focus-ring: 0 0 0 2px var(--accent);
+}
+
+/* ─── Dark theme (primary) ─────────────────────────────────────────────── */
+:root[data-theme="dark"] {
+  /* Substrate — near-black with a cool blue-grey cast, not pure black */
+  --bg:        #0C0D0F;
+  --bg-elev:   #141518;
+  --bg-elev2:  #1A1C21;
+  --bg-elev3:  #202329;
+
+  /* Micro-borders — the "ink on glass" signature */
+  --border:        #22252C;
+  --border-strong: #2E323A;
+
+  /* Text — high contrast but not glaring */
+  --text:       #E8EAF0;
+  --text-dim:   #8B92A0;
+  --text-faint: #50565F;
+
+  --accent-fg:  #ffffff;
+
+  /* Scrollbar */
+  --scrollbar-thumb: #2E323A;
+  --scrollbar-track: transparent;
+}
+
+/* ─── Light theme ──────────────────────────────────────────────────────── */
+:root[data-theme="light"] {
+  --bg:        #F6F7F9;
+  --bg-elev:   #FFFFFF;
+  --bg-elev2:  #EDEFF3;
+  --bg-elev3:  #E4E6EB;
+
+  --border:        #DDE0E7;
+  --border-strong: #C7CBD4;
+
+  --text:       #111318;
+  --text-dim:   #555D6A;
+  --text-faint: #8A919C;
+
+  --accent-fg:  #ffffff;
+
+  --scrollbar-thumb: #C7CBD4;
+  --scrollbar-track: transparent;
+}
