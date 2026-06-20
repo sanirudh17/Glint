@@ -1,0 +1,25 @@
+# Rust
+/target
+**/target
+Cargo.lock.bak
+
+# Node
+node_modules
+dist
+dist-ssr
+*.local
+
+# Spike artifacts
+spike/*.mp4
+spike/target
+
+# Editor / OS
+.DS_Store
+Thumbs.db
+.vscode/*
+!.vscode/extensions.json
+.idea
+
+# Glint runtime data (never commit captures)
+*.glint.db
+/captures
