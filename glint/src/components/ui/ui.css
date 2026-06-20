@@ -1,0 +1,407 @@
+/*
+ * Glint — UI primitives stylesheet
+ *
+ * All values drawn from tokens.css. Never hardcoded.
+ * Aesthetic: "ink on glass" — micro-borders over dark substrates,
+ * 1px dividers, no glows, no heavy shadows, restrained motion.
+ *
+ * Focus strategy: --focus-ring token is REMOVED from tokens.css usage here.
+ * We use outline-based focus-visible globally (defined in global.css) — consistent
+ * across all primitives. The --focus-ring box-shadow token was inconsistent with
+ * that approach, so it is not used here. global.css :focus-visible rule covers all.
+ */
+
+/* ─── Button ─────────────────────────────────────────────────────────── */
+.g-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: var(--r1);
+  background: transparent;
+  color: var(--text);
+  font-family: inherit;
+  font-weight: var(--fw-medium);
+  cursor: pointer;
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    color var(--dur) var(--ease),
+    opacity var(--dur) var(--ease);
+  white-space: nowrap;
+  user-select: none;
+}
+
+.g-btn:disabled {
+  opacity: 0.38;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+
+/* Sizes */
+.g-btn-sm {
+  padding: var(--s1) var(--s3);
+  font-size: var(--fz-sm);
+  height: 28px;
+}
+
+.g-btn-md {
+  padding: var(--s2) var(--s4);
+  font-size: var(--fz-md);
+  height: 34px;
+}
+
+/* Variants */
+.g-btn-primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: var(--accent-fg);
+}
+.g-btn-primary:hover:not(:disabled) {
+  background: var(--accent-hover);
+}
+.g-btn-primary:active:not(:disabled) {
+  opacity: 0.88;
+}
+
+.g-btn-ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--text-dim);
+}
+.g-btn-ghost:hover:not(:disabled) {
+  background: var(--bg-elev2);
+  color: var(--text);
+  border-color: transparent;
+}
+.g-btn-ghost:active:not(:disabled) {
+  background: var(--bg-elev3);
+}
+
+.g-btn-subtle {
+  background: transparent;
+  border-color: var(--border);
+  color: var(--text-dim);
+}
+.g-btn-subtle:hover:not(:disabled) {
+  background: var(--bg-elev2);
+  border-color: var(--border-strong);
+  color: var(--text);
+}
+.g-btn-subtle:active:not(:disabled) {
+  background: var(--bg-elev3);
+}
+
+/* ─── IconButton ─────────────────────────────────────────────────────── */
+.g-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: var(--r1);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition:
+    background var(--dur) var(--ease),
+    color var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+  flex-shrink: 0;
+}
+
+.g-icon-btn:hover {
+  background: var(--bg-elev2);
+  color: var(--text);
+}
+.g-icon-btn:active {
+  background: var(--bg-elev3);
+}
+
+.g-icon-btn[aria-pressed="true"],
+.g-icon-btn.g-icon-btn--active {
+  color: var(--accent);
+  background: var(--accent-subtle);
+  border-color: transparent;
+}
+
+/* ─── Switch ─────────────────────────────────────────────────────────── */
+.g-switch-root {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--s3);
+  cursor: pointer;
+  user-select: none;
+}
+
+.g-switch-root input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.g-switch-track {
+  position: relative;
+  width: 36px;
+  height: 20px;
+  border-radius: 10px;
+  background: var(--bg-elev3);
+  border: 1px solid var(--border-strong);
+  transition:
+    background var(--dur) var(--ease),
+    border-color var(--dur) var(--ease);
+  flex-shrink: 0;
+}
+
+.g-switch-track::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: var(--text-faint);
+  transition:
+    transform var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+
+.g-switch-root:has(input:checked) .g-switch-track {
+  background: var(--accent);
+  border-color: transparent;
+}
+.g-switch-root:has(input:checked) .g-switch-track::after {
+  transform: translateX(16px);
+  background: var(--accent-fg);
+}
+
+.g-switch-label {
+  font-size: var(--fz-md);
+  color: var(--text-dim);
+  line-height: var(--lh-base);
+}
+
+/* ─── Section ────────────────────────────────────────────────────────── */
+.g-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s5);
+}
+
+.g-section-header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+  padding-bottom: var(--s4);
+  border-bottom: 1px solid var(--border);
+}
+
+.g-section-title {
+  font-size: var(--fz-md);
+  font-weight: var(--fw-semi);
+  color: var(--text);
+  line-height: var(--lh-tight);
+}
+
+.g-section-description {
+  font-size: var(--fz-sm);
+  color: var(--text-dim);
+  line-height: var(--lh-base);
+}
+
+.g-section-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+/* ─── Field ──────────────────────────────────────────────────────────── */
+.g-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s1);
+}
+
+.g-field-label {
+  font-size: var(--fz-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-dim);
+  line-height: var(--lh-tight);
+}
+
+.g-field-hint {
+  font-size: var(--fz-xs);
+  color: var(--text-faint);
+  line-height: var(--lh-base);
+}
+
+/* ─── Select ─────────────────────────────────────────────────────────── */
+.g-select-wrap {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+}
+
+.g-select {
+  appearance: none;
+  -webkit-appearance: none;
+  width: 100%;
+  height: 34px;
+  padding: 0 var(--s7) 0 var(--s3);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r1);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fz-md);
+  font-weight: var(--fw-normal);
+  cursor: pointer;
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+
+.g-select:hover {
+  border-color: var(--border-strong);
+}
+
+.g-select option {
+  background: var(--bg-elev2);
+  color: var(--text);
+}
+
+.g-select-chevron {
+  position: absolute;
+  right: var(--s3);
+  pointer-events: none;
+  color: var(--text-faint);
+}
+
+/* ─── Card ───────────────────────────────────────────────────────────── */
+.g-card {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: var(--s5);
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+/* ─── Tooltip ────────────────────────────────────────────────────────── */
+.g-tooltip-root {
+  position: relative;
+  display: inline-flex;
+}
+
+.g-tooltip-bubble {
+  position: absolute;
+  bottom: calc(100% + var(--s2));
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  background: var(--bg-elev3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r1);
+  padding: var(--s1) var(--s2);
+  font-size: var(--fz-xs);
+  color: var(--text);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  transition:
+    opacity var(--dur) var(--ease),
+    transform var(--dur) var(--ease);
+  z-index: 9999;
+}
+
+.g-tooltip-root:hover .g-tooltip-bubble,
+.g-tooltip-root:focus-within .g-tooltip-bubble {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ─── EmptyState ─────────────────────────────────────────────────────── */
+.g-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s3);
+  padding: var(--s8) var(--s5);
+  text-align: center;
+}
+
+.g-empty-icon {
+  color: var(--text-faint);
+  opacity: 0.6;
+}
+
+.g-empty-title {
+  font-size: var(--fz-md);
+  font-weight: var(--fw-medium);
+  color: var(--text-dim);
+  line-height: var(--lh-tight);
+}
+
+.g-empty-hint {
+  font-size: var(--fz-sm);
+  color: var(--text-faint);
+  line-height: var(--lh-base);
+  max-width: 280px;
+}
+
+/* ─── Toast ──────────────────────────────────────────────────────────── */
+.g-toast-host {
+  position: fixed;
+  bottom: var(--s5);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--s2);
+  z-index: 10000;
+  pointer-events: none;
+}
+
+.g-toast {
+  background: var(--bg-elev3);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r2);
+  padding: var(--s2) var(--s4);
+  font-size: var(--fz-sm);
+  color: var(--text);
+  white-space: nowrap;
+  pointer-events: auto;
+  animation: g-toast-in var(--dur-slow) var(--ease-out) forwards;
+}
+
+.g-toast--out {
+  animation: g-toast-out var(--dur) var(--ease) forwards;
+}
+
+@keyframes g-toast-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes g-toast-out {
+  from {
+    opacity: 1;
+    transform: translateY(0);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+}

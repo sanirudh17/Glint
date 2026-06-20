@@ -67,8 +67,11 @@
   /* Titlebar height (Tauri custom titlebar) */
   --titlebar-h: 36px;
 
-  /* Focus ring */
-  --focus-ring: 0 0 0 2px var(--accent);
+  /*
+   * Focus ring: handled via outline in global.css (:focus-visible rule).
+   * No separate --focus-ring token — outline-based approach is used
+   * consistently across all primitives. No box-shadow duplication.
+   */
 }
 
 /* ─── Dark theme (primary) ─────────────────────────────────────────────── */

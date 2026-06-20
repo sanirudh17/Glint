@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import { router } from "./router";
 import { useAppStore } from "./store/useAppStore";
+import { ToastHost } from "./components/ui";
 
 /**
  * App — root component.
@@ -25,5 +26,10 @@ export default function App() {
     });
   }, [loadSettings]);
 
-  return <RouterProvider router={router} />;
+  return (
+    <>
+      <RouterProvider router={router} />
+      <ToastHost />
+    </>
+  );
 }
