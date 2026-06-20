@@ -1,3 +1,4 @@
+mod db;
 mod tray;
 mod window;
 
@@ -13,6 +14,11 @@ pub fn run() {
         .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
             window::focus_main(app);
         }))
+        .plugin(
+            tauri_plugin_sql::Builder::default()
+                .add_migrations("sqlite:glint.db", db::migrations())
+                .build(),
+        )
         .plugin(tauri_plugin_opener::init())
         .setup(|app| {
             tray::build(app.handle())?;
