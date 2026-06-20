@@ -1,0 +1,11 @@
+[package]
+name = "spike"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+# THROWAWAY Phase 0 spike. Proves scap -> ffmpeg sidecar -> smooth, in-sync MP4.
+# Not part of the Glint app; deleted/replaced once the gate passes.
+
+[dependencies]
+scap = "0.0.8"
