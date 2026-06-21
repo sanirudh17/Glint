@@ -1,59 +1,26 @@
-import { createBrowserRouter, Navigate, Outlet } from "react-router-dom";
+import { createHashRouter, Navigate, Outlet } from "react-router-dom";
+import { Titlebar } from "./components/Titlebar";
+import { NavRail } from "./components/NavRail";
 import HomeView from "./views/HomeView";
 import LibraryView from "./views/LibraryView";
 import SettingsView from "./views/SettingsView";
 import EditorView from "./views/EditorView";
+import "./components/shell.css";
 
 /**
- * AppShell — minimal layout placeholder.
+ * AppShell — the real layout: Titlebar + NavRail + scrollable content.
  *
- * Task 8 replaces this with the real <Titlebar> + <NavRail> + <Outlet/> layout.
- * The structure is already wired: Titlebar sits at the top (--titlebar-h),
- * NavRail on the left (--nav-w), content fills the rest.
+ * Uses createHashRouter (not createBrowserRouter) so the tauri:// custom
+ * protocol doesn't 404 on deep-links — hash-based routes are always
+ * resolved client-side regardless of the origin.
  */
 function AppShell() {
   return (
-    <div style={{ display: "flex", flexDirection: "column", height: "100dvh" }}>
-      {/* Titlebar placeholder — Task 8 */}
-      <div
-        data-tauri-drag-region
-        style={{
-          height: "var(--titlebar-h)",
-          background: "var(--bg-elev)",
-          borderBottom: "1px solid var(--border)",
-          flexShrink: 0,
-          display: "flex",
-          alignItems: "center",
-          paddingLeft: "var(--s4)",
-        }}
-      >
-        <span
-          style={{
-            fontSize: "var(--fz-sm)",
-            fontWeight: "var(--fw-medium)",
-            color: "var(--text-dim)",
-            letterSpacing: "0.02em",
-          }}
-        >
-          Glint
-        </span>
-      </div>
-
-      {/* Body: NavRail + content */}
-      <div style={{ display: "flex", flex: 1, overflow: "hidden" }}>
-        {/* NavRail placeholder — Task 8 */}
-        <nav
-          style={{
-            width: "var(--nav-w)",
-            background: "var(--bg-elev)",
-            borderRight: "1px solid var(--border)",
-            flexShrink: 0,
-          }}
-          aria-label="Main navigation"
-        />
-
-        {/* Main content */}
-        <main style={{ flex: 1, overflow: "auto" }}>
+    <div className="g-shell">
+      <Titlebar />
+      <div className="g-shell-body">
+        <NavRail />
+        <main className="g-content">
           <Outlet />
         </main>
       </div>
@@ -61,7 +28,7 @@ function AppShell() {
   );
 }
 
-export const router = createBrowserRouter([
+export const router = createHashRouter([
   {
     path: "/",
     element: <AppShell />,

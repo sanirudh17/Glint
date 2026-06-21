@@ -1,3 +1,4 @@
+import { useId } from "react";
 import "./ui.css";
 
 interface SwitchProps {
@@ -8,7 +9,8 @@ interface SwitchProps {
 }
 
 export function Switch({ checked, onChange, label, id }: SwitchProps) {
-  const inputId = id ?? `g-switch-${Math.random().toString(36).slice(2, 7)}`;
+  const generatedId = useId();
+  const inputId = id ?? `g-switch-${generatedId}`;
   return (
     <label className="g-switch-root" htmlFor={inputId}>
       <div className="g-switch-track">

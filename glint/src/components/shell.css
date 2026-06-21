@@ -1,0 +1,173 @@
+/*
+ * Glint — App shell layout
+ *
+ * Grid: titlebar row on top, then a two-column body (rail + content).
+ * Rail and titlebar never scroll. Content area scrolls per-view.
+ */
+
+/* ─── Root shell ─────────────────────────────────────────────────────── */
+.g-shell {
+  display: flex;
+  flex-direction: column;
+  height: 100dvh;
+  overflow: hidden;
+}
+
+/* ─── Titlebar ───────────────────────────────────────────────────────── */
+.g-titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  height: var(--titlebar-h);
+  background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
+  padding: 0 var(--s2) 0 var(--s4);
+  flex-shrink: 0;
+  position: relative;
+  z-index: 100;
+}
+
+.g-wordmark {
+  font-size: var(--fz-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-dim);
+  letter-spacing: 0.02em;
+  user-select: none;
+  pointer-events: none;
+}
+
+/* ─── Window controls ────────────────────────────────────────────────── */
+/*
+ * pointer-events: auto on the button group overrides the
+ * data-tauri-drag-region behavior for the titlebar area. The
+ * drag region is the entire .g-titlebar; only these buttons need
+ * to intercept clicks, so we restore interactivity here.
+ */
+.g-winctl {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  pointer-events: auto;
+}
+
+.g-winctl-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r1);
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+  flex-shrink: 0;
+}
+
+.g-winctl-btn:hover {
+  background: var(--bg-elev2);
+  color: var(--text-dim);
+}
+
+.g-winctl-btn:active {
+  background: var(--bg-elev3);
+}
+
+/* Close button: danger tint on hover — distinct without being alarming */
+.g-winctl-btn--close:hover {
+  background: var(--danger-subtle);
+  color: var(--danger);
+}
+
+.g-winctl-btn--close:active {
+  opacity: 0.8;
+}
+
+/* ─── Shell body ─────────────────────────────────────────────────────── */
+.g-shell-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+/* ─── Nav rail ───────────────────────────────────────────────────────── */
+.g-nav-rail {
+  width: var(--nav-w);
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: var(--s3) 0;
+  gap: var(--s1);
+  background: var(--bg-elev);
+  border-right: 1px solid var(--border);
+  overflow: hidden;
+}
+
+/*
+ * Nav items: 36×36 rounded targets, centered in the 52px rail.
+ * Active state = accent icon + accent-subtle fill + a 3px left-edge bar.
+ *
+ * The bar is implemented via a negative left box-shadow that bleeds
+ * outside the element's border-box to the rail edge. This avoids the
+ * position:fixed / transformed-ancestor trap while keeping the effect flush.
+ *
+ * The rail has overflow:hidden, so we use inset box-shadow instead:
+ * a left-side inset shadow that acts as a border-left indicator.
+ */
+.g-nav-item {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--r2);
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  text-decoration: none;
+  transition:
+    color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+  flex-shrink: 0;
+}
+
+.g-nav-item:hover {
+  color: var(--text);
+  background: var(--bg-elev2);
+}
+
+.g-nav-item--active {
+  color: var(--accent);
+  background: var(--accent-subtle);
+}
+
+/*
+ * 3px left-edge indicator bar on active nav items.
+ * Uses a pseudo-element absolutely positioned relative to the rail
+ * (not the item) by stretching into the 8px gap between item left edge
+ * and rail left edge. Width = 3px, centered on item height.
+ */
+.g-nav-item--active::before {
+  content: "";
+  position: absolute;
+  left: calc(-1 * ((var(--nav-w) - 36px) / 2) - 1px); /* flush to rail left border */
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  border-radius: 0 2px 2px 0;
+  background: var(--accent);
+  pointer-events: none;
+}
+
+/* ─── Content area ───────────────────────────────────────────────────── */
+.g-content {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg);
+}
