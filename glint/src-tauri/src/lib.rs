@@ -31,7 +31,6 @@ pub fn run() {
                 .add_migrations("sqlite:glint.db", db::migrations())
                 .build(),
         )
-        .plugin(tauri_plugin_opener::init())
         .manage(SettingsState(Default::default()))
         .setup(|app| {
             tray::build(app.handle())?;
