@@ -1,0 +1,404 @@
+/*
+ * overlay.css — Glint capture overlay surface.
+ *
+ * Design intent: zero chrome. The frozen screenshot fills the viewport
+ * pixel-for-pixel; the only visible affordance is the crosshair cursor.
+ * No border, no glow, no gradient — consistent with Glint's "ink on glass"
+ * token set (tokens.css). The mode layer (Tasks 9–12) mounts inside .ov-root
+ * and is responsible for its own chrome (selection rect, loupe, etc.).
+ *
+ * .ov-root   — active: frozen screenshot as full-bleed background.
+ * .ov-empty  — loading state: fully transparent so the Tauri transparent
+ *              window lets the live desktop show through until data arrives.
+ */
+
+.ov-root {
+  position: fixed;
+  inset: 0;
+
+  /* Full-bleed frozen screenshot — no stretching, no gap */
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+
+  /* Capture cursor — the only signature UI element of this shell */
+  cursor: crosshair;
+
+  /* Prevent text selection during drag operations */
+  user-select: none;
+  -webkit-user-select: none;
+
+  /* Clip any overflow from mode-layer children */
+  overflow: hidden;
+}
+
+/*
+ * Loading / empty state.
+ * Tauri opens the overlay window with a transparent background
+ * (configured in tauri.conf.json). While OverlayApp fetches data,
+ * render a fully transparent container so the desktop shows through
+ * rather than flashing a coloured rectangle.
+ */
+.ov-root.ov-empty {
+  background-color: transparent;
+  background-image: none;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * SelectionLayer — area capture mode (Task 9)
+ *
+ * Design language: "precision instrument" — surgical restraint.
+ * Accent #5B7CFA (periwinkle) as a single crisp 1px line on the selection.
+ * No glow, no shadow, no gradient. The dim panels are uniform flat alpha.
+ *
+ * Handle design: corners are 7×7 filled squares; edge-midpoints are elongated
+ * rectangles perpendicular to their edge (4×14 / 14×4). This reads as an
+ * aperture mechanism — more instrument-grade than 8 identical squares.
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+/* Full-viewport interaction surface — sits on top of the frozen image */
+.sl-layer {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+/* ── Dimmed surround panels ────────────────────────────────────────────────── */
+
+.sl-dim {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.45);
+  /* No transition: the panels must follow the pointer synchronously */
+  pointer-events: none;
+}
+
+/* ── Selection rect — the "hole" in the dim ────────────────────────────────── */
+
+.sl-rect {
+  position: absolute;
+  /* 1px crisp accent border — the only colour on screen */
+  outline: 1px solid var(--accent, #5B7CFA);
+  outline-offset: 0;
+  cursor: move;
+  /* Sub-pixel box: ensure the outline sits ON the selection edge, not outside */
+  box-sizing: border-box;
+  /* No background — the frozen image shows through the "hole" */
+}
+
+/* Inner layout container — for Task 10 (crosshair, dimensions badge) */
+.sl-rect-inner {
+  position: absolute;
+  inset: 0;
+  /* Flex column so Task 10 components can be placed at top / bottom */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-end;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* ── Confirm hint ──────────────────────────────────────────────────────────── */
+/*
+ * Shown once the selection is large enough (w,h > 40px).
+ * Subordinate — white/dim, no background. Morse-code brevity.
+ */
+.sl-confirm-hint {
+  font-size: var(--fz-xs, 11px);
+  font-weight: var(--fw-medium, 500);
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: var(--ls-label, 0.04em);
+  /* Nudge inset so it doesn't bleed under the 1px border */
+  margin: 0 5px 5px 0;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* ── Resize handles ─────────────────────────────────────────────────────────── */
+/*
+ * Base: absolutely positioned, accent-filled, no border.
+ * The cursor is set inline per-handle (nw-resize, n-resize, etc.)
+ */
+.sl-handle {
+  position: absolute;
+  background: var(--accent, #5B7CFA);
+  /* Crisp — no border-radius on handles; they read as precision anchors */
+  border-radius: 0;
+  /* Expand hit target beyond visual size without affecting layout */
+  padding: 4px;
+  margin: -4px;
+  box-sizing: content-box;
+  pointer-events: all;
+}
+
+/* Corner handles — 7×7 squares */
+.sl-handle--corner {
+  width: 7px;
+  height: 7px;
+}
+
+/* Horizontal edge-midpoint handles (N, S) — wide, thin pill */
+.sl-handle--edge-h {
+  width: 14px;
+  height: 4px;
+}
+
+/* Vertical edge-midpoint handles (E, W) — tall, thin pill */
+.sl-handle--edge-v {
+  width: 4px;
+  height: 14px;
+}
+
+/* ── Handle positions ── (centered on each edge/corner via transform) ───────── */
+
+.sl-handle--nw { top: 0;   left: 0;   transform: translate(-50%, -50%); }
+.sl-handle--n  { top: 0;   left: 50%; transform: translate(-50%, -50%); }
+.sl-handle--ne { top: 0;   right: 0;  transform: translate(50%,  -50%); }
+.sl-handle--w  { top: 50%; left: 0;   transform: translate(-50%, -50%); }
+.sl-handle--e  { top: 50%; right: 0;  transform: translate(50%,  -50%); }
+.sl-handle--sw { bottom: 0; left: 0;  transform: translate(-50%, 50%); }
+.sl-handle--s  { bottom: 0; left: 50%; transform: translate(-50%, 50%); }
+.sl-handle--se { bottom: 0; right: 0; transform: translate(50%,  50%); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Crosshair guides (Task 10)
+ *
+ * Two 1px hairlines spanning the full viewport, tracking the cursor before a
+ * selection is established. White at low alpha — an aiming reticle, not chrome.
+ * pointer-events: none so the drag layer underneath stays fully interactive.
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+.sl-crosshair {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.sl-crosshair-h,
+.sl-crosshair-v {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Horizontal guide — full width, 1px tall, positioned by inline `top` */
+.sl-crosshair-h {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+/* Vertical guide — full height, 1px wide, positioned by inline `left` */
+.sl-crosshair-v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Dimensions badge (Task 10)
+ *
+ * Live W×H in PHYSICAL pixels, anchored just outside the selection corner.
+ * "Ink on glass": monospace numerals, a hair of translucent fill, a 1px accent
+ * hairline. No glow, no shadow. Subordinate to the selection border.
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+.sl-dimensions-badge {
+  /* `position: fixed` + left/top set inline by the component */
+  z-index: 4;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent, #5B7CFA) 55%, transparent);
+  border-radius: 4px;
+  background: rgba(12, 14, 20, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.sl-dimensions-text {
+  font-family: var(--ff-mono, ui-monospace, "SF Mono", "Cascadia Code", monospace);
+  font-size: var(--fz-xs, 11px);
+  font-weight: var(--fw-medium, 500);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+}
+
+/* The "×" separator — dimmed so the numerals read first */
+.sl-dimensions-sep {
+  margin: 0 0.35em;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Loupe (Task 11) — pixel-peeping magnifier with hex readout.
+ *
+ * "Instrument glass": a crisp rounded square holding an 8× nearest-neighbour
+ * canvas, with a monospace hex readout beneath. 1px accent ring, dark backing.
+ * Floats above everything; never intercepts pointer input.
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+.ov-loupe {
+  position: fixed;
+  z-index: 6;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent, #5B7CFA) 60%, transparent);
+  background: rgba(12, 14, 20, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* The magnified pixels. Belt-and-braces nearest-neighbour for crisp squares. */
+.ov-loupe-canvas {
+  display: block;
+  image-rendering: pixelated;
+  width: 120px;
+  height: 120px;
+}
+
+/* Readout strip beneath the glass: swatch + hex. */
+.ov-loupe-readout {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ov-loupe-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  /* 1px inset hairline so light swatches stay visible on the dark strip */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+  flex: none;
+}
+
+.ov-loupe-hex {
+  font-family: var(--ff-mono, ui-monospace, "SF Mono", "Cascadia Code", monospace);
+  font-size: var(--fz-xs, 11px);
+  font-weight: var(--fw-medium, 500);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Fullscreen mode (Task 12)
+ *
+ * The whole monitor is the target. A 1px accent inset frame marks the boundary;
+ * a centred hint card invites confirmation. No dim — the entire frozen screen
+ * is what gets captured.
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+.fs-layer {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+
+/* Accent inset frame, held a few px off the edge so it reads as deliberate. */
+.fs-frame {
+  position: absolute;
+  inset: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent, #5B7CFA) 70%, transparent);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* Centred hint card. */
+.fs-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 26px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 14, 20, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.fs-hint-title {
+  font-size: var(--fz-md, 14px);
+  font-weight: var(--fw-medium, 500);
+  letter-spacing: var(--ls-tight, -0.01em);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.fs-hint-dims {
+  font-family: var(--ff-mono, ui-monospace, "SF Mono", "Cascadia Code", monospace);
+  font-size: var(--fz-xs, 11px);
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.fs-hint-sep {
+  margin: 0 0.35em;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.fs-hint-key {
+  font-size: var(--fz-xs, 11px);
+  color: var(--accent, #5B7CFA);
+  letter-spacing: var(--ls-label, 0.04em);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Window mode (Task 12)
+ *
+ * Hover highlights the detected window under the cursor: the rest dims (reusing
+ * .sl-dim), the window keeps its frozen pixels, an accent border traces it.
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+.wm-layer {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+
+.wm-highlight {
+  position: absolute;
+  outline: 1px solid var(--accent, #5B7CFA);
+  outline-offset: -1px;
+  box-sizing: border-box;
+  pointer-events: none;
+  /* A whisper of accent fill so the target reads even on busy windows. */
+  background: color-mix(in srgb, var(--accent, #5B7CFA) 8%, transparent);
+}
+
+/* Initial hint shown before the cursor finds a window. */
+.wm-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 14, 20, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: var(--fz-sm, 13px);
+  color: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  user-select: none;
+}

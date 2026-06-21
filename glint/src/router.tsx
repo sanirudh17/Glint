@@ -5,6 +5,7 @@ import HomeView from "./views/HomeView";
 import LibraryView from "./views/LibraryView";
 import SettingsView from "./views/SettingsView";
 import EditorView from "./views/EditorView";
+import { OverlayApp } from "./overlay/OverlayApp";
 import "./components/shell.css";
 
 /**
@@ -29,6 +30,22 @@ function AppShell() {
 }
 
 export const router = createHashRouter([
+  {
+    /**
+     * Chrome-free overlay route — rendered WITHOUT AppShell.
+     *
+     * The Tauri overlay window is borderless and transparent; mounting
+     * AppShell here would show a spurious Titlebar and NavRail over the
+     * frozen screenshot. This top-level route sits outside the AppShell
+     * parent so OverlayApp is the sole root element for this path.
+     *
+     * URL pattern: tauri://localhost/#/overlay?monitor=<id>
+     * The ?monitor query is parsed directly from window.location.hash
+     * inside OverlayApp (React Router strips query before rendering).
+     */
+    path: "/overlay",
+    element: <OverlayApp />,
+  },
   {
     path: "/",
     element: <AppShell />,
