@@ -10,14 +10,17 @@ interface SelectProps {
   value: string;
   options: SelectOption[];
   onChange: (value: string) => void;
+  /** Accessible name for the underlying <select> when there's no visible <label for>. */
+  ariaLabel?: string;
 }
 
-export function Select({ value, options, onChange }: SelectProps) {
+export function Select({ value, options, onChange, ariaLabel }: SelectProps) {
   return (
     <div className="g-select-wrap">
       <select
         className="g-select"
         value={value}
+        aria-label={ariaLabel}
         onChange={(e) => onChange(e.currentTarget.value)}
       >
         {options.map((opt) => (

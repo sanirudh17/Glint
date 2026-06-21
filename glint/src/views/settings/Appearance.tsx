@@ -27,6 +27,7 @@ export function Appearance() {
           value={settings.theme}
           options={THEME_OPTIONS}
           onChange={(v) => setTheme(v as Theme)}
+          ariaLabel="Theme"
         />
       </Field>
 
