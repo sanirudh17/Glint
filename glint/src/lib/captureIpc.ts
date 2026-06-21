@@ -59,6 +59,14 @@ export async function getOverlayData(monitorId: number): Promise<OverlayData> {
   };
 }
 
+// Once a commit or cancel fires, the backend takes the session and tears the
+// overlay window down. Any later commit/cancel from this same overlay (Enter
+// then click, a second mode's handler, a stray Esc) would only hit "no active
+// capture session" and surface as an unhandled rejection. This webview is
+// single-capture and short-lived, so a module-level latch makes the first call
+// win and turns the rest into harmless no-ops.
+let settled = false;
+
 /**
  * Commit the selected rect as a capture.
  * rect must be in logical/CSS px (same coordinate space as WindowRect).
@@ -66,11 +74,20 @@ export async function getOverlayData(monitorId: number): Promise<OverlayData> {
  * @param rect       Selection in logical px.
  * @param monitorId  The monitor index (camelCase — see above).
  */
-export const commitCapture = (rect: Rect, monitorId: number): Promise<void> =>
-  invoke<void>("capture_commit", { rect, monitorId });
+export function commitCapture(rect: Rect, monitorId: number): Promise<void> {
+  if (settled) return Promise.resolve();
+  settled = true;
+  // The backend tears the overlay down regardless; swallow any error (e.g. an
+  // empty selection slipped past the client guard, or plain-Vite with no Tauri)
+  // so it never becomes an unhandled rejection.
+  return invoke<void>("capture_commit", { rect, monitorId }).catch(() => {});
+}
 
 /**
  * Cancel the capture and close the overlay window.
  */
-export const cancelCapture = (): Promise<void> =>
-  invoke<void>("capture_cancel");
+export function cancelCapture(): Promise<void> {
+  if (settled) return Promise.resolve();
+  settled = true;
+  return invoke<void>("capture_cancel").catch(() => {});
+}
