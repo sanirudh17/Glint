@@ -1,6 +1,7 @@
 mod capture;
 mod clipboard;
 mod db;
+mod overlay;
 mod settings;
 mod shortcuts;
 mod tray;
