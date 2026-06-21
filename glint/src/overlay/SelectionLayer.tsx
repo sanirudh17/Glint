@@ -27,6 +27,7 @@ import { normalizeRect, type Rect } from "./modes";
 import { commitCapture } from "../lib/captureIpc";
 import { Crosshair } from "./Crosshair";
 import { DimensionsBadge } from "./DimensionsBadge";
+import { Loupe } from "./Loupe";
 
 // ─── Handle descriptors ───────────────────────────────────────────────────────
 
@@ -66,10 +67,42 @@ type DragMode =
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function SelectionLayer({ monitorId, scale }: { monitorId: number; scale: number }) {
+export function SelectionLayer({
+  monitorId,
+  scale,
+  imageDataUrl,
+}: {
+  monitorId: number;
+  scale: number;
+  imageDataUrl: string;
+}) {
   const [rect, setRect] = useState<Rect | null>(null);
   const drag = useRef<DragMode | null>(null);
   const layerRef = useRef<HTMLDivElement>(null);
+
+  // ── Loupe state: frozen bitmap (decoded once), live cursor, interaction flag ──
+  const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
+  const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
+  const [interacting, setInteracting] = useState(false);
+
+  // Decode the frozen image into an ImageBitmap once — the loupe samples it.
+  useEffect(() => {
+    let cancelled = false;
+    let made: ImageBitmap | null = null;
+    fetch(imageDataUrl)
+      .then((r) => r.blob())
+      .then((b) => createImageBitmap(b))
+      .then((bmp) => {
+        if (cancelled) { bmp.close(); return; }
+        made = bmp;
+        setBitmap(bmp);
+      })
+      .catch(() => { /* loupe simply won't render; selection still works */ });
+    return () => {
+      cancelled = true;
+      made?.close();
+    };
+  }, [imageDataUrl]);
 
   // ── Commit ──────────────────────────────────────────────────────────────────
 
@@ -97,10 +130,13 @@ export function SelectionLayer({ monitorId, scale }: { monitorId: number; scale:
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     drag.current = { kind: "draw", startX: e.clientX, startY: e.clientY };
+    setInteracting(true);
     setRect({ x: e.clientX, y: e.clientY, w: 0, h: 0 });
   }
 
   function onLayerPointerMove(e: React.PointerEvent<HTMLDivElement>) {
+    // Track the cursor for the loupe on every move (hover and drag alike).
+    setCursor({ x: e.clientX, y: e.clientY });
     const d = drag.current;
     if (!d) return;
     e.preventDefault();
@@ -151,6 +187,7 @@ export function SelectionLayer({ monitorId, scale }: { monitorId: number; scale:
   function onLayerPointerUp(e: React.PointerEvent<HTMLDivElement>) {
     e.preventDefault();
     drag.current = null;
+    setInteracting(false);
   }
 
   // ── Selection rect: start move ───────────────────────────────────────────────
@@ -162,6 +199,7 @@ export function SelectionLayer({ monitorId, scale }: { monitorId: number; scale:
     // Capture on the layer so move events route there
     layerRef.current?.setPointerCapture(e.pointerId);
     drag.current = { kind: "move", startX: e.clientX, startY: e.clientY, origRect: rect };
+    setInteracting(true);
   }
 
   // ── Handle: start resize ─────────────────────────────────────────────────────
@@ -172,6 +210,7 @@ export function SelectionLayer({ monitorId, scale }: { monitorId: number; scale:
     if (!rect) return;
     layerRef.current?.setPointerCapture(e.pointerId);
     drag.current = { kind: "resize", startX: e.clientX, startY: e.clientY, origRect: rect, handle };
+    setInteracting(true);
   }
 
   // ── Confirm on double-click inside selection ──────────────────────────────────
@@ -208,10 +247,12 @@ export function SelectionLayer({ monitorId, scale }: { monitorId: number; scale:
         <DimensionsBadge rect={rect} scale={scale} />
       )}
 
-      {/* ── Task 11: Loupe mount point ──────────────────────────────────────────
-          <Loupe mouseX={…} mouseY={…} imageUrl={data.imageDataUrl} scale={data.scale} />
-          Mount here (as sibling of SelectionBox) so it floats above the dim layer.
-       ────────────────────────────────────────────────────────────────────────── */}
+      {/* ── Loupe: pixel-peeping magnifier + hex readout (Task 11) ──────────────
+          Visible while aiming (no selection yet) or during an active drag —
+          hidden once a selection is settled so it doesn't obscure the result. */}
+      {cursor && bitmap && (rect === null || interacting) && (
+        <Loupe bitmap={bitmap} cx={cursor.x} cy={cursor.y} scale={scale} />
+      )}
     </div>
   );
 }

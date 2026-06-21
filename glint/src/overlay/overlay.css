@@ -234,3 +234,62 @@
   margin: 0 0.35em;
   color: rgba(255, 255, 255, 0.45);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Loupe (Task 11) — pixel-peeping magnifier with hex readout.
+ *
+ * "Instrument glass": a crisp rounded square holding an 8× nearest-neighbour
+ * canvas, with a monospace hex readout beneath. 1px accent ring, dark backing.
+ * Floats above everything; never intercepts pointer input.
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+.ov-loupe {
+  position: fixed;
+  z-index: 6;
+  pointer-events: none;
+  display: flex;
+  flex-direction: column;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid color-mix(in srgb, var(--accent, #5B7CFA) 60%, transparent);
+  background: rgba(12, 14, 20, 0.82);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+
+/* The magnified pixels. Belt-and-braces nearest-neighbour for crisp squares. */
+.ov-loupe-canvas {
+  display: block;
+  image-rendering: pixelated;
+  width: 120px;
+  height: 120px;
+}
+
+/* Readout strip beneath the glass: swatch + hex. */
+.ov-loupe-readout {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  height: 26px;
+  padding: 0 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.ov-loupe-swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+  /* 1px inset hairline so light swatches stay visible on the dark strip */
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.25);
+  flex: none;
+}
+
+.ov-loupe-hex {
+  font-family: var(--ff-mono, ui-monospace, "SF Mono", "Cascadia Code", monospace);
+  font-size: var(--fz-xs, 11px);
+  font-weight: var(--fw-medium, 500);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.9);
+}
