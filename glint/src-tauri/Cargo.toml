@@ -26,4 +26,6 @@ tauri-plugin-sql = { version = "2.4.0", features = ["sqlite"] }
 tauri-plugin-log = "2.8.0"
 log = "0.4.33"
 tauri-plugin-global-shortcut = "2.3.2"
+xcap = "0.9.6"
+image = { version = "0.25", default-features = false, features = ["png"] }
 
