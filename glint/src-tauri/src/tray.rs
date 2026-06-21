@@ -36,8 +36,14 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
                 let _ = app.emit("navigate", "/settings");
             }
             "quit" => app.exit(0),
-            // capture/record placeholders emit an event the UI can toast on
-            other => { let _ = app.emit("tray-action", other.to_string()); }
+            "cap_area" => crate::capture::begin(app, crate::capture::CaptureMode::Area),
+            "cap_window" => crate::capture::begin(app, crate::capture::CaptureMode::Window),
+            "cap_full" => {
+                crate::capture::begin(app, crate::capture::CaptureMode::Fullscreen);
+            }
+            other => {
+                let _ = app.emit("tray-action", other.to_string());
+            }
         })
         .on_tray_icon_event(|tray, event| {
             if let TrayIconEvent::Click { button: MouseButton::Left, .. } = event {

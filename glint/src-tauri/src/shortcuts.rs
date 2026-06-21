@@ -36,8 +36,24 @@ pub fn register(app: &AppHandle) -> tauri::Result<()> {
             move |handle, _shortcut, event| {
                 // Only fire on key-down; ignore the release to avoid double-fire.
                 if event.state == ShortcutState::Pressed {
-                    window::focus_main(handle);
-                    let _ = handle.emit("shortcut-fired", action_name);
+                    match action_name {
+                        "capture_area" => {
+                            crate::capture::begin(handle, crate::capture::CaptureMode::Area);
+                        }
+                        "capture_window" => {
+                            crate::capture::begin(handle, crate::capture::CaptureMode::Window);
+                        }
+                        "capture_fullscreen" => {
+                            crate::capture::begin(
+                                handle,
+                                crate::capture::CaptureMode::Fullscreen,
+                            );
+                        }
+                        other => {
+                            window::focus_main(handle);
+                            let _ = handle.emit("shortcut-fired", other);
+                        }
+                    }
                 }
             },
         );
