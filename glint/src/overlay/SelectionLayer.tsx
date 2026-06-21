@@ -25,6 +25,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { normalizeRect, type Rect } from "./modes";
 import { commitCapture } from "../lib/captureIpc";
+import { Crosshair } from "./Crosshair";
+import { DimensionsBadge } from "./DimensionsBadge";
 
 // ─── Handle descriptors ───────────────────────────────────────────────────────
 
@@ -64,7 +66,7 @@ type DragMode =
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function SelectionLayer({ monitorId }: { monitorId: number }) {
+export function SelectionLayer({ monitorId, scale }: { monitorId: number; scale: number }) {
   const [rect, setRect] = useState<Rect | null>(null);
   const drag = useRef<DragMode | null>(null);
   const layerRef = useRef<HTMLDivElement>(null);
@@ -188,6 +190,9 @@ export function SelectionLayer({ monitorId }: { monitorId: number }) {
       onPointerUp={onLayerPointerUp}
       tabIndex={-1}
     >
+      {/* ── Task 10: Crosshair guides (visible before/without an active selection) */}
+      <Crosshair rect={rect} />
+
       {rect && (
         <SelectionBox
           rect={rect}
@@ -196,6 +201,11 @@ export function SelectionLayer({ monitorId }: { monitorId: number }) {
           onDoubleClick={onRectDoubleClick}
           showHint={rect.w > 40 && rect.h > 40}
         />
+      )}
+
+      {/* ── Task 10: DimensionsBadge — fixed-positioned, outside the rect */}
+      {rect && rect.w > 1 && rect.h > 1 && (
+        <DimensionsBadge rect={rect} scale={scale} />
       )}
 
       {/* ── Task 11: Loupe mount point ──────────────────────────────────────────

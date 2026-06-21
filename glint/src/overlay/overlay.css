@@ -160,3 +160,77 @@
 .sl-handle--sw { bottom: 0; left: 0;  transform: translate(-50%, 50%); }
 .sl-handle--s  { bottom: 0; left: 50%; transform: translate(-50%, 50%); }
 .sl-handle--se { bottom: 0; right: 0; transform: translate(50%,  50%); }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Crosshair guides (Task 10)
+ *
+ * Two 1px hairlines spanning the full viewport, tracking the cursor before a
+ * selection is established. White at low alpha — an aiming reticle, not chrome.
+ * pointer-events: none so the drag layer underneath stays fully interactive.
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+.sl-crosshair {
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 2;
+}
+
+.sl-crosshair-h,
+.sl-crosshair-v {
+  position: absolute;
+  background: rgba(255, 255, 255, 0.25);
+}
+
+/* Horizontal guide — full width, 1px tall, positioned by inline `top` */
+.sl-crosshair-h {
+  left: 0;
+  right: 0;
+  height: 1px;
+}
+
+/* Vertical guide — full height, 1px wide, positioned by inline `left` */
+.sl-crosshair-v {
+  top: 0;
+  bottom: 0;
+  width: 1px;
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Dimensions badge (Task 10)
+ *
+ * Live W×H in PHYSICAL pixels, anchored just outside the selection corner.
+ * "Ink on glass": monospace numerals, a hair of translucent fill, a 1px accent
+ * hairline. No glow, no shadow. Subordinate to the selection border.
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+.sl-dimensions-badge {
+  /* `position: fixed` + left/top set inline by the component */
+  z-index: 4;
+  pointer-events: none;
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 7px;
+  border: 1px solid color-mix(in srgb, var(--accent, #5B7CFA) 55%, transparent);
+  border-radius: 4px;
+  background: rgba(12, 14, 20, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+.sl-dimensions-text {
+  font-family: var(--ff-mono, ui-monospace, "SF Mono", "Cascadia Code", monospace);
+  font-size: var(--fz-xs, 11px);
+  font-weight: var(--fw-medium, 500);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  color: rgba(255, 255, 255, 0.92);
+  white-space: nowrap;
+}
+
+/* The "×" separator — dimmed so the numerals read first */
+.sl-dimensions-sep {
+  margin: 0 0.35em;
+  color: rgba(255, 255, 255, 0.45);
+}

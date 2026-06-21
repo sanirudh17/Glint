@@ -78,7 +78,7 @@ export function OverlayApp() {
           TODO(task-12): replace this conditional with a <ModeRouter> that
           also handles "fullscreen" and "window" modes. */}
       {data.mode === "area" && (
-        <SelectionLayer monitorId={monitorId} />
+        <SelectionLayer monitorId={monitorId} scale={data.scale} />
       )}
     </div>
   );
