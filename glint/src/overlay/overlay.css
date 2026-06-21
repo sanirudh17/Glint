@@ -1,0 +1,45 @@
+/*
+ * overlay.css — Glint capture overlay surface.
+ *
+ * Design intent: zero chrome. The frozen screenshot fills the viewport
+ * pixel-for-pixel; the only visible affordance is the crosshair cursor.
+ * No border, no glow, no gradient — consistent with Glint's "ink on glass"
+ * token set (tokens.css). The mode layer (Tasks 9–12) mounts inside .ov-root
+ * and is responsible for its own chrome (selection rect, loupe, etc.).
+ *
+ * .ov-root   — active: frozen screenshot as full-bleed background.
+ * .ov-empty  — loading state: fully transparent so the Tauri transparent
+ *              window lets the live desktop show through until data arrives.
+ */
+
+.ov-root {
+  position: fixed;
+  inset: 0;
+
+  /* Full-bleed frozen screenshot — no stretching, no gap */
+  background-repeat: no-repeat;
+  background-position: center center;
+  background-size: cover;
+
+  /* Capture cursor — the only signature UI element of this shell */
+  cursor: crosshair;
+
+  /* Prevent text selection during drag operations */
+  user-select: none;
+  -webkit-user-select: none;
+
+  /* Clip any overflow from mode-layer children */
+  overflow: hidden;
+}
+
+/*
+ * Loading / empty state.
+ * Tauri opens the overlay window with a transparent background
+ * (configured in tauri.conf.json). While OverlayApp fetches data,
+ * render a fully transparent container so the desktop shows through
+ * rather than flashing a coloured rectangle.
+ */
+.ov-root.ov-empty {
+  background-color: transparent;
+  background-image: none;
+}
