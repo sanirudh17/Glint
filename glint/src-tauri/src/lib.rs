@@ -1,4 +1,5 @@
 mod capture;
+mod clipboard;
 mod db;
 mod settings;
 mod shortcuts;
