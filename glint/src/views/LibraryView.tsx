@@ -26,7 +26,7 @@ export default function LibraryView() {
   }, []);
 
   // Filter in-memory (both predicates are no-ops when the list is empty, but
-  // the logic is correct and ready for real rows in Phase 2).
+  // the logic is correct and ready for real rows in Phase 4).
   const visible = captures.filter((c) => {
     const matchesKind   = kind === "all" || c.kind === kind;
     const matchesSearch =
@@ -81,7 +81,7 @@ export default function LibraryView() {
         ) : (
           <div className="library-grid" role="list" aria-label="Captures">
             {visible.map((c) => (
-              // Phase 2 will render a real CaptureCard here.
+              // Phase 4 will render a real CaptureCard here.
               // For now, each row is a plain placeholder that proves the
               // data path without faking visual richness.
               <div key={c.id} className="library-card-stub" role="listitem">

@@ -119,7 +119,7 @@
 /* ─── Capture grid ────────────────────────────────────────────────────── */
 /*
  * Responsive auto-fill grid. Columns collapse to single at narrow widths.
- * Phase 2 will replace .library-card-stub with real CaptureCard components.
+ * Phase 4 will replace .library-card-stub with real CaptureCard components.
  */
 .library-grid {
   display: grid;
@@ -129,7 +129,7 @@
   overflow-y: auto;
 }
 
-/* ─── Stub card (Phase 2 will replace) ───────────────────────────────── */
+/* ─── Stub card (Phase 4 will replace) ───────────────────────────────── */
 .library-card-stub {
   background: var(--bg-elev);
   border: 1px solid var(--border);

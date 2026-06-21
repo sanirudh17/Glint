@@ -3,6 +3,7 @@ import { listen } from "@tauri-apps/api/event";
 import { Crop, AppWindow, Monitor, Video, ImageOff } from "lucide-react";
 import { Button, Card, EmptyState } from "../components/ui";
 import { useAppStore } from "../store/useAppStore";
+import { startCapture } from "../lib/captureIpc";
 import "./home.css";
 
 /** Human-readable labels for each hotkey action key. */
@@ -44,17 +45,14 @@ export default function HomeView() {
   const settings = useAppStore((s) => s.settings);
   const pushToast = useAppStore((s) => s.pushToast);
 
-  // Listen for tray placeholder actions and surface them as toasts.
+  // The tray's capture items call capture::begin directly now; only the
+  // not-yet-built actions still emit "tray-action" (e.g. record → Phase 6).
   useEffect(() => {
     const unlisten = listen<string>("tray-action", (event) => {
-      const action = event.payload;
       const msg: Record<string, string> = {
-        cap_area:   "Capture area — lands in Phase 2",
-        cap_window: "Capture window — lands in Phase 2",
-        cap_full:   "Capture fullscreen — lands in Phase 2",
-        record:     "Recording — lands in Phase 2",
+        record: "Recording arrives in a later phase",
       };
-      pushToast(msg[action] ?? "Capture lands in Phase 2");
+      pushToast(msg[event.payload] ?? "That action arrives in a later phase");
     });
 
     return () => {
@@ -74,7 +72,7 @@ export default function HomeView() {
             variant="primary"
             size="md"
             icon={Crop}
-            onClick={() => pushToast("Capture area — lands in Phase 2")}
+            onClick={() => startCapture("area")}
           >
             Capture Area
           </Button>
@@ -82,7 +80,7 @@ export default function HomeView() {
             variant="subtle"
             size="md"
             icon={AppWindow}
-            onClick={() => pushToast("Capture window — lands in Phase 2")}
+            onClick={() => startCapture("window")}
           >
             Capture Window
           </Button>
@@ -90,7 +88,7 @@ export default function HomeView() {
             variant="subtle"
             size="md"
             icon={Monitor}
-            onClick={() => pushToast("Capture fullscreen — lands in Phase 2")}
+            onClick={() => startCapture("fullscreen")}
           >
             Capture Fullscreen
           </Button>
@@ -98,7 +96,7 @@ export default function HomeView() {
             variant="subtle"
             size="md"
             icon={Video}
-            onClick={() => pushToast("Recording — lands in Phase 2")}
+            onClick={() => pushToast("Recording arrives in a later phase")}
           >
             Record
           </Button>

@@ -1,7 +1,7 @@
 import { HardDrive } from "lucide-react";
 import { Section, Field, Card } from "../../components/ui";
 
-/** Default paths for display. Phase 2 will query these from Rust. */
+/** Default paths for display. Phase 4 will query these from Rust. */
 const DB_PATH = "%APPDATA%\\com.glint.app\\glint.db";
 const CAPTURES_PATH = "%APPDATA%\\com.glint.app\\captures\\";
 const LOGS_PATH = "%APPDATA%\\com.glint.app\\logs\\";

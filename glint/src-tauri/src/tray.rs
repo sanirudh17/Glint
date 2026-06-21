@@ -9,7 +9,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let settings = MenuItem::with_id(app, "settings", "Settings", true, None::<&str>)?;
     let quit = MenuItem::with_id(app, "quit", "Quit Glint", true, None::<&str>)?;
 
-    // Capture submenu — placeholders wired to real capture in Phase 2.
+    // Capture submenu — each item calls capture::begin directly (on_menu_event).
     let cap_area = MenuItem::with_id(app, "cap_area", "Capture Area", true, None::<&str>)?;
     let cap_win = MenuItem::with_id(app, "cap_window", "Capture Window", true, None::<&str>)?;
     let cap_full = MenuItem::with_id(app, "cap_full", "Capture Fullscreen", true, None::<&str>)?;

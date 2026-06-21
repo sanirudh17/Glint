@@ -10,34 +10,23 @@ mod window;
 use capture::commands::{capture_cancel, capture_commit, capture_overlay_data};
 use settings::commands::{settings_get_all, settings_set, SettingsState};
 
-/// SPIKE (throwaway, P3 drag de-risk): write a known gradient PNG to the temp
-/// dir and return its absolute path, so the /dragtest route has a real file to
-/// drag out via tauri-plugin-drag. Remove once the drag-out path is proven and
-/// the real HUD owns the file path.
+/// Start a capture from the main-window UI (the Home quick-start buttons).
+/// Hotkeys and the tray call `capture::begin` directly while the main window is
+/// already hidden; this command additionally hides the main window first — so
+/// Glint isn't baked into the frozen frame — gives the compositor a beat to
+/// remove it, then begins.
 #[tauri::command]
-fn spike_make_test_png(app: tauri::AppHandle) -> Result<String, String> {
+fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
+    use std::str::FromStr;
     use tauri::Manager;
-    let dir = app
-        .path()
-        .app_local_data_dir()
-        .map_err(|e| e.to_string())?
-        .join("tmp");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let path = dir.join("glint-dragtest.png");
-    let (w, h) = (320u32, 200u32);
-    let mut rgba = Vec::with_capacity((w * h * 4) as usize);
-    for y in 0..h {
-        for x in 0..w {
-            rgba.push((x * 255 / w) as u8);
-            rgba.push((y * 255 / h) as u8);
-            rgba.push(0x5Bu8);
-            rgba.push(0xFFu8);
-        }
+    let m = crate::capture::CaptureMode::from_str(&mode)
+        .map_err(|_| format!("unknown capture mode: {mode}"))?;
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.hide();
     }
-    let img = capture::frozen::CapturedImage { width: w, height: h, rgba };
-    let png = capture::frozen::encode_png(&img).map_err(|e| e.to_string())?;
-    std::fs::write(&path, &png).map_err(|e| e.to_string())?;
-    Ok(path.to_string_lossy().to_string())
+    std::thread::sleep(std::time::Duration::from_millis(160));
+    crate::capture::begin(&app, m);
+    Ok(())
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -88,7 +77,7 @@ pub fn run() {
             capture_overlay_data,
             capture_commit,
             capture_cancel,
-            spike_make_test_png,
+            capture_start,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Glint");

@@ -84,6 +84,14 @@ export function commitCapture(rect: Rect, monitorId: number): Promise<void> {
 }
 
 /**
+ * Begin a capture from the main-window UI (Home quick-start buttons).
+ * The backend hides the main window first so Glint isn't in the frozen frame,
+ * then opens the overlay. Hotkeys/tray bypass this and call begin directly.
+ */
+export const startCapture = (mode: CaptureMode): Promise<void> =>
+  invoke<void>("capture_start", { mode });
+
+/**
  * Cancel the capture and close the overlay window.
  */
 export function cancelCapture(): Promise<void> {
