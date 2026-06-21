@@ -72,6 +72,28 @@ export default function App() {
     <>
       <RouterProvider router={router} />
       <ToastHost />
+      {/* SPIKE (throwaway, P3 drag de-risk): dev-only shortcut to /dragtest.
+          Auto-stripped from production builds; remove with the spike. */}
+      {import.meta.env.DEV && (
+        <a
+          href="#/dragtest"
+          style={{
+            position: "fixed",
+            bottom: 8,
+            right: 8,
+            zIndex: 9999,
+            font: "11px ui-monospace, monospace",
+            color: "#9aa0ac",
+            background: "rgba(12,14,20,0.8)",
+            border: "1px solid rgba(255,255,255,0.12)",
+            borderRadius: 6,
+            padding: "4px 8px",
+            textDecoration: "none",
+          }}
+        >
+          → drag spike
+        </a>
+      )}
     </>
   );
 }
