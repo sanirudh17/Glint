@@ -40,3 +40,18 @@ export const rectFromWindow = (w: WindowRect): import("../lib/captureIpc").Rect 
   w: w.w,
   h: w.h,
 });
+
+/**
+ * Topmost window containing the point (x, y) in logical/CSS px.
+ * `windows` MUST be ordered topmost-first (the backend enumerates EnumWindows
+ * order). Mirrors the Rust `window_at` hit-test exactly.
+ */
+export function windowAt(
+  windows: WindowRect[],
+  x: number,
+  y: number,
+): WindowRect | undefined {
+  return windows.find(
+    (w) => x >= w.x && y >= w.y && x < w.x + w.w && y < w.y + w.h,
+  );
+}

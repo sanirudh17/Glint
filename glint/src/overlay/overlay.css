@@ -293,3 +293,112 @@
   line-height: 1;
   color: rgba(255, 255, 255, 0.9);
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Fullscreen mode (Task 12)
+ *
+ * The whole monitor is the target. A 1px accent inset frame marks the boundary;
+ * a centred hint card invites confirmation. No dim — the entire frozen screen
+ * is what gets captured.
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+.fs-layer {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+
+/* Accent inset frame, held a few px off the edge so it reads as deliberate. */
+.fs-frame {
+  position: absolute;
+  inset: 6px;
+  border: 1px solid color-mix(in srgb, var(--accent, #5B7CFA) 70%, transparent);
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* Centred hint card. */
+.fs-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  padding: 18px 26px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 14, 20, 0.78);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  pointer-events: none;
+  user-select: none;
+}
+
+.fs-hint-title {
+  font-size: var(--fz-md, 14px);
+  font-weight: var(--fw-medium, 500);
+  letter-spacing: var(--ls-tight, -0.01em);
+  color: rgba(255, 255, 255, 0.95);
+}
+
+.fs-hint-dims {
+  font-family: var(--ff-mono, ui-monospace, "SF Mono", "Cascadia Code", monospace);
+  font-size: var(--fz-xs, 11px);
+  font-variant-numeric: tabular-nums;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.fs-hint-sep {
+  margin: 0 0.35em;
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.fs-hint-key {
+  font-size: var(--fz-xs, 11px);
+  color: var(--accent, #5B7CFA);
+  letter-spacing: var(--ls-label, 0.04em);
+}
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * Window mode (Task 12)
+ *
+ * Hover highlights the detected window under the cursor: the rest dims (reusing
+ * .sl-dim), the window keeps its frozen pixels, an accent border traces it.
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+.wm-layer {
+  position: absolute;
+  inset: 0;
+  cursor: pointer;
+}
+
+.wm-highlight {
+  position: absolute;
+  outline: 1px solid var(--accent, #5B7CFA);
+  outline-offset: -1px;
+  box-sizing: border-box;
+  pointer-events: none;
+  /* A whisper of accent fill so the target reads even on busy windows. */
+  background: color-mix(in srgb, var(--accent, #5B7CFA) 8%, transparent);
+}
+
+/* Initial hint shown before the cursor finds a window. */
+.wm-hint {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  padding: 12px 20px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(12, 14, 20, 0.72);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  font-size: var(--fz-sm, 13px);
+  color: rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  user-select: none;
+}

@@ -17,6 +17,8 @@
 import { useEffect, useState } from "react";
 import { getOverlayData, cancelCapture, type OverlayData } from "../lib/captureIpc";
 import { SelectionLayer } from "./SelectionLayer";
+import { FullscreenMode } from "./FullscreenMode";
+import { WindowMode } from "./WindowMode";
 import "./overlay.css";
 
 // ─── Hook: parse monitor id from hash query ───────────────────────────────────
@@ -73,16 +75,24 @@ export function OverlayApp() {
        * ───────────────────────────────────────────────────────────────────
        */}
 
-      {/* Task 9: Area selection layer — mounted only for area mode.
-          Task 12 will add the full mode-switch mechanism (fullscreen / window).
-          TODO(task-12): replace this conditional with a <ModeRouter> that
-          also handles "fullscreen" and "window" modes. */}
+      {/* Mode router — Area / Fullscreen / Window over the shared frozen image. */}
       {data.mode === "area" && (
         <SelectionLayer
           monitorId={monitorId}
           scale={data.scale}
           imageDataUrl={data.imageDataUrl}
         />
+      )}
+      {data.mode === "fullscreen" && (
+        <FullscreenMode
+          monitorId={monitorId}
+          width={data.width}
+          height={data.height}
+          scale={data.scale}
+        />
+      )}
+      {data.mode === "window" && (
+        <WindowMode monitorId={monitorId} windows={data.windows} scale={data.scale} />
       )}
     </div>
   );
