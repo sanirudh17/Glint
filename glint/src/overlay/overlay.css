@@ -43,3 +43,120 @@
   background-color: transparent;
   background-image: none;
 }
+
+/* ─────────────────────────────────────────────────────────────────────────────
+ * SelectionLayer — area capture mode (Task 9)
+ *
+ * Design language: "precision instrument" — surgical restraint.
+ * Accent #5B7CFA (periwinkle) as a single crisp 1px line on the selection.
+ * No glow, no shadow, no gradient. The dim panels are uniform flat alpha.
+ *
+ * Handle design: corners are 7×7 filled squares; edge-midpoints are elongated
+ * rectangles perpendicular to their edge (4×14 / 14×4). This reads as an
+ * aperture mechanism — more instrument-grade than 8 identical squares.
+ * ───────────────────────────────────────────────────────────────────────────*/
+
+/* Full-viewport interaction surface — sits on top of the frozen image */
+.sl-layer {
+  position: absolute;
+  inset: 0;
+  cursor: crosshair;
+}
+
+/* ── Dimmed surround panels ────────────────────────────────────────────────── */
+
+.sl-dim {
+  position: absolute;
+  background: rgba(0, 0, 0, 0.45);
+  /* No transition: the panels must follow the pointer synchronously */
+  pointer-events: none;
+}
+
+/* ── Selection rect — the "hole" in the dim ────────────────────────────────── */
+
+.sl-rect {
+  position: absolute;
+  /* 1px crisp accent border — the only colour on screen */
+  outline: 1px solid var(--accent, #5B7CFA);
+  outline-offset: 0;
+  cursor: move;
+  /* Sub-pixel box: ensure the outline sits ON the selection edge, not outside */
+  box-sizing: border-box;
+  /* No background — the frozen image shows through the "hole" */
+}
+
+/* Inner layout container — for Task 10 (crosshair, dimensions badge) */
+.sl-rect-inner {
+  position: absolute;
+  inset: 0;
+  /* Flex column so Task 10 components can be placed at top / bottom */
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: flex-end;
+  pointer-events: none;
+  overflow: hidden;
+}
+
+/* ── Confirm hint ──────────────────────────────────────────────────────────── */
+/*
+ * Shown once the selection is large enough (w,h > 40px).
+ * Subordinate — white/dim, no background. Morse-code brevity.
+ */
+.sl-confirm-hint {
+  font-size: var(--fz-xs, 11px);
+  font-weight: var(--fw-medium, 500);
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: var(--ls-label, 0.04em);
+  /* Nudge inset so it doesn't bleed under the 1px border */
+  margin: 0 5px 5px 0;
+  line-height: 1;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* ── Resize handles ─────────────────────────────────────────────────────────── */
+/*
+ * Base: absolutely positioned, accent-filled, no border.
+ * The cursor is set inline per-handle (nw-resize, n-resize, etc.)
+ */
+.sl-handle {
+  position: absolute;
+  background: var(--accent, #5B7CFA);
+  /* Crisp — no border-radius on handles; they read as precision anchors */
+  border-radius: 0;
+  /* Expand hit target beyond visual size without affecting layout */
+  padding: 4px;
+  margin: -4px;
+  box-sizing: content-box;
+  pointer-events: all;
+}
+
+/* Corner handles — 7×7 squares */
+.sl-handle--corner {
+  width: 7px;
+  height: 7px;
+}
+
+/* Horizontal edge-midpoint handles (N, S) — wide, thin pill */
+.sl-handle--edge-h {
+  width: 14px;
+  height: 4px;
+}
+
+/* Vertical edge-midpoint handles (E, W) — tall, thin pill */
+.sl-handle--edge-v {
+  width: 4px;
+  height: 14px;
+}
+
+/* ── Handle positions ── (centered on each edge/corner via transform) ───────── */
+
+.sl-handle--nw { top: 0;   left: 0;   transform: translate(-50%, -50%); }
+.sl-handle--n  { top: 0;   left: 50%; transform: translate(-50%, -50%); }
+.sl-handle--ne { top: 0;   right: 0;  transform: translate(50%,  -50%); }
+.sl-handle--w  { top: 50%; left: 0;   transform: translate(-50%, -50%); }
+.sl-handle--e  { top: 50%; right: 0;  transform: translate(50%,  -50%); }
+.sl-handle--sw { bottom: 0; left: 0;  transform: translate(-50%, 50%); }
+.sl-handle--s  { bottom: 0; left: 50%; transform: translate(-50%, 50%); }
+.sl-handle--se { bottom: 0; right: 0; transform: translate(50%,  50%); }

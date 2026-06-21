@@ -16,6 +16,7 @@
  */
 import { useEffect, useState } from "react";
 import { getOverlayData, cancelCapture, type OverlayData } from "../lib/captureIpc";
+import { SelectionLayer } from "./SelectionLayer";
 import "./overlay.css";
 
 // ─── Hook: parse monitor id from hash query ───────────────────────────────────
@@ -71,6 +72,14 @@ export function OverlayApp() {
        *   commitCapture() / cancelCapture() from captureIpc
        * ───────────────────────────────────────────────────────────────────
        */}
+
+      {/* Task 9: Area selection layer — mounted only for area mode.
+          Task 12 will add the full mode-switch mechanism (fullscreen / window).
+          TODO(task-12): replace this conditional with a <ModeRouter> that
+          also handles "fullscreen" and "window" modes. */}
+      {data.mode === "area" && (
+        <SelectionLayer monitorId={monitorId} />
+      )}
     </div>
   );
 }
