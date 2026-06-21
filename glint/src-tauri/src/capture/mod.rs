@@ -40,6 +40,9 @@ impl CaptureMode {
 }
 
 pub struct CaptureSession {
+    // Kept for the per-monitor architecture; the single-monitor P2 path always
+    // uses the primary (id 0) and commands clamp against the session image.
+    #[allow(dead_code)]
     pub monitor_id: u32,
     pub image: CapturedImage,
     pub scale: f64,

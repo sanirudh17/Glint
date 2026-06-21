@@ -8,7 +8,11 @@
 #[derive(Clone, Debug)]
 pub struct WindowInfo {
     pub id: u32,
+    // `title`/`app` are captured now to feed P4 Library metadata; not yet read
+    // by the P2 crop path (the overlay only needs geometry).
+    #[allow(dead_code)]
     pub title: String,
+    #[allow(dead_code)]
     pub app: String,
     pub x: i32,
     pub y: i32,
@@ -17,6 +21,11 @@ pub struct WindowInfo {
 }
 
 /// `windows` must be ordered topmost-first. Returns the first window containing the point.
+///
+/// Window-mode hit-testing happens client-side in the overlay (`modes.ts`
+/// `windowAt`); this Rust twin is unit-tested and kept as the canonical
+/// reference / for any future server-side hit-test. Not on the P2 hot path.
+#[allow(dead_code)]
 pub fn window_at(windows: &[WindowInfo], x: i32, y: i32) -> Option<&WindowInfo> {
     windows.iter().find(|win| {
         x >= win.x

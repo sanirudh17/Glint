@@ -5,6 +5,14 @@ import { router } from "./router";
 import { useAppStore } from "./store/useAppStore";
 import { ToastHost } from "./components/ui";
 
+/** Payload of the `capture-complete` event emitted by tray-core after a crop. */
+type CaptureComplete = {
+  path: string;
+  width: number;
+  height: number;
+  clipboard: boolean;
+};
+
 /**
  * App — root component.
  *
@@ -29,15 +37,34 @@ export default function App() {
   }, [loadSettings]);
 
   useEffect(() => {
-    // Listen for global shortcut events emitted by the Rust backend.
-    // The payload is the action name (e.g. "capture_area").
-    // Returns an unlisten function; call it on cleanup to avoid leaks.
-    const unlisten = listen<string>("shortcut-fired", (e) => {
-      pushToast(`Hotkey: ${e.payload}`);
-    });
+    // Backend events → toasts. Each listen() returns an unlisten promise;
+    // collect them all and tear down on cleanup to avoid leaks.
+    const subs = [
+      // Global shortcut events for the non-capture actions (record/settings).
+      // Capture hotkeys go straight to capture::begin in Rust and do NOT emit
+      // shortcut-fired, so they never reach this toast.
+      listen<string>("shortcut-fired", (e) => {
+        pushToast(`Hotkey: ${e.payload}`);
+      }),
+
+      // A capture finished: cropped PNG written + (usually) copied to clipboard.
+      listen<CaptureComplete>("capture-complete", (e) => {
+        const { width, height, clipboard } = e.payload;
+        pushToast(
+          clipboard
+            ? `Copied to clipboard · ${width}×${height}`
+            : `Saved · ${width}×${height} (clipboard unavailable)`,
+        );
+      }),
+
+      // Generic backend toast (e.g. capture errors surfaced from tray-core).
+      listen<string>("glint-toast", (e) => {
+        pushToast(e.payload);
+      }),
+    ];
 
     return () => {
-      unlisten.then((fn) => fn());
+      subs.forEach((p) => p.then((fn) => fn()));
     };
   }, [pushToast]);
 
