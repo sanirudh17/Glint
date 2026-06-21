@@ -1,0 +1,150 @@
+/*
+ * Glint — Library view styles
+ *
+ * Visual language: matches Home view's calm vertical rhythm.
+ * Section-eyebrow pattern (monospace .label + hairline border-bottom),
+ * framed empty state, token-driven spacing throughout.
+ *
+ * Aesthetic choice: the filter bar sits flush under the section hairline —
+ * no elevated toolbar, no box-shadow. Controls feel part of the header
+ * zone rather than floating above content. Calm, intentional.
+ */
+
+/* ─── Layout ─────────────────────────────────────────────────────────── */
+.library-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s6);
+  padding: var(--s7);
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ─── Sections ────────────────────────────────────────────────────────── */
+.library-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+/* The grid region expands to fill available space */
+.library-section--grow {
+  flex: 1;
+  min-height: 0;
+}
+
+/*
+ * Section eyebrow: monospace .label class (defined in global.css) with
+ * a hairline border-bottom — same structural device as Home view.
+ */
+.library-section-label {
+  display: block;
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ─── Filter bar ──────────────────────────────────────────────────────── */
+/*
+ * Search + kind select sit side by side.
+ * The bar is compact and quiet — controls read as contextual refinement,
+ * not a dominant chrome layer over an empty page.
+ */
+.library-bar {
+  display: flex;
+  align-items: center;
+  gap: var(--s3);
+}
+
+/* Search input — same visual DNA as .g-select (bg-elev, 1px border, r1) */
+.library-search {
+  flex: 1;
+  min-width: 0;
+  height: 34px;
+  padding: 0 var(--s3);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r1);
+  color: var(--text);
+  font-family: inherit;
+  font-size: var(--fz-md);
+  font-weight: var(--fw-normal);
+  transition:
+    border-color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+}
+
+.library-search::placeholder {
+  color: var(--text-faint);
+}
+
+.library-search:hover {
+  border-color: var(--border-strong);
+}
+
+.library-search:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+/* Suppress WebKit's default search-cancel button — the input is inert in P1 */
+.library-search::-webkit-search-cancel-button {
+  -webkit-appearance: none;
+}
+
+/* Kind filter — fixed width so it doesn't grow like the text input */
+.library-bar .g-select-wrap {
+  flex-shrink: 0;
+}
+
+.library-bar .g-select {
+  width: 140px;
+}
+
+/* ─── Empty state wrapper ─────────────────────────────────────────────── */
+/*
+ * Framed container — mirrors home-empty-wrap for consistent visual language.
+ * 1px border, r2 radius, flex-centered.
+ */
+.library-empty-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  min-height: 200px;
+}
+
+/* ─── Capture grid ────────────────────────────────────────────────────── */
+/*
+ * Responsive auto-fill grid. Columns collapse to single at narrow widths.
+ * Phase 2 will replace .library-card-stub with real CaptureCard components.
+ */
+.library-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: var(--s4);
+  /* Allow the grid to scroll if it overflows — normal for a library */
+  overflow-y: auto;
+}
+
+/* ─── Stub card (Phase 2 will replace) ───────────────────────────────── */
+.library-card-stub {
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  padding: var(--s4);
+  min-height: 120px;
+  display: flex;
+  align-items: flex-end;
+}
+
+.library-card-path {
+  font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, "Consolas", monospace;
+  font-size: var(--fz-xs);
+  color: var(--text-faint);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
