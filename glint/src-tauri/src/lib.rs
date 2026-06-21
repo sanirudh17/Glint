@@ -1,5 +1,6 @@
 mod db;
 mod settings;
+mod shortcuts;
 mod tray;
 mod window;
 
@@ -24,6 +25,7 @@ pub fn run() {
                 .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
                 .build(),
         )
+        .plugin(tauri_plugin_global_shortcut::Builder::new().build())
         .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:glint.db", db::migrations())
@@ -33,6 +35,7 @@ pub fn run() {
         .manage(SettingsState(Default::default()))
         .setup(|app| {
             tray::build(app.handle())?;
+            shortcuts::register(app.handle())?;
             log::info!("Glint started");
             Ok(())
         })

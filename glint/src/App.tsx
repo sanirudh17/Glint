@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
+import { listen } from "@tauri-apps/api/event";
 import { router } from "./router";
 import { useAppStore } from "./store/useAppStore";
 import { ToastHost } from "./components/ui";
@@ -14,6 +15,7 @@ import { ToastHost } from "./components/ui";
  */
 export default function App() {
   const loadSettings = useAppStore((s) => s.loadSettings);
+  const pushToast = useAppStore((s) => s.pushToast);
 
   useEffect(() => {
     // Apply dark theme immediately so there's no flash before settings load
@@ -25,6 +27,19 @@ export default function App() {
       // Fall back to dark theme — already applied above.
     });
   }, [loadSettings]);
+
+  useEffect(() => {
+    // Listen for global shortcut events emitted by the Rust backend.
+    // The payload is the action name (e.g. "capture_area").
+    // Returns an unlisten function; call it on cleanup to avoid leaks.
+    const unlisten = listen<string>("shortcut-fired", (e) => {
+      pushToast(`Hotkey: ${e.payload}`);
+    });
+
+    return () => {
+      unlisten.then((fn) => fn());
+    };
+  }, [pushToast]);
 
   return (
     <>
