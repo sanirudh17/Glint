@@ -1,0 +1,281 @@
+/*
+ * Glint — Settings view styles
+ *
+ * Two-column layout: a fixed left sub-nav + a scrollable right content panel.
+ * Left nav uses the same monospace eyebrow + hairline rule as Home/Library.
+ * Active nav item: 2px left accent bar + bg-elev2 fill — quiet, not loud.
+ *
+ * Aesthetic note: the signature element here is the accent swatch row —
+ * small pills with a thin border and a white checkmark on selection.
+ * Everything else stays calm around it.
+ */
+
+/* ─── Shell layout ────────────────────────────────────────────────────────── */
+.settings-view {
+  display: grid;
+  grid-template-columns: 188px 1fr;
+  height: 100%;
+  overflow: hidden;
+}
+
+/* ─── Left sub-nav ────────────────────────────────────────────────────────── */
+.settings-nav {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s7) var(--s4) var(--s7) var(--s5);
+  border-right: 1px solid var(--border);
+  overflow-y: auto;
+  flex-shrink: 0;
+}
+
+/* Monospace eyebrow — same device as Home/Library section labels */
+.settings-nav-eyebrow {
+  display: block;
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-nav-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Each nav item is a full-width button */
+.settings-nav-item {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r1);
+  font-size: var(--fz-sm);
+  font-weight: var(--fw-normal);
+  color: var(--text-dim);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  text-align: left;
+  transition:
+    color var(--dur) var(--ease),
+    background var(--dur) var(--ease);
+  /* Left 2px accent bar — hidden until active */
+  box-shadow: inset 2px 0 0 transparent;
+  position: relative;
+}
+
+.settings-nav-item:hover {
+  color: var(--text);
+  background: var(--bg-elev2);
+}
+
+.settings-nav-item--active {
+  color: var(--accent);
+  background: var(--accent-subtle);
+  font-weight: var(--fw-medium);
+  /* The 2px left bar is the active signal — accent, not a heavy indicator */
+  box-shadow: inset 2px 0 0 var(--accent);
+}
+
+.settings-nav-item--active:hover {
+  background: var(--accent-subtle);
+}
+
+/* ─── Right content panel ─────────────────────────────────────────────────── */
+.settings-panel {
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: var(--s7);
+}
+
+/* ─── Section spacing inside .g-section ──────────────────────────────────── */
+/*
+ * .g-section is defined in ui.css; these overrides tune spacing for the
+ * settings panel specifically — a bit more breathing room than default.
+ */
+.settings-panel .g-section {
+  max-width: 560px;
+}
+
+.settings-panel .g-section + .g-section {
+  margin-top: var(--s6);
+  padding-top: var(--s6);
+  border-top: 1px solid var(--border);
+}
+
+/* ─── Inert control wrapper ───────────────────────────────────────────────── */
+/*
+ * Wraps a control + the "Available in a later phase" caption in a column.
+ * Keeps control and note spatially associated without visual noise.
+ */
+.settings-inert-control {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+}
+
+/* Phase note — appears below inert controls and standalone on Fields */
+.settings-phase-note {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  font-size: var(--fz-xs);
+  color: var(--text-faint);
+  margin-top: var(--s1);
+}
+
+/* ─── Accent swatch row ───────────────────────────────────────────────────── */
+/*
+ * The visual signature of this view: 5 small circular swatches in a row.
+ * Each is a button. Selected state gets a white checkmark — the only moment
+ * of white-on-colour in the settings panel.
+ *
+ * Size: 28px circle. Gap: var(--s2). No outer labels — the aria-label carries
+ * the name and the title tooltip reinforces it on hover.
+ */
+.settings-accent-row {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  margin-top: var(--s1);
+}
+
+.settings-accent-swatch {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: var(--swatch-color);
+  border: 1.5px solid transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition:
+    transform var(--dur) var(--ease),
+    border-color var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
+  /* Slight scale down resets on hover — keeps gesture tight */
+  flex-shrink: 0;
+}
+
+.settings-accent-swatch:hover {
+  transform: scale(1.12);
+  border-color: var(--border-strong);
+}
+
+.settings-accent-swatch--active {
+  border-color: var(--text);
+  box-shadow: 0 0 0 2px var(--bg), 0 0 0 3.5px var(--swatch-color);
+}
+
+.settings-accent-swatch--active:hover {
+  transform: none;
+}
+
+/* The checkmark SVG inside a selected swatch */
+.settings-accent-check {
+  color: #ffffff;
+  /* Slight drop-shadow so white is readable on light swatches */
+  filter: drop-shadow(0 1px 1px rgba(0, 0, 0, 0.4));
+  pointer-events: none;
+}
+
+/* ─── Hotkeys list (mirrors HomeView hotkeys card) ────────────────────────── */
+.settings-hotkeys-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-hotkey-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-hotkey-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.settings-hotkey-row:first-child {
+  padding-top: 0;
+}
+
+.settings-hotkey-label {
+  font-size: var(--fz-sm);
+  color: var(--text-dim);
+  line-height: var(--lh-tight);
+}
+
+.settings-hotkey-keys {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  flex-shrink: 0;
+}
+
+/* <kbd> chips — identical to HomeView for visual consistency */
+.settings-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px var(--s2);
+  background: var(--bg-elev2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r1);
+  font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, "Consolas", monospace;
+  font-size: var(--fz-xs);
+  font-weight: var(--fw-normal);
+  color: var(--text-dim);
+  line-height: 1.6;
+  min-width: 20px;
+  text-align: center;
+  border-bottom-color: var(--border-strong);
+}
+
+/* ─── Storage paths ───────────────────────────────────────────────────────── */
+.settings-storage-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.settings-storage-row {
+  display: flex;
+  align-items: baseline;
+  gap: var(--s4);
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+.settings-storage-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+.settings-storage-row:first-child {
+  padding-top: 0;
+}
+
+.settings-storage-key {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  font-size: var(--fz-xs);
+  font-weight: var(--fw-medium);
+  color: var(--text-dim);
+  white-space: nowrap;
+  flex-shrink: 0;
+  width: 72px;
+}
+
+.settings-storage-path {
+  font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, "Consolas", monospace;
+  font-size: var(--fz-xs);
+  color: var(--text-faint);
+  word-break: break-all;
+  line-height: var(--lh-loose);
+}

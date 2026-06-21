@@ -1,8 +1,11 @@
 /**
- * Glint IPC helpers — thin wrappers around Tauri invoke().
- * All network-free; calls go only to the local Rust backend.
+ * Glint IPC helpers — thin wrappers around Tauri invoke() and plugin-sql.
+ * All network-free; calls go only to the local Rust backend or the local SQLite DB.
  *
- * Task 11 will expand saveSetting() to persist to SQLite via Rust.
+ * Settings persistence uses the JS-side plugin-sql (not Rust invoke): the frontend
+ * writes directly to the `settings` table via persistSetting/readSetting, and hydrates
+ * from it on load. The Rust SettingsState holds the validated in-memory copy for the
+ * current session but is NOT hydrated from disk on startup.
  */
 import { invoke } from "@tauri-apps/api/core";
 import Database from "@tauri-apps/plugin-sql";
@@ -44,18 +47,50 @@ export async function loadCaptures(): Promise<CaptureRow[]> {
   );
 }
 
-/** Fetch all persisted settings from the Rust backend. */
+/** Fetch all persisted settings from the Rust backend (returns defaults). */
 export async function getSettings(): Promise<Settings> {
   return invoke<Settings>("settings_get_all");
 }
 
 /**
- * Persist a single setting key/value pair.
+ * Update the Rust in-memory settings copy (validation + live apply for the session).
  * Returns the full updated Settings object.
+ * Call this alongside persistSetting() — they serve different purposes.
  */
 export async function saveSetting<K extends keyof Settings>(
   key: K,
   value: Settings[K],
 ): Promise<Settings> {
   return invoke<Settings>("settings_set", { key, value });
+}
+
+// ─── SQLite-backed settings persistence ──────────────────────────────────────
+//
+// These two functions are the source-of-truth for settings that survive restart.
+// The Rust SettingsState starts at Default() each launch; the frontend reads
+// from SQLite at startup (loadSettings) and writes here on every change.
+//
+// Both reuse the db() singleton already shared with loadCaptures().
+
+/**
+ * Upsert a setting row in the `settings` table.
+ * The value is JSON-encoded so any scalar or object can be stored uniformly.
+ */
+export async function persistSetting(key: string, value: unknown): Promise<void> {
+  await (await db()).execute(
+    "INSERT INTO settings(key,value) VALUES($1,$2) ON CONFLICT(key) DO UPDATE SET value=$2",
+    [key, JSON.stringify(value)],
+  );
+}
+
+/**
+ * Read one setting row from the `settings` table.
+ * Returns null if the row does not exist yet (first run, or key never set).
+ */
+export async function readSetting<T>(key: string): Promise<T | null> {
+  const rows = await (await db()).select<{ value: string }[]>(
+    "SELECT value FROM settings WHERE key=$1",
+    [key],
+  );
+  return rows.length ? (JSON.parse(rows[0].value) as T) : null;
 }
