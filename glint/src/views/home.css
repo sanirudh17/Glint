@@ -1,0 +1,130 @@
+/*
+ * Glint — Home view styles
+ *
+ * Three regions in calm vertical rhythm.
+ * All values from tokens.css. Never hardcoded.
+ */
+
+/* ─── Layout ─────────────────────────────────────────────────────────── */
+.home-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s6);
+  padding: var(--s7) var(--s7);
+  height: 100%;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+/* ─── Sections ────────────────────────────────────────────────────────── */
+.home-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+}
+
+/* The "recent captures" region expands to fill available space */
+.home-section--grow {
+  flex: 1;
+  min-height: 0;
+}
+
+/*
+ * Section labels — monospace eyebrows in .label class (defined in global.css).
+ * Hairline rule below them encodes section boundaries without decorative weight.
+ */
+.home-section-label {
+  display: block;
+  padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--border);
+}
+
+/* ─── Quick-start row ─────────────────────────────────────────────────── */
+.home-quickstart {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--s2);
+  align-items: center;
+}
+
+/* ─── Empty state wrapper ─────────────────────────────────────────────── */
+/*
+ * Centers the EmptyState within the grow region.
+ * Uses a flex container so it vertically centres even when
+ * the panel is tall.
+ */
+.home-empty-wrap {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  min-height: 160px;
+}
+
+/* ─── Hotkeys card ────────────────────────────────────────────────────── */
+.home-hotkeys-list {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  /* gap between rows is handled by the card's own gap token */
+}
+
+.home-hotkey-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: var(--s2) 0;
+  border-bottom: 1px solid var(--border);
+}
+
+/* Remove the divider on the last row */
+.home-hotkey-row:last-child {
+  border-bottom: none;
+  padding-bottom: 0;
+}
+
+/* First row: no top padding needed (card already has padding) */
+.home-hotkey-row:first-child {
+  padding-top: 0;
+}
+
+.home-hotkey-label {
+  font-size: var(--fz-sm);
+  color: var(--text-dim);
+  line-height: var(--lh-tight);
+}
+
+/* The group of kbd chips for one shortcut */
+.home-hotkey-keys {
+  display: flex;
+  align-items: center;
+  gap: var(--s1);
+  flex-shrink: 0;
+}
+
+/* ─── <kbd> chips ─────────────────────────────────────────────────────── */
+/*
+ * Token-driven: 1px border (--border), --bg-elev2 background,
+ * monospace font for the capture-tool DNA nod.
+ * Deliberately small — reference, not dominant.
+ */
+.home-kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1px var(--s2);
+  background: var(--bg-elev2);
+  border: 1px solid var(--border-strong);
+  border-radius: var(--r1);
+  font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, "Consolas", monospace;
+  font-size: var(--fz-xs);
+  font-weight: var(--fw-normal);
+  color: var(--text-dim);
+  line-height: 1.6;
+  min-width: 20px;
+  text-align: center;
+  /* Bottom border slightly darker — simulates key relief without a shadow */
+  border-bottom-color: var(--border-strong);
+}
