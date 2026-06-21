@@ -36,10 +36,12 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
                 let _ = app.emit("navigate", "/settings");
             }
             "quit" => app.exit(0),
-            "cap_area" => crate::capture::begin(app, crate::capture::CaptureMode::Area),
-            "cap_window" => crate::capture::begin(app, crate::capture::CaptureMode::Window),
+            "cap_area" => crate::capture::begin_spawned(app, crate::capture::CaptureMode::Area),
+            "cap_window" => {
+                crate::capture::begin_spawned(app, crate::capture::CaptureMode::Window)
+            }
             "cap_full" => {
-                crate::capture::begin(app, crate::capture::CaptureMode::Fullscreen);
+                crate::capture::begin_spawned(app, crate::capture::CaptureMode::Fullscreen);
             }
             other => {
                 let _ = app.emit("tray-action", other.to_string());

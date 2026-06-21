@@ -22,11 +22,18 @@ fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     use tauri::Manager;
     let m = crate::capture::CaptureMode::from_str(&mode)
         .map_err(|_| format!("unknown capture mode: {mode}"))?;
+    // Hide the main window so Glint isn't baked into the frozen frame.
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.hide();
     }
-    std::thread::sleep(std::time::Duration::from_millis(160));
-    crate::capture::begin(&app, m);
+    // Run capture OFF the main thread (this sync command runs on the main thread,
+    // and building the overlay webview there deadlocks the event loop). Give the
+    // hide a beat to take effect on screen, then begin.
+    let app2 = app.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(200));
+        crate::capture::begin(&app2, m);
+    });
     Ok(())
 }
 

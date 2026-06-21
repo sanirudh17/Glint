@@ -53,8 +53,23 @@ pub struct CaptureSession {
 #[derive(Default)]
 pub struct CaptureState(pub Mutex<Option<CaptureSession>>);
 
-/// Entry point from hotkeys / tray. Never panics; logs + toasts on failure.
+/// Spawn [`begin`] on a fresh background thread.
+///
+/// Building the overlay `WebviewWindow` must NOT happen synchronously on the
+/// main thread: sync Tauri commands and tray menu-event handlers run on the
+/// main thread, and creating a webview there deadlocks the Windows event loop
+/// (the build waits on the loop that is busy running the handler). Every
+/// main-thread trigger MUST route through this so the build runs off-thread,
+/// where the event loop is free to service it.
+pub fn begin_spawned(app: &AppHandle, mode: CaptureMode) {
+    let app = app.clone();
+    std::thread::spawn(move || begin(&app, mode));
+}
+
+/// Entry point from hotkeys / tray / the capture_start command. Never panics;
+/// logs + toasts on failure. Must run off the main thread (see [`begin_spawned`]).
 pub fn begin(app: &AppHandle, mode: CaptureMode) {
+    log::info!("capture begin: mode={}", mode.as_str());
     // Guard against double-begin: tear down any existing overlay first.
     overlay::teardown_all(app);
 
@@ -67,6 +82,7 @@ pub fn begin(app: &AppHandle, mode: CaptureMode) {
             return;
         }
     };
+    log::info!("captured frozen frame: {}x{}", image.width, image.height);
 
     let monitor_id: u32 = 0; // single-monitor phase: primary keyed as 0
 
@@ -93,11 +109,14 @@ pub fn begin(app: &AppHandle, mode: CaptureMode) {
         mode,
     });
 
-    if let Err(e) = overlay::open_for_monitor(app, monitor_id) {
-        log::error!("overlay open failed: {e}");
-        overlay::teardown_all(app);
-        *app.state::<CaptureState>().0.lock().unwrap() = None;
-        toast(app, "Couldn't open capture overlay");
+    match overlay::open_for_monitor(app, monitor_id) {
+        Ok(()) => log::info!("capture overlay opened (scale={scale})"),
+        Err(e) => {
+            log::error!("overlay open failed: {e}");
+            overlay::teardown_all(app);
+            *app.state::<CaptureState>().0.lock().unwrap() = None;
+            toast(app, "Couldn't open capture overlay");
+        }
     }
 }
 

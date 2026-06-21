@@ -22,14 +22,22 @@ pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
         .visible(false) // shown after it positions to the monitor
         .build()?;
 
-    // Cover the primary monitor (single-monitor phase). Multi-monitor: position per monitor.
+    // Cover the primary monitor by manual position+size (single-monitor phase).
+    // We deliberately do NOT call set_fullscreen(true): on Windows, OS fullscreen
+    // on a borderless transparent always-on-top window can drop the transparency
+    // (black fill) or fight the manual geometry. A borderless window sized to the
+    // monitor with always_on_top is the correct "fullscreen overlay".
     if let Some(monitor) = win.primary_monitor()? {
         let pos = monitor.position();
         let size = monitor.size();
         win.set_position(tauri::PhysicalPosition { x: pos.x, y: pos.y })?;
-        win.set_size(tauri::PhysicalSize { width: size.width, height: size.height })?;
+        win.set_size(tauri::PhysicalSize {
+            width: size.width,
+            height: size.height,
+        })?;
+    } else {
+        log::warn!("overlay: no primary monitor; using default window geometry");
     }
-    win.set_fullscreen(true)?;
     win.show()?;
     win.set_focus()?;
     Ok(())

@@ -38,13 +38,16 @@ pub fn register(app: &AppHandle) -> tauri::Result<()> {
                 if event.state == ShortcutState::Pressed {
                     match action_name {
                         "capture_area" => {
-                            crate::capture::begin(handle, crate::capture::CaptureMode::Area);
+                            crate::capture::begin_spawned(handle, crate::capture::CaptureMode::Area);
                         }
                         "capture_window" => {
-                            crate::capture::begin(handle, crate::capture::CaptureMode::Window);
+                            crate::capture::begin_spawned(
+                                handle,
+                                crate::capture::CaptureMode::Window,
+                            );
                         }
                         "capture_fullscreen" => {
-                            crate::capture::begin(
+                            crate::capture::begin_spawned(
                                 handle,
                                 crate::capture::CaptureMode::Fullscreen,
                             );
