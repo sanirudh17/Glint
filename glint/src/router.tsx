@@ -6,6 +6,7 @@ import LibraryView from "./views/LibraryView";
 import SettingsView from "./views/SettingsView";
 import EditorView from "./views/EditorView";
 import { OverlayApp } from "./overlay/OverlayApp";
+import { DragTest } from "./spike/DragTest";
 import "./components/shell.css";
 
 /**
@@ -45,6 +46,12 @@ export const router = createHashRouter([
      */
     path: "/overlay",
     element: <OverlayApp />,
+  },
+  {
+    // SPIKE (throwaway, P3 drag de-risk) — remove with DragTest + the
+    // spike_make_test_png command once drag-out is proven. Chrome-free.
+    path: "/dragtest",
+    element: <DragTest />,
   },
   {
     path: "/",
