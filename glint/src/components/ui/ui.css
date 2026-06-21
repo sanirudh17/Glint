@@ -324,6 +324,19 @@
   transform: translateX(-50%) translateY(0);
 }
 
+/* Right-side variant — for the narrow nav rail, where a top bubble would clip. */
+.g-tooltip-bubble--right {
+  bottom: auto;
+  top: 50%;
+  left: calc(100% + var(--s2));
+  transform: translateY(-50%) translateX(-4px);
+}
+
+.g-tooltip-root:hover .g-tooltip-bubble--right,
+.g-tooltip-root:focus-within .g-tooltip-bubble--right {
+  transform: translateY(-50%) translateX(0);
+}
+
 /* ─── EmptyState ─────────────────────────────────────────────────────── */
 .g-empty {
   display: flex;

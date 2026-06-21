@@ -102,19 +102,18 @@
   gap: var(--s1);
   background: var(--bg-elev);
   border-right: 1px solid var(--border);
-  overflow: hidden;
+  /* No overflow:hidden — nav-item tooltips open rightward and must escape the rail. */
 }
 
 /*
  * Nav items: 36×36 rounded targets, centered in the 52px rail.
  * Active state = accent icon + accent-subtle fill + a 3px left-edge bar.
  *
- * The bar is implemented via a negative left box-shadow that bleeds
- * outside the element's border-box to the rail edge. This avoids the
- * position:fixed / transformed-ancestor trap while keeping the effect flush.
- *
- * The rail has overflow:hidden, so we use inset box-shadow instead:
- * a left-side inset shadow that acts as a border-left indicator.
+ * The bar is a ::before pseudo-element, absolutely positioned relative to the
+ * item and offset left into the gap so it sits flush against the rail's left
+ * edge (see .g-nav-item--active::before). The sliver that lands at the window's
+ * left edge is clipped by the viewport, giving a clean flush indicator without
+ * needing overflow:hidden on the rail.
  */
 .g-nav-item {
   position: relative;

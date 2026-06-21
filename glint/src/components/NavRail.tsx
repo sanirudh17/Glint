@@ -46,7 +46,7 @@ interface NavItemProps {
 
 function NavItem({ to, label, icon }: NavItemProps) {
   return (
-    <Tooltip label={label}>
+    <Tooltip label={label} side="right">
       <NavLink
         to={to}
         aria-label={label}
