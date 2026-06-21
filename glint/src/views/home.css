@@ -68,7 +68,7 @@
   list-style: none;
   display: flex;
   flex-direction: column;
-  /* gap between rows is handled by the card's own gap token */
+  /* Row spacing comes from each row's vertical padding + 1px dividers below. */
 }
 
 .home-hotkey-row {
