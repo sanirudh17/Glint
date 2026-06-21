@@ -185,6 +185,13 @@
   line-height: var(--lh-base);
 }
 
+/* Disabled switch — inert and visibly unavailable (used for not-yet-built
+   settings so they read as "coming later", not broken). */
+.g-switch-root--disabled {
+  cursor: not-allowed;
+  opacity: 0.4;
+}
+
 /* ─── Section ────────────────────────────────────────────────────────── */
 .g-section {
   display: flex;
@@ -267,6 +274,17 @@
 
 .g-select:hover {
   border-color: var(--border-strong);
+}
+
+/* Disabled select — inert and visibly unavailable. */
+.g-select-wrap--disabled {
+  opacity: 0.4;
+}
+.g-select-wrap--disabled .g-select {
+  cursor: not-allowed;
+}
+.g-select-wrap--disabled .g-select:hover {
+  border-color: var(--border);
 }
 
 .g-select option {

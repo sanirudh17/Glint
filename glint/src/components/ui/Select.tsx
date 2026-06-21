@@ -12,15 +12,18 @@ interface SelectProps {
   onChange: (value: string) => void;
   /** Accessible name for the underlying <select> when there's no visible <label for>. */
   ariaLabel?: string;
+  /** When true, the control is inert and styled as unavailable. */
+  disabled?: boolean;
 }
 
-export function Select({ value, options, onChange, ariaLabel }: SelectProps) {
+export function Select({ value, options, onChange, ariaLabel, disabled = false }: SelectProps) {
   return (
-    <div className="g-select-wrap">
+    <div className={`g-select-wrap${disabled ? " g-select-wrap--disabled" : ""}`}>
       <select
         className="g-select"
         value={value}
         aria-label={ariaLabel}
+        disabled={disabled}
         onChange={(e) => onChange(e.currentTarget.value)}
       >
         {options.map((opt) => (

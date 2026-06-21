@@ -25,6 +25,7 @@ export function Capture() {
             value="png"
             options={FORMAT_OPTIONS}
             onChange={() => {}}
+            disabled
           />
           <span className="settings-phase-note">
             <Info size={12} strokeWidth={1.75} />
@@ -38,6 +39,7 @@ export function Capture() {
             value="high"
             options={QUALITY_OPTIONS}
             onChange={() => {}}
+            disabled
           />
           <span className="settings-phase-note">
             <Info size={12} strokeWidth={1.75} />

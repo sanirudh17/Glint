@@ -21,7 +21,7 @@ export function Recording() {
     >
       <Field label="Frame rate" hint="Frames per second for screen recordings.">
         <div className="settings-inert-control">
-          <Select value="60" options={FPS_OPTIONS} onChange={() => {}} />
+          <Select value="60" options={FPS_OPTIONS} onChange={() => {}} disabled />
           <span className="settings-phase-note">
             <Info size={12} strokeWidth={1.75} />
             Available in a later phase
@@ -30,7 +30,7 @@ export function Recording() {
       </Field>
       <Field label="Video codec" hint="Encoding format for recorded video.">
         <div className="settings-inert-control">
-          <Select value="h264" options={CODEC_OPTIONS} onChange={() => {}} />
+          <Select value="h264" options={CODEC_OPTIONS} onChange={() => {}} disabled />
           <span className="settings-phase-note">
             <Info size={12} strokeWidth={1.75} />
             Available in a later phase

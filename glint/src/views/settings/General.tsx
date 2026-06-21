@@ -9,7 +9,7 @@ export function General() {
     >
       <Field label="Launch at login" hint="Start Glint automatically when you sign in to Windows.">
         <div className="settings-inert-control">
-          <Switch checked={false} onChange={() => {}} />
+          <Switch checked={false} onChange={() => {}} disabled />
           <span className="settings-phase-note">
             <Info size={12} strokeWidth={1.75} />
             Available in a later phase
@@ -18,7 +18,7 @@ export function General() {
       </Field>
       <Field label="Show in taskbar" hint="Keep Glint visible in the Windows taskbar alongside the tray.">
         <div className="settings-inert-control">
-          <Switch checked={true} onChange={() => {}} />
+          <Switch checked={true} onChange={() => {}} disabled />
           <span className="settings-phase-note">
             <Info size={12} strokeWidth={1.75} />
             Available in a later phase
@@ -27,7 +27,7 @@ export function General() {
       </Field>
       <Field label="Sound effects" hint="Play a shutter sound on capture.">
         <div className="settings-inert-control">
-          <Switch checked={false} onChange={() => {}} />
+          <Switch checked={false} onChange={() => {}} disabled />
           <span className="settings-phase-note">
             <Info size={12} strokeWidth={1.75} />
             Available in a later phase
