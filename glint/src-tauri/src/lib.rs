@@ -12,6 +12,19 @@ pub fn run() {
             window::focus_main(app);
         }))
         .plugin(
+            tauri_plugin_log::Builder::new()
+                .clear_targets()
+                .target(tauri_plugin_log::Target::new(
+                    tauri_plugin_log::TargetKind::LogDir {
+                        file_name: Some("glint".into()),
+                    },
+                ))
+                .level(log::LevelFilter::Info)
+                .max_file_size(5_000_000_u128)
+                .rotation_strategy(tauri_plugin_log::RotationStrategy::KeepAll)
+                .build(),
+        )
+        .plugin(
             tauri_plugin_sql::Builder::default()
                 .add_migrations("sqlite:glint.db", db::migrations())
                 .build(),
@@ -20,6 +33,7 @@ pub fn run() {
         .manage(SettingsState(Default::default()))
         .setup(|app| {
             tray::build(app.handle())?;
+            log::info!("Glint started");
             Ok(())
         })
         .on_window_event(|window, event| {
