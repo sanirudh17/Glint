@@ -9,11 +9,11 @@ const THEME_OPTIONS = [
 ];
 
 export function Appearance() {
-  const { settings, setTheme, setAccent } = useAppStore((s) => ({
-    settings:  s.settings,
-    setTheme:  s.setTheme,
-    setAccent: s.setAccent,
-  }));
+  // Atomic selectors — a single object-returning selector is an infinite
+  // re-render under Zustand v5's Object.is equality (see HomeView).
+  const settings = useAppStore((s) => s.settings);
+  const setTheme = useAppStore((s) => s.setTheme);
+  const setAccent = useAppStore((s) => s.setAccent);
 
   if (!settings) return null;
 

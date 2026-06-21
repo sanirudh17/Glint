@@ -38,10 +38,11 @@ function parseHotkey(raw: string): string[] {
 }
 
 export default function HomeView() {
-  const { settings, pushToast } = useAppStore((s) => ({
-    settings: s.settings,
-    pushToast: s.pushToast,
-  }));
+  // Atomic selectors: each returns a stable reference. A single selector
+  // returning a new object `{...}` re-runs getSnapshot to a fresh value every
+  // render, which under Zustand v5's Object.is equality is an infinite loop.
+  const settings = useAppStore((s) => s.settings);
+  const pushToast = useAppStore((s) => s.pushToast);
 
   // Listen for tray placeholder actions and surface them as toasts.
   useEffect(() => {
