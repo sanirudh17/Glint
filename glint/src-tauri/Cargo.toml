@@ -29,4 +29,5 @@ tauri-plugin-global-shortcut = "2.3.2"
 xcap = "0.9.6"
 image = { version = "0.25", default-features = false, features = ["png"] }
 arboard = "3"
+base64 = "0.22"
 

@@ -1,3 +1,117 @@
-pub mod geometry;
+pub mod commands;
 pub mod frozen;
+pub mod geometry;
 pub mod windows_enum;
+
+use crate::overlay;
+use frozen::{CapturedImage, ScreenCapturer, XcapCapturer};
+use std::str::FromStr;
+use std::sync::Mutex;
+use tauri::{AppHandle, Emitter, Manager};
+use windows_enum::WindowInfo;
+
+#[derive(Clone, Copy, Debug)]
+pub enum CaptureMode {
+    Area,
+    Fullscreen,
+    Window,
+}
+
+impl FromStr for CaptureMode {
+    type Err = ();
+    fn from_str(s: &str) -> Result<Self, ()> {
+        match s {
+            "area" => Ok(CaptureMode::Area),
+            "fullscreen" => Ok(CaptureMode::Fullscreen),
+            "window" => Ok(CaptureMode::Window),
+            _ => Err(()),
+        }
+    }
+}
+
+impl CaptureMode {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            CaptureMode::Area => "area",
+            CaptureMode::Fullscreen => "fullscreen",
+            CaptureMode::Window => "window",
+        }
+    }
+}
+
+pub struct CaptureSession {
+    pub monitor_id: u32,
+    pub image: CapturedImage,
+    pub scale: f64,
+    pub windows: Vec<WindowInfo>,
+    pub mode: CaptureMode,
+}
+
+#[derive(Default)]
+pub struct CaptureState(pub Mutex<Option<CaptureSession>>);
+
+/// Entry point from hotkeys / tray. Never panics; logs + toasts on failure.
+pub fn begin(app: &AppHandle, mode: CaptureMode) {
+    // Guard against double-begin: tear down any existing overlay first.
+    overlay::teardown_all(app);
+
+    let capturer = XcapCapturer;
+    let image = match capturer.capture_primary() {
+        Ok(img) => img,
+        Err(e) => {
+            log::error!("capture failed: {e}");
+            toast(app, "Couldn't capture screen");
+            return;
+        }
+    };
+
+    let monitor_id: u32 = 0; // single-monitor phase: primary keyed as 0
+
+    // AppHandle::primary_monitor() exists in Tauri 2.11.3 (confirmed in app.rs:870).
+    // Returns crate::Result<Option<Monitor>>; Monitor::scale_factor(&self) -> f64.
+    let scale = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|m| m.scale_factor())
+        .unwrap_or(1.0);
+
+    let windows = if matches!(mode, CaptureMode::Window) {
+        windows_enum::list_windows()
+    } else {
+        Vec::new()
+    };
+
+    *app.state::<CaptureState>().0.lock().unwrap() = Some(CaptureSession {
+        monitor_id,
+        image,
+        scale,
+        windows,
+        mode,
+    });
+
+    if let Err(e) = overlay::open_for_monitor(app, monitor_id) {
+        log::error!("overlay open failed: {e}");
+        overlay::teardown_all(app);
+        *app.state::<CaptureState>().0.lock().unwrap() = None;
+        toast(app, "Couldn't open capture overlay");
+    }
+}
+
+pub(crate) fn toast(app: &AppHandle, msg: &str) {
+    let _ = app.emit("glint-toast", msg);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::str::FromStr;
+
+    #[test]
+    fn parses_modes() {
+        assert!(matches!(CaptureMode::from_str("area"), Ok(CaptureMode::Area)));
+        assert!(matches!(CaptureMode::from_str("window"), Ok(CaptureMode::Window)));
+        assert!(matches!(CaptureMode::from_str("fullscreen"), Ok(CaptureMode::Fullscreen)));
+        assert!(CaptureMode::from_str("nope").is_err());
+    }
+}
