@@ -30,6 +30,7 @@ export function AnnotationNode({ anno, draggable, onSelect, onChange, onDragStar
       return (
         <Arrow
           {...common}
+          x={0} y={0}
           points={[a.x1, a.y1, a.x2, a.y2]}
           stroke={a.style.color}
           fill={a.style.color}
@@ -45,6 +46,7 @@ export function AnnotationNode({ anno, draggable, onSelect, onChange, onDragStar
       return (
         <Line
           {...common}
+          x={0} y={0}
           points={[a.x1, a.y1, a.x2, a.y2]}
           stroke={a.style.color}
           strokeWidth={a.style.strokeWidth}
@@ -101,8 +103,11 @@ function patchPosition(
 ) {
   if (anno.type === "arrow" || anno.type === "line") {
     const a = anno as TwoPointAnno;
-    const dx = x - 0; const dy = y - 0;
-    // Konva resets node x/y to the drag position; translate the points and reset.
+    // The dragged node accumulates its offset in x/y (the points stay at their
+    // original coords). Fold that delta into the points; the node itself is
+    // pinned back to the origin via the x={0} y={0} props on Arrow/Line, so the
+    // translated points are authoritative and the offset isn't double-counted.
+    const dx = x; const dy = y;
     onChange({ x1: a.x1 + dx, y1: a.y1 + dy, x2: a.x2 + dx, y2: a.y2 + dy } as Partial<Annotation>);
   } else {
     onChange({ x, y } as Partial<Annotation>);
