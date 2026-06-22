@@ -56,7 +56,7 @@ mod tests {
     #[test]
     fn make_thumb_encodes_a_png_at_scaled_size() {
         // 4x2 opaque-red image → downscale to max 2 → 2x1.
-        let rgba: Vec<u8> = std::iter::repeat([255u8, 0, 0, 255]).take(4 * 2).flatten().collect();
+        let rgba: Vec<u8> = std::iter::repeat_n([255u8, 0, 0, 255], 4 * 2).flatten().collect();
         let png = make_thumb(&rgba, 4, 2, 2).unwrap();
         let decoded = image::load_from_memory(&png).unwrap();
         assert_eq!((decoded.width(), decoded.height()), (2, 1));
