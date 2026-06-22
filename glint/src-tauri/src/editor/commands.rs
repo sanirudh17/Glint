@@ -94,3 +94,74 @@ pub fn editor_source(ed: State<EditorState>) -> Result<EditorSourceDto, String> 
         capture_id: s.capture_id,
     })
 }
+
+// ─── Export ────────────────────────────────────────────────────────────────────
+
+/// Strip an optional `data:image/png;base64,` prefix, then decode to PNG bytes.
+fn decode_png_arg(png_base64: &str) -> Result<Vec<u8>, String> {
+    let raw = png_base64.rsplit(',').next().unwrap_or(png_base64);
+    base64::engine::general_purpose::STANDARD
+        .decode(raw)
+        .map_err(|e| e.to_string())
+}
+
+/// Copy the flattened (annotated) image to the clipboard.
+#[tauri::command]
+pub fn editor_copy(png_base64: String) -> Result<(), String> {
+    let bytes = decode_png_arg(&png_base64)?;
+    let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
+    let (w, h) = (img.width(), img.height());
+    crate::clipboard::copy_image(&img.into_raw(), w, h)
+}
+
+/// Save the flattened image as a NEW capture in the Library (never overwrites).
+#[tauri::command]
+pub fn editor_save(app: AppHandle, db: State<crate::Db>, png_base64: String) -> Result<String, String> {
+    let bytes = decode_png_arg(&png_base64)?;
+    let pictures = app.path().picture_dir().map_err(|e| e.to_string())?;
+    let dir = crate::paths::glint_save_dir(&pictures);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let filename = crate::paths::capture_filename(chrono::Local::now());
+    let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
+    std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
+    let dest_str = dest.to_string_lossy().to_string();
+
+    let rgba_img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
+    let (w, h) = (rgba_img.width(), rgba_img.height());
+    let thumb_path = crate::capture::commands::write_thumb(&app, &rgba_img.into_raw(), w, h, &dest_str);
+    let row = crate::db::NewCapture {
+        kind: "screenshot".into(),
+        path: dest_str.clone(),
+        thumb_path,
+        width: Some(w as i64),
+        height: Some(h as i64),
+        bytes: Some(bytes.len() as i64),
+        created_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0),
+    };
+    {
+        let conn = db.0.lock().unwrap();
+        if let Err(e) = crate::db::insert_capture(&conn, &row) {
+            log::error!("editor_save insert_capture failed: {e}");
+        }
+    }
+    let _ = app.emit("capture-saved", ());
+    Ok(dest_str)
+}
+
+/// Write the flattened image to a temp file and return its path (for drag-out).
+#[tauri::command]
+pub fn editor_flatten_temp(app: AppHandle, png_base64: String) -> Result<String, String> {
+    let bytes = decode_png_arg(&png_base64)?;
+    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let dest = dir.join(format!("glint-edit-{ts}.png"));
+    std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
+    Ok(dest.to_string_lossy().to_string())
+}

@@ -15,7 +15,10 @@ use capture::commands::{
     capture_overlay_data, capture_reveal, captures_list, hud_copy, hud_copy_path, hud_data,
     hud_dismiss, hud_reveal, hud_save,
 };
-use editor::commands::{editor_open_capture, editor_open_from_last, editor_source};
+use editor::commands::{
+    editor_copy, editor_flatten_temp, editor_open_capture, editor_open_from_last, editor_save,
+    editor_source,
+};
 use settings::commands::{settings_get_all, settings_set, SettingsState};
 
 /// tray-core's owned connection to the captures table (same glint.db plugin-sql uses).
@@ -136,6 +139,9 @@ pub fn run() {
             editor_open_from_last,
             editor_open_capture,
             editor_source,
+            editor_copy,
+            editor_save,
+            editor_flatten_temp,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Glint");

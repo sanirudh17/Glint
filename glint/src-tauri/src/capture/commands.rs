@@ -229,7 +229,7 @@ fn finish_commit(
 
 /// Write a thumbnail PNG into the app's thumbs dir and return its path. Non-fatal:
 /// returns None on any failure (the Library card falls back to a placeholder tile).
-fn write_thumb(app: &AppHandle, rgba: &[u8], w: u32, h: u32, src_path: &str) -> Option<String> {
+pub(crate) fn write_thumb(app: &AppHandle, rgba: &[u8], w: u32, h: u32, src_path: &str) -> Option<String> {
     let png = crate::capture::thumb::make_thumb(rgba, w, h, 480).ok()?;
     let dir = app.path().app_local_data_dir().ok()?;
     let dir = crate::paths::thumbs_dir(&dir);
