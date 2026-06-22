@@ -115,6 +115,14 @@ pub fn run() {
                 if window.label() == "main" {
                     api.prevent_close();
                     let _ = window.hide();
+                    // Drop any in-memory editing source when the window is
+                    // dismissed so a capture's pixels don't linger past the
+                    // session. Invisible to an open editor (its base lives in the
+                    // frontend store); the next entry point repopulates this.
+                    use tauri::Manager;
+                    if let Some(ed) = window.try_state::<crate::editor::EditorState>() {
+                        *ed.0.lock().unwrap() = None;
+                    }
                 }
             }
         })

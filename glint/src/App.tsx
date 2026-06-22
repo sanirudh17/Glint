@@ -63,6 +63,9 @@ export default function App() {
       }),
 
       // Editor entry points (HUD Annotate / Library Edit / open-in-editor) emit this.
+      // This listener must stay mounted for the editor to open — it does because
+      // the main window is only ever hidden, never destroyed (see lib.rs
+      // CloseRequested → hide), so this App tree is never torn down.
       listen("editor-open", () => {
         router.navigate("/editor");
       }),

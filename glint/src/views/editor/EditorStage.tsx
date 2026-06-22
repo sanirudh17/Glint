@@ -148,7 +148,10 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
             <AnnotationNode
               key={a.id}
               anno={a}
-              draggable={tool === "select"}
+              // Freehand strokes (pen/highlight) have no x/y origin, so dragging
+              // them can't reposition anything — keep them non-draggable rather
+              // than offer a dead gesture that just burns an undo step.
+              draggable={tool === "select" && a.type !== "pen" && a.type !== "highlight"}
               baseImage={base.image}
               baseWidth={base.width}
               baseHeight={base.height}

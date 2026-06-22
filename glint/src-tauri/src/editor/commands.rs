@@ -14,6 +14,13 @@ pub struct EditorSourceDto {
 }
 
 /// Show + focus the main window and tell it to navigate to /editor.
+///
+/// This relies on the main window being *hidden, never destroyed* (see the
+/// CloseRequested handler in lib.rs, which calls `hide()` instead of closing):
+/// its React app — and the `editor-open` listener in App.tsx — stay mounted, so
+/// the event below always lands on a live listener. If the main window is ever
+/// changed to truly close, this emit would fire into the void and the editor
+/// would silently fail to open.
 pub(crate) fn open_editor_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.show();
