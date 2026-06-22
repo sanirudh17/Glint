@@ -251,6 +251,8 @@ pub struct HudData {
     pub width: u32,
     pub height: u32,
     pub image_data_url: String,
+    /// True when the capture was auto-saved to the Library (drives Save↔Reveal).
+    pub saved: bool,
 }
 
 /// The HUD's thumbnail + metadata for the current capture result.
@@ -270,7 +272,22 @@ pub fn hud_data(state: State<crate::capture::LastCaptureState>) -> Result<HudDat
         width: last.width,
         height: last.height,
         image_data_url: format!("data:image/png;base64,{b64}"),
+        saved: last.saved,
     })
+}
+
+/// Reveal the (already auto-saved) capture in Explorer.
+#[tauri::command]
+pub fn hud_reveal(state: State<crate::capture::LastCaptureState>) -> Result<(), String> {
+    let path = {
+        let guard = state.0.lock().unwrap();
+        guard.as_ref().ok_or("no capture result")?.path.clone()
+    };
+    std::process::Command::new("explorer")
+        .arg(format!("/select,{path}"))
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
 }
 
 /// Re-copy the current capture image to the clipboard. The HUD shows its own

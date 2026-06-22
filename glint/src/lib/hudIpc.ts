@@ -11,12 +11,14 @@ import { invoke } from "@tauri-apps/api/core";
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
 
 export type HudData = {
-  /** Absolute path to the capture's temp PNG (drag-out / copy-path / save src). */
+  /** Absolute path to the capture's file (drag-out / copy-path / save src). */
   path: string;
   width: number;
   height: number;
   /** Mapped from backend `image_data_url`. Full data:image/png;base64,… URL. */
   imageDataUrl: string;
+  /** True when the capture was auto-saved — the HUD shows Reveal instead of Save. */
+  saved: boolean;
 };
 
 interface RawHudData {
@@ -24,6 +26,7 @@ interface RawHudData {
   width: number;
   height: number;
   image_data_url: string;
+  saved: boolean;
 }
 
 /** Fetch the current capture result (thumbnail + path + dimensions). */
@@ -34,6 +37,7 @@ export async function getHudData(): Promise<HudData> {
     width: d.width,
     height: d.height,
     imageDataUrl: d.image_data_url,
+    saved: d.saved,
   };
 }
 
@@ -46,6 +50,9 @@ export const hudCopyPath = (): Promise<void> => invoke<void>("hud_copy_path");
 /** Save a copy into the default folder (<Pictures>/Glint) with a timestamped name.
  *  Resolves to the destination path. */
 export const hudSave = (): Promise<string> => invoke<string>("hud_save");
+
+/** Reveal the (already auto-saved) capture in Explorer. */
+export const hudReveal = (): Promise<void> => invoke<void>("hud_reveal");
 
 /** Close the HUD window. */
 export const hudDismiss = (): Promise<void> => invoke<void>("hud_dismiss");

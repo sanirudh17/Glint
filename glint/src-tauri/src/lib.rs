@@ -12,7 +12,7 @@ mod window;
 use capture::commands::{
     capture_cancel, capture_commit, capture_copy, capture_delete, capture_open,
     capture_overlay_data, capture_reveal, captures_list, hud_copy, hud_copy_path, hud_data,
-    hud_dismiss, hud_save,
+    hud_dismiss, hud_reveal, hud_save,
 };
 use settings::commands::{settings_get_all, settings_set, SettingsState};
 
@@ -124,6 +124,7 @@ pub fn run() {
             hud_copy_path,
             hud_save,
             hud_dismiss,
+            hud_reveal,
             captures_list,
             capture_open,
             capture_reveal,

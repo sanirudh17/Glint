@@ -15,6 +15,7 @@ import {
   hudCopy,
   hudCopyPath,
   hudSave,
+  hudReveal,
   hudDismiss,
   dragOut,
   type HudData,
@@ -61,7 +62,11 @@ export function HudApp() {
           await hudCopyPath().then(() => flash("Path copied")).catch(() => flash("Couldn't copy path"));
           break;
         case "save":
-          await hudSave().then((dest) => flash(`Saved · ${fileName(dest)}`)).catch(() => flash("Couldn't save"));
+          if (data?.saved) {
+            await hudReveal().then(() => flash("Revealed in folder")).catch(() => flash("Couldn't reveal"));
+          } else {
+            await hudSave().then((dest) => flash(`Saved · ${fileName(dest)}`)).catch(() => flash("Couldn't save"));
+          }
           break;
         case "annotate":
           flash("Annotation arrives in Phase 5");
@@ -74,7 +79,7 @@ export function HudApp() {
           break;
       }
     },
-    [flash],
+    [flash, data],
   );
 
   // Drag-out: lift the real PNG from the thumbnail into any app.
@@ -124,7 +129,7 @@ export function HudApp() {
 
         {/* Scrim + action toolbar — revealed on hover. */}
         <div className="hud-scrim" aria-hidden="true" />
-        <HudActions onAction={onAction} />
+        <HudActions onAction={onAction} saved={data?.saved ?? false} />
 
         {/* Inline confirmation, layered over the card. */}
         <div className={`hud-status${status ? " hud-status--show" : ""}`} aria-live="polite">

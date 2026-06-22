@@ -10,6 +10,7 @@ import {
   Copy,
   Link2,
   Save,
+  FolderOpen,
   Pencil,
   Pin,
   type LucideIcon,
@@ -29,18 +30,26 @@ interface ButtonDef {
   tip: string;
 }
 
-const ACTIONS: ButtonDef[] = [
-  { id: "copy",      icon: Copy,   tip: "Copy image" },
-  { id: "copy-path", icon: Link2,  tip: "Copy path" },
-  { id: "save",      icon: Save,   tip: "Save" },
-  { id: "annotate",  icon: Pencil, tip: "Annotate" },
-  { id: "pin",       icon: Pin,    tip: "Pin" },
-];
-
-export function HudActions({ onAction }: { onAction: (a: HudAction) => void }) {
+export function HudActions({
+  onAction,
+  saved,
+}: {
+  onAction: (a: HudAction) => void;
+  saved: boolean;
+}) {
+  // When the capture was auto-saved, the Save slot becomes Reveal-in-folder.
+  const actions: ButtonDef[] = [
+    { id: "copy",      icon: Copy,  tip: "Copy image" },
+    { id: "copy-path", icon: Link2, tip: "Copy path" },
+    saved
+      ? { id: "save", icon: FolderOpen, tip: "Reveal in folder" }
+      : { id: "save", icon: Save,       tip: "Save" },
+    { id: "annotate",  icon: Pencil, tip: "Annotate" },
+    { id: "pin",       icon: Pin,    tip: "Pin" },
+  ];
   return (
     <div className="hud-toolbar">
-      {ACTIONS.map(({ id, icon: Icon, tip }) => (
+      {actions.map(({ id, icon: Icon, tip }) => (
         <button
           key={id}
           type="button"
