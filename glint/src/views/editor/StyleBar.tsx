@@ -16,13 +16,23 @@ export function StyleBar() {
   const tool = useEditorStore((s) => s.tool);
 
   // Applying a style updates the current tool default AND the selection (if any).
+  // The selection's patch merges onto the annotation's OWN style, not the global
+  // tool style — otherwise recoloring a shape would clobber its stroke width with
+  // whatever the global tool width currently is.
+  const patchSelected = (patch: Partial<typeof style>) => {
+    if (!selectedId) return;
+    const anno = useEditorStore.getState().annotations.find((a) => a.id === selectedId);
+    if (!anno) return;
+    pushHistory();
+    update(selectedId, { style: { ...anno.style, ...patch } } as never);
+  };
   const applyColor = (color: string) => {
     setStyle({ color });
-    if (selectedId) { pushHistory(); update(selectedId, { style: { ...style, color } } as never); }
+    patchSelected({ color });
   };
   const applyWidth = (strokeWidth: number) => {
     setStyle({ strokeWidth });
-    if (selectedId) { pushHistory(); update(selectedId, { style: { ...style, strokeWidth } } as never); }
+    patchSelected({ strokeWidth });
   };
 
   return (
