@@ -5,6 +5,7 @@ import { getEditorSource } from "../lib/editor";
 import { EditorStage } from "./editor/EditorStage";
 import { ToolRail } from "./editor/ToolRail";
 import { StyleBar } from "./editor/StyleBar";
+import { ExportBar } from "./editor/ExportBar";
 import type { ToolId } from "../editor/model";
 import "./editor/editor.css";
 
@@ -83,7 +84,10 @@ export default function EditorView() {
 
   return (
     <div className="editor-view">
-      <StyleBar />
+      <div className="editor-topbar">
+        <StyleBar />
+        <ExportBar stageRef={stageRef} />
+      </div>
       <div className="editor-main">
         <ToolRail />
         <EditorStage ref={stageRef} />
