@@ -205,7 +205,10 @@ function BlurRegion({
   useEffect(() => {
     const node = ref.current;
     if (!node || w < 1 || h < 1) return;
-    node.cache();
+    // Cache only the visible region — the group is pinned to the origin and the
+    // clip lives at (x,y), so the blur filter runs over just that slice rather
+    // than the whole base image (which can be a multi-megapixel screenshot).
+    node.cache({ x, y, width: w, height: h });
     node.getLayer()?.batchDraw();
   }, [x, y, w, h, baseImage]);
 
@@ -219,7 +222,15 @@ function BlurRegion({
       onMouseDown={onSelect}
       onTap={onSelect}
       onDragStart={onDragStart}
-      onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y(), w, h } as Partial<Annotation>)}
+      onDragEnd={(e) =>
+        // The group is pinned to the origin (x={0} y={0} below) with the clip at
+        // the stored rect, so a drag accumulates only its delta into the node
+        // position. Fold that delta into the rect; the re-render snaps the node
+        // back to 0,0 and re-clips to the new position.
+        onChange({ x: x + e.target.x(), y: y + e.target.y(), w, h } as Partial<Annotation>)
+      }
+      x={0}
+      y={0}
       clipX={x}
       clipY={y}
       clipWidth={w}
