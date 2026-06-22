@@ -32,4 +32,5 @@ arboard = "3"
 base64 = "0.22"
 tauri-plugin-drag = "2"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
+rusqlite = { version = "0.32", features = ["bundled"] }
 
