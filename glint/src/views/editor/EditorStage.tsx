@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, forwardRef } from "react"
 import { Stage, Layer, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useEditorStore } from "../../editor/useEditorStore";
-import { newId, type Annotation } from "../../editor/model";
+import { newId, nextStepNumber, type Annotation } from "../../editor/model";
 import { AnnotationNode } from "./AnnotationNode";
 
 function fitScale(boxW: number, boxH: number, imgW: number, imgH: number): number {
@@ -91,11 +91,15 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         draftId.current = null; // text is placed immediately, not dragged
         break;
       case "step": {
-        // step number filled by the store/model in Task 11 wiring
-        a = { id, type: "step", z: 0, style: { ...style }, x, y, number: 0 };
+        const number = nextStepNumber(useEditorStore.getState().annotations);
+        a = { id, type: "step", z: 0, style: { ...style }, x, y, number };
         draftId.current = null;
         break;
       }
+      case "pen":
+      case "highlight":
+        a = { id, type: tool, z: 0, style: { ...style }, points: [x, y] };
+        break;
       default:
         return;
     }
@@ -114,6 +118,8 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
       update(id, { x2: x, y2: y } as Partial<Annotation>);
     } else if (a.type === "rect" || a.type === "ellipse" || a.type === "blur") {
       update(id, { w: x - a.x, h: y - a.y } as Partial<Annotation>);
+    } else if (a.type === "pen" || a.type === "highlight") {
+      update(id, { points: [...a.points, x, y] } as Partial<Annotation>);
     }
   };
 
@@ -143,6 +149,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
               key={a.id}
               anno={a}
               draggable={tool === "select"}
+              baseImage={base.image}
+              baseWidth={base.width}
+              baseHeight={base.height}
               onSelect={() => tool === "select" && select(a.id)}
               onDragStart={() => pushHistory()}
               onChange={(patch) => update(a.id, patch)}

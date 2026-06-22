@@ -1,16 +1,20 @@
-import { Arrow, Line, Rect, Ellipse, Text } from "react-konva";
-import type Konva from "konva";
-import type { Annotation, BoxAnno, TextAnno, TwoPointAnno } from "../../editor/model";
+import { useEffect, useRef } from "react";
+import { Arrow, Line, Rect, Ellipse, Text, Group, Image as KonvaImage, Circle } from "react-konva";
+import Konva from "konva";
+import type { Annotation, BoxAnno, FreehandAnno, StepAnno, TextAnno, TwoPointAnno } from "../../editor/model";
 
 interface Props {
   anno: Annotation;
   draggable: boolean;
+  baseImage: HTMLImageElement;
+  baseWidth: number;
+  baseHeight: number;
   onSelect: () => void;
   onChange: (patch: Partial<Annotation>) => void;
   onDragStart: () => void;
 }
 
-export function AnnotationNode({ anno, draggable, onSelect, onChange, onDragStart }: Props) {
+export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeight, onSelect, onChange, onDragStart }: Props) {
   const common = {
     id: anno.id,
     draggable,
@@ -90,8 +94,72 @@ export function AnnotationNode({ anno, draggable, onSelect, onChange, onDragStar
         />
       );
     }
-    default:
-      return null; // step + blur added in Task 11
+    case "pen": {
+      const a = anno as FreehandAnno;
+      return (
+        <Line
+          {...common}
+          points={a.points}
+          stroke={a.style.color}
+          strokeWidth={a.style.strokeWidth}
+          lineCap="round"
+          lineJoin="round"
+          tension={0.2}
+          hitStrokeWidth={Math.max(12, a.style.strokeWidth)}
+        />
+      );
+    }
+    case "highlight": {
+      const a = anno as FreehandAnno;
+      return (
+        <Line
+          {...common}
+          points={a.points}
+          stroke={a.style.color}
+          strokeWidth={a.style.strokeWidth * 4}
+          lineCap="round"
+          lineJoin="round"
+          opacity={0.4}
+          hitStrokeWidth={Math.max(16, a.style.strokeWidth * 4)}
+        />
+      );
+    }
+    case "step": {
+      const a = anno as StepAnno;
+      const r = 14 + a.style.strokeWidth * 2;
+      return (
+        <Group {...common} x={a.x} y={a.y}>
+          <Circle radius={r} fill={a.style.color} />
+          <Text
+            text={String(a.number)}
+            fontSize={r}
+            fontStyle="bold"
+            fill="#fff"
+            width={r * 2}
+            height={r * 2}
+            offsetX={r}
+            offsetY={r}
+            align="center"
+            verticalAlign="middle"
+          />
+        </Group>
+      );
+    }
+    case "blur": {
+      const a = anno as BoxAnno;
+      return (
+        <BlurRegion
+          a={a}
+          baseImage={baseImage}
+          baseWidth={baseWidth}
+          baseHeight={baseHeight}
+          draggable={draggable}
+          onSelect={onSelect}
+          onDragStart={onDragStart}
+          onChange={onChange}
+        />
+      );
+    }
   }
 }
 
@@ -112,4 +180,54 @@ function patchPosition(
   } else {
     onChange({ x, y } as Partial<Annotation>);
   }
+}
+
+/** A non-destructive blur: a cached, blurred copy of the base image clipped to a rect. */
+function BlurRegion({
+  a, baseImage, baseWidth, baseHeight, draggable, onSelect, onDragStart, onChange,
+}: {
+  a: BoxAnno;
+  baseImage: HTMLImageElement;
+  baseWidth: number;
+  baseHeight: number;
+  draggable: boolean;
+  onSelect: () => void;
+  onDragStart: () => void;
+  onChange: (patch: Partial<Annotation>) => void;
+}) {
+  const ref = useRef<Konva.Group>(null);
+  // Normalize negative drag rects.
+  const x = Math.min(a.x, a.x + a.w);
+  const y = Math.min(a.y, a.y + a.h);
+  const w = Math.abs(a.w);
+  const h = Math.abs(a.h);
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || w < 1 || h < 1) return;
+    node.cache();
+    node.getLayer()?.batchDraw();
+  }, [x, y, w, h, baseImage]);
+
+  if (w < 1 || h < 1) return null;
+
+  return (
+    <Group
+      id={a.id}
+      ref={ref}
+      draggable={draggable}
+      onMouseDown={onSelect}
+      onTap={onSelect}
+      onDragStart={onDragStart}
+      onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y(), w, h } as Partial<Annotation>)}
+      clipX={x}
+      clipY={y}
+      clipWidth={w}
+      clipHeight={h}
+      filters={[Konva.Filters.Blur]}
+      blurRadius={14}
+    >
+      <KonvaImage image={baseImage} width={baseWidth} height={baseHeight} listening={false} />
+    </Group>
+  );
 }
