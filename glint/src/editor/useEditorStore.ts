@@ -36,6 +36,7 @@ interface EditorState {
   add: (a: Annotation) => void;
   update: (id: string, patch: Partial<Annotation>) => void;
   remove: (id: string) => void;
+  clearAll: () => void;
   undo: () => void;
   redo: () => void;
 }
@@ -70,6 +71,15 @@ export const useEditorStore = create<EditorState>((set) => ({
       annotations: deleteAnnotation(s.annotations, id),
       selectedId: s.selectedId === id ? null : s.selectedId,
     })),
+
+  // Wipe every annotation in one gesture (a single undoable step). No-op — and
+  // crucially no spurious history entry — when there's nothing to clear.
+  clearAll: () =>
+    set((s) =>
+      s.annotations.length
+        ? { past: [...s.past, s.annotations], future: [], annotations: [], selectedId: null }
+        : s,
+    ),
 
   undo: () =>
     set((s) =>

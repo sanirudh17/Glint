@@ -55,6 +55,24 @@ describe("useEditorStore", () => {
     expect(useEditorStore.getState().annotations).toEqual([]);
   });
 
+  it("clearAll wipes annotations in one undoable step", () => {
+    const s = useEditorStore.getState();
+    s.add(rect("a"));
+    s.add(rect("b"));
+    s.clearAll();
+    expect(useEditorStore.getState().annotations).toEqual([]);
+    expect(useEditorStore.getState().selectedId).toBeNull();
+    // One undo brings every annotation back.
+    useEditorStore.getState().undo();
+    expect(useEditorStore.getState().annotations.map((a) => a.id)).toEqual(["a", "b"]);
+  });
+
+  it("clearAll on an empty canvas does not push a history entry", () => {
+    const s = useEditorStore.getState();
+    s.clearAll();
+    expect(useEditorStore.getState().past).toEqual([]);
+  });
+
   it("update changes an annotation and does not push history", () => {
     const s = useEditorStore.getState();
     s.add(rect("a"));

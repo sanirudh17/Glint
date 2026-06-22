@@ -9,15 +9,19 @@ interface Props {
   baseImage: HTMLImageElement;
   baseWidth: number;
   baseHeight: number;
+  /** Hide the Konva node — used to make room for the DOM textarea while a text
+      annotation is being edited. */
+  hidden?: boolean;
   onSelect: () => void;
   onChange: (patch: Partial<Annotation>) => void;
   onDragStart: () => void;
 }
 
-export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeight, onSelect, onChange, onDragStart }: Props) {
+export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeight, hidden, onSelect, onChange, onDragStart }: Props) {
   const common = {
     id: anno.id,
     draggable,
+    visible: !hidden,
     onMouseDown: onSelect,
     onTap: onSelect,
     onDragStart,

@@ -1,6 +1,6 @@
 import {
   MousePointer2, ArrowUpRight, Minus, Square, Circle as CircleIcon,
-  Type, Pen, Highlighter, Droplet, Hash, Undo2, Redo2, type LucideIcon,
+  Type, Pen, Highlighter, Droplet, Hash, Undo2, Redo2, Trash2, type LucideIcon,
 } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import type { ToolId } from "../../editor/model";
@@ -23,6 +23,8 @@ export function ToolRail() {
   const setTool = useEditorStore((s) => s.setTool);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
+  const clearAll = useEditorStore((s) => s.clearAll);
+  const hasAnnotations = useEditorStore((s) => s.annotations.length > 0);
 
   return (
     <div className="editor-rail" role="toolbar" aria-label="Annotation tools">
@@ -44,6 +46,15 @@ export function ToolRail() {
       </button>
       <button className="editor-tool" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" onClick={() => redo()}>
         <Redo2 size={18} strokeWidth={1.75} />
+      </button>
+      <button
+        className="editor-tool editor-tool--danger"
+        title="Clear all annotations"
+        aria-label="Clear all annotations"
+        disabled={!hasAnnotations}
+        onClick={() => clearAll()}
+      >
+        <Trash2 size={18} strokeWidth={1.75} />
       </button>
     </div>
   );

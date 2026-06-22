@@ -2,6 +2,7 @@ import { ExternalLink, FolderOpen, Copy, Pencil, Trash2 } from "lucide-react";
 import type { CaptureItem } from "../../lib/captures";
 import { openCapture, revealCapture, copyCapture, deleteCapture, dragOut } from "../../lib/captures";
 import { openEditorCapture } from "../../lib/editor";
+import { useAppStore } from "../../store/useAppStore";
 
 function when(unixSec: number): string {
   return new Date(unixSec * 1000).toLocaleString(undefined, {
@@ -10,8 +11,16 @@ function when(unixSec: number): string {
 }
 
 export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged: () => void }) {
+  const pushToast = useAppStore((s) => s.pushToast);
+
+  // Surface command failures (e.g. the file was deleted in Explorer) instead of
+  // failing silently — the Rust side returns a human-readable message.
   async function act(fn: () => Promise<void>) {
-    try { await fn(); } catch { /* non-fatal; Library stays as-is */ }
+    try {
+      await fn();
+    } catch (e) {
+      pushToast(typeof e === "string" ? e : "Something went wrong");
+    }
   }
 
   return (

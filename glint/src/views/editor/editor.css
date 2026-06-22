@@ -48,6 +48,20 @@
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2);
 }
 .editor-swatch--active { border-color: var(--text); }
+/* Custom-color swatch: shows a spectrum hint when no preset is active, the
+   chosen color otherwise. Wraps a hidden native <input type=color>. */
+.editor-swatch--custom {
+  position: relative;
+  display: inline-flex;
+  overflow: hidden;
+  background-image: conic-gradient(from 0deg, #f00, #ff0, #0f0, #0ff, #00f, #f0f, #f00);
+}
+.editor-swatch--custom input[type="color"] {
+  position: absolute; inset: 0;
+  width: 100%; height: 100%;
+  margin: 0; padding: 0; border: none;
+  opacity: 0; cursor: pointer;
+}
 .editor-width {
   width: 28px; height: 24px; border-radius: var(--r1);
   border: 1px solid var(--border); background: transparent;
@@ -71,7 +85,32 @@
 }
 .editor-tool:hover { background: var(--bg-elev2); color: var(--text); }
 .editor-tool--active { background: var(--accent-subtle); color: var(--accent); }
+.editor-tool:disabled { opacity: 0.35; cursor: default; }
+.editor-tool:disabled:hover { background: transparent; color: var(--text-dim); }
+.editor-tool--danger:hover:not(:disabled) {
+  background: color-mix(in srgb, var(--danger) 16%, transparent);
+  color: var(--danger);
+}
 .editor-rail-sep { height: 1px; margin: var(--s2) 0; background: var(--border); }
+
+/* Inline text-annotation editor: a real <textarea> floated over the Konva text
+   node's screen position while editing (Konva has no text input). */
+.editor-text-input {
+  position: fixed;
+  z-index: 50;
+  margin: 0;
+  padding: 0 2px;
+  border: 1px dashed var(--accent);
+  border-radius: 2px;
+  outline: none;
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  font-family: Arial, sans-serif;
+  line-height: 1;
+  resize: none;
+  overflow: hidden;
+  white-space: pre;
+  min-width: 12px;
+}
 
 /* ── Export bar ──────────────────────────────────────────────────────────── */
 .editor-topbar {

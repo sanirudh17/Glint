@@ -35,19 +35,37 @@ export function StyleBar() {
     patchSelected({ strokeWidth });
   };
 
+  const current = style.color.toLowerCase();
+  const isPreset = COLORS.some((c) => c.toLowerCase() === current);
+
   return (
     <div className="editor-stylebar" role="toolbar" aria-label="Style">
       <div className="editor-swatches">
         {COLORS.map((c) => (
           <button
             key={c}
-            className={`editor-swatch${style.color === c ? " editor-swatch--active" : ""}`}
+            className={`editor-swatch${c.toLowerCase() === current ? " editor-swatch--active" : ""}`}
             style={{ background: c }}
             title={c}
             aria-label={`Color ${c}`}
             onClick={() => applyColor(c)}
           />
         ))}
+        {/* Custom color — opens the OS spectrum/hex picker. Active ring when the
+            current color isn't one of the presets. Local-first: a native input,
+            no library. */}
+        <label
+          className={`editor-swatch editor-swatch--custom${isPreset ? "" : " editor-swatch--active"}`}
+          style={{ background: isPreset ? undefined : style.color }}
+          title="Custom color"
+        >
+          <input
+            type="color"
+            value={style.color}
+            onChange={(e) => applyColor(e.currentTarget.value)}
+            aria-label="Custom color"
+          />
+        </label>
       </div>
       <div className="editor-widths">
         {WIDTHS.map((w) => (
