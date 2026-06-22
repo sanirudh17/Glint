@@ -1,0 +1,50 @@
+import {
+  MousePointer2, ArrowUpRight, Minus, Square, Circle as CircleIcon,
+  Type, Pen, Highlighter, Droplet, Hash, Undo2, Redo2, type LucideIcon,
+} from "lucide-react";
+import { useEditorStore } from "../../editor/useEditorStore";
+import type { ToolId } from "../../editor/model";
+
+const TOOLS: { id: ToolId; icon: LucideIcon; tip: string; key: string }[] = [
+  { id: "select",    icon: MousePointer2, tip: "Select (V)",      key: "V" },
+  { id: "arrow",     icon: ArrowUpRight,  tip: "Arrow (A)",       key: "A" },
+  { id: "line",      icon: Minus,         tip: "Line (L)",        key: "L" },
+  { id: "rect",      icon: Square,        tip: "Rectangle (R)",   key: "R" },
+  { id: "ellipse",   icon: CircleIcon,    tip: "Ellipse (O)",     key: "O" },
+  { id: "text",      icon: Type,          tip: "Text (T)",        key: "T" },
+  { id: "pen",       icon: Pen,           tip: "Pen (P)",         key: "P" },
+  { id: "highlight", icon: Highlighter,   tip: "Highlighter (H)", key: "H" },
+  { id: "blur",      icon: Droplet,       tip: "Blur (B)",        key: "B" },
+  { id: "step",      icon: Hash,          tip: "Step (S)",        key: "S" },
+];
+
+export function ToolRail() {
+  const tool = useEditorStore((s) => s.tool);
+  const setTool = useEditorStore((s) => s.setTool);
+  const undo = useEditorStore((s) => s.undo);
+  const redo = useEditorStore((s) => s.redo);
+
+  return (
+    <div className="editor-rail" role="toolbar" aria-label="Annotation tools">
+      {TOOLS.map(({ id, icon: Icon, tip }) => (
+        <button
+          key={id}
+          className={`editor-tool${tool === id ? " editor-tool--active" : ""}`}
+          title={tip}
+          aria-label={tip}
+          aria-pressed={tool === id}
+          onClick={() => setTool(id)}
+        >
+          <Icon size={18} strokeWidth={1.75} />
+        </button>
+      ))}
+      <div className="editor-rail-sep" />
+      <button className="editor-tool" title="Undo (Ctrl+Z)" aria-label="Undo" onClick={() => undo()}>
+        <Undo2 size={18} strokeWidth={1.75} />
+      </button>
+      <button className="editor-tool" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" onClick={() => redo()}>
+        <Redo2 size={18} strokeWidth={1.75} />
+      </button>
+    </div>
+  );
+}
