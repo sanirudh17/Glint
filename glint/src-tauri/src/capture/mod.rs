@@ -48,6 +48,11 @@ pub struct CaptureSession {
     pub scale: f64,
     pub windows: Vec<WindowInfo>,
     pub mode: CaptureMode,
+    /// True when this capture was started from the main-window UI (a quick-start
+    /// button), which hid the main window first. On commit/cancel the commands
+    /// re-show + focus the main window so it (and its taskbar icon) returns.
+    /// False for hotkey/tray captures, which never touched the main window.
+    pub restore_main: bool,
 }
 
 #[derive(Default)]
@@ -66,9 +71,16 @@ pub fn begin_spawned(app: &AppHandle, mode: CaptureMode) {
     std::thread::spawn(move || begin(&app, mode));
 }
 
-/// Entry point from hotkeys / tray / the capture_start command. Never panics;
-/// logs + toasts on failure. Must run off the main thread (see [`begin_spawned`]).
+/// Entry point from hotkeys / tray. Leaves the main window untouched.
 pub fn begin(app: &AppHandle, mode: CaptureMode) {
+    begin_restoring(app, mode, false);
+}
+
+/// Begin a capture, recording whether the main window should be re-shown when the
+/// capture settles. `restore_main` is true only for the main-window quick-start
+/// buttons (which hid the main window first). Never panics; logs + toasts on
+/// failure. Must run off the main thread (see [`begin_spawned`]).
+pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
     log::info!("capture begin: mode={}", mode.as_str());
     // Guard against double-begin: tear down any existing overlay first.
     overlay::teardown_all(app);
@@ -107,6 +119,7 @@ pub fn begin(app: &AppHandle, mode: CaptureMode) {
         scale,
         windows,
         mode,
+        restore_main,
     });
 
     match overlay::open_for_monitor(app, monitor_id) {
@@ -122,6 +135,16 @@ pub fn begin(app: &AppHandle, mode: CaptureMode) {
 
 pub(crate) fn toast(app: &AppHandle, msg: &str) {
     let _ = app.emit("glint-toast", msg);
+}
+
+/// Re-show + focus the main window. Called when a capture that was started from
+/// the main-window UI settles, so the window (and its taskbar icon) returns and
+/// the success toast lands somewhere visible.
+pub(crate) fn restore_main_window(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
 }
 
 #[cfg(test)]

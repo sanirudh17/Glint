@@ -68,6 +68,13 @@ pub struct RectArg {
 
 /// Commit a capture: crop the frozen screenshot to the selected rect, write a temp PNG,
 /// copy to clipboard (non-fatal), and emit "capture-complete".
+///
+/// The overlay teardown + main-window restore happen up front, then the heavy work
+/// (crop / PNG encode / file write / clipboard) runs on a background thread. This
+/// command runs on the main thread, and the overlay's `close()` is only serviced by
+/// the event loop AFTER this command returns — so doing the encode/write inline would
+/// keep the overlay on screen for the whole duration. Spawning the work lets the
+/// command return immediately, and the overlay vanishes the instant Enter is pressed.
 #[tauri::command]
 pub fn capture_commit(
     app: AppHandle,
@@ -78,7 +85,28 @@ pub fn capture_commit(
     // Take the session out — it won't be available after this.
     let session = { state.0.lock().unwrap().take() }.ok_or("no active capture session")?;
     overlay::teardown_all(&app);
+    if session.restore_main {
+        crate::capture::restore_main_window(&app);
+    }
 
+    let app2 = app.clone();
+    std::thread::spawn(move || {
+        if let Err(e) = finish_commit(&app2, session, rect) {
+            log::error!("capture commit failed: {e}");
+            let _ = app2.emit("glint-toast", "Couldn't save capture");
+        }
+    });
+
+    Ok(())
+}
+
+/// The heavy half of a commit: crop, encode, write, copy to clipboard, emit.
+/// Runs off the main thread (see [`capture_commit`]).
+fn finish_commit(
+    app: &AppHandle,
+    session: crate::capture::CaptureSession,
+    rect: RectArg,
+) -> Result<(), String> {
     let phys = logical_to_physical(
         LogicalRect { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
         session.scale,
@@ -127,10 +155,14 @@ pub fn capture_commit(
     Ok(())
 }
 
-/// Cancel an in-progress capture: discard session, tear down overlays.
+/// Cancel an in-progress capture: discard session, tear down overlays, and restore
+/// the main window if this capture was started from the main-window UI.
 #[tauri::command]
 pub fn capture_cancel(app: AppHandle, state: State<CaptureState>) -> Result<(), String> {
-    *state.0.lock().unwrap() = None;
+    let session = state.0.lock().unwrap().take();
     overlay::teardown_all(&app);
+    if session.map(|s| s.restore_main).unwrap_or(false) {
+        crate::capture::restore_main_window(&app);
+    }
     Ok(())
 }

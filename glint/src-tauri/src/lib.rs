@@ -32,7 +32,9 @@ fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     let app2 = app.clone();
     std::thread::spawn(move || {
         std::thread::sleep(std::time::Duration::from_millis(200));
-        crate::capture::begin(&app2, m);
+        // restore_main = true: re-show the main window once the capture settles,
+        // since we hid it above.
+        crate::capture::begin_restoring(&app2, m, true);
     });
     Ok(())
 }
