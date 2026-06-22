@@ -1,10 +1,11 @@
 /*
- * hud.css — the post-capture HUD bar.
+ * hud.css — the post-capture HUD: a CleanShot-style corner card.
  *
- * Same instrument family as the capture loupe + dimensions badge: a dark
- * translucent pane, 1px accent hairline, monospace data, zero glow. The
- * thumbnail is the drag handle, marked with viewfinder corner ticks that echo
- * the capture crosshair. Window is transparent; the bar floats within it.
+ * Quiet by default — a compact thumbnail with viewfinder corner ticks and a
+ * dimensions chip, parked bottom-left. On hover a scrim + action toolbar reveal
+ * over the bottom edge, and a close button appears top-right. The card is the
+ * drag handle. Same instrument family as the capture loupe: dark glass, accent
+ * hairline, monospace data, zero glow.
  */
 
 .hud-root {
@@ -15,59 +16,42 @@
   justify-content: center;
   background: transparent;
   overflow: hidden;
-  /* The whole HUD never participates in text selection. */
   user-select: none;
   -webkit-user-select: none;
 }
 
-/* ── The bar ──────────────────────────────────────────────────────────────── */
-.hud-bar {
+/* ── The card (also the drag handle) ──────────────────────────────────────── */
+.hud-card {
   position: relative;
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 84px;
-  padding: 0 12px 0 12px;
-  border-radius: 16px;
-  background: rgba(16, 18, 24, 0.86);
-  border: 1px solid color-mix(in srgb, var(--accent, #5B7CFA) 20%, rgba(255, 255, 255, 0.08));
-  backdrop-filter: blur(22px) saturate(1.2);
-  -webkit-backdrop-filter: blur(22px) saturate(1.2);
-  /* One soft seat shadow — the bar floats above the desktop. Not a glow. */
-  box-shadow: 0 12px 34px -12px rgba(0, 0, 0, 0.7);
-  animation: hud-rise 220ms cubic-bezier(0.22, 1, 0.36, 1) both;
-}
-
-@keyframes hud-rise {
-  from { opacity: 0; transform: translateY(10px); }
-  to   { opacity: 1; transform: translateY(0); }
-}
-
-/* ── Thumbnail = drag handle ──────────────────────────────────────────────── */
-.hud-thumb {
-  position: relative;
-  height: 64px;
-  width: 96px;
-  flex: none;
-  border-radius: 8px;
+  width: 208px;
+  height: 136px;
+  border-radius: 12px;
   overflow: hidden;
-  background: rgba(255, 255, 255, 0.04);
+  background: rgba(16, 18, 24, 0.92);
+  border: 1px solid color-mix(in srgb, var(--accent, #5B7CFA) 22%, rgba(255, 255, 255, 0.08));
+  box-shadow: 0 14px 38px -14px rgba(0, 0, 0, 0.78);
   cursor: grab;
-  /* Inner hairline so light captures keep an edge against the dark bar. */
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-  transition: box-shadow 140ms var(--ease, ease), transform 140ms var(--ease, ease);
+  animation: hud-rise 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
-.hud-thumb:hover {
-  box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--accent, #5B7CFA) 70%, transparent);
-}
-.hud-thumb:active {
+.hud-card:active {
   cursor: grabbing;
-  transform: scale(0.98);
 }
-.hud-thumb--loading {
+.hud-card--loading {
   cursor: default;
 }
 
+@keyframes hud-rise {
+  from { opacity: 0; transform: translateY(12px) scale(0.985); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Drag surface holds the image; sits beneath the overlays so toolbar / close
+   clicks never start a drag-out. */
+.hud-drag {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+}
 .hud-thumb-img {
   width: 100%;
   height: 100%;
@@ -76,148 +60,180 @@
   pointer-events: none;
 }
 
-/* Viewfinder corner ticks — L-shaped accent marks at each corner. */
+/* ── Resting affordances: corner ticks + dimensions — fade away on hover ───── */
 .hud-tick {
   position: absolute;
+  z-index: 3;
   width: 9px;
   height: 9px;
   border: 1.5px solid var(--accent, #5B7CFA);
+  opacity: 0.92;
   pointer-events: none;
-  opacity: 0.9;
+  transition: opacity 150ms var(--ease, ease);
 }
-.hud-tick--tl { top: 5px;    left: 5px;    border-right: none;  border-bottom: none; }
-.hud-tick--tr { top: 5px;    right: 5px;   border-left: none;   border-bottom: none; }
-.hud-tick--bl { bottom: 5px; left: 5px;    border-right: none;  border-top: none; }
-.hud-tick--br { bottom: 5px; right: 5px;   border-left: none;   border-top: none; }
+.hud-tick--tl { top: 6px;    left: 6px;    border-right: none; border-bottom: none; }
+.hud-tick--tr { top: 6px;    right: 6px;   border-left: none;  border-bottom: none; }
+.hud-tick--bl { bottom: 6px; left: 6px;    border-right: none; border-top: none; }
+.hud-tick--br { bottom: 6px; right: 6px;   border-left: none;  border-top: none; }
 
-/* Dimensions readout — monospace, pinned to the thumbnail's bottom edge. */
 .hud-dims {
   position: absolute;
-  left: 50%;
-  bottom: 5px;
-  transform: translateX(-50%);
+  top: 7px;
+  left: 7px;
+  z-index: 3;
   padding: 1px 6px;
   border-radius: 5px;
-  background: rgba(8, 9, 13, 0.74);
+  background: rgba(8, 9, 13, 0.72);
   font-family: var(--ff-mono, ui-monospace, "Cascadia Code", monospace);
   font-size: 10px;
   font-variant-numeric: tabular-nums;
   letter-spacing: 0.02em;
-  line-height: 1.4;
+  line-height: 1.5;
   color: rgba(255, 255, 255, 0.9);
   pointer-events: none;
+  transition: opacity 150ms var(--ease, ease);
 }
 .hud-dims-x {
   margin: 0 0.25em;
   color: rgba(255, 255, 255, 0.45);
 }
 
-/* ── Dividers ─────────────────────────────────────────────────────────────── */
-.hud-divider {
-  width: 1px;
-  height: 28px;
-  background: rgba(255, 255, 255, 0.1);
-  flex: none;
-}
-.hud-divider--lead {
-  margin: 0 2px;
+.hud-card:hover .hud-tick,
+.hud-card:hover .hud-dims {
+  opacity: 0;
 }
 
-/* ── Action row ───────────────────────────────────────────────────────────── */
-.hud-actions {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-
-.hud-btn {
-  position: relative;
+/* ── Close button — top-right, revealed on hover ──────────────────────────── */
+.hud-close {
+  position: absolute;
+  top: 7px;
+  right: 7px;
+  z-index: 5;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 36px;
-  height: 36px;
-  border-radius: 9px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(8, 9, 13, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 150ms var(--ease, ease),
+    background 130ms var(--ease, ease),
+    color 130ms var(--ease, ease);
+}
+.hud-card:hover .hud-close {
+  opacity: 1;
+}
+.hud-close:hover {
+  background: rgba(8, 9, 13, 0.9);
+  color: #fff;
+}
+
+/* ── Scrim + action toolbar — revealed on hover ───────────────────────────── */
+.hud-scrim {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 56px;
+  z-index: 2;
+  background: linear-gradient(to top, rgba(8, 9, 13, 0.94), rgba(8, 9, 13, 0));
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 160ms var(--ease, ease);
+}
+.hud-card:hover .hud-scrim {
+  opacity: 1;
+}
+
+.hud-toolbar {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  height: 46px;
+  padding-bottom: 4px;
+  opacity: 0;
+  transform: translateY(6px);
+  pointer-events: none;
+  transition:
+    opacity 160ms var(--ease, ease),
+    transform 160ms var(--ease, ease);
+}
+.hud-card:hover .hud-toolbar {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+
+.hud-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
   border: 1px solid transparent;
   background: transparent;
-  color: rgba(255, 255, 255, 0.62);
+  color: rgba(255, 255, 255, 0.82);
   cursor: pointer;
   transition:
     background 130ms var(--ease, ease),
-    color 130ms var(--ease, ease),
-    border-color 130ms var(--ease, ease);
+    color 130ms var(--ease, ease);
 }
 .hud-btn:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.96);
-  border-color: color-mix(in srgb, var(--accent, #5B7CFA) 38%, transparent);
+  background: rgba(255, 255, 255, 0.13);
+  color: #fff;
 }
 .hud-btn:active {
-  background: rgba(255, 255, 255, 0.1);
-}
-.hud-btn--dismiss:hover {
-  /* Terminal action — warm it slightly without alarming. */
-  color: #fff;
-  border-color: rgba(255, 255, 255, 0.2);
-}
-
-/* CSS tooltip — appears above the button on hover. */
-.hud-btn::after {
-  content: attr(data-tip);
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%) translateY(3px);
-  padding: 3px 7px;
-  border-radius: 6px;
-  background: rgba(8, 9, 13, 0.95);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 11px;
-  font-weight: 500;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 120ms var(--ease, ease), transform 120ms var(--ease, ease);
-  z-index: 10;
-}
-.hud-btn:hover::after {
-  opacity: 1;
-  transform: translateX(-50%) translateY(0);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 /* ── Inline confirmation flash ────────────────────────────────────────────── */
 .hud-status {
   position: absolute;
   inset: 0;
+  z-index: 6;
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 16px;
-  background: rgba(12, 14, 20, 0.9);
+  background: rgba(12, 14, 20, 0.92);
   backdrop-filter: blur(4px);
   -webkit-backdrop-filter: blur(4px);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   letter-spacing: -0.005em;
+  line-height: 1.35;
   color: rgba(255, 255, 255, 0.96);
+  text-align: center;
+  padding: 0 16px;
   opacity: 0;
   pointer-events: none;
   transition: opacity 160ms var(--ease, ease);
-  padding: 0 18px;
-  text-align: center;
 }
 .hud-status--show {
   opacity: 1;
 }
 
 /* ── Quality floor ────────────────────────────────────────────────────────── */
-.hud-btn:focus-visible {
+.hud-btn:focus-visible,
+.hud-close:focus-visible {
   outline: 2px solid var(--accent, #5B7CFA);
   outline-offset: 2px;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .hud-bar { animation: none; }
-  .hud-thumb, .hud-btn, .hud-btn::after, .hud-status { transition: none; }
+  .hud-card { animation: none; }
+  .hud-tick, .hud-dims, .hud-close, .hud-scrim, .hud-toolbar, .hud-btn, .hud-status {
+    transition: none;
+  }
 }

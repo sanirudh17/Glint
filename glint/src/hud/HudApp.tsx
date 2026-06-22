@@ -1,14 +1,13 @@
 /**
  * HudApp.tsx — root of the post-capture HUD (route #/hud).
  *
- * Mounted in a borderless, transparent, always-on-top webview at the bottom-centre
- * of the capture monitor. Renders an "instrument glass" bar: the capture thumbnail
- * (which is itself the drag handle) plus an action row.
+ * A CleanShot-style corner card: a compact thumbnail of the shot you just took,
+ * parked in the bottom-left of the capture monitor. Quiet by default — just the
+ * preview, its dimensions, and a close button. The action toolbar (Copy / Copy
+ * path / Save / Annotate / Pin) reveals over the bottom edge on hover.
  *
- * The thumbnail wears viewfinder corner ticks — a nod to the capture crosshair —
- * marking it as the shot you just took, ready to lift into any app.
- *
- * No app chrome here (no Titlebar / NavRail). Esc dismisses.
+ * The thumbnail is the drag handle: press and drag it to drop the real PNG into
+ * any app. Viewfinder corner ticks echo the capture crosshair. Esc dismisses.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -21,6 +20,7 @@ import {
   type HudData,
 } from "../lib/hudIpc";
 import { HudActions, type HudAction } from "./HudActions";
+import { X } from "lucide-react";
 import "./hud.css";
 
 export function HudApp() {
@@ -29,7 +29,7 @@ export function HudApp() {
   const statusTimer = useRef<number | null>(null);
 
   // Fetch the current capture result. On failure, close the HUD so we never
-  // strand an empty bar on screen.
+  // strand an empty card on screen.
   useEffect(() => {
     getHudData().then(setData).catch(() => hudDismiss());
   }, []);
@@ -84,10 +84,11 @@ export function HudApp() {
 
   return (
     <div className="hud-root">
-      <div className="hud-bar">
-        {/* Thumbnail — the drag handle. */}
+      <div className={`hud-card${data ? "" : " hud-card--loading"}`}>
+        {/* Drag surface — sits beneath the overlays so toolbar/close clicks
+            never start a drag. */}
         <div
-          className={`hud-thumb${data ? "" : " hud-thumb--loading"}`}
+          className="hud-drag"
           onPointerDown={onThumbPointerDown}
           role="img"
           aria-label="Captured image — drag to share"
@@ -96,23 +97,36 @@ export function HudApp() {
           {data && (
             <img className="hud-thumb-img" src={data.imageDataUrl} alt="" draggable={false} />
           )}
-          {/* Viewfinder corner ticks. */}
-          <span className="hud-tick hud-tick--tl" />
-          <span className="hud-tick hud-tick--tr" />
-          <span className="hud-tick hud-tick--bl" />
-          <span className="hud-tick hud-tick--br" />
-          {data && (
-            <span className="hud-dims">
-              {data.width}<span className="hud-dims-x">×</span>{data.height}
-            </span>
-          )}
         </div>
 
-        <span className="hud-divider hud-divider--lead" aria-hidden="true" />
+        {/* Viewfinder corner ticks. */}
+        <span className="hud-tick hud-tick--tl" />
+        <span className="hud-tick hud-tick--tr" />
+        <span className="hud-tick hud-tick--bl" />
+        <span className="hud-tick hud-tick--br" />
 
+        {data && (
+          <span className="hud-dims">
+            {data.width}<span className="hud-dims-x">×</span>{data.height}
+          </span>
+        )}
+
+        <button
+          type="button"
+          className="hud-close"
+          aria-label="Dismiss"
+          data-tip="Dismiss"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => onAction("dismiss")}
+        >
+          <X size={13} strokeWidth={2} />
+        </button>
+
+        {/* Scrim + action toolbar — revealed on hover. */}
+        <div className="hud-scrim" aria-hidden="true" />
         <HudActions onAction={onAction} />
 
-        {/* Inline confirmation, layered over the bar. */}
+        {/* Inline confirmation, layered over the card. */}
         <div className={`hud-status${status ? " hud-status--show" : ""}`} aria-live="polite">
           {status}
         </div>

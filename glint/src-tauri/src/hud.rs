@@ -7,12 +7,15 @@ use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const HUD_LABEL: &str = "hud";
 
-// Logical (CSS px) size of the HUD window. The bar inside has its own inset, so
-// the window carries a little transparent breathing room around it.
-const HUD_W: f64 = 400.0;
-const HUD_H: f64 = 112.0;
-// Gap between the HUD and the bottom edge of the monitor.
-const MARGIN: f64 = 24.0;
+// Logical (CSS px) size of the HUD window. It holds a corner thumbnail card with
+// transparent breathing room around it for the seat shadow.
+const HUD_W: f64 = 244.0;
+const HUD_H: f64 = 172.0;
+// Gap from the monitor's left edge.
+const MARGIN_X: f64 = 20.0;
+// Gap from the monitor's bottom edge — generous so the card clears the Windows
+// taskbar (precise work-area insetting is a later polish pass).
+const MARGIN_Y: f64 = 48.0;
 
 /// Open a fresh HUD window for the current capture result. Tears down any prior
 /// HUD first (only one result is ever current). Must run off the main thread —
@@ -37,16 +40,16 @@ pub fn open(app: &AppHandle) -> tauri::Result<()> {
         .visible(false) // shown after it positions to the monitor
         .build()?;
 
-    // Position bottom-centre of the primary monitor (single-monitor phase).
+    // Position bottom-LEFT of the primary monitor (CleanShot-style corner).
     if let Some(monitor) = win.primary_monitor()? {
         let scale = monitor.scale_factor();
         let pos = monitor.position(); // physical px
         let size = monitor.size(); // physical px
-        let hud_w = (HUD_W * scale) as i32;
         let hud_h = (HUD_H * scale) as i32;
-        let margin = (MARGIN * scale) as i32;
-        let x = pos.x + (size.width as i32 - hud_w) / 2;
-        let y = pos.y + size.height as i32 - hud_h - margin;
+        let margin_x = (MARGIN_X * scale) as i32;
+        let margin_y = (MARGIN_Y * scale) as i32;
+        let x = pos.x + margin_x;
+        let y = pos.y + size.height as i32 - hud_h - margin_y;
         win.set_position(tauri::PhysicalPosition { x, y })?;
     } else {
         log::warn!("hud: no primary monitor; using default window position");

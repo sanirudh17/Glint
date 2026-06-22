@@ -1,9 +1,10 @@
 /**
- * HudActions.tsx — the action row of the post-capture HUD.
+ * HudActions.tsx — the hover toolbar of the post-capture HUD.
  *
- * Iconographic, instrument-grade buttons. Each carries a `data-tip` for the
- * CSS tooltip (hud.css). Annotate + Pin are stubs until P5 / P7 and announce
- * that inline. Dismiss is set slightly apart as the terminal action.
+ * Five iconographic, instrument-grade actions that reveal over the bottom of the
+ * thumbnail on hover. Dismiss is a separate corner button on the card itself.
+ * Annotate + Pin are honest stubs until P5 / P7. Each button stops pointer-down
+ * propagation so clicking it never starts a drag-out.
  */
 import {
   Copy,
@@ -11,7 +12,6 @@ import {
   Save,
   Pencil,
   Pin,
-  X,
   type LucideIcon,
 } from "lucide-react";
 
@@ -24,46 +24,36 @@ export type HudAction =
   | "dismiss";
 
 interface ButtonDef {
-  id: HudAction;
+  id: Exclude<HudAction, "dismiss">;
   icon: LucideIcon;
   tip: string;
 }
 
-const PRIMARY: ButtonDef[] = [
+const ACTIONS: ButtonDef[] = [
   { id: "copy",      icon: Copy,   tip: "Copy image" },
   { id: "copy-path", icon: Link2,  tip: "Copy path" },
-  { id: "save",      icon: Save,   tip: "Save to Pictures" },
+  { id: "save",      icon: Save,   tip: "Save" },
   { id: "annotate",  icon: Pencil, tip: "Annotate" },
   { id: "pin",       icon: Pin,    tip: "Pin" },
 ];
 
 export function HudActions({ onAction }: { onAction: (a: HudAction) => void }) {
   return (
-    <div className="hud-actions">
-      {PRIMARY.map(({ id, icon: Icon, tip }) => (
+    <div className="hud-toolbar">
+      {ACTIONS.map(({ id, icon: Icon, tip }) => (
         <button
           key={id}
           type="button"
           className="hud-btn"
           data-tip={tip}
           aria-label={tip}
+          // Don't let a button press initiate a thumbnail drag.
+          onPointerDown={(e) => e.stopPropagation()}
           onClick={() => onAction(id)}
         >
-          <Icon size={17} strokeWidth={1.75} />
+          <Icon size={16} strokeWidth={1.75} />
         </button>
       ))}
-
-      <span className="hud-divider" aria-hidden="true" />
-
-      <button
-        type="button"
-        className="hud-btn hud-btn--dismiss"
-        data-tip="Dismiss"
-        aria-label="Dismiss"
-        onClick={() => onAction("dismiss")}
-      >
-        <X size={17} strokeWidth={1.75} />
-      </button>
     </div>
   );
 }
