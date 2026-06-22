@@ -58,6 +58,20 @@ pub struct CaptureSession {
 #[derive(Default)]
 pub struct CaptureState(pub Mutex<Option<CaptureSession>>);
 
+/// The most recent committed capture — what the post-capture HUD acts on.
+/// Holds the cropped pixels (for re-copy + thumbnail) plus the temp PNG path
+/// (for drag-out / copy-path / save). Replaced on every commit.
+#[derive(Clone)]
+pub struct LastCapture {
+    pub path: String,
+    pub width: u32,
+    pub height: u32,
+    pub rgba: Vec<u8>,
+}
+
+#[derive(Default)]
+pub struct LastCaptureState(pub Mutex<Option<LastCapture>>);
+
 /// Spawn [`begin`] on a fresh background thread.
 ///
 /// Building the overlay `WebviewWindow` must NOT happen synchronously on the
@@ -82,8 +96,10 @@ pub fn begin(app: &AppHandle, mode: CaptureMode) {
 /// failure. Must run off the main thread (see [`begin_spawned`]).
 pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
     log::info!("capture begin: mode={}", mode.as_str());
-    // Guard against double-begin: tear down any existing overlay first.
+    // Guard against double-begin: tear down any existing overlay first, and
+    // close the previous capture's HUD so a new capture clears the old result.
     overlay::teardown_all(app);
+    crate::hud::teardown(app);
 
     let capturer = XcapCapturer;
     let image = match capturer.capture_primary() {

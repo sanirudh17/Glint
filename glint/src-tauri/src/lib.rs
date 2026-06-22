@@ -1,6 +1,7 @@
 mod capture;
 mod clipboard;
 mod db;
+mod hud;
 mod overlay;
 mod paths;
 mod settings;
@@ -8,7 +9,10 @@ mod shortcuts;
 mod tray;
 mod window;
 
-use capture::commands::{capture_cancel, capture_commit, capture_overlay_data};
+use capture::commands::{
+    capture_cancel, capture_commit, capture_overlay_data, hud_copy, hud_copy_path, hud_data,
+    hud_dismiss, hud_save,
+};
 use settings::commands::{settings_get_all, settings_set, SettingsState};
 
 /// Start a capture from the main-window UI (the Home quick-start buttons).
@@ -67,6 +71,7 @@ pub fn run() {
         )
         .manage(SettingsState(Default::default()))
         .manage(crate::capture::CaptureState::default())
+        .manage(crate::capture::LastCaptureState::default())
         .setup(|app| {
             tray::build(app.handle())?;
             shortcuts::register(app.handle())?;
@@ -88,6 +93,11 @@ pub fn run() {
             capture_commit,
             capture_cancel,
             capture_start,
+            hud_data,
+            hud_copy,
+            hud_copy_path,
+            hud_save,
+            hud_dismiss,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Glint");

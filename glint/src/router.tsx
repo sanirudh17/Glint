@@ -6,6 +6,7 @@ import LibraryView from "./views/LibraryView";
 import SettingsView from "./views/SettingsView";
 import EditorView from "./views/EditorView";
 import { OverlayApp } from "./overlay/OverlayApp";
+import { HudApp } from "./hud/HudApp";
 import "./components/shell.css";
 
 /**
@@ -45,6 +46,15 @@ export const router = createHashRouter([
      */
     path: "/overlay",
     element: <OverlayApp />,
+  },
+  {
+    /**
+     * Chrome-free HUD route — the post-capture bar. Like /overlay it sits
+     * outside AppShell so HudApp is the sole root for this transparent,
+     * borderless window. URL: tauri://localhost/#/hud
+     */
+    path: "/hud",
+    element: <HudApp />,
   },
   {
     path: "/",

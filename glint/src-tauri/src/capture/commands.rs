@@ -134,24 +134,127 @@ fn finish_commit(
     let png = crate::capture::frozen::encode_png(&out_img).map_err(|e| e.to_string())?;
     std::fs::write(&path, &png).map_err(|e| e.to_string())?;
 
-    // Copy to clipboard — non-fatal: log a warning but still emit capture-complete.
+    // Copy to clipboard — non-fatal: log a warning but carry on.
     let clip = clipboard::copy_image(&cropped, clamped.w, clamped.h);
     if let Err(ref e) = clip {
         log::warn!("clipboard copy failed: {e}");
     }
 
-    // Emit capture-complete with path, dimensions, and clipboard success flag.
-    app.emit(
-        "capture-complete",
-        serde_json::json!({
-            "path": path.to_string_lossy(),
-            "width": clamped.w,
-            "height": clamped.h,
-            "clipboard": clip.is_ok(),
-        }),
-    )
-    .map_err(|e| e.to_string())?;
+    // Mirror to a stable path (%USERPROFILE%\.glint\latest.png) for coding agents.
+    // Non-fatal: the temp PNG + clipboard already succeeded.
+    if let Ok(home) = app.path().home_dir() {
+        let latest = crate::paths::latest_png(&home);
+        if let Some(parent) = latest.parent() {
+            let _ = std::fs::create_dir_all(parent);
+        }
+        if let Err(e) = std::fs::write(&latest, &png) {
+            log::warn!("latest.png mirror failed: {e}");
+        }
+    }
 
+    // Stash the result for the HUD to act on (re-copy / drag / save / copy-path).
+    let path_str = path.to_string_lossy().to_string();
+    *app.state::<crate::capture::LastCaptureState>().0.lock().unwrap() =
+        Some(crate::capture::LastCapture {
+            path: path_str.clone(),
+            width: clamped.w,
+            height: clamped.h,
+            rgba: cropped,
+        });
+
+    // Open the post-capture HUD. If it fails to open, fall back to the Phase 2
+    // success toast so the capture still gives feedback.
+    if let Err(e) = crate::hud::open(app) {
+        log::error!("hud open failed: {e}");
+        app.emit(
+            "capture-complete",
+            serde_json::json!({
+                "path": path_str,
+                "width": clamped.w,
+                "height": clamped.h,
+                "clipboard": clip.is_ok(),
+            }),
+        )
+        .map_err(|e| e.to_string())?;
+    }
+
+    Ok(())
+}
+
+// ─── HUD commands ─────────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct HudData {
+    pub path: String,
+    pub width: u32,
+    pub height: u32,
+    pub image_data_url: String,
+}
+
+/// The HUD's thumbnail + metadata for the current capture result.
+#[tauri::command]
+pub fn hud_data(state: State<crate::capture::LastCaptureState>) -> Result<HudData, String> {
+    let guard = state.0.lock().unwrap();
+    let last = guard.as_ref().ok_or("no capture result")?;
+    let img = crate::capture::frozen::CapturedImage {
+        width: last.width,
+        height: last.height,
+        rgba: last.rgba.clone(),
+    };
+    let png = crate::capture::frozen::encode_png(&img).map_err(|e| e.to_string())?;
+    let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+    Ok(HudData {
+        path: last.path.clone(),
+        width: last.width,
+        height: last.height,
+        image_data_url: format!("data:image/png;base64,{b64}"),
+    })
+}
+
+/// Re-copy the current capture image to the clipboard. The HUD shows its own
+/// confirmation, so this stays silent (no toast to the possibly-hidden main window).
+#[tauri::command]
+pub fn hud_copy(state: State<crate::capture::LastCaptureState>) -> Result<(), String> {
+    let (rgba, w, h) = {
+        let guard = state.0.lock().unwrap();
+        let last = guard.as_ref().ok_or("no capture result")?;
+        (last.rgba.clone(), last.width, last.height)
+    };
+    clipboard::copy_image(&rgba, w, h)
+}
+
+/// Copy the current capture's temp-file path to the clipboard as text.
+#[tauri::command]
+pub fn hud_copy_path(state: State<crate::capture::LastCaptureState>) -> Result<(), String> {
+    let path = {
+        let guard = state.0.lock().unwrap();
+        guard.as_ref().ok_or("no capture result")?.path.clone()
+    };
+    clipboard::copy_text(&path)
+}
+
+/// Save a copy of the current capture into the default save folder
+/// (`<Pictures>/Glint`) with a timestamped, collision-free filename. Returns the
+/// destination path so the HUD can confirm where it landed.
+#[tauri::command]
+pub fn hud_save(app: AppHandle, state: State<crate::capture::LastCaptureState>) -> Result<String, String> {
+    let src = {
+        let guard = state.0.lock().unwrap();
+        guard.as_ref().ok_or("no capture result")?.path.clone()
+    };
+    let pictures = app.path().picture_dir().map_err(|e| e.to_string())?;
+    let dir = crate::paths::glint_save_dir(&pictures);
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let filename = crate::paths::capture_filename(chrono::Local::now());
+    let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
+    std::fs::copy(&src, &dest).map_err(|e| e.to_string())?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+/// Dismiss (close) the HUD window.
+#[tauri::command]
+pub fn hud_dismiss(app: AppHandle) -> Result<(), String> {
+    crate::hud::teardown(&app);
     Ok(())
 }
 
