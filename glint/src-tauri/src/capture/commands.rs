@@ -320,6 +320,105 @@ pub fn hud_dismiss(app: AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+// ─── Library commands ─────────────────────────────────────────────────────────
+
+#[derive(Serialize)]
+pub struct CaptureListItem {
+    pub id: i64,
+    pub kind: String,
+    pub path: String,
+    pub width: Option<i64>,
+    pub height: Option<i64>,
+    pub bytes: Option<i64>,
+    pub created_at: i64,
+    /// base64 data URL of the thumbnail PNG, when one exists on disk.
+    pub thumb_data_url: Option<String>,
+}
+
+/// List all (non-deleted) captures, newest first, with inlined thumbnail data URLs.
+#[tauri::command]
+pub fn captures_list(db: State<crate::Db>) -> Result<Vec<CaptureListItem>, String> {
+    let conn = db.0.lock().unwrap();
+    let rows = crate::db::list_captures(&conn).map_err(|e| e.to_string())?;
+    let items = rows
+        .into_iter()
+        .map(|r| {
+            let thumb_data_url = r.thumb_path.as_ref().and_then(|tp| {
+                std::fs::read(tp).ok().map(|bytes| {
+                    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+                    format!("data:image/png;base64,{b64}")
+                })
+            });
+            CaptureListItem {
+                id: r.id,
+                kind: r.kind,
+                path: r.path,
+                width: r.width,
+                height: r.height,
+                bytes: r.bytes,
+                created_at: r.created_at,
+                thumb_data_url,
+            }
+        })
+        .collect();
+    Ok(items)
+}
+
+fn path_for(db: &State<crate::Db>, id: i64) -> Result<String, String> {
+    let conn = db.0.lock().unwrap();
+    crate::db::capture_path(&conn, id)
+        .map_err(|e| e.to_string())?
+        .ok_or_else(|| "capture not found".to_string())
+}
+
+/// Open the capture in the OS default image viewer.
+#[tauri::command]
+pub fn capture_open(db: State<crate::Db>, id: i64) -> Result<(), String> {
+    let path = path_for(&db, id)?;
+    std::process::Command::new("cmd")
+        .args(["/C", "start", "", &path])
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Reveal (select) the capture in Windows Explorer.
+#[tauri::command]
+pub fn capture_reveal(db: State<crate::Db>, id: i64) -> Result<(), String> {
+    let path = path_for(&db, id)?;
+    std::process::Command::new("explorer")
+        .arg(format!("/select,{path}"))
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
+/// Re-copy a Library capture image to the clipboard (decode PNG → rgba).
+#[tauri::command]
+pub fn capture_copy(db: State<crate::Db>, id: i64) -> Result<(), String> {
+    let path = path_for(&db, id)?;
+    let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
+    let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
+    let (w, h) = (img.width(), img.height());
+    clipboard::copy_image(&img.into_raw(), w, h)
+}
+
+/// Soft-delete a capture and remove its main file (best effort). Orphan thumbnails
+/// are harmless and cleaned in a later pass.
+#[tauri::command]
+pub fn capture_delete(db: State<crate::Db>, id: i64) -> Result<(), String> {
+    let path = {
+        let conn = db.0.lock().unwrap();
+        let p = crate::db::capture_path(&conn, id).map_err(|e| e.to_string())?;
+        crate::db::soft_delete(&conn, id).map_err(|e| e.to_string())?;
+        p
+    };
+    if let Some(p) = path {
+        let _ = std::fs::remove_file(&p);
+    }
+    Ok(())
+}
+
 /// Cancel an in-progress capture: discard session, tear down overlays, and restore
 /// the main window if this capture was started from the main-window UI.
 #[tauri::command]

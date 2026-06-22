@@ -10,7 +10,8 @@ mod tray;
 mod window;
 
 use capture::commands::{
-    capture_cancel, capture_commit, capture_overlay_data, hud_copy, hud_copy_path, hud_data,
+    capture_cancel, capture_commit, capture_copy, capture_delete, capture_open,
+    capture_overlay_data, capture_reveal, captures_list, hud_copy, hud_copy_path, hud_data,
     hud_dismiss, hud_save,
 };
 use settings::commands::{settings_get_all, settings_set, SettingsState};
@@ -123,6 +124,11 @@ pub fn run() {
             hud_copy_path,
             hud_save,
             hud_dismiss,
+            captures_list,
+            capture_open,
+            capture_reveal,
+            capture_copy,
+            capture_delete,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Glint");
