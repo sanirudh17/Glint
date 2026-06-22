@@ -15,6 +15,9 @@ use capture::commands::{
 };
 use settings::commands::{settings_get_all, settings_set, SettingsState};
 
+/// tray-core's owned connection to the captures table (same glint.db plugin-sql uses).
+pub struct Db(pub std::sync::Mutex<rusqlite::Connection>);
+
 /// Start a capture from the main-window UI (the Home quick-start buttons).
 /// Hotkeys and the tray call `capture::begin` directly while the main window is
 /// already hidden; this command additionally hides the main window first — so
@@ -75,6 +78,28 @@ pub fn run() {
         .setup(|app| {
             tray::build(app.handle())?;
             shortcuts::register(app.handle())?;
+
+            // Open tray-core's rusqlite connection to the same glint.db plugin-sql uses.
+            use tauri::Manager;
+            let db_path = app
+                .path()
+                .app_config_dir()
+                .map(|d| d.join("glint.db"))
+                .map_err(|e| format!("config dir: {e}"))?;
+            if let Some(parent) = db_path.parent() {
+                let _ = std::fs::create_dir_all(parent);
+            }
+            let conn = rusqlite::Connection::open(&db_path)
+                .map_err(|e| format!("open glint.db: {e}"))?;
+            let _ = conn.busy_timeout(std::time::Duration::from_millis(5000));
+            // Hydrate persisted settings into the live SettingsState.
+            {
+                let state = app.state::<SettingsState>();
+                let mut s = state.0.lock().unwrap();
+                crate::settings::hydrate::hydrate_from_db(&conn, &mut s);
+            }
+            app.manage(Db(std::sync::Mutex::new(conn)));
+
             log::info!("Glint started");
             Ok(())
         })

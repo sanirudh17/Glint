@@ -23,6 +23,11 @@ pub fn latest_png(home: &Path) -> PathBuf {
     home.join(".glint").join("latest.png")
 }
 
+/// Thumbnail storage dir: `<app_local_data>/thumbs`.
+pub fn thumbs_dir(app_local: &Path) -> PathBuf {
+    app_local.join("thumbs")
+}
+
 /// Resolve a non-colliding path in `dir` for `filename`. If it is free, return
 /// `dir/filename`; otherwise insert ` (n)` before the extension until free.
 /// `exists` is injected so this stays pure and testable.
@@ -70,6 +75,11 @@ mod tests {
             latest_png(Path::new("C:/Users/x")),
             PathBuf::from("C:/Users/x/.glint/latest.png")
         );
+    }
+
+    #[test]
+    fn thumbs_dir_joins() {
+        assert_eq!(thumbs_dir(Path::new("C:/x")), PathBuf::from("C:/x/thumbs"));
     }
 
     #[test]

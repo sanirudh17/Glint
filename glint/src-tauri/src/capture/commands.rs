@@ -115,33 +115,54 @@ fn finish_commit(
         .ok_or("empty selection")?;
     let cropped = crop_rgba(&session.image.rgba, session.image.width, session.image.height, clamped);
 
-    // Write temp PNG under %LOCALAPPDATA%\com.glint.app\tmp\.
-    // app.path() returns &PathResolver via the Manager trait (Tauri 2.11.3).
-    // app_local_data_dir() -> Result<PathBuf> is available on desktop.
-    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
-    let path = dir.join(format!("glint-{ts}.png"));
-
     let out_img = crate::capture::frozen::CapturedImage {
         width: clamped.w,
         height: clamped.h,
         rgba: cropped.clone(),
     };
     let png = crate::capture::frozen::encode_png(&out_img).map_err(|e| e.to_string())?;
-    std::fs::write(&path, &png).map_err(|e| e.to_string())?;
 
-    // Copy to clipboard — non-fatal: log a warning but carry on.
-    let clip = clipboard::copy_image(&cropped, clamped.w, clamped.h);
+    // Read the live settings (hydrated at startup).
+    let (auto_save, auto_copy) = {
+        let state = app.state::<crate::settings::commands::SettingsState>();
+        let s = state.0.lock().unwrap();
+        (s.auto_save, s.auto_copy)
+    };
+
+    // Decide where the durable file lives: auto-save → Pictures\Glint; otherwise a temp file.
+    let (path, saved) = if auto_save {
+        let pictures = app.path().picture_dir().map_err(|e| e.to_string())?;
+        let dir = crate::paths::glint_save_dir(&pictures);
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let filename = crate::paths::capture_filename(chrono::Local::now());
+        let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
+        std::fs::write(&dest, &png).map_err(|e| e.to_string())?;
+        (dest, true)
+    } else {
+        let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
+        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+        let ts = std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_millis();
+        let dest = dir.join(format!("glint-{ts}.png"));
+        std::fs::write(&dest, &png).map_err(|e| e.to_string())?;
+        (dest, false)
+    };
+    let path_str = path.to_string_lossy().to_string();
+
+    // Copy to clipboard (gated by auto_copy) — non-fatal: log a warning but carry on.
+    let clip = if auto_copy {
+        clipboard::copy_image(&cropped, clamped.w, clamped.h)
+    } else {
+        Ok(())
+    };
     if let Err(ref e) = clip {
         log::warn!("clipboard copy failed: {e}");
     }
 
     // Mirror to a stable path (%USERPROFILE%\.glint\latest.png) for coding agents.
-    // Non-fatal: the temp PNG + clipboard already succeeded.
+    // Always — non-fatal.
     if let Ok(home) = app.path().home_dir() {
         let latest = crate::paths::latest_png(&home);
         if let Some(parent) = latest.parent() {
@@ -152,14 +173,39 @@ fn finish_commit(
         }
     }
 
-    // Stash the result for the HUD to act on (re-copy / drag / save / copy-path).
-    let path_str = path.to_string_lossy().to_string();
+    // Record in the Library when auto-saved: thumbnail + DB row + capture-saved event.
+    if saved {
+        let thumb_path = write_thumb(app, &cropped, clamped.w, clamped.h, &path_str);
+        let row = crate::db::NewCapture {
+            kind: "screenshot".into(),
+            path: path_str.clone(),
+            thumb_path,
+            width: Some(clamped.w as i64),
+            height: Some(clamped.h as i64),
+            bytes: Some(png.len() as i64),
+            created_at: std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map(|d| d.as_secs() as i64)
+                .unwrap_or(0),
+        };
+        let conn = app.state::<crate::Db>();
+        let guard = conn.0.lock().unwrap();
+        match crate::db::insert_capture(&guard, &row) {
+            Ok(_) => {
+                let _ = app.emit("capture-saved", ());
+            }
+            Err(e) => log::error!("insert_capture failed: {e}"),
+        }
+    }
+
+    // Stash the result for the HUD to act on (re-copy / drag / save / copy-path / reveal).
     *app.state::<crate::capture::LastCaptureState>().0.lock().unwrap() =
         Some(crate::capture::LastCapture {
             path: path_str.clone(),
             width: clamped.w,
             height: clamped.h,
             rgba: cropped,
+            saved,
         });
 
     // Open the post-capture HUD. If it fails to open, fall back to the Phase 2
@@ -179,6 +225,22 @@ fn finish_commit(
     }
 
     Ok(())
+}
+
+/// Write a thumbnail PNG into the app's thumbs dir and return its path. Non-fatal:
+/// returns None on any failure (the Library card falls back to a placeholder tile).
+fn write_thumb(app: &AppHandle, rgba: &[u8], w: u32, h: u32, src_path: &str) -> Option<String> {
+    let png = crate::capture::thumb::make_thumb(rgba, w, h, 480).ok()?;
+    let dir = app.path().app_local_data_dir().ok()?;
+    let dir = crate::paths::thumbs_dir(&dir);
+    std::fs::create_dir_all(&dir).ok()?;
+    let stem = std::path::Path::new(src_path)
+        .file_stem()
+        .and_then(|s| s.to_str())
+        .unwrap_or("thumb");
+    let dest = dir.join(format!("{stem}.thumb.png"));
+    std::fs::write(&dest, &png).ok()?;
+    Some(dest.to_string_lossy().to_string())
 }
 
 // ─── HUD commands ─────────────────────────────────────────────────────────────
