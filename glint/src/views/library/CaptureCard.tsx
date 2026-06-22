@@ -1,6 +1,7 @@
-import { ExternalLink, FolderOpen, Copy, Trash2 } from "lucide-react";
+import { ExternalLink, FolderOpen, Copy, Pencil, Trash2 } from "lucide-react";
 import type { CaptureItem } from "../../lib/captures";
 import { openCapture, revealCapture, copyCapture, deleteCapture, dragOut } from "../../lib/captures";
+import { openEditorCapture } from "../../lib/editor";
 
 function when(unixSec: number): string {
   return new Date(unixSec * 1000).toLocaleString(undefined, {
@@ -41,6 +42,9 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
         </button>
         <button className="cap-btn" aria-label="Reveal in Explorer" title="Reveal" onClick={() => act(() => revealCapture(item.id))}>
           <FolderOpen size={15} strokeWidth={1.75} />
+        </button>
+        <button className="cap-btn" aria-label="Edit" title="Edit" onClick={() => act(() => openEditorCapture(item.id))}>
+          <Pencil size={15} strokeWidth={1.75} />
         </button>
         <button className="cap-btn" aria-label="Copy" title="Copy" onClick={() => act(() => copyCapture(item.id))}>
           <Copy size={15} strokeWidth={1.75} />

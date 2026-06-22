@@ -20,6 +20,7 @@ import {
   dragOut,
   type HudData,
 } from "../lib/hudIpc";
+import { openEditorFromLast } from "../lib/editor";
 import { HudActions, type HudAction } from "./HudActions";
 import { X } from "lucide-react";
 import "./hud.css";
@@ -75,7 +76,7 @@ export function HudApp() {
           }
           break;
         case "annotate":
-          flash("Annotation arrives in Phase 5");
+          await openEditorFromLast().catch(() => flash("Couldn't open editor"));
           break;
         case "pin":
           flash("Pinning arrives in Phase 7");

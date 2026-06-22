@@ -61,6 +61,11 @@ export default function App() {
       listen<string>("glint-toast", (e) => {
         pushToast(e.payload);
       }),
+
+      // Editor entry points (HUD Annotate / Library Edit / open-in-editor) emit this.
+      listen("editor-open", () => {
+        router.navigate("/editor");
+      }),
     ];
 
     return () => {
