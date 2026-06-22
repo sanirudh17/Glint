@@ -293,11 +293,7 @@ pub fn hud_reveal(state: State<crate::capture::LastCaptureState>) -> Result<(), 
         let guard = state.0.lock().unwrap();
         guard.as_ref().ok_or("no capture result")?.path.clone()
     };
-    std::process::Command::new("explorer")
-        .arg(format!("/select,{path}"))
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    reveal_in_explorer(&path)
 }
 
 /// Re-copy the current capture image to the clipboard. The HUD shows its own
@@ -447,6 +443,22 @@ fn path_for_existing(db: &State<crate::Db>, id: i64) -> Result<String, String> {
     Ok(path)
 }
 
+/// Select a file in a fresh Explorer window.
+///
+/// Uses `raw_arg` so the path is quoted exactly — `explorer /select,"<path>"`.
+/// Our save names contain spaces (`Glint 2026-… at ….png`); the normal `arg`
+/// API would make Rust quote the whole `/select,…` token, which Explorer can't
+/// parse — it then silently opens the default folder (Documents) instead of
+/// selecting the file.
+fn reveal_in_explorer(path: &str) -> Result<(), String> {
+    use std::os::windows::process::CommandExt;
+    std::process::Command::new("explorer")
+        .raw_arg(format!("/select,\"{path}\""))
+        .spawn()
+        .map_err(|e| e.to_string())?;
+    Ok(())
+}
+
 /// Open the capture in the OS default image viewer.
 #[tauri::command]
 pub fn capture_open(db: State<crate::Db>, id: i64) -> Result<(), String> {
@@ -462,11 +474,7 @@ pub fn capture_open(db: State<crate::Db>, id: i64) -> Result<(), String> {
 #[tauri::command]
 pub fn capture_reveal(db: State<crate::Db>, id: i64) -> Result<(), String> {
     let path = path_for_existing(&db, id)?;
-    std::process::Command::new("explorer")
-        .arg(format!("/select,{path}"))
-        .spawn()
-        .map_err(|e| e.to_string())?;
-    Ok(())
+    reveal_in_explorer(&path)
 }
 
 /// Re-copy a Library capture image to the clipboard (decode PNG → rgba).
