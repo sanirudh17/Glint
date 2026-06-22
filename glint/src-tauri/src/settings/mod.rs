@@ -34,6 +34,8 @@ pub struct Settings {
     pub theme: Theme,
     pub accent: String,
     pub hotkeys: Hotkeys,
+    pub auto_save: bool,
+    pub auto_copy: bool,
 }
 
 impl Default for Settings {
@@ -42,6 +44,8 @@ impl Default for Settings {
             theme: Theme::Dark,
             accent: "#5B7CFA".into(),
             hotkeys: Hotkeys::default(),
+            auto_save: true,
+            auto_copy: true,
         }
     }
 }
@@ -58,12 +62,19 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         "hotkeys" => {
             s.hotkeys = serde_json::from_value(value).map_err(|e| e.to_string())?;
         }
+        "auto_save" => {
+            s.auto_save = value.as_bool().ok_or("auto_save must be boolean")?;
+        }
+        "auto_copy" => {
+            s.auto_copy = value.as_bool().ok_or("auto_copy must be boolean")?;
+        }
         other => return Err(format!("unknown settings key: {other}")),
     }
     Ok(())
 }
 
 pub mod commands;
+pub mod hydrate;
 
 #[cfg(test)]
 mod tests {
@@ -102,5 +113,24 @@ mod tests {
     fn apply_update_rejects_bad_value() {
         let mut s = Settings::default();
         assert!(apply_update(&mut s, "theme", json!("chartreuse")).is_err());
+    }
+
+    #[test]
+    fn defaults_enable_autosave_and_autocopy() {
+        let s = Settings::default();
+        assert!(s.auto_save && s.auto_copy);
+    }
+
+    #[test]
+    fn apply_update_sets_autosave_bool() {
+        let mut s = Settings::default();
+        apply_update(&mut s, "auto_save", json!(false)).unwrap();
+        assert!(!s.auto_save);
+    }
+
+    #[test]
+    fn apply_update_rejects_non_bool_autosave() {
+        let mut s = Settings::default();
+        assert!(apply_update(&mut s, "auto_save", json!("yes")).is_err());
     }
 }

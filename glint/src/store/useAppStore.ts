@@ -8,6 +8,8 @@ export interface Settings {
   theme: Theme;
   accent: string;
   hotkeys: Record<string, string>;
+  auto_save: boolean;
+  auto_copy: boolean;
 }
 
 export interface Toast {
@@ -21,6 +23,8 @@ interface AppState {
   loadSettings: () => Promise<void>;
   setTheme: (t: Theme) => Promise<void>;
   setAccent: (hex: string) => Promise<void>;
+  setAutoSave: (on: boolean) => Promise<void>;
+  setAutoCopy: (on: boolean) => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -38,16 +42,22 @@ export const useAppStore = create<AppState>((set, get) => ({
     //    Wrapped in try/catch so a missing plugin (plain-Vite preview) doesn't crash.
     let theme = rustSettings.theme;
     let accent = rustSettings.accent;
+    let auto_save = rustSettings.auto_save;
+    let auto_copy = rustSettings.auto_copy;
     try {
       const dbTheme = await readSetting<Theme>("theme");
       if (dbTheme) theme = dbTheme;
       const dbAccent = await readSetting<string>("accent");
       if (dbAccent) accent = dbAccent;
+      const dbAutoSave = await readSetting<boolean>("auto_save");
+      if (dbAutoSave !== null) auto_save = dbAutoSave;
+      const dbAutoCopy = await readSetting<boolean>("auto_copy");
+      if (dbAutoCopy !== null) auto_copy = dbAutoCopy;
     } catch {
       // plugin-sql unavailable (e.g. plain Vite dev server) — use Rust defaults.
     }
 
-    const merged: Settings = { ...rustSettings, theme, accent };
+    const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy };
     set({ settings: merged });
     applyTheme(theme);
     applyAccent(accent);
@@ -69,6 +79,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     await persistSetting("accent", hex);
     set({ settings: { ...updated, accent: hex } });
     applyAccent(hex);
+  },
+
+  setAutoSave: async (on: boolean) => {
+    const updated = await saveSetting("auto_save", on);
+    await persistSetting("auto_save", on);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setAutoCopy: async (on: boolean) => {
+    const updated = await saveSetting("auto_copy", on);
+    await persistSetting("auto_copy", on);
+    set({ settings: { ...get().settings, ...updated } as Settings });
   },
 
   pushToast: (text: string) =>
