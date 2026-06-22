@@ -10,6 +10,7 @@ export interface Settings {
   hotkeys: Record<string, string>;
   auto_save: boolean;
   auto_copy: boolean;
+  open_in_editor: boolean;
 }
 
 export interface Toast {
@@ -25,6 +26,7 @@ interface AppState {
   setAccent: (hex: string) => Promise<void>;
   setAutoSave: (on: boolean) => Promise<void>;
   setAutoCopy: (on: boolean) => Promise<void>;
+  setOpenInEditor: (on: boolean) => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -44,6 +46,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     let accent = rustSettings.accent;
     let auto_save = rustSettings.auto_save;
     let auto_copy = rustSettings.auto_copy;
+    let open_in_editor = rustSettings.open_in_editor;
     try {
       const dbTheme = await readSetting<Theme>("theme");
       if (dbTheme) theme = dbTheme;
@@ -53,11 +56,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (dbAutoSave !== null) auto_save = dbAutoSave;
       const dbAutoCopy = await readSetting<boolean>("auto_copy");
       if (dbAutoCopy !== null) auto_copy = dbAutoCopy;
+      const dbOpenInEditor = await readSetting<boolean>("open_in_editor");
+      if (dbOpenInEditor !== null) open_in_editor = dbOpenInEditor;
     } catch {
       // plugin-sql unavailable (e.g. plain Vite dev server) — use Rust defaults.
     }
 
-    const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy };
+    const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy, open_in_editor };
     set({ settings: merged });
     applyTheme(theme);
     applyAccent(accent);
@@ -90,6 +95,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setAutoCopy: async (on: boolean) => {
     const updated = await saveSetting("auto_copy", on);
     await persistSetting("auto_copy", on);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setOpenInEditor: async (on: boolean) => {
+    const updated = await saveSetting("open_in_editor", on);
+    await persistSetting("open_in_editor", on);
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 

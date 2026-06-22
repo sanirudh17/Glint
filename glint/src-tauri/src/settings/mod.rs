@@ -36,6 +36,7 @@ pub struct Settings {
     pub hotkeys: Hotkeys,
     pub auto_save: bool,
     pub auto_copy: bool,
+    pub open_in_editor: bool,
 }
 
 impl Default for Settings {
@@ -46,6 +47,7 @@ impl Default for Settings {
             hotkeys: Hotkeys::default(),
             auto_save: true,
             auto_copy: true,
+            open_in_editor: false,
         }
     }
 }
@@ -67,6 +69,9 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         }
         "auto_copy" => {
             s.auto_copy = value.as_bool().ok_or("auto_copy must be boolean")?;
+        }
+        "open_in_editor" => {
+            s.open_in_editor = value.as_bool().ok_or("open_in_editor must be boolean")?;
         }
         other => return Err(format!("unknown settings key: {other}")),
     }
@@ -132,5 +137,13 @@ mod tests {
     fn apply_update_rejects_non_bool_autosave() {
         let mut s = Settings::default();
         assert!(apply_update(&mut s, "auto_save", json!("yes")).is_err());
+    }
+
+    #[test]
+    fn apply_update_sets_open_in_editor_bool() {
+        let mut s = Settings::default();
+        assert!(!s.open_in_editor);
+        apply_update(&mut s, "open_in_editor", json!(true)).unwrap();
+        assert!(s.open_in_editor);
     }
 }
