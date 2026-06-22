@@ -1,6 +1,7 @@
 mod capture;
 mod clipboard;
 mod db;
+mod editor;
 mod hud;
 mod overlay;
 mod paths;
@@ -14,6 +15,7 @@ use capture::commands::{
     capture_overlay_data, capture_reveal, captures_list, hud_copy, hud_copy_path, hud_data,
     hud_dismiss, hud_reveal, hud_save,
 };
+use editor::commands::{editor_open_capture, editor_open_from_last, editor_source};
 use settings::commands::{settings_get_all, settings_set, SettingsState};
 
 /// tray-core's owned connection to the captures table (same glint.db plugin-sql uses).
@@ -76,6 +78,7 @@ pub fn run() {
         .manage(SettingsState(Default::default()))
         .manage(crate::capture::CaptureState::default())
         .manage(crate::capture::LastCaptureState::default())
+        .manage(crate::editor::EditorState::default())
         .setup(|app| {
             tray::build(app.handle())?;
             shortcuts::register(app.handle())?;
@@ -130,6 +133,9 @@ pub fn run() {
             capture_reveal,
             capture_copy,
             capture_delete,
+            editor_open_from_last,
+            editor_open_capture,
+            editor_source,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Glint");
