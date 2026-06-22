@@ -123,10 +123,10 @@ fn finish_commit(
     let png = crate::capture::frozen::encode_png(&out_img).map_err(|e| e.to_string())?;
 
     // Read the live settings (hydrated at startup).
-    let (auto_save, auto_copy) = {
+    let (auto_save, auto_copy, open_in_editor) = {
         let state = app.state::<crate::settings::commands::SettingsState>();
         let s = state.0.lock().unwrap();
-        (s.auto_save, s.auto_copy)
+        (s.auto_save, s.auto_copy, s.open_in_editor)
     };
 
     // Decide where the durable file lives: auto-save → Pictures\Glint; otherwise a temp file.
@@ -208,9 +208,19 @@ fn finish_commit(
             saved,
         });
 
-    // Open the post-capture HUD. If it fails to open, fall back to the Phase 2
-    // success toast so the capture still gives feedback.
-    if let Err(e) = crate::hud::open(app) {
+    if open_in_editor {
+        // Skip the HUD — drop straight into the editor with this capture loaded.
+        *app.state::<crate::editor::EditorState>().0.lock().unwrap() =
+            Some(crate::editor::EditorSource {
+                png: png.clone(),
+                width: clamped.w,
+                height: clamped.h,
+                origin: "capture".into(),
+                capture_id: None,
+            });
+        crate::editor::commands::open_editor_window(app);
+    } else if let Err(e) = crate::hud::open(app) {
+        // HUD failed to open — fall back to the Phase 2 success toast.
         log::error!("hud open failed: {e}");
         app.emit(
             "capture-complete",
