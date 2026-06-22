@@ -65,7 +65,13 @@ export function HudApp() {
           if (data?.saved) {
             await hudReveal().then(() => flash("Revealed in folder")).catch(() => flash("Couldn't reveal"));
           } else {
-            await hudSave().then((dest) => flash(`Saved · ${fileName(dest)}`)).catch(() => flash("Couldn't save"));
+            await hudSave()
+              .then((dest) => {
+                flash(`Saved · ${fileName(dest)}`);
+                // Reflect the save locally: the toolbar flips Save→Reveal.
+                setData((d) => (d ? { ...d, saved: true, path: dest } : d));
+              })
+              .catch(() => flash("Couldn't save"));
           }
           break;
         case "annotate":

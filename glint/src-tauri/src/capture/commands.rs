@@ -317,9 +317,10 @@ pub fn hud_copy_path(state: State<crate::capture::LastCaptureState>) -> Result<(
 /// destination path so the HUD can confirm where it landed.
 #[tauri::command]
 pub fn hud_save(app: AppHandle, state: State<crate::capture::LastCaptureState>) -> Result<String, String> {
-    let src = {
+    let (src, rgba, w, h) = {
         let guard = state.0.lock().unwrap();
-        guard.as_ref().ok_or("no capture result")?.path.clone()
+        let last = guard.as_ref().ok_or("no capture result")?;
+        (last.path.clone(), last.rgba.clone(), last.width, last.height)
     };
     let pictures = app.path().picture_dir().map_err(|e| e.to_string())?;
     let dir = crate::paths::glint_save_dir(&pictures);
@@ -327,7 +328,43 @@ pub fn hud_save(app: AppHandle, state: State<crate::capture::LastCaptureState>) 
     let filename = crate::paths::capture_filename(chrono::Local::now());
     let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
     std::fs::copy(&src, &dest).map_err(|e| e.to_string())?;
-    Ok(dest.to_string_lossy().to_string())
+    let dest_str = dest.to_string_lossy().to_string();
+
+    // Manual Save curates this capture into the Library — mirror the auto-save path
+    // (thumbnail + DB row + capture-saved event) so an explicit Save means "keep it".
+    let thumb_path = write_thumb(&app, &rgba, w, h, &dest_str);
+    let bytes = std::fs::metadata(&dest).map(|m| m.len() as i64).ok();
+    let row = crate::db::NewCapture {
+        kind: "screenshot".into(),
+        path: dest_str.clone(),
+        thumb_path,
+        width: Some(w as i64),
+        height: Some(h as i64),
+        bytes,
+        created_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0),
+    };
+    {
+        let conn = app.state::<crate::Db>();
+        let guard = conn.0.lock().unwrap();
+        if let Err(e) = crate::db::insert_capture(&guard, &row) {
+            log::error!("hud_save insert_capture failed: {e}");
+        }
+    }
+    let _ = app.emit("capture-saved", ());
+
+    // Update the stash so the HUD flips Save→Reveal and later actions target the saved file.
+    {
+        let mut guard = state.0.lock().unwrap();
+        if let Some(last) = guard.as_mut() {
+            last.path = dest_str.clone();
+            last.saved = true;
+        }
+    }
+
+    Ok(dest_str)
 }
 
 /// Dismiss (close) the HUD window.
