@@ -127,7 +127,7 @@ export function HudApp() {
           type="button"
           className="hud-close"
           aria-label="Dismiss"
-          data-tip="Dismiss"
+          title="Dismiss"
           onPointerDown={(e) => e.stopPropagation()}
           onClick={() => onAction("dismiss")}
         >

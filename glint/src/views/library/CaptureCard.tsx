@@ -3,6 +3,9 @@ import type { CaptureItem } from "../../lib/captures";
 import { openCapture, revealCapture, copyCapture, deleteCapture, dragOut } from "../../lib/captures";
 import { openEditorCapture } from "../../lib/editor";
 import { useAppStore } from "../../store/useAppStore";
+// Card styles live in library.css; import here so the card is styled wherever
+// it's used (the Library grid *and* the Home dashboard's recent-captures row).
+import "../library.css";
 
 function when(unixSec: number): string {
   return new Date(unixSec * 1000).toLocaleString(undefined, {

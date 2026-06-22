@@ -72,7 +72,15 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
   return (
     <div className="editor-exportbar">
       {status && <span className="editor-status">{status}</span>}
-      <button className="editor-export-btn" onClick={onDrag} title="Drag out">
+      <button
+        className="editor-export-btn"
+        // Press-and-drag: the OS drag must start while the mouse button is held,
+        // so this fires on pointer-down (like the HUD/Library drag). onClick
+        // fires on release, when there's no held button to attach a drag to —
+        // which is why this used to do nothing.
+        onPointerDown={onDrag}
+        title="Press and drag onto any app"
+      >
         <Share2 size={16} strokeWidth={1.75} /> Drag
       </button>
       <button className="editor-export-btn" onClick={onCopy} title="Copy to clipboard">

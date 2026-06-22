@@ -54,7 +54,9 @@ export function HudActions({
           key={id}
           type="button"
           className="hud-btn"
-          data-tip={tip}
+          // Native title: a real OS tooltip that isn't clipped by the small HUD
+          // window (a CSS tooltip would be cut off at the window edge).
+          title={tip}
           aria-label={tip}
           // Don't let a button press initiate a thumbnail drag.
           onPointerDown={(e) => e.stopPropagation()}

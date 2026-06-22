@@ -1,10 +1,15 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { Crop, AppWindow, Monitor, Video, ImageOff } from "lucide-react";
 import { Button, Card, EmptyState } from "../components/ui";
 import { useAppStore } from "../store/useAppStore";
 import { startCapture } from "../lib/captureIpc";
+import { listCaptures, type CaptureItem } from "../lib/captures";
+import { CaptureCard } from "./library/CaptureCard";
 import "./home.css";
+
+/** How many of the most recent captures the dashboard previews. */
+const RECENT_LIMIT = 6;
 
 /** Human-readable labels for each hotkey action key. */
 const HOTKEY_LABELS: Record<string, string> = {
@@ -44,6 +49,20 @@ export default function HomeView() {
   // render, which under Zustand v5's Object.is equality is an infinite loop.
   const settings = useAppStore((s) => s.settings);
   const pushToast = useAppStore((s) => s.pushToast);
+
+  // Recent-captures preview — newest first, capped at RECENT_LIMIT.
+  const [recent, setRecent] = useState<CaptureItem[]>([]);
+  const reloadRecent = useCallback(() => {
+    listCaptures()
+      .then((c) => setRecent(c.slice(0, RECENT_LIMIT)))
+      .catch(() => setRecent([]));
+  }, []);
+  useEffect(() => { reloadRecent(); }, [reloadRecent]);
+  // Refresh when a capture is saved (or deleted from a card here / in the Library).
+  useEffect(() => {
+    const p = listen("capture-saved", () => reloadRecent());
+    return () => { p.then((un) => un()); };
+  }, [reloadRecent]);
 
   // The tray's capture items call capture::begin directly now; only the
   // not-yet-built actions still emit "tray-action" (e.g. record → Phase 6).
@@ -108,13 +127,21 @@ export default function HomeView() {
         <span className="label home-section-label" id="rc-label">
           Recent captures
         </span>
-        <div className="home-empty-wrap">
-          <EmptyState
-            icon={ImageOff}
-            title="No captures yet"
-            hint="Your screenshots and recordings will appear here."
-          />
-        </div>
+        {recent.length === 0 ? (
+          <div className="home-empty-wrap">
+            <EmptyState
+              icon={ImageOff}
+              title="No captures yet"
+              hint="Your screenshots and recordings will appear here."
+            />
+          </div>
+        ) : (
+          <div className="home-recent-grid" role="list" aria-label="Recent captures">
+            {recent.map((c) => (
+              <CaptureCard key={c.id} item={c} onChanged={reloadRecent} />
+            ))}
+          </div>
+        )}
       </section>
 
       {/* ── Hotkeys ─────────────────────────────────────────── */}

@@ -63,6 +63,16 @@
   min-height: 160px;
 }
 
+/* ─── Recent-captures grid ────────────────────────────────────────────── */
+/* Dashboard preview of the latest captures. Reuses .cap-card from library.css;
+   the page itself scrolls, so the grid doesn't need its own scroll region. */
+.home-recent-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--s4);
+  align-content: start;
+}
+
 /* ─── Hotkeys card ────────────────────────────────────────────────────── */
 .home-hotkeys-list {
   list-style: none;
