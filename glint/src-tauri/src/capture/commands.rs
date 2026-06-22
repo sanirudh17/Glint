@@ -435,10 +435,22 @@ fn path_for(db: &State<crate::Db>, id: i64) -> Result<String, String> {
         .ok_or_else(|| "capture not found".to_string())
 }
 
+/// Like `path_for`, but also confirms the file is still on disk. The Library row
+/// can outlive the file (the user moved/deleted it in Explorer), in which case
+/// Open/Reveal/Copy would otherwise fail silently or send Explorer to the wrong
+/// place — return a clear, user-facing message instead.
+fn path_for_existing(db: &State<crate::Db>, id: i64) -> Result<String, String> {
+    let path = path_for(db, id)?;
+    if !std::path::Path::new(&path).exists() {
+        return Err("This file is no longer on disk — it may have been moved or deleted.".into());
+    }
+    Ok(path)
+}
+
 /// Open the capture in the OS default image viewer.
 #[tauri::command]
 pub fn capture_open(db: State<crate::Db>, id: i64) -> Result<(), String> {
-    let path = path_for(&db, id)?;
+    let path = path_for_existing(&db, id)?;
     std::process::Command::new("cmd")
         .args(["/C", "start", "", &path])
         .spawn()
@@ -449,7 +461,7 @@ pub fn capture_open(db: State<crate::Db>, id: i64) -> Result<(), String> {
 /// Reveal (select) the capture in Windows Explorer.
 #[tauri::command]
 pub fn capture_reveal(db: State<crate::Db>, id: i64) -> Result<(), String> {
-    let path = path_for(&db, id)?;
+    let path = path_for_existing(&db, id)?;
     std::process::Command::new("explorer")
         .arg(format!("/select,{path}"))
         .spawn()
@@ -460,7 +472,7 @@ pub fn capture_reveal(db: State<crate::Db>, id: i64) -> Result<(), String> {
 /// Re-copy a Library capture image to the clipboard (decode PNG → rgba).
 #[tauri::command]
 pub fn capture_copy(db: State<crate::Db>, id: i64) -> Result<(), String> {
-    let path = path_for(&db, id)?;
+    let path = path_for_existing(&db, id)?;
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
     let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
     let (w, h) = (img.width(), img.height());

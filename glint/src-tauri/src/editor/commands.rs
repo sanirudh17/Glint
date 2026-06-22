@@ -23,8 +23,17 @@ pub struct EditorSourceDto {
 /// would silently fail to open.
 pub(crate) fn open_editor_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
+        let _ = w.unminimize();
         let _ = w.show();
+        // Windows won't reliably raise a hidden/background window with show() +
+        // set_focus() alone (the OS foreground lock). A brief always-on-top
+        // toggle forces it to the front; we immediately drop the topmost flag so
+        // the window behaves normally afterward. Without this the editor opens
+        // but stays behind whatever the user was looking at, so it feels like
+        // "Annotate" did nothing.
+        let _ = w.set_always_on_top(true);
         let _ = w.set_focus();
+        let _ = w.set_always_on_top(false);
     }
     let _ = app.emit("editor-open", ());
 }
@@ -73,6 +82,9 @@ pub fn editor_open_capture(
             .map_err(|e| e.to_string())?
             .ok_or("capture not found")?
     };
+    if !std::path::Path::new(&path).exists() {
+        return Err("This capture's file is no longer on disk — it may have been moved or deleted.".into());
+    }
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
     let decoded = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
     let (width, height) = (decoded.width(), decoded.height());
