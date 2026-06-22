@@ -48,4 +48,18 @@ describe("useEditorStore", () => {
     expect(useEditorStore.getState().style.color).toBe("#00f");
     expect(useEditorStore.getState().style.strokeWidth).toBe(3);
   });
+
+  it("undo with empty history is a no-op", () => {
+    const s = useEditorStore.getState();
+    s.undo();
+    expect(useEditorStore.getState().annotations).toEqual([]);
+  });
+
+  it("update changes an annotation and does not push history", () => {
+    const s = useEditorStore.getState();
+    s.add(rect("a"));
+    s.update("a", { x: 42 } as Partial<Annotation>);
+    expect((useEditorStore.getState().annotations[0] as { x: number }).x).toBe(42);
+    expect(useEditorStore.getState().past).toEqual([]);
+  });
 });

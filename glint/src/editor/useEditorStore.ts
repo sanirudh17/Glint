@@ -52,10 +52,11 @@ const INITIAL = {
 
 export const useEditorStore = create<EditorState>((set) => ({
   ...INITIAL,
+  style: { ...DEFAULT_STYLE },
 
   setBase: (b) => set({ base: b }),
   reset: () => set({ ...INITIAL, style: { ...DEFAULT_STYLE } }),
-  setTool: (t) => set({ tool: t, selectedId: t === "select" ? null : null }),
+  setTool: (t) => set({ tool: t, selectedId: null }),
   setStyle: (patch) => set((s) => ({ style: { ...s.style, ...patch } })),
   select: (id) => set({ selectedId: id }),
 
