@@ -1,19 +1,23 @@
-import { useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef } from "react";
 import type Konva from "konva";
+import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Frame as FrameIcon } from "lucide-react";
 import { useEditorStore } from "../editor/useEditorStore";
+import type { SerializedDoc } from "../editor/useEditorStore";
 import { getEditorSource } from "../lib/editor";
 import { EditorStage } from "./editor/EditorStage";
 import { ToolRail } from "./editor/ToolRail";
 import { StyleBar } from "./editor/StyleBar";
 import { ExportBar } from "./editor/ExportBar";
+import { ProjectBar } from "./editor/ProjectBar";
 import { FramePanel } from "./editor/FramePanel";
 import type { ToolId } from "../editor/model";
 import "./editor/editor.css";
 
 export default function EditorView() {
   const base = useEditorStore((s) => s.base);
-  const setBase = useEditorStore((s) => s.setBase);
+  const loadDoc = useEditorStore((s) => s.loadDoc);
   const reset = useEditorStore((s) => s.reset);
   const stageRef = useRef<Konva.Stage>(null);
 
@@ -25,6 +29,15 @@ export default function EditorView() {
   const frameEnabled = useEditorStore((s) => s.frame.enabled);
   const toggleFrame = useEditorStore((s) => s.toggleFrame);
 
+  const projectName = useEditorStore((s) => s.projectName);
+  const dirty = useEditorStore((s) => s.dirty);
+
+  useEffect(() => {
+    const label = projectName ?? "Untitled";
+    getCurrentWindow().setTitle(`Glint — ${dirty ? "•" : ""}${label}`).catch(() => {});
+    return () => { getCurrentWindow().setTitle("Glint").catch(() => {}); };
+  }, [projectName, dirty]);
+
   useEffect(() => {
     const keys: Record<string, ToolId> = {
       v: "select", a: "arrow", l: "line", r: "rect", o: "ellipse",
@@ -33,6 +46,11 @@ export default function EditorView() {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+        e.preventDefault();
+        window.dispatchEvent(new CustomEvent("glint:save-project", { detail: { asNew: e.shiftKey } }));
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
         e.preventDefault();
         e.shiftKey ? redo() : undo();
@@ -53,31 +71,49 @@ export default function EditorView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [setTool, undo, redo, remove, selectedId]);
 
-  useEffect(() => {
+  // Load (or reload) the editor source from EditorState. Used on mount AND when
+  // a `.glint` is opened while the editor is already mounted (editor-open fires
+  // but the route doesn't remount). loadDoc hydrates base + doc atomically.
+  const loadFromSource = useCallback(() => {
     let alive = true;
     getEditorSource()
       .then((src) => {
         const img = new Image();
         img.onload = () => {
-          if (alive)
-            setBase({
-              image: img,
-              width: src.width,
-              height: src.height,
-              origin: src.origin,
-              captureId: src.captureId,
-            });
+          if (!alive) return;
+          const project = src.projectPath
+            ? { path: src.projectPath, name: src.projectPath.split(/[\\/]/).pop() ?? src.projectPath }
+            : null;
+          loadDoc(
+            { image: img, width: src.width, height: src.height, origin: src.origin, captureId: src.captureId },
+            (src.doc as SerializedDoc | null) ?? null,
+            project,
+          );
         };
         img.src = src.imageDataUrl;
       })
       .catch(() => {
-        /* no source (e.g. navigated here directly) — show empty state */
+        /* no source (navigated here directly) — show empty state */
       });
     return () => {
       alive = false;
+    };
+  }, [loadDoc]);
+
+  useEffect(() => {
+    const cancel = loadFromSource();
+    return () => {
+      cancel();
       reset();
     };
-  }, [setBase, reset]);
+  }, [loadFromSource, reset]);
+
+  // Reopen path: project_open emits editor-open after setting EditorState; if we
+  // are already on /editor the route won't remount, so reload here.
+  useEffect(() => {
+    const p = listen("editor-open", () => loadFromSource());
+    return () => { p.then((un) => un()); };
+  }, [loadFromSource]);
 
   if (!base) {
     return (
@@ -91,6 +127,7 @@ export default function EditorView() {
   return (
     <div className="editor-view">
       <div className="editor-topbar">
+        <ProjectBar />
         <StyleBar />
         <div className="editor-frame-slot">
           <button
