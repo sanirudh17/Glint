@@ -18,3 +18,4 @@ pub struct EditorSource {
 pub struct EditorState(pub Mutex<Option<EditorSource>>);
 
 pub mod commands;
+pub mod document;
