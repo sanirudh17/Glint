@@ -14,6 +14,7 @@
   "dependencies": {
     "@crabnebula/tauri-plugin-drag": "^2.1.0",
     "@tauri-apps/api": "^2.11.1",
+    "@tauri-apps/plugin-dialog": "^2",
     "@tauri-apps/plugin-sql": "^2.4.0",
     "konva": "^9.3.22",
     "lucide-react": "^1.21.0",
