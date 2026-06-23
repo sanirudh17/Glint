@@ -37,6 +37,13 @@ export interface FrameConfig {
 /** One step of undo/redo history: annotations + the structural crop together. */
 interface DocSnapshot { annotations: Annotation[]; crop: Crop | null }
 
+/** The serializable editor document persisted to / loaded from a `.glint` file. */
+export interface SerializedDoc {
+  annotations: Annotation[];
+  crop: Crop | null;
+  frame: FrameConfig;
+}
+
 export const DEFAULT_FRAME: FrameConfig = {
   enabled: false,
   background: { type: "gradient", gradientId: GRADIENTS[0].id },
@@ -56,8 +63,17 @@ interface EditorState {
   frame: FrameConfig;
   past: DocSnapshot[];
   future: DocSnapshot[];
+  projectPath: string | null;
+  projectName: string | null;
+  dirty: boolean;
 
   setBase: (b: EditorBase) => void;
+  loadDoc: (
+    base: EditorBase,
+    doc: SerializedDoc | null,
+    project: { path: string; name: string } | null,
+  ) => void;
+  markSaved: (path: string, name: string) => void;
   reset: () => void;
   setTool: (t: ToolId) => void;
   setStyle: (patch: Partial<Style>) => void;
@@ -79,6 +95,12 @@ interface EditorState {
 /** Fresh frame config with its nested background cloned (so resets/inits never share refs). */
 const freshFrame = (): FrameConfig => ({ ...DEFAULT_FRAME, background: { ...DEFAULT_FRAME.background } });
 
+/** Merge a loaded frame over defaults so a partial/legacy doc still hydrates safely. */
+const mergeFrame = (f: FrameConfig | undefined): FrameConfig =>
+  f
+    ? { ...DEFAULT_FRAME, ...f, background: f.background ? { ...f.background } : { ...DEFAULT_FRAME.background } }
+    : freshFrame();
+
 const INITIAL = {
   base: null as EditorBase | null,
   annotations: [] as Annotation[],
@@ -89,6 +111,9 @@ const INITIAL = {
   frame: freshFrame(),
   past: [] as DocSnapshot[],
   future: [] as DocSnapshot[],
+  projectPath: null as string | null,
+  projectName: null as string | null,
+  dirty: false,
 };
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -96,6 +121,23 @@ export const useEditorStore = create<EditorState>((set) => ({
   style: { ...DEFAULT_STYLE },
 
   setBase: (b) => set({ base: b }),
+
+  loadDoc: (base, doc, project) =>
+    set({
+      base,
+      annotations: doc?.annotations ?? [],
+      crop: doc?.crop ?? null,
+      frame: mergeFrame(doc?.frame),
+      past: [],
+      future: [],
+      selectedId: null,
+      projectPath: project?.path ?? null,
+      projectName: project?.name ?? null,
+      dirty: false,
+    }),
+
+  markSaved: (path, name) => set({ projectPath: path, projectName: name, dirty: false }),
+
   reset: () => set({ ...INITIAL, style: { ...DEFAULT_STYLE }, frame: freshFrame() }),
   setTool: (t) => set({ tool: t, selectedId: null }),
   setStyle: (patch) => set((s) => ({ style: { ...s.style, ...patch } })),
@@ -105,12 +147,13 @@ export const useEditorStore = create<EditorState>((set) => ({
   // undone. Clears redo.
   pushHistory: () => set((s) => ({ past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [] })),
 
-  add: (a) => set((s) => ({ annotations: addAnnotation(s.annotations, a), selectedId: a.id })),
-  update: (id, patch) => set((s) => ({ annotations: updateAnnotation(s.annotations, id, patch) })),
+  add: (a) => set((s) => ({ annotations: addAnnotation(s.annotations, a), selectedId: a.id, dirty: true })),
+  update: (id, patch) => set((s) => ({ annotations: updateAnnotation(s.annotations, id, patch), dirty: true })),
   remove: (id) =>
     set((s) => ({
       annotations: deleteAnnotation(s.annotations, id),
       selectedId: s.selectedId === id ? null : s.selectedId,
+      dirty: true,
     })),
 
   // Wipe every annotation in one gesture (a single undoable step). No-op — and
@@ -119,19 +162,19 @@ export const useEditorStore = create<EditorState>((set) => ({
   clearAll: () =>
     set((s) =>
       s.annotations.length
-        ? { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: [], selectedId: null }
+        ? { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: [], selectedId: null, dirty: true }
         : s,
     ),
 
   // Crop is structural → part of the undo snapshot. Callers pushHistory() before
   // setCrop so the prior crop can be undone.
-  setCrop: (c) => set({ crop: c }),
-  resetCrop: () => set({ crop: null }),
+  setCrop: (c) => set({ crop: c, dirty: true }),
+  resetCrop: () => set({ crop: null, dirty: true }),
 
   // Frame styling is live tweak state (like the style bar) — never in history.
-  setFrame: (patch) => set((s) => ({ frame: { ...s.frame, ...patch } })),
-  toggleFrame: (on) => set((s) => ({ frame: { ...s.frame, enabled: on ?? !s.frame.enabled } })),
-  resetFrame: () => set({ frame: freshFrame() }),
+  setFrame: (patch) => set((s) => ({ frame: { ...s.frame, ...patch }, dirty: true })),
+  toggleFrame: (on) => set((s) => ({ frame: { ...s.frame, enabled: on ?? !s.frame.enabled }, dirty: true })),
+  resetFrame: () => set({ frame: freshFrame(), dirty: true }),
 
   undo: () =>
     set((s) =>
@@ -141,6 +184,7 @@ export const useEditorStore = create<EditorState>((set) => ({
             past: s.past.slice(0, -1),
             future: [{ annotations: s.annotations, crop: s.crop }, ...s.future],
             selectedId: null,
+            dirty: true,
           }
         : s,
     ),
@@ -152,6 +196,7 @@ export const useEditorStore = create<EditorState>((set) => ({
             future: s.future.slice(1),
             past: [...s.past, { annotations: s.annotations, crop: s.crop }],
             selectedId: null,
+            dirty: true,
           }
         : s,
     ),

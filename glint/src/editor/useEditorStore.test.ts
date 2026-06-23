@@ -1,7 +1,19 @@
 import { describe, it, expect, beforeEach } from "vitest";
-import { useEditorStore } from "./useEditorStore";
+import { useEditorStore, DEFAULT_FRAME } from "./useEditorStore";
+import type { EditorBase } from "./useEditorStore";
 import type { Annotation } from "./model";
 import type { Crop } from "./composition";
+
+const fakeBase = (): EditorBase => ({
+  image: {} as HTMLImageElement,
+  width: 100,
+  height: 80,
+  origin: "project",
+  captureId: null,
+});
+
+const sampleAnno = () =>
+  ({ id: "a1", type: "rect", x: 1, y: 2, w: 3, h: 4, style: {} }) as never;
 
 const rect = (id: string): Annotation => ({
   id, type: "rect", z: 0, style: { color: "#fff", strokeWidth: 3, fontSize: 24 },
@@ -117,5 +129,73 @@ describe("useEditorStore — composition", () => {
     const s = useEditorStore.getState();
     s.setFrame({ padding: 99 });
     expect(useEditorStore.getState().past).toEqual([]);
+  });
+});
+
+describe("loadDoc", () => {
+  it("hydrates annotations + crop + frame atomically and clears history + dirty", () => {
+    const s = useEditorStore.getState();
+    // dirty the store first so we can prove loadDoc clears it
+    s.pushHistory();
+    s.add(sampleAnno());
+    expect(useEditorStore.getState().dirty).toBe(true);
+    expect(useEditorStore.getState().past.length).toBe(1);
+
+    useEditorStore.getState().loadDoc(
+      fakeBase(),
+      {
+        annotations: [sampleAnno()],
+        crop: { x: 0, y: 0, w: 50, h: 40 },
+        frame: { ...DEFAULT_FRAME, enabled: true },
+      },
+      { path: "C:/x/My Shot.glint", name: "My Shot.glint" },
+    );
+
+    const after = useEditorStore.getState();
+    expect(after.annotations.length).toBe(1);
+    expect(after.crop).toEqual({ x: 0, y: 0, w: 50, h: 40 });
+    expect(after.frame.enabled).toBe(true);
+    expect(after.past.length).toBe(0);
+    expect(after.future.length).toBe(0);
+    expect(after.projectPath).toBe("C:/x/My Shot.glint");
+    expect(after.projectName).toBe("My Shot.glint");
+    expect(after.dirty).toBe(false);
+  });
+
+  it("with null doc + null project loads a clean empty session", () => {
+    useEditorStore.getState().loadDoc(fakeBase(), null, null);
+    const after = useEditorStore.getState();
+    expect(after.annotations).toEqual([]);
+    expect(after.crop).toBeNull();
+    expect(after.frame).toEqual(DEFAULT_FRAME);
+    expect(after.projectPath).toBeNull();
+    expect(after.projectName).toBeNull();
+    expect(after.dirty).toBe(false);
+  });
+});
+
+describe("dirty tracking", () => {
+  it("flips dirty on a document mutation", () => {
+    useEditorStore.getState().loadDoc(fakeBase(), null, null);
+    expect(useEditorStore.getState().dirty).toBe(false);
+    useEditorStore.getState().add(sampleAnno());
+    expect(useEditorStore.getState().dirty).toBe(true);
+  });
+
+  it("does NOT flip dirty on setTool or select", () => {
+    useEditorStore.getState().loadDoc(fakeBase(), null, null);
+    useEditorStore.getState().setTool("rect");
+    useEditorStore.getState().select("a1");
+    expect(useEditorStore.getState().dirty).toBe(false);
+  });
+
+  it("markSaved clears dirty and records the path/name", () => {
+    useEditorStore.getState().loadDoc(fakeBase(), null, null);
+    useEditorStore.getState().add(sampleAnno());
+    useEditorStore.getState().markSaved("C:/x/Saved.glint", "Saved.glint");
+    const after = useEditorStore.getState();
+    expect(after.dirty).toBe(false);
+    expect(after.projectPath).toBe("C:/x/Saved.glint");
+    expect(after.projectName).toBe("Saved.glint");
   });
 });
