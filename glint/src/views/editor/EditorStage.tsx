@@ -1,14 +1,27 @@
 import { useEffect, useLayoutEffect, useRef, useState, forwardRef } from "react";
-import { Stage, Layer, Group, Image as KonvaImage, Transformer } from "react-konva";
+import { Stage, Layer, Group, Rect, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { newId, nextStepNumber, type Annotation, type TextAnno } from "../../editor/model";
 import { computeLayout } from "../../editor/composition";
+import { getGradient, konvaGradient } from "../../editor/gradients";
 import { AnnotationNode } from "./AnnotationNode";
 
 function fitScale(boxW: number, boxH: number, imgW: number, imgH: number): number {
   if (!imgW || !imgH) return 1;
   return Math.min(boxW / imgW, boxH / imgH, 1);
+}
+
+/** Trace a rounded-rect path (clamped radius) for a Group clipFunc. */
+function roundedRectPath(ctx: Konva.Context, x: number, y: number, w: number, h: number, r: number) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
 }
 
 export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, ref) {
@@ -132,6 +145,18 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const offX = layout.contentX - layout.cropX;
   const offY = layout.contentY - layout.cropY;
 
+  // Frame visuals (no-op when the frame is off: r=0, no shadow → plain image).
+  const r = frame.enabled ? frame.radius : 0;
+  const shadowProps =
+    frame.enabled && frame.shadow > 0
+      ? {
+          shadowColor: "#000",
+          shadowBlur: Math.round((frame.shadow / 100) * 60),
+          shadowOpacity: (frame.shadow / 100) * 0.5,
+          shadowOffsetY: Math.round((frame.shadow / 100) * 12),
+        }
+      : {};
+
   // Pointer position in image (unscaled) coordinates. Inverts the layer offset:
   // screen → composition (÷scale) → image (subtract content offset, add crop origin).
   const imgPoint = (stage: Konva.Stage) => {
@@ -235,15 +260,51 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         onDblClick={onDblClick}
         style={{ cursor: tool === "select" ? "default" : "crosshair" }}
       >
+        {/* Background fill (gradient/solid). Transparent → no rect → alpha in export. */}
+        {frame.enabled && frame.background.type !== "transparent" && (
+          <Layer listening={false}>
+            <Rect
+              x={0}
+              y={0}
+              width={compW}
+              height={compH}
+              {...(frame.background.type === "solid"
+                ? { fill: frame.background.color }
+                : konvaGradient(getGradient(frame.background.gradientId), compW, compH))}
+            />
+          </Layer>
+        )}
+
+        {/* Screenshot card: a shadow-casting rounded rect behind, then the image
+            clipped to the same rounded rect. Frame off → no shadow, r=0, plain image. */}
         <Layer listening={false}>
-          <KonvaImage
-            image={base.image}
-            x={layout.contentX}
-            y={layout.contentY}
-            width={layout.contentW}
-            height={layout.contentH}
-            crop={{ x: layout.cropX, y: layout.cropY, width: layout.contentW, height: layout.contentH }}
-          />
+          {frame.enabled && (
+            <Rect
+              x={layout.contentX}
+              y={layout.contentY}
+              width={layout.contentW}
+              height={layout.contentH}
+              cornerRadius={r}
+              fill="#000"
+              {...shadowProps}
+            />
+          )}
+          <Group
+            clipFunc={
+              r > 0
+                ? (ctx) => roundedRectPath(ctx, layout.contentX, layout.contentY, layout.contentW, layout.contentH, r)
+                : undefined
+            }
+          >
+            <KonvaImage
+              image={base.image}
+              x={layout.contentX}
+              y={layout.contentY}
+              width={layout.contentW}
+              height={layout.contentH}
+              crop={{ x: layout.cropX, y: layout.cropY, width: layout.contentW, height: layout.contentH }}
+            />
+          </Group>
         </Layer>
         {/* Annotations are offset onto the screenshot. Only the strokes are
             clipped (a Group) so they can't spill onto the frame backdrop; the
