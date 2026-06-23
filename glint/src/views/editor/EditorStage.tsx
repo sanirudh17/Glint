@@ -1,5 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState, forwardRef } from "react";
-import { Stage, Layer, Image as KonvaImage, Transformer } from "react-konva";
+import { Stage, Layer, Group, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { newId, nextStepNumber, type Annotation, type TextAnno } from "../../editor/model";
@@ -245,32 +245,35 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
             crop={{ x: layout.cropX, y: layout.cropY, width: layout.contentW, height: layout.contentH }}
           />
         </Layer>
-        <Layer
-          ref={layerRef}
-          x={offX}
-          y={offY}
-          clipX={layout.cropX}
-          clipY={layout.cropY}
-          clipWidth={layout.contentW}
-          clipHeight={layout.contentH}
-        >
-          {annotations.map((a) => (
-            <AnnotationNode
-              key={a.id}
-              anno={a}
-              // Freehand strokes (pen/highlight) have no x/y origin, so dragging
-              // them can't reposition anything — keep them non-draggable rather
-              // than offer a dead gesture that just burns an undo step.
-              draggable={tool === "select" && a.type !== "pen" && a.type !== "highlight"}
-              baseImage={base.image}
-              baseWidth={base.width}
-              baseHeight={base.height}
-              hidden={a.id === editingId}
-              onSelect={() => tool === "select" && select(a.id)}
-              onDragStart={() => pushHistory()}
-              onChange={(patch) => update(a.id, patch)}
-            />
-          ))}
+        {/* Annotations are offset onto the screenshot. Only the strokes are
+            clipped (a Group) so they can't spill onto the frame backdrop; the
+            Transformer is a sibling in the same layer so its resize handles —
+            which extend a few px outside an edge annotation — are never clipped. */}
+        <Layer ref={layerRef} x={offX} y={offY}>
+          <Group
+            clipX={layout.cropX}
+            clipY={layout.cropY}
+            clipWidth={layout.contentW}
+            clipHeight={layout.contentH}
+          >
+            {annotations.map((a) => (
+              <AnnotationNode
+                key={a.id}
+                anno={a}
+                // Freehand strokes (pen/highlight) have no x/y origin, so dragging
+                // them can't reposition anything — keep them non-draggable rather
+                // than offer a dead gesture that just burns an undo step.
+                draggable={tool === "select" && a.type !== "pen" && a.type !== "highlight"}
+                baseImage={base.image}
+                baseWidth={base.width}
+                baseHeight={base.height}
+                hidden={a.id === editingId}
+                onSelect={() => tool === "select" && select(a.id)}
+                onDragStart={() => pushHistory()}
+                onChange={(patch) => update(a.id, patch)}
+              />
+            ))}
+          </Group>
           <Transformer
             ref={trRef}
             rotateEnabled={false}
