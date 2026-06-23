@@ -3,10 +3,18 @@ import type { RefObject } from "react";
 import type Konva from "konva";
 import { Copy, Save, Share2 } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
+import { computeLayout, exportPixelRatio } from "../../editor/composition";
 import { editorCopy, editorSave, editorFlattenTemp, dragOut } from "../../lib/editor";
 
-/** Flatten the stage to base64 PNG (no data-url prefix) at native capture resolution. */
-function flatten(stage: Konva.Stage, baseWidth: number): string {
+/**
+ * Flatten the stage to base64 PNG (no data-url prefix) at the native composition
+ * resolution. Reads crop/frame from the store so the pixel-ratio scales the
+ * scaled-down stage back to the full framed composition's native pixels.
+ */
+function flatten(stage: Konva.Stage): string {
+  const { base, crop, frame } = useEditorStore.getState();
+  if (!base) return "";
+
   // Guard against a not-yet-laid-out stage: a zero width would make pixelRatio
   // Infinity, which corrupts the canvas and yields a blank/throwing toDataURL.
   const stageW = stage.width();
@@ -17,7 +25,8 @@ function flatten(stage: Konva.Stage, baseWidth: number): string {
   const hadNodes = tr ? tr.nodes() : [];
   if (tr) { tr.nodes([]); tr.getLayer()?.batchDraw(); }
 
-  const pixelRatio = baseWidth / stageW; // stageW is the scaled px width
+  const layout = computeLayout(base.width, base.height, crop, frame);
+  const pixelRatio = exportPixelRatio(layout, stageW); // → native composition px
   let url: string;
   try {
     url = stage.toDataURL({ pixelRatio, mimeType: "image/png" });
@@ -45,7 +54,7 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
   const withPng = (fn: (png: string) => Promise<void>) => async () => {
     const stage = stageRef.current;
     if (!stage || !base) return;
-    const png = flatten(stage, base.width);
+    const png = flatten(stage);
     if (!png) { flash("Couldn't render the image"); return; }
     try { await fn(png); } catch { flash("Something went wrong"); }
   };
@@ -61,7 +70,7 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
   const onDrag = async () => {
     const stage = stageRef.current;
     if (!stage || !base) return;
-    const png = flatten(stage, base.width);
+    const png = flatten(stage);
     if (!png) { flash("Couldn't render the image"); return; }
     try {
       const path = await editorFlattenTemp(png);
