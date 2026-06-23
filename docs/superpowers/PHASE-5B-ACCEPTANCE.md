@@ -1,7 +1,7 @@
 # Phase 5b — Crop + Backgrounds/Framing — Acceptance
 
 **Branch:** `phase-5b-composition`
-**Status:** Implementation complete; automated gate green. Manual (human-at-screen) acceptance pending.
+**Status:** ACCEPTED (user at-screen, incl. the shadow/checkerboard/colors refinement round). Merged to `master`.
 
 ## Automated gate (green)
 
