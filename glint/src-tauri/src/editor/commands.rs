@@ -214,17 +214,21 @@ pub fn project_save(
     }
 
     let text = {
-        let mut guard = ed.0.lock().unwrap();
-        let s = guard.as_mut().ok_or("no editor source")?;
+        let guard = ed.0.lock().unwrap();
+        let s = guard.as_ref().ok_or("no editor source")?;
         let app_version = app.package_info().version.to_string();
-        let text = document::assemble(&s.png, s.width, s.height, doc, &app_version)?;
-        // Remember the path so the next Ctrl+S overwrites silently.
-        s.project_path = Some(dest.to_string_lossy().to_string());
-        text
+        document::assemble(&s.png, s.width, s.height, doc, &app_version)?
     };
 
     std::fs::write(&dest, text.as_bytes()).map_err(|e| e.to_string())?;
-    Ok(dest.to_string_lossy().to_string())
+    let dest_str = dest.to_string_lossy().to_string();
+    // Record the path only AFTER a successful write, so a failed save can't leave
+    // EditorState.project_path pointing at a file that was never created (which
+    // would diverge from the frontend store and mislead a later silent Ctrl+S).
+    if let Some(s) = ed.0.lock().unwrap().as_mut() {
+        s.project_path = Some(dest_str.clone());
+    }
+    Ok(dest_str)
 }
 
 /// Open a `.glint` file into the editor: parse it, set EditorState (origin

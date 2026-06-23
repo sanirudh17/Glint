@@ -113,6 +113,9 @@ export default function EditorView() {
   // Reopen path: project_open emits editor-open after setting EditorState; if we
   // are already on /editor the route won't remount, so reload here.
   useEffect(() => {
+    // Reload when a project is opened while the editor is ALREADY mounted (the
+    // route doesn't remount). On a cold open the editor-open event fires before
+    // this listener subscribes, so only the mount effect loads — no double-load.
     // Track the in-flight reload's canceller so unmount (or a new editor-open)
     // can abort a pending image load — otherwise its alive guard stays true and
     // loadDoc could repopulate the store after reset() has cleared it.

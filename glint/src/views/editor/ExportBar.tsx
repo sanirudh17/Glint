@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type Konva from "konva";
-import { Copy, Save, Share2 } from "lucide-react";
+import { Copy, Download, Share2 } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { computeLayout, exportPixelRatio } from "../../editor/composition";
 import { editorCopy, editorSave, editorFlattenTemp, dragOut } from "../../lib/editor";
@@ -96,7 +96,7 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
         <Copy size={16} strokeWidth={1.75} /> Copy
       </button>
       <button className="editor-export-btn editor-export-btn--primary" onClick={onSave} title="Export a PNG to the Library">
-        <Save size={16} strokeWidth={1.75} /> Export
+        <Download size={16} strokeWidth={1.75} /> Export
       </button>
     </div>
   );
