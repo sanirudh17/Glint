@@ -3,6 +3,7 @@ import { Stage, Layer, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { newId, nextStepNumber, type Annotation, type TextAnno } from "../../editor/model";
+import { computeLayout } from "../../editor/composition";
 import { AnnotationNode } from "./AnnotationNode";
 
 function fitScale(boxW: number, boxH: number, imgW: number, imgH: number): number {
@@ -16,6 +17,8 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const tool = useEditorStore((s) => s.tool);
   const style = useEditorStore((s) => s.style);
   const selectedId = useEditorStore((s) => s.selectedId);
+  const crop = useEditorStore((s) => s.crop);
+  const frame = useEditorStore((s) => s.frame);
   const select = useEditorStore((s) => s.select);
   const add = useEditorStore((s) => s.add);
   const update = useEditorStore((s) => s.update);
@@ -38,9 +41,14 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     | TextAnno
     | undefined;
 
-  // Fit-to-viewport scale (1 when there's no base yet). Computed before the
-  // early return so the hooks below — which run unconditionally — can use it.
-  const scale = base ? fitScale(box.w, box.h, base.width, base.height) : 1;
+  // Composition geometry (crop + frame) drives the stage size and every
+  // coordinate mapping. Computed before the early return so the hooks below —
+  // which run unconditionally — can use it. With frame off + no crop the layout
+  // is the identity (compositionW/H == image size, offsets 0).
+  const layout = base ? computeLayout(base.width, base.height, crop, frame) : null;
+  const compW = layout?.compositionW ?? 1;
+  const compH = layout?.compositionH ?? 1;
+  const scale = layout ? fitScale(box.w, box.h, compW, compH) : 1;
 
   useLayoutEffect(() => {
     const el = wrapRef.current;
@@ -71,18 +79,21 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   // Recomputed when the edit target, its origin, font size, or the scale change
   // (not on every keystroke, so the box stays put while typing).
   useLayoutEffect(() => {
-    if (!editing) {
+    if (!editing || !layout) {
       setEditBox(null);
       return;
     }
     const cont = layerRef.current?.getStage()?.container().getBoundingClientRect();
     if (!cont) return;
+    // Image coords → screen: shift by the content offset (cropX→contentX), then
+    // scale. With frame off + no crop this reduces to editing.x * scale.
     setEditBox({
-      left: cont.left + editing.x * scale,
-      top: cont.top + editing.y * scale,
+      left: cont.left + (editing.x - layout.cropX + layout.contentX) * scale,
+      top: cont.top + (editing.y - layout.cropY + layout.contentY) * scale,
       fontSize: editing.style.fontSize * scale,
     });
-  }, [editingId, scale, editing?.x, editing?.y, editing?.style.fontSize]);
+  }, [editingId, scale, editing?.x, editing?.y, editing?.style.fontSize,
+      layout?.cropX, layout?.cropY, layout?.contentX, layout?.contentY]);
 
   // Focus + select-all when the editor opens.
   useEffect(() => {
@@ -112,16 +123,24 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     setEditingId(null);
   };
 
-  if (!base) return <div className="editor-canvas" ref={wrapRef} />;
+  if (!base || !layout) return <div className="editor-canvas" ref={wrapRef} />;
 
-  const stageW = Math.max(1, Math.round(base.width * scale));
-  const stageH = Math.max(1, Math.round(base.height * scale));
+  const stageW = Math.max(1, Math.round(compW * scale));
+  const stageH = Math.max(1, Math.round(compH * scale));
+  // The annotation layer is offset so image point (cropX,cropY) lands at the
+  // content's top-left (contentX,contentY). Frame off + no crop → (0,0).
+  const offX = layout.contentX - layout.cropX;
+  const offY = layout.contentY - layout.cropY;
 
-  // Pointer position in image (unscaled) coordinates.
+  // Pointer position in image (unscaled) coordinates. Inverts the layer offset:
+  // screen → composition (÷scale) → image (subtract content offset, add crop origin).
   const imgPoint = (stage: Konva.Stage) => {
     const p = stage.getPointerPosition();
     if (!p) return { x: 0, y: 0 };
-    return { x: p.x / scale, y: p.y / scale };
+    return {
+      x: p.x / scale - layout.contentX + layout.cropX,
+      y: p.y / scale - layout.contentY + layout.cropY,
+    };
   };
 
   const onDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -217,9 +236,24 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         style={{ cursor: tool === "select" ? "default" : "crosshair" }}
       >
         <Layer listening={false}>
-          <KonvaImage image={base.image} width={base.width} height={base.height} />
+          <KonvaImage
+            image={base.image}
+            x={layout.contentX}
+            y={layout.contentY}
+            width={layout.contentW}
+            height={layout.contentH}
+            crop={{ x: layout.cropX, y: layout.cropY, width: layout.contentW, height: layout.contentH }}
+          />
         </Layer>
-        <Layer ref={layerRef}>
+        <Layer
+          ref={layerRef}
+          x={offX}
+          y={offY}
+          clipX={layout.cropX}
+          clipY={layout.cropY}
+          clipWidth={layout.contentW}
+          clipHeight={layout.contentH}
+        >
           {annotations.map((a) => (
             <AnnotationNode
               key={a.id}
