@@ -16,7 +16,8 @@ export type ToolId =
   | "pen"
   | "highlight"
   | "blur"
-  | "step";
+  | "step"
+  | "crop";
 
 export interface Style {
   color: string;

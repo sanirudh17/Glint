@@ -1,6 +1,6 @@
 import { useEditorStore } from "../../editor/useEditorStore";
+import { PALETTE as COLORS } from "../../editor/palette";
 
-const COLORS = ["#E5484D", "#F5A623", "#30A46C", "#3B82F6", "#111111", "#FFFFFF"];
 const WIDTHS: { label: string; value: number }[] = [
   { label: "S", value: 2 },
   { label: "M", value: 4 },

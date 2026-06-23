@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useEditorStore } from "./useEditorStore";
 import type { Annotation } from "./model";
+import type { Crop } from "./composition";
 
 const rect = (id: string): Annotation => ({
   id, type: "rect", z: 0, style: { color: "#fff", strokeWidth: 3, fontSize: 24 },
@@ -78,6 +79,43 @@ describe("useEditorStore", () => {
     s.add(rect("a"));
     s.update("a", { x: 42 } as Partial<Annotation>);
     expect((useEditorStore.getState().annotations[0] as { x: number }).x).toBe(42);
+    expect(useEditorStore.getState().past).toEqual([]);
+  });
+});
+
+describe("useEditorStore — composition", () => {
+  it("setCrop / resetCrop update crop", () => {
+    const c: Crop = { x: 1, y: 2, w: 3, h: 4 };
+    useEditorStore.getState().setCrop(c);
+    expect(useEditorStore.getState().crop).toEqual(c);
+    useEditorStore.getState().resetCrop();
+    expect(useEditorStore.getState().crop).toBeNull();
+  });
+
+  it("crop is part of the undo snapshot", () => {
+    const s = useEditorStore.getState();
+    s.pushHistory();           // snapshot { annotations: [], crop: null }
+    s.setCrop({ x: 0, y: 0, w: 10, h: 10 });
+    s.undo();
+    expect(useEditorStore.getState().crop).toBeNull();
+    s.redo();
+    expect(useEditorStore.getState().crop).toEqual({ x: 0, y: 0, w: 10, h: 10 });
+  });
+
+  it("setFrame merges, toggleFrame flips enabled, resetFrame restores defaults", () => {
+    const s = useEditorStore.getState();
+    s.setFrame({ padding: 80 });
+    expect(useEditorStore.getState().frame.padding).toBe(80);
+    s.toggleFrame(true);
+    expect(useEditorStore.getState().frame.enabled).toBe(true);
+    s.resetFrame();
+    expect(useEditorStore.getState().frame.padding).toBe(40);
+    expect(useEditorStore.getState().frame.enabled).toBe(false);
+  });
+
+  it("frame changes do NOT push history", () => {
+    const s = useEditorStore.getState();
+    s.setFrame({ padding: 99 });
     expect(useEditorStore.getState().past).toEqual([]);
   });
 });
