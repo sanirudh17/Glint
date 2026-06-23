@@ -1,6 +1,6 @@
 import { useEditorStore } from "../../editor/useEditorStore";
 import { GRADIENTS } from "../../editor/gradients";
-import { PALETTE } from "../../editor/palette";
+import { BG_SOLIDS } from "../../editor/palette";
 
 const ASPECTS = ["auto", "1:1", "16:9", "4:3"] as const;
 
@@ -31,7 +31,7 @@ export function FramePanel() {
                 setFrame({
                   background:
                     t === "solid"
-                      ? { type: "solid", color: PALETTE[3] }
+                      ? { type: "solid", color: BG_SOLIDS[0] }
                       : t === "gradient"
                         ? { type: "gradient", gradientId: GRADIENTS[0].id }
                         : { type: "transparent" },
@@ -46,7 +46,7 @@ export function FramePanel() {
 
       {bg.type === "solid" && (
         <div className="frame-swatches">
-          {PALETTE.map((c) => (
+          {BG_SOLIDS.map((c) => (
             <button
               key={c}
               className={`editor-swatch${bg.color.toLowerCase() === c.toLowerCase() ? " editor-swatch--active" : ""}`}
@@ -82,6 +82,14 @@ export function FramePanel() {
         </div>
       )}
 
+      {bg.type === "transparent" && (
+        <p className="frame-hint">
+          No backdrop — the padding &amp; rounded corners export as a see-through (alpha) PNG, so the
+          framed screenshot drops cleanly onto any color, slide, or doc. The checkerboard just marks
+          the transparent areas; it isn&apos;t part of the image.
+        </p>
+      )}
+
       <Slider label="Padding" value={frame.padding} onChange={(v) => setFrame({ padding: v })} />
       <Slider label="Radius" value={frame.radius} min={0} max={48} onChange={(v) => setFrame({ radius: v })} />
       <Slider label="Shadow" value={frame.shadow} onChange={(v) => setFrame({ shadow: v })} />
@@ -100,6 +108,11 @@ export function FramePanel() {
           ))}
         </div>
       </div>
+      <p className="frame-hint">
+        Aspect pads the backdrop out to a fixed shape (1:1 for social, 16:9 for slides). The
+        screenshot never shrinks — it stays centered while the frame grows. Most visible with a
+        solid/gradient backdrop.
+      </p>
 
       <div className="frame-actions">
         {crop && (

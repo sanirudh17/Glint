@@ -15,6 +15,14 @@ export const GRADIENTS: GradientPreset[] = [
   { id: "slate",   label: "Slate",   angleDeg: 135, stops: [{ offset: 0, color: "#232526" }, { offset: 1, color: "#414345" }] },
   { id: "rose",    label: "Rose",    angleDeg: 135, stops: [{ offset: 0, color: "#ED4264" }, { offset: 1, color: "#FFEDBC" }] },
   { id: "mint",    label: "Mint",    angleDeg: 135, stops: [{ offset: 0, color: "#43C6AC" }, { offset: 1, color: "#F8FFAE" }] },
+  { id: "grape",   label: "Grape",   angleDeg: 135, stops: [{ offset: 0, color: "#7F00FF" }, { offset: 1, color: "#E100FF" }] },
+  { id: "sky",     label: "Sky",     angleDeg: 135, stops: [{ offset: 0, color: "#56CCF2" }, { offset: 1, color: "#2F80ED" }] },
+  { id: "coral",   label: "Coral",   angleDeg: 135, stops: [{ offset: 0, color: "#FF512F" }, { offset: 1, color: "#DD2476" }] },
+  { id: "gold",    label: "Gold",    angleDeg: 135, stops: [{ offset: 0, color: "#F7971E" }, { offset: 1, color: "#FFD200" }] },
+  { id: "aurora",  label: "Aurora",  angleDeg: 135, stops: [{ offset: 0, color: "#00C9FF" }, { offset: 1, color: "#92FE9D" }] },
+  { id: "lavender",label: "Lavender",angleDeg: 135, stops: [{ offset: 0, color: "#C9D6FF" }, { offset: 1, color: "#E2E2E2" }] },
+  { id: "midnight",label: "Midnight",angleDeg: 135, stops: [{ offset: 0, color: "#0F2027" }, { offset: 1, color: "#2C5364" }] },
+  { id: "steel",   label: "Steel",   angleDeg: 135, stops: [{ offset: 0, color: "#BDC3C7" }, { offset: 1, color: "#2C3E50" }] },
 ];
 
 export function getGradient(id: string): GradientPreset {

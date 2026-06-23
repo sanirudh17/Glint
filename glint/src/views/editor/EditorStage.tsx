@@ -155,15 +155,29 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
 
   // Frame visuals (no-op when the frame is off: r=0, no shadow → plain image).
   const r = frame.enabled ? frame.radius : 0;
+  // Shadow scales with the screenshot's long edge (so it reads the same on any
+  // capture size) and ramps clearly across the slider — even a low setting is
+  // plainly visible and the max is bold. (Tuned up after at-screen feedback that
+  // the old fixed-px values were barely visible on large captures.)
   const shadowProps =
     frame.enabled && frame.shadow > 0
-      ? {
-          shadowColor: "#000",
-          shadowBlur: Math.round((frame.shadow / 100) * 60),
-          shadowOpacity: (frame.shadow / 100) * 0.5,
-          shadowOffsetY: Math.round((frame.shadow / 100) * 12),
-        }
+      ? (() => {
+          const longEdge = Math.max(layout.contentW, layout.contentH);
+          const t = frame.shadow / 100; // 0..1
+          return {
+            shadowColor: "#000",
+            shadowBlur: Math.round((0.02 + t * 0.1) * longEdge), // 2%..12% of long edge
+            shadowOpacity: 0.2 + t * 0.5, // 0.2..0.7
+            shadowOffsetY: Math.round((0.01 + t * 0.05) * longEdge), // 1%..6% of long edge
+          };
+        })()
       : {};
+
+  // A transparent frame leaves the padding/corner area see-through; show a
+  // checkerboard behind the (transparent) canvas so it's unmistakably "this will
+  // export with alpha" — not a flat backdrop and not the same as frame-off. The
+  // checker is CSS on the wrapper (never in the Konva canvas), so export stays alpha.
+  const showChecker = frame.enabled && frame.background.type === "transparent";
 
   // Pointer position in image (unscaled) coordinates. Inverts the layer offset:
   // screen → composition (÷scale) → image (subtract content offset, add crop origin).
@@ -261,7 +275,10 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     <div className="editor-canvas" ref={wrapRef}>
       {/* A relative box exactly the size of the stage, so the absolutely-
           positioned crop overlay shares the stage's origin and bounds. */}
-      <div className="editor-stage-wrap" style={{ width: stageW, height: stageH }}>
+      <div
+        className={`editor-stage-wrap${showChecker ? " editor-stage-wrap--checker" : ""}`}
+        style={{ width: stageW, height: stageH }}
+      >
       <Stage
         ref={ref}
         width={stageW}
