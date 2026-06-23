@@ -1,6 +1,6 @@
 import {
   MousePointer2, ArrowUpRight, Minus, Square, Circle as CircleIcon,
-  Type, Pen, Highlighter, Droplet, Hash, Undo2, Redo2, Trash2, type LucideIcon,
+  Type, Pen, Highlighter, Droplet, Hash, Crop as CropIcon, Undo2, Redo2, Trash2, type LucideIcon,
 } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import type { ToolId } from "../../editor/model";
@@ -16,6 +16,7 @@ const TOOLS: { id: ToolId; icon: LucideIcon; tip: string; key: string }[] = [
   { id: "highlight", icon: Highlighter,   tip: "Highlighter (H)", key: "H" },
   { id: "blur",      icon: Droplet,       tip: "Blur (B)",        key: "B" },
   { id: "step",      icon: Hash,          tip: "Step (S)",        key: "S" },
+  { id: "crop",      icon: CropIcon,      tip: "Crop (C)",        key: "C" },
 ];
 
 export function ToolRail() {

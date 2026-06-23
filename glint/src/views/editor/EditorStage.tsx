@@ -6,6 +6,7 @@ import { newId, nextStepNumber, type Annotation, type TextAnno } from "../../edi
 import { computeLayout } from "../../editor/composition";
 import { getGradient, konvaGradient } from "../../editor/gradients";
 import { AnnotationNode } from "./AnnotationNode";
+import { CropOverlay } from "./CropOverlay";
 
 function fitScale(boxW: number, boxH: number, imgW: number, imgH: number): number {
   if (!imgW || !imgH) return 1;
@@ -37,6 +38,8 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const update = useEditorStore((s) => s.update);
   const remove = useEditorStore((s) => s.remove);
   const pushHistory = useEditorStore((s) => s.pushHistory);
+  const setCrop = useEditorStore((s) => s.setCrop);
+  const setTool = useEditorStore((s) => s.setTool);
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -171,6 +174,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const onDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
     if (!stage) return;
+    // Crop tool: the DOM CropOverlay drives the interaction (and covers the
+    // stage), so the stage itself does nothing.
+    if (tool === "crop") return;
     // Select tool: empty click clears selection; node clicks are handled by nodes.
     if (tool === "select") {
       if (e.target === stage) select(null);
@@ -248,6 +254,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
 
   return (
     <div className="editor-canvas" ref={wrapRef}>
+      {/* A relative box exactly the size of the stage, so the absolutely-
+          positioned crop overlay shares the stage's origin and bounds. */}
+      <div className="editor-stage-wrap" style={{ position: "relative", width: stageW, height: stageH }}>
       <Stage
         ref={ref}
         width={stageW}
@@ -347,6 +356,22 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
           />
         </Layer>
       </Stage>
+
+        {tool === "crop" && (
+          <CropOverlay
+            layout={layout}
+            scale={scale}
+            imageW={base.width}
+            imageH={base.height}
+            onConfirm={(c) => {
+              pushHistory();
+              setCrop(c);
+              setTool("select");
+            }}
+            onCancel={() => setTool("select")}
+          />
+        )}
+      </div>
 
       {editing && editBox && (
         <textarea

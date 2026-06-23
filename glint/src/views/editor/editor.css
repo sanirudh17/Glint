@@ -136,3 +136,45 @@
 .editor-export-btn:hover { border-color: var(--border-strong); }
 .editor-export-btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .editor-export-btn--primary:hover { background: var(--accent-hover); }
+
+/* ── Crop overlay ────────────────────────────────────────────────────────── */
+/* Absolutely fills the stage wrapper (which is exactly the stage box), so its
+   coordinate origin is the stage top-left. */
+.crop-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 20;
+  user-select: none;
+  touch-action: none;
+}
+/* The crop rectangle. The huge spread box-shadow dims everything outside it. */
+.crop-rect {
+  position: absolute;
+  box-sizing: border-box;
+  border: 1px solid var(--accent);
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.5);
+  cursor: move;
+}
+/* 8 resize handles, centred on their edge/corner points. */
+.crop-handle {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin: -5px 0 0 -5px; /* centre on the (left,top) anchor point */
+  background: var(--accent);
+  border: 1px solid #fff;
+  border-radius: 2px;
+}
+.crop-hint {
+  position: absolute;
+  left: 50%;
+  bottom: var(--s3);
+  transform: translateX(-50%);
+  padding: var(--s1) var(--s3);
+  border-radius: var(--r1);
+  background: rgba(0, 0, 0, 0.7);
+  color: #fff;
+  font-size: var(--fz-xs);
+  white-space: nowrap;
+  pointer-events: none;
+}
