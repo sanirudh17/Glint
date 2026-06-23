@@ -1,8 +1,8 @@
-import { useEffect, useRef, useState } from "react";
 import type { RefObject } from "react";
 import type Konva from "konva";
 import { Copy, Download, Share2 } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
+import { useAppStore } from "../../store/useAppStore";
 import { computeLayout, exportPixelRatio } from "../../editor/composition";
 import { editorCopy, editorSave, editorFlattenTemp, dragOut } from "../../lib/editor";
 
@@ -39,48 +39,40 @@ function flatten(stage: Konva.Stage): string {
 
 export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null> }) {
   const base = useEditorStore((s) => s.base);
-  const [status, setStatus] = useState<string | null>(null);
-  const timer = useRef<number | undefined>(undefined);
-
-  // One live status message at a time; clears any pending timer so rapid clicks
-  // don't let an earlier message cut a later one short.
-  const flash = (m: string) => {
-    if (timer.current) window.clearTimeout(timer.current);
-    setStatus(m);
-    timer.current = window.setTimeout(() => setStatus(null), 1900);
-  };
-  useEffect(() => () => { if (timer.current) window.clearTimeout(timer.current); }, []);
+  // Feedback goes through the app's toast host (a clean corner toast) rather than
+  // an inline status span — a long "Exported · <filename>" used to wrap inside
+  // the toolbar and squash the buttons into a cramped box.
+  const pushToast = useAppStore((s) => s.pushToast);
 
   const withPng = (fn: (png: string) => Promise<void>) => async () => {
     const stage = stageRef.current;
     if (!stage || !base) return;
     const png = flatten(stage);
-    if (!png) { flash("Couldn't render the image"); return; }
-    try { await fn(png); } catch { flash("Something went wrong"); }
+    if (!png) { pushToast("Couldn't render the image"); return; }
+    try { await fn(png); } catch { pushToast("Something went wrong"); }
   };
 
   const onCopy = withPng(async (png) => {
     await editorCopy(png);
-    flash("Copied to clipboard");
+    pushToast("Copied to clipboard");
   });
   const onSave = withPng(async (png) => {
     const dest = await editorSave(png);
-    flash(`Exported · ${dest.split(/[\\/]/).pop()}`);
+    pushToast(`Exported · ${dest.split(/[\\/]/).pop()}`);
   });
   const onDrag = async () => {
     const stage = stageRef.current;
     if (!stage || !base) return;
     const png = flatten(stage);
-    if (!png) { flash("Couldn't render the image"); return; }
+    if (!png) { pushToast("Couldn't render the image"); return; }
     try {
       const path = await editorFlattenTemp(png);
       dragOut(path);
-    } catch { flash("Couldn't prepare drag"); }
+    } catch { pushToast("Couldn't prepare drag"); }
   };
 
   return (
     <div className="editor-exportbar">
-      {status && <span className="editor-status">{status}</span>}
       <button
         className="editor-export-btn"
         // Press-and-drag: the OS drag must start while the mouse button is held,

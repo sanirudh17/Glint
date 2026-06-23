@@ -23,10 +23,13 @@
   gap: var(--s4);
 }
 
-/* The "recent captures" region expands to fill available space */
+/* The "recent captures" region expands to fill available space. Use grow-only
+   (shrink:0, basis:auto) so it never shrinks below its content — otherwise the
+   thumbnail cards overflow downward and overlap the sections beneath it (they
+   sat on top of the Recent Projects rows, hiding their names). The page itself
+   scrolls (.home-view overflow-y:auto) when content exceeds the viewport. */
 .home-section--grow {
-  flex: 1;
-  min-height: 0;
+  flex: 1 0 auto;
 }
 
 /*

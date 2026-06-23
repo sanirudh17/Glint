@@ -43,7 +43,7 @@ export default function EditorView() {
   useEffect(() => {
     const keys: Record<string, ToolId> = {
       v: "select", a: "arrow", l: "line", r: "rect", o: "ellipse",
-      t: "text", p: "pen", h: "highlight", b: "blur", s: "step", c: "crop",
+      t: "text", p: "pen", h: "highlight", b: "blur", s: "step", e: "eraser", c: "crop",
     };
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;

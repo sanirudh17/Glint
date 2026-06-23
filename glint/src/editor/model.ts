@@ -17,6 +17,7 @@ export type ToolId =
   | "highlight"
   | "blur"
   | "step"
+  | "eraser"
   | "crop";
 
 export interface Style {

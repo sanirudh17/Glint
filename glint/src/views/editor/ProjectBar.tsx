@@ -61,11 +61,8 @@ export function ProjectBar() {
       <button className="editor-export-btn" onClick={doOpen} title="Open a .glint project">
         <FolderOpen size={16} strokeWidth={1.75} /> Open
       </button>
-      <button className="editor-export-btn" onClick={() => doSave(false)} title="Save project (Ctrl+S)">
+      <button className="editor-export-btn" onClick={() => doSave(false)} title="Save project (Ctrl+S) · Ctrl+Shift+S saves a copy">
         <Save size={16} strokeWidth={1.75} /> Save
-      </button>
-      <button className="editor-export-btn" onClick={() => doSave(true)} title="Save project as… (Ctrl+Shift+S)">
-        Save As
       </button>
     </div>
   );

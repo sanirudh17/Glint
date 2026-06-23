@@ -47,6 +47,11 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const taRef = useRef<HTMLTextAreaElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const draftId = useRef<string | null>(null);
+  // Eraser drag state: whether a wipe gesture is active, and whether it has
+  // already pushed a single history entry (so erasing several shapes in one drag
+  // collapses to one undo step).
+  const erasing = useRef(false);
+  const eraseStroke = useRef(false);
 
   // Which text annotation (if any) is open for inline editing, and where to float
   // its DOM <textarea>. Text is rendered by Konva but edited via a real textarea
@@ -190,12 +195,40 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     };
   };
 
+  // Eraser: delete whatever annotation is under the pointer. Resolves the hit
+  // shape up to its owning annotation id (step/blur are Groups), then removes it.
+  // Pushes history once per gesture so a drag-wipe is a single undo step.
+  const eraseAtPointer = (stage: Konva.Stage) => {
+    const pos = stage.getPointerPosition();
+    if (!pos) return;
+    const hit = stage.getIntersection(pos);
+    if (!hit) return;
+    const ids = new Set(useEditorStore.getState().annotations.map((a) => a.id));
+    let node: Konva.Node | null = hit;
+    while (node && node !== stage) {
+      const id = node.id();
+      if (id && ids.has(id)) {
+        if (!eraseStroke.current) { pushHistory(); eraseStroke.current = true; }
+        remove(id);
+        return;
+      }
+      node = node.getParent();
+    }
+  };
+
   const onDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
     if (!stage) return;
     // Crop tool: the DOM CropOverlay drives the interaction (and covers the
     // stage), so the stage itself does nothing.
     if (tool === "crop") return;
+    // Eraser: start a wipe gesture and delete the shape under the cursor.
+    if (tool === "eraser") {
+      erasing.current = true;
+      eraseStroke.current = false;
+      eraseAtPointer(stage);
+      return;
+    }
     // Select tool: empty click clears selection; node clicks are handled by nodes.
     if (tool === "select") {
       if (e.target === stage) select(null);
@@ -240,6 +273,14 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   };
 
   const onMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
+    // Eraser: while the button is held, wipe any shape the pointer crosses.
+    if (tool === "eraser") {
+      if (erasing.current) {
+        const stage = e.target.getStage();
+        if (stage) eraseAtPointer(stage);
+      }
+      return;
+    }
     const id = draftId.current;
     if (!id) return;
     const stage = e.target.getStage();
@@ -258,6 +299,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
 
   const onUp = () => {
     draftId.current = null;
+    erasing.current = false;
   };
 
   // Double-click an existing text annotation (Select tool) to re-edit it.
