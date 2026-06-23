@@ -3,6 +3,7 @@ use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
 use crate::editor::{EditorSource, EditorState};
+use crate::editor::document;
 
 #[derive(Serialize)]
 pub struct EditorSourceDto {
@@ -191,4 +192,81 @@ pub fn editor_flatten_temp(app: AppHandle, png_base64: String) -> Result<String,
     let dest = dir.join(format!("glint-edit-{ts}.png"));
     std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
     Ok(dest.to_string_lossy().to_string())
+}
+
+// ─── Project (.glint) save/load ──────────────────────────────────────────────
+
+/// Save the current editor document to a `.glint` file. The frontend supplies
+/// the opaque `doc` (annotations + crop + frame) and the destination path (chosen
+/// via the OS dialog). The base image is read from EditorState, so its bytes never
+/// cross the IPC bridge as part of this call.
+#[tauri::command]
+pub fn project_save(
+    app: AppHandle,
+    ed: State<EditorState>,
+    doc: serde_json::Value,
+    path: String,
+) -> Result<String, String> {
+    // Ensure a .glint extension (the dialog usually adds it, but be defensive).
+    let mut dest = std::path::PathBuf::from(&path);
+    if dest.extension().and_then(|e| e.to_str()) != Some("glint") {
+        dest.set_extension("glint");
+    }
+
+    let text = {
+        let mut guard = ed.0.lock().unwrap();
+        let s = guard.as_mut().ok_or("no editor source")?;
+        let app_version = app.package_info().version.to_string();
+        let text = document::assemble(&s.png, s.width, s.height, doc, &app_version)?;
+        // Remember the path so the next Ctrl+S overwrites silently.
+        s.project_path = Some(dest.to_string_lossy().to_string());
+        text
+    };
+
+    std::fs::write(&dest, text.as_bytes()).map_err(|e| e.to_string())?;
+    Ok(dest.to_string_lossy().to_string())
+}
+
+/// Open a `.glint` file into the editor: parse it, set EditorState (origin
+/// "project", carrying the opaque doc + path), then show/focus the editor window.
+#[tauri::command]
+pub fn project_open(app: AppHandle, ed: State<EditorState>, path: String) -> Result<(), String> {
+    let text = std::fs::read_to_string(&path)
+        .map_err(|_| "Couldn't open this project — the file could not be read.".to_string())?;
+    let parsed = document::parse(&text)?;
+    *ed.0.lock().unwrap() = Some(EditorSource {
+        png: parsed.png,
+        width: parsed.width,
+        height: parsed.height,
+        origin: "project".into(),
+        capture_id: None,
+        doc: Some(parsed.doc),
+        project_path: Some(path),
+    });
+    open_editor_window(&app);
+    Ok(())
+}
+
+#[derive(Serialize)]
+pub struct RecentProjectDto {
+    pub path: String,
+    pub name: String,
+    pub exists: bool,
+}
+
+/// Resolve a list of `.glint` paths into display rows: basename + on-disk check.
+/// Lets the frontend grey/prune stale entries without a filesystem plugin.
+#[tauri::command]
+pub fn projects_resolve(paths: Vec<String>) -> Vec<RecentProjectDto> {
+    paths
+        .into_iter()
+        .map(|p| {
+            let name = std::path::Path::new(&p)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| p.clone());
+            let exists = std::path::Path::new(&p).is_file();
+            RecentProjectDto { path: p, name, exists }
+        })
+        .collect()
 }
