@@ -138,3 +138,16 @@
   /* Bottom border slightly darker — simulates key relief without a shadow */
   border-bottom-color: var(--border-strong);
 }
+
+/* ─── Recent projects list ────────────────────────────────────────────── */
+.home-projects { display: flex; flex-direction: column; gap: var(--s1); list-style: none; margin: 0; padding: 0; }
+.home-project {
+  display: flex; align-items: center; gap: var(--s2);
+  width: 100%; padding: var(--s2) var(--s3);
+  border: 1px solid var(--border); border-radius: var(--r1);
+  background: var(--bg-elev); color: var(--text); cursor: pointer; text-align: left;
+  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
+}
+.home-project:hover { border-color: var(--border-strong); }
+.home-project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-project--stale { opacity: 0.5; }

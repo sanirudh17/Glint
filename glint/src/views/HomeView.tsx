@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { Crop, AppWindow, Monitor, Video, ImageOff } from "lucide-react";
+import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, FileText } from "lucide-react";
 import { Button, Card, EmptyState } from "../components/ui";
 import { useAppStore } from "../store/useAppStore";
 import { startCapture } from "../lib/captureIpc";
 import { listCaptures, type CaptureItem } from "../lib/captures";
+import { getRecentProjects, openProject, pickOpenPath, pushRecentProject, type RecentProject } from "../lib/editor";
 import { CaptureCard } from "./library/CaptureCard";
 import "./home.css";
 
@@ -64,6 +65,33 @@ export default function HomeView() {
     return () => { p.then((un) => un()); };
   }, [reloadRecent]);
 
+  const [projects, setProjects] = useState<RecentProject[]>([]);
+  const reloadProjects = useCallback(() => {
+    getRecentProjects().then(setProjects).catch(() => setProjects([]));
+  }, []);
+  useEffect(() => { reloadProjects(); }, [reloadProjects]);
+
+  const onOpenProject = useCallback(async () => {
+    const path = await pickOpenPath();
+    if (!path) return;
+    try {
+      await openProject(path);
+      await pushRecentProject(path);
+    } catch {
+      pushToast("Couldn't open the project");
+    }
+  }, [pushToast]);
+
+  const onOpenRecent = useCallback(async (p: RecentProject) => {
+    if (!p.exists) { pushToast("That project file is no longer on disk"); reloadProjects(); return; }
+    try {
+      await openProject(p.path);
+      await pushRecentProject(p.path);
+    } catch {
+      pushToast("Couldn't open the project");
+    }
+  }, [pushToast, reloadProjects]);
+
   // The tray's capture items call capture::begin directly now; only the
   // not-yet-built actions still emit "tray-action" (e.g. record → Phase 6).
   useEffect(() => {
@@ -119,6 +147,14 @@ export default function HomeView() {
           >
             Record
           </Button>
+          <Button
+            variant="subtle"
+            size="md"
+            icon={FolderOpen}
+            onClick={onOpenProject}
+          >
+            Open Project
+          </Button>
         </div>
       </section>
 
@@ -143,6 +179,29 @@ export default function HomeView() {
           </div>
         )}
       </section>
+
+      {/* ── Recent projects ─────────────────────────────────── */}
+      {projects.length > 0 && (
+        <section className="home-section" aria-labelledby="rp-label">
+          <span className="label home-section-label" id="rp-label">
+            Recent projects
+          </span>
+          <ul className="home-projects" role="list">
+            {projects.map((p) => (
+              <li key={p.path}>
+                <button
+                  className={`home-project${p.exists ? "" : " home-project--stale"}`}
+                  onClick={() => onOpenRecent(p)}
+                  title={p.exists ? p.path : `${p.path} (missing)`}
+                >
+                  <FileText size={16} strokeWidth={1.75} />
+                  <span className="home-project-name">{p.name}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       {/* ── Hotkeys ─────────────────────────────────────────── */}
       {settings !== null && (
