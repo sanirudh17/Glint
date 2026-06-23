@@ -9,9 +9,13 @@ pub struct EditorSource {
     pub png: Vec<u8>,
     pub width: u32,
     pub height: u32,
-    /// "hud" | "library" | "capture" — informational for the frontend.
+    /// "hud" | "library" | "capture" | "project" — informational for the frontend.
     pub origin: String,
     pub capture_id: Option<i64>,
+    /// Present only when opened from a `.glint` project — the opaque editor doc.
+    pub doc: Option<serde_json::Value>,
+    /// The `.glint` path this session was opened from / last saved to (for silent Ctrl+S).
+    pub project_path: Option<String>,
 }
 
 #[derive(Default)]

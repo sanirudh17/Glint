@@ -217,6 +217,8 @@ fn finish_commit(
                 height: clamped.h,
                 origin: "capture".into(),
                 capture_id: None,
+                doc: None,
+                project_path: None,
             });
         crate::editor::commands::open_editor_window(app);
     } else if let Err(e) = crate::hud::open(app) {

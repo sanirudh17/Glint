@@ -11,6 +11,8 @@ pub struct EditorSourceDto {
     pub height: u32,
     pub origin: String,
     pub capture_id: Option<i64>,
+    pub doc: Option<serde_json::Value>,
+    pub project_path: Option<String>,
 }
 
 /// Show + focus the main window and tell it to navigate to /editor.
@@ -62,6 +64,8 @@ pub fn editor_open_from_last(
         height,
         origin: "hud".into(),
         capture_id: None,
+        doc: None,
+        project_path: None,
     });
     crate::hud::teardown(&app);
     open_editor_window(&app);
@@ -94,6 +98,8 @@ pub fn editor_open_capture(
         height,
         origin: "library".into(),
         capture_id: Some(id),
+        doc: None,
+        project_path: None,
     });
     open_editor_window(&app);
     Ok(())
@@ -111,6 +117,8 @@ pub fn editor_source(ed: State<EditorState>) -> Result<EditorSourceDto, String> 
         height: s.height,
         origin: s.origin.clone(),
         capture_id: s.capture_id,
+        doc: s.doc.clone(),
+        project_path: s.project_path.clone(),
     })
 }
 
