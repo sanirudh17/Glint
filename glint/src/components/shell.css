@@ -36,6 +36,9 @@
   pointer-events: none;
 }
 
+.g-project { color: var(--text-dim); font-weight: 400; }
+.g-dirty { color: var(--accent); margin-right: 2px; }
+
 /* ─── Window controls ────────────────────────────────────────────────── */
 /*
  * pointer-events: auto on the button group overrides the

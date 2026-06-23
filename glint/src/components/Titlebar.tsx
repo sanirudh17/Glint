@@ -1,5 +1,6 @@
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Minus, Square, X } from "lucide-react";
+import { useEditorStore } from "../editor/useEditorStore";
 
 const win = getCurrentWindow();
 
@@ -13,9 +14,21 @@ const win = getCurrentWindow();
  * to hide the window (close-to-tray), not terminate the process.
  */
 export function Titlebar() {
+  const projectName = useEditorStore((s) => s.projectName);
+  const dirty = useEditorStore((s) => s.dirty);
+
   return (
     <div className="g-titlebar" data-tauri-drag-region>
-      <span className="g-wordmark">Glint</span>
+      <span className="g-wordmark">
+        Glint
+        {projectName && (
+          <span className="g-project" title={dirty ? "Unsaved changes" : projectName}>
+            {" — "}
+            {dirty && <span className="g-dirty" aria-label="Unsaved changes">•</span>}
+            {projectName}
+          </span>
+        )}
+      </span>
 
       <div className="g-winctl">
         <button
