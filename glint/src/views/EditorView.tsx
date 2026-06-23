@@ -1,11 +1,13 @@
 import { useEffect, useRef } from "react";
 import type Konva from "konva";
+import { Frame as FrameIcon } from "lucide-react";
 import { useEditorStore } from "../editor/useEditorStore";
 import { getEditorSource } from "../lib/editor";
 import { EditorStage } from "./editor/EditorStage";
 import { ToolRail } from "./editor/ToolRail";
 import { StyleBar } from "./editor/StyleBar";
 import { ExportBar } from "./editor/ExportBar";
+import { FramePanel } from "./editor/FramePanel";
 import type { ToolId } from "../editor/model";
 import "./editor/editor.css";
 
@@ -20,6 +22,8 @@ export default function EditorView() {
   const redo = useEditorStore((s) => s.redo);
   const remove = useEditorStore((s) => s.remove);
   const selectedId = useEditorStore((s) => s.selectedId);
+  const frameEnabled = useEditorStore((s) => s.frame.enabled);
+  const toggleFrame = useEditorStore((s) => s.toggleFrame);
 
   useEffect(() => {
     const keys: Record<string, ToolId> = {
@@ -86,11 +90,22 @@ export default function EditorView() {
     <div className="editor-view">
       <div className="editor-topbar">
         <StyleBar />
+        <div className="editor-frame-slot">
+          <button
+            className={`editor-export-btn${frameEnabled ? " editor-export-btn--primary" : ""}`}
+            onClick={() => toggleFrame()}
+            title="Frame & background"
+            aria-pressed={frameEnabled}
+          >
+            <FrameIcon size={16} strokeWidth={1.75} /> Frame
+          </button>
+        </div>
         <ExportBar stageRef={stageRef} />
       </div>
       <div className="editor-main">
         <ToolRail />
         <EditorStage ref={stageRef} />
+        {frameEnabled && <FramePanel />}
       </div>
     </div>
   );

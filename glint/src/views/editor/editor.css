@@ -178,3 +178,94 @@
   white-space: nowrap;
   pointer-events: none;
 }
+
+/* ── Frame toggle (top bar) ──────────────────────────────────────────────── */
+.editor-frame-slot {
+  display: flex;
+  align-items: center;
+  padding: 0 var(--s2);
+}
+
+/* ── Frame panel (right dock) ────────────────────────────────────────────── */
+.frame-panel {
+  width: 240px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--s4);
+  padding: var(--s4);
+  border-left: 1px solid var(--border);
+  background: var(--bg-elev);
+  overflow-y: auto;
+}
+.frame-row { display: flex; flex-direction: column; gap: var(--s2); }
+.frame-label {
+  font-size: var(--fz-xs);
+  color: var(--text-dim);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+/* Segmented control (background type + aspect) */
+.frame-seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--r1);
+  background: var(--bg);
+}
+.frame-seg-btn {
+  flex: 1;
+  padding: var(--s1) var(--s2);
+  border: none;
+  border-radius: calc(var(--r1) - 1px);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--fz-xs);
+  text-transform: capitalize;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.frame-seg-btn:hover { color: var(--text); }
+.frame-seg-btn.is-active { background: var(--accent-subtle); color: var(--accent); }
+
+.frame-swatches { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+.frame-gradients { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.frame-grad {
+  width: 28px;
+  height: 28px;
+  border-radius: var(--r1);
+  border: 2px solid transparent;
+  cursor: pointer;
+  padding: 0;
+  box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
+}
+.frame-grad.is-active { border-color: var(--text); }
+
+/* Sliders */
+.frame-slider { display: flex; flex-direction: column; gap: var(--s2); }
+.frame-slider input[type="range"] {
+  width: 100%;
+  accent-color: var(--accent);
+  cursor: pointer;
+}
+
+.frame-actions {
+  display: flex;
+  flex-direction: column;
+  gap: var(--s2);
+  margin-top: auto;
+  padding-top: var(--s3);
+  border-top: 1px solid var(--border);
+}
+.frame-text-btn {
+  padding: var(--s2);
+  border: 1px solid var(--border);
+  border-radius: var(--r1);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--fz-sm);
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.frame-text-btn:hover { border-color: var(--border-strong); color: var(--text); }
