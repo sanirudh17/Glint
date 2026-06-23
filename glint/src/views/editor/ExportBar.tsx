@@ -65,7 +65,7 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
   });
   const onSave = withPng(async (png) => {
     const dest = await editorSave(png);
-    flash(`Saved · ${dest.split(/[\\/]/).pop()}`);
+    flash(`Exported · ${dest.split(/[\\/]/).pop()}`);
   });
   const onDrag = async () => {
     const stage = stageRef.current;
@@ -95,8 +95,8 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
       <button className="editor-export-btn" onClick={onCopy} title="Copy to clipboard">
         <Copy size={16} strokeWidth={1.75} /> Copy
       </button>
-      <button className="editor-export-btn editor-export-btn--primary" onClick={onSave} title="Save a new PNG">
-        <Save size={16} strokeWidth={1.75} /> Save
+      <button className="editor-export-btn editor-export-btn--primary" onClick={onSave} title="Export a PNG to the Library">
+        <Save size={16} strokeWidth={1.75} /> Export
       </button>
     </div>
   );

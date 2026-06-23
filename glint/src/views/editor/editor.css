@@ -201,6 +201,15 @@
   padding: 0 var(--s2);
 }
 
+/* ── Project bar (top bar, far left) ─────────────────────────────────────── */
+.editor-projectbar {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: var(--s2) var(--s4);
+  border-right: 1px solid var(--border);
+}
+
 /* ── Frame panel (right dock) ────────────────────────────────────────────── */
 .frame-panel {
   width: 240px;
