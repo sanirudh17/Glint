@@ -14,14 +14,13 @@ capture/library/editor path.
   undo/redo, native-res export: copy/save/drag).
 - **Phase 5b — Crop + Backgrounds/Framing** (non-destructive crop; solid/gradient/transparent
   backdrop, padding, rounded corners, drop shadow, aspect presets; live WYSIWYG; native-res
-  export). *Branch `phase-5b-composition` — at-screen acceptance in progress.*
+  export). *Merged to master.*
+- **Phase 5c — `.glint` save/load** (versioned, self-contained document: embedded base image +
+  opaque doc {annotations, crop, frame}; Save=project / Export=PNG; Ctrl+S / Ctrl+Shift+S; dirty
+  indicator in the titlebar; Home "Open Project" + Recent Projects). *Branch
+  `phase-5c-glint-document` — at-screen acceptance in progress.*
 
 ## Planned
-
-### Phase 5c — `.glint` save/load (document persistence)
-Persist the editor document (annotations + crop + frame + a reference/copy of the base image)
-to a `.glint` file and reopen it for further editing. Sets up reusable/editable compositions.
-The 5b state was deliberately built plain/JSON-able for this.
 
 ### Phase 6 — "Open in Glint" (Explorer integration + edit any image)
 **Goal:** Right-click any image in Windows Explorer → **Open in Glint** → the annotator opens
