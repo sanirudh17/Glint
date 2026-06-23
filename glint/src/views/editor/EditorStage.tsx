@@ -256,7 +256,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     <div className="editor-canvas" ref={wrapRef}>
       {/* A relative box exactly the size of the stage, so the absolutely-
           positioned crop overlay shares the stage's origin and bounds. */}
-      <div className="editor-stage-wrap" style={{ position: "relative", width: stageW, height: stageH }}>
+      <div className="editor-stage-wrap" style={{ width: stageW, height: stageH }}>
       <Stage
         ref={ref}
         width={stageW}

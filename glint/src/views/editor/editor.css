@@ -138,6 +138,9 @@
 .editor-export-btn--primary:hover { background: var(--accent-hover); }
 
 /* ── Crop overlay ────────────────────────────────────────────────────────── */
+/* Wrapper sized to the stage box (dimensions set inline) so the absolutely-
+   positioned crop overlay shares the stage's origin and bounds. */
+.editor-stage-wrap { position: relative; }
 /* Absolutely fills the stage wrapper (which is exactly the stage box), so its
    coordinate origin is the stage top-left. */
 .crop-overlay {

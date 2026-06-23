@@ -45,7 +45,9 @@ export default function EditorView() {
         return;
       }
       const t = keys[e.key.toLowerCase()];
-      if (t) setTool(t);
+      // No-op when the tool is already active — avoids a needless store update
+      // (and selection clear) on a repeated tool key, e.g. "c" mid-crop.
+      if (t && t !== useEditorStore.getState().tool) setTool(t);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);

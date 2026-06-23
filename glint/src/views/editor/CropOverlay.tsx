@@ -11,9 +11,6 @@ interface Props {
   onCancel: () => void;
 }
 
-/** Smallest crop edge, in image px. */
-const MIN = 16;
-
 /** The 8 resize handles as fractions of the crop rect (fx, fy) + a cursor. */
 const HANDLES: { id: string; fx: number; fy: number; cursor: string }[] = [
   { id: "nw", fx: 0, fy: 0, cursor: "nwse-resize" },
@@ -44,6 +41,15 @@ export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel
   });
   const rectRef = useRef(rect);
   rectRef.current = rect;
+  // Hold the confirm/cancel callbacks in a ref so the keydown effect can
+  // subscribe once (deps []) without resubscribing when these inline-lambda
+  // props change identity on a parent re-render.
+  const cbRef = useRef({ onConfirm, onCancel });
+  cbRef.current = { onConfirm, onCancel };
+
+  // Smallest crop edge, in image px — clamped down for tiny images so a resize
+  // can never produce a crop larger than the image.
+  const min = Math.max(1, Math.min(16, Math.floor(imageW / 4), Math.floor(imageH / 4)));
 
   // The annotation/content offset folded into screen mapping (image → screen px).
   const offX = layout.contentX - layout.cropX;
@@ -57,24 +63,27 @@ export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      const t = e.target as HTMLElement;
+      // Don't hijack Enter/Esc while a panel input (FramePanel slider/color) is focused.
+      if (t.tagName === "INPUT" || t.tagName === "TEXTAREA") return;
       if (e.key === "Enter") {
         e.preventDefault();
-        onConfirm(normalizeRect(rectRef.current));
+        cbRef.current.onConfirm(normalizeRect(rectRef.current));
       } else if (e.key === "Escape") {
         e.preventDefault();
-        onCancel();
+        cbRef.current.onCancel();
       }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [onConfirm, onCancel]);
+  }, []);
 
   const onPointerDown = (e: React.PointerEvent) => {
     const mode = (e.target as HTMLElement).dataset.handle;
     if (!mode) return; // click in the dim surround — ignore
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
-    drag.current = { mode, sx: e.clientX, sy: e.clientY, orig: rect };
+    drag.current = { mode, sx: e.clientX, sy: e.clientY, orig: rectRef.current };
   };
 
   const onPointerMove = (e: React.PointerEvent) => {
@@ -100,10 +109,10 @@ export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel
     let top = o.y;
     let right = o.x + o.w;
     let bottom = o.y + o.h;
-    if (d.mode.includes("w")) left = clamp(o.x + dx, 0, right - MIN);
-    if (d.mode.includes("e")) right = clamp(o.x + o.w + dx, left + MIN, imageW);
-    if (d.mode.includes("n")) top = clamp(o.y + dy, 0, bottom - MIN);
-    if (d.mode.includes("s")) bottom = clamp(o.y + o.h + dy, top + MIN, imageH);
+    if (d.mode.includes("w")) left = clamp(o.x + dx, 0, right - min);
+    if (d.mode.includes("e")) right = clamp(o.x + o.w + dx, left + min, imageW);
+    if (d.mode.includes("n")) top = clamp(o.y + dy, 0, bottom - min);
+    if (d.mode.includes("s")) bottom = clamp(o.y + o.h + dy, top + min, imageH);
     setRect({ x: left, y: top, w: right - left, h: bottom - top });
   };
 
