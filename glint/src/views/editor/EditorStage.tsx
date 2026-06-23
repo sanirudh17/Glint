@@ -276,7 +276,10 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         )}
 
         {/* Screenshot card: a shadow-casting rounded rect behind, then the image
-            clipped to the same rounded rect. Frame off → no shadow, r=0, plain image. */}
+            clipped to the same rounded rect. Frame off → no shadow, r=0, plain image.
+            The shadow renders for every background type INCLUDING transparent — a
+            framed screenshot dropped onto a slide keeps its drop shadow against the
+            alpha (matches CleanShot); only the background fill is omitted when transparent. */}
         <Layer listening={false}>
           {frame.enabled && (
             <Rect
