@@ -24,4 +24,13 @@ describe("gradients", () => {
     expect(k.fillLinearGradientStartPoint).toEqual({ x: 0, y: 25 });
     expect(k.fillLinearGradientEndPoint).toEqual({ x: 100, y: 25 });
   });
+
+  it("konvaGradient at 135deg (the preset angle) spans top-right → bottom-left", () => {
+    const g = { id: "x", label: "X", angleDeg: 135, stops: [{ offset: 0, color: "#000" }, { offset: 1, color: "#fff" }] };
+    const k = konvaGradient(g, 100, 100);
+    expect(k.fillLinearGradientStartPoint.x).toBeCloseTo(100);
+    expect(k.fillLinearGradientStartPoint.y).toBeCloseTo(0);
+    expect(k.fillLinearGradientEndPoint.x).toBeCloseTo(0);
+    expect(k.fillLinearGradientEndPoint.y).toBeCloseTo(100);
+  });
 });

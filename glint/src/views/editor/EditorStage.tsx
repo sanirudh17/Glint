@@ -147,6 +147,11 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   // content's top-left (contentX,contentY). Frame off + no crop → (0,0).
   const offX = layout.contentX - layout.cropX;
   const offY = layout.contentY - layout.cropY;
+  // Clip annotations to the content only when there's actually something to clip
+  // against — a frame backdrop or a crop. With frame off + no crop, content == the
+  // full image, so no clip is needed and omitting it keeps this path byte-identical
+  // to Phase 5a (strokes that bleed a hair past the edge render as they did before).
+  const clipContent = frame.enabled || crop !== null;
 
   // Frame visuals (no-op when the frame is off: r=0, no shadow → plain image).
   const r = frame.enabled ? frame.radius : 0;
@@ -324,10 +329,14 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
             which extend a few px outside an edge annotation — are never clipped. */}
         <Layer ref={layerRef} x={offX} y={offY}>
           <Group
-            clipX={layout.cropX}
-            clipY={layout.cropY}
-            clipWidth={layout.contentW}
-            clipHeight={layout.contentH}
+            {...(clipContent
+              ? {
+                  clipX: layout.cropX,
+                  clipY: layout.cropY,
+                  clipWidth: layout.contentW,
+                  clipHeight: layout.contentH,
+                }
+              : {})}
           >
             {annotations.map((a) => (
               <AnnotationNode
