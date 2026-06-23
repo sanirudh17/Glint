@@ -32,11 +32,13 @@ export default function EditorView() {
   const projectName = useEditorStore((s) => s.projectName);
   const dirty = useEditorStore((s) => s.dirty);
 
+  // Set-title on name/dirty change; reset-on-unmount lives in a separate effect
+  // so it doesn't fire on every dep change (which would briefly flash "Glint").
   useEffect(() => {
     const label = projectName ?? "Untitled";
     getCurrentWindow().setTitle(`Glint — ${dirty ? "•" : ""}${label}`).catch(() => {});
-    return () => { getCurrentWindow().setTitle("Glint").catch(() => {}); };
   }, [projectName, dirty]);
+  useEffect(() => () => { getCurrentWindow().setTitle("Glint").catch(() => {}); }, []);
 
   useEffect(() => {
     const keys: Record<string, ToolId> = {
@@ -111,8 +113,18 @@ export default function EditorView() {
   // Reopen path: project_open emits editor-open after setting EditorState; if we
   // are already on /editor the route won't remount, so reload here.
   useEffect(() => {
-    const p = listen("editor-open", () => loadFromSource());
-    return () => { p.then((un) => un()); };
+    // Track the in-flight reload's canceller so unmount (or a new editor-open)
+    // can abort a pending image load — otherwise its alive guard stays true and
+    // loadDoc could repopulate the store after reset() has cleared it.
+    let cancelReload: (() => void) | null = null;
+    const p = listen("editor-open", () => {
+      cancelReload?.();
+      cancelReload = loadFromSource();
+    });
+    return () => {
+      cancelReload?.();
+      p.then((un) => un());
+    };
   }, [loadFromSource]);
 
   if (!base) {
