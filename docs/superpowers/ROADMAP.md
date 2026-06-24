@@ -20,42 +20,18 @@ capture/library/editor path.
   the titlebar; Home "Open Project" + Recent Projects). Also shipped in the at-screen round: a
   scrub **eraser** (sized footprint, partial freehand erase), **copy-path hotkey** wired up, and
   a **capture-overlay reuse** speedup (pre-warmed webview). *Merged to master.*
+- **Phase 6 — "Open in Glint"** (Explorer integration + edit any image). HKCU shell verb under
+  `SystemFileAssociations\image\shell\Glint` (the `image` perceived-type covers png/jpg/jpeg/
+  webp/bmp/gif in one entry) running `glint.exe "%1"` — no admin. Auto-registers on first run +
+  self-heals each launch; Settings → General toggle (default ON) adds/removes it. Cold start
+  parses argv; warm start routes through `tauri-plugin-single-instance`; both funnel into one
+  `open_image_path` that decodes → re-encodes PNG → opens an **Untitled** external doc (no Library
+  row). Non-destructive: Save = new `.glint`, Export = new PNG; the source file is never touched.
+  New dep: `winreg`. *Built — awaiting at-screen.* (See PHASE-6-ACCEPTANCE.md.)
 
 ## Planned
 
-### Phase 6 — "Open in Glint" (Explorer integration + edit any image)
-**Goal:** Right-click any image in Windows Explorer → **Open in Glint** → the annotator opens
-with that image loaded, ready for arrows, crop, rounded corners, framing, etc. Makes Glint a
-general-purpose lightweight image editor, not just a capture annotator.
-
-**Why now / motivation:** the 5a+5b editor is already capable enough (annotate + crop + frame +
-native-res export) to be useful on *any* image, not only fresh captures. This unlocks the
-"beautify an existing screenshot/photo" workflow. (Ordering vs. 5c is the user's call — this
-can come first if the "edit any image" flow is wanted sooner.)
-
-**Scope (seed for a later brainstorm → spec → plan):**
-- **Shell context menu (no admin):** register a verb under `HKCU\Software\Classes\
-  SystemFileAssociations\image\shell\Glint` (the `image` perceived-type covers png/jpg/jpeg/
-  webp/bmp/gif in one entry) running `glint.exe "%1"`. HKCU-only → no admin password (honors the
-  no-admin constraint). Register on install/first-run; offer a settings toggle to add/remove it.
-- **Single-instance + argv routing:** when Glint is already running, route the launched path to
-  the live instance (tauri-plugin-single-instance) instead of spawning a second tray-core; on
-  cold start, read the path from argv. Bring the window to the front (existing always-on-top
-  toggle).
-- **Load external image into the editor:** a new Rust command (e.g. `editor_open_path(path)`)
-  that reads + decodes the file, sets `EditorState` with `origin = <external path>` and
-  `captureId = null` (it's not a Library row), then shows the editor. The frontend reuses the
-  existing `editor_source` → `setBase` flow unchanged.
-- **Non-destructive:** Save writes a **new** PNG to `Pictures\Glint` (+ a Library row) exactly as
-  today — it never overwrites the user's original file. Optionally offer "Save over original" as
-  an explicit, separate action later.
-
-**Constraint fit:** local-first ✓ (no network), single-user/no-auth ✓ (HKCU needs no admin),
-recorder isolation ✓ (editor path only, no recorder coupling), non-destructive ✓.
-
-**Open questions for the brainstorm:** which file types to claim; whether to also add a
-"Set Glint as default editor" affordance; behavior when multiple files are selected; uninstall
-cleanup of the registry verb.
+_(next phase TBD — Phase 6 awaiting at-screen acceptance)_
 
 ## Out of scope (project-wide, unchanged)
 Cloud/upload/share-links, teams/collaboration, login/auth, web backend/network calls, scrolling
