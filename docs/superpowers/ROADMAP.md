@@ -31,10 +31,19 @@ capture/library/editor path.
   (editor-open navigation must be guarded to the main window — all windows share one `<App/>`).
   Note: on Windows 11 the entry sits under Explorer's "Show more options"; top-level placement
   needs a packaged build + `IExplorerCommand` (future). (See PHASE-6-ACCEPTANCE.md.)
+- **Phase 7 — "Pin to Screen"** (floating always-on-top image windows). One borderless,
+  transparent `WebviewWindow` per pin (`pin-<n>`), backed by an in-memory `PinState` registry
+  (PNG bytes + dims) — ephemeral: closing a pin or quitting clears it, nothing persisted. Pin
+  from the post-capture HUD ("Pin") or any Library card ("Pin to screen"). The `/pin` route
+  renders `PinApp`: drag to move, mouse-wheel / corner handles to resize (aspect locked, clamped
+  80px → monitor), right-click menu (Copy · Save to Library · Opacity 100/75/50/25 · Close),
+  hover **×** and Esc to close. Opacity is plain CSS on the `<img>` (no OS window-alpha API).
+  Reuses the existing save/thumb/clipboard helpers; no new dependencies; zero recorder coupling.
+  *Built — awaiting at-screen.* (See PHASE-7-ACCEPTANCE.md.)
 
 ## Planned
 
-_(next phase TBD — Phase 6 awaiting at-screen acceptance)_
+_(next phase TBD — Phase 7 awaiting at-screen acceptance)_
 
 ## Out of scope (project-wide, unchanged)
 Cloud/upload/share-links, teams/collaboration, login/auth, web backend/network calls, scrolling
