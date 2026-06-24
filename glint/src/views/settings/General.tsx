@@ -1,12 +1,25 @@
 import { Info } from "lucide-react";
 import { Section, Field, Switch } from "../../components/ui";
+import { useAppStore } from "../../store/useAppStore";
 
 export function General() {
+  const settings = useAppStore((s) => s.settings);
+  const setExplorerMenu = useAppStore((s) => s.setExplorerMenu);
+
   return (
     <Section
       title="General"
       description="App-wide behaviour settings."
     >
+      <Field
+        label="Open in Glint (right-click menu)"
+        hint="Add an &quot;Open in Glint&quot; entry to the Windows Explorer right-click menu for image files."
+      >
+        <Switch
+          checked={settings?.explorer_menu_enabled ?? true}
+          onChange={(v) => setExplorerMenu(v)}
+        />
+      </Field>
       <Field label="Launch at login" hint="Start Glint automatically when you sign in to Windows.">
         <div className="settings-inert-control">
           <Switch checked={false} onChange={() => {}} disabled />

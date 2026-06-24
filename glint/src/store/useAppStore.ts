@@ -1,6 +1,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { persistSetting, readSetting, saveSetting } from "../lib/ipc";
+import { registerExplorerMenu, unregisterExplorerMenu } from "../lib/shell";
 
 export type Theme = "dark" | "light" | "system";
 
@@ -11,6 +12,7 @@ export interface Settings {
   auto_save: boolean;
   auto_copy: boolean;
   open_in_editor: boolean;
+  explorer_menu_enabled: boolean;
 }
 
 export interface Toast {
@@ -27,6 +29,7 @@ interface AppState {
   setAutoSave: (on: boolean) => Promise<void>;
   setAutoCopy: (on: boolean) => Promise<void>;
   setOpenInEditor: (on: boolean) => Promise<void>;
+  setExplorerMenu: (on: boolean) => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -47,6 +50,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     let auto_save = rustSettings.auto_save;
     let auto_copy = rustSettings.auto_copy;
     let open_in_editor = rustSettings.open_in_editor;
+    let explorer_menu_enabled = rustSettings.explorer_menu_enabled;
     try {
       const dbTheme = await readSetting<Theme>("theme");
       if (dbTheme) theme = dbTheme;
@@ -58,11 +62,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (dbAutoCopy !== null) auto_copy = dbAutoCopy;
       const dbOpenInEditor = await readSetting<boolean>("open_in_editor");
       if (dbOpenInEditor !== null) open_in_editor = dbOpenInEditor;
+      const dbExplorerMenu = await readSetting<boolean>("explorer_menu_enabled");
+      if (dbExplorerMenu !== null) explorer_menu_enabled = dbExplorerMenu;
     } catch {
       // plugin-sql unavailable (e.g. plain Vite dev server) — use Rust defaults.
     }
 
-    const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy, open_in_editor };
+    const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy, open_in_editor, explorer_menu_enabled };
     set({ settings: merged });
     applyTheme(theme);
     applyAccent(accent);
@@ -101,6 +107,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   setOpenInEditor: async (on: boolean) => {
     const updated = await saveSetting("open_in_editor", on);
     await persistSetting("open_in_editor", on);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setExplorerMenu: async (on: boolean) => {
+    const updated = await saveSetting("explorer_menu_enabled", on);
+    await persistSetting("explorer_menu_enabled", on);
+    try {
+      if (on) await registerExplorerMenu();
+      else await unregisterExplorerMenu();
+      get().pushToast(on ? "Added to right-click menu" : "Removed from right-click menu");
+    } catch {
+      get().pushToast("Couldn't update the right-click menu");
+    }
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 

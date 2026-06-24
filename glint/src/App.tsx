@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { router } from "./router";
 import { useAppStore } from "./store/useAppStore";
 import { ToastHost } from "./components/ui";
+import { consumePendingExternalOpen } from "./lib/shell";
 
 /** Payload of the `capture-complete` event emitted by tray-core after a crop. */
 type CaptureComplete = {
@@ -35,6 +36,19 @@ export default function App() {
       // Fall back to dark theme — already applied above.
     });
   }, [loadSettings]);
+
+  useEffect(() => {
+    // Cold start via "Open in Glint": Rust set the external image into EditorState
+    // and a one-shot pending flag before this webview mounted. Consume it and
+    // navigate; EditorView's mount fetch then loads the image.
+    consumePendingExternalOpen()
+      .then((pending) => {
+        if (pending) router.navigate("/editor");
+      })
+      .catch(() => {
+        // Backend not ready (plain Vite) — nothing to open.
+      });
+  }, []);
 
   useEffect(() => {
     // Backend events → toasts. Each listen() returns an unlisten promise;
