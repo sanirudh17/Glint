@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { router } from "./router";
 import { useAppStore } from "./store/useAppStore";
 import { ToastHost } from "./components/ui";
@@ -41,6 +42,19 @@ export default function App() {
     // Cold start via "Open in Glint": Rust set the external image into EditorState
     // and a one-shot pending flag before this webview mounted. Consume it and
     // navigate; EditorView's mount fetch then loads the image.
+    //
+    // Guard to the MAIN window only. Every window (main, HUD, overlay) mounts the
+    // same <App/>, and PendingOpen is one global flag — without this guard a
+    // pre-warmed overlay/HUD webview could consume the flag and navigate ITSELF
+    // to /editor (showing a fullscreen annotator on the next capture). Only the
+    // main window owns the editor route.
+    let isMain = false;
+    try {
+      isMain = getCurrentWindow().label === "main";
+    } catch {
+      isMain = false; // not in a Tauri window (plain Vite) — nothing to open.
+    }
+    if (!isMain) return;
     consumePendingExternalOpen()
       .then((pending) => {
         if (pending) router.navigate("/editor");

@@ -24,6 +24,13 @@ pub struct EditorSourceDto {
 /// the event below always lands on a live listener. If the main window is ever
 /// changed to truly close, this emit would fire into the void and the editor
 /// would silently fail to open.
+///
+/// IMPORTANT: the `editor-open` event is emitted ONLY to the "main" window
+/// (`emit_to`), never broadcast. Every window (main, HUD, overlay) loads the
+/// same `index.html` and mounts the same `<App/>`, so a global `emit` would make
+/// the HUD navigate to /editor (turning it into a mini-annotator) and — worse —
+/// make the pre-warmed, hidden capture overlay navigate to /editor, so the next
+/// capture would show a borderless fullscreen annotator with no window controls.
 pub(crate) fn open_editor_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
@@ -38,7 +45,7 @@ pub(crate) fn open_editor_window(app: &AppHandle) {
         let _ = w.set_focus();
         let _ = w.set_always_on_top(false);
     }
-    let _ = app.emit("editor-open", ());
+    let _ = app.emit_to("main", "editor-open", ());
 }
 
 /// Open the most recent capture (from the HUD) into the editor.
