@@ -23,6 +23,9 @@ use editor::commands::{
     projects_resolve,
 };
 use settings::commands::{settings_get_all, settings_set, SettingsState};
+use pin::{
+    pin_close, pin_copy, pin_create_from_capture, pin_create_from_last, pin_data, pin_save,
+};
 use shell_integration::{shell_register_explorer_menu, shell_unregister_explorer_menu};
 
 /// tray-core's owned connection to the captures table (same glint.db plugin-sql uses).
@@ -98,6 +101,7 @@ pub fn run() {
         .manage(crate::capture::LastCaptureState::default())
         .manage(crate::editor::EditorState::default())
         .manage(crate::editor::PendingOpen::default())
+        .manage(crate::pin::PinState::default())
         .setup(|app| {
             tray::build(app.handle())?;
             shortcuts::register(app.handle())?;
@@ -183,6 +187,17 @@ pub fn run() {
                     }
                 }
             }
+            // Drop a pin's in-memory bytes when its window is destroyed (any
+            // close path) so a closed pin never leaks its image for the session.
+            if let tauri::WindowEvent::Destroyed = event {
+                let label = window.label();
+                if label.starts_with("pin-") {
+                    use tauri::Manager;
+                    if let Some(pins) = window.try_state::<crate::pin::PinState>() {
+                        crate::pin::forget(&pins, label);
+                    }
+                }
+            }
         })
         .invoke_handler(tauri::generate_handler![
             settings_get_all,
@@ -214,6 +229,12 @@ pub fn run() {
             consume_pending_external_open,
             shell_register_explorer_menu,
             shell_unregister_explorer_menu,
+            pin_create_from_last,
+            pin_create_from_capture,
+            pin_data,
+            pin_save,
+            pin_copy,
+            pin_close,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Glint");
