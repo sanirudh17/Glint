@@ -1,17 +1,16 @@
-//! Per-monitor transparent capture overlay windows. Always tear down via teardown_all
-//! on every exit path so no invisible click-blocking window is ever left behind.
+//! The transparent capture overlay window. To keep capture snappy and its timing
+//! consistent, the overlay webview is built ONCE (pre-warmed, hidden) and then
+//! reused: each capture repositions it, tells the React app to reload the new
+//! frozen frame (the `overlay-refresh` event), and shows it. On commit/cancel it
+//! is HIDDEN, not closed, so the next capture pays no webview-creation cost.
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub const OVERLAY_PREFIX: &str = "overlay-";
 
-pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
-    let label = format!("{OVERLAY_PREFIX}{monitor_id}");
-    if app.get_webview_window(&label).is_some() {
-        return Ok(()); // already open
-    }
+fn build(app: &AppHandle, label: &str, monitor_id: u32) -> tauri::Result<WebviewWindow> {
     let url = WebviewUrl::App(format!("index.html#/overlay?monitor={monitor_id}").into());
-    let win = WebviewWindowBuilder::new(app, &label, url)
+    WebviewWindowBuilder::new(app, label, url)
         .title("Glint Capture")
         .decorations(false)
         .transparent(true)
@@ -20,7 +19,30 @@ pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
         .resizable(false)
         .shadow(false)
         .visible(false) // shown after it positions to the monitor
-        .build()?;
+        .build()
+}
+
+/// Build the overlay window once, hidden, so the first capture doesn't pay the
+/// webview-creation cost (the dominant source of the open delay). Idempotent —
+/// a no-op if it already exists. Safe to call from a spawned thread (the proven
+/// off-main-thread build path; see `capture::begin_spawned`).
+pub fn prewarm(app: &AppHandle, monitor_id: u32) {
+    let label = format!("{OVERLAY_PREFIX}{monitor_id}");
+    if app.get_webview_window(&label).is_some() {
+        return;
+    }
+    if let Err(e) = build(app, &label, monitor_id) {
+        log::warn!("overlay prewarm failed (will build on demand): {e}");
+    }
+}
+
+pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
+    let label = format!("{OVERLAY_PREFIX}{monitor_id}");
+    // Reuse the pre-warmed window when present; build on demand as a fallback.
+    let win = match app.get_webview_window(&label) {
+        Some(w) => w,
+        None => build(app, &label, monitor_id)?,
+    };
 
     // Cover the primary monitor by manual position+size (single-monitor phase).
     // We deliberately do NOT call set_fullscreen(true): on Windows, OS fullscreen
@@ -38,11 +60,19 @@ pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
     } else {
         log::warn!("overlay: no primary monitor; using default window geometry");
     }
+
+    // Tell the (already-mounted) overlay app to load the new frozen frame. The
+    // mount-time fetch only covers the on-demand fallback build; a reused window
+    // is already mounted, so this event is what refreshes it each capture.
+    let _ = app.emit_to(label.as_str(), "overlay-refresh", ());
+
     win.show()?;
     win.set_focus()?;
     Ok(())
 }
 
+/// Hide every overlay window (kept alive for reuse — never closed). Always called
+/// on every capture exit path so no visible click-blocking overlay is left behind.
 pub fn teardown_all(app: &AppHandle) {
     let labels: Vec<String> = app
         .webview_windows()
@@ -52,7 +82,7 @@ pub fn teardown_all(app: &AppHandle) {
         .collect();
     for label in labels {
         if let Some(win) = app.get_webview_window(&label) {
-            let _ = win.close();
+            let _ = win.hide();
         }
     }
 }

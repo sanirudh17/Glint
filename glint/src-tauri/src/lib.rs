@@ -108,6 +108,18 @@ pub fn run() {
             }
             app.manage(Db(std::sync::Mutex::new(conn)));
 
+            // Pre-warm the capture overlay webview (hidden) so the first capture
+            // doesn't pay the webview-creation cost — the dominant source of the
+            // open delay. Off-thread + delayed so it never blocks startup; the
+            // on-demand build in open_for_monitor remains the fallback.
+            {
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    crate::overlay::prewarm(&h, 0);
+                });
+            }
+
             log::info!("Glint started");
             Ok(())
         })

@@ -15,7 +15,8 @@
  * Tasks 9–12 will mount the interactive mode layer inside the marked comment.
  */
 import { useEffect, useState } from "react";
-import { getOverlayData, cancelCapture, type OverlayData } from "../lib/captureIpc";
+import { listen } from "@tauri-apps/api/event";
+import { getOverlayData, cancelCapture, resetCaptureLatch, type OverlayData } from "../lib/captureIpc";
 import { SelectionLayer } from "./SelectionLayer";
 import { FullscreenMode } from "./FullscreenMode";
 import { WindowMode } from "./WindowMode";
@@ -41,10 +42,25 @@ export function OverlayApp() {
   const monitorId = useMonitorId();
   const [data, setData] = useState<OverlayData | null>(null);
 
-  // Fetch the frozen screenshot. On error, cancel (close the overlay)
-  // so the user isn't left staring at a stuck transparent window.
+  // The overlay window is pre-warmed and REUSED across captures. The mount-time
+  // fetch only matters for the on-demand fallback build (a fresh window with a
+  // live session); when pre-warmed at startup there's no session yet, so a failure
+  // here is expected — stay transparent, don't cancel.
   useEffect(() => {
-    getOverlayData(monitorId).then(setData).catch(() => cancelCapture());
+    getOverlayData(monitorId).then(setData).catch(() => {});
+  }, [monitorId]);
+
+  // Each capture, the backend repositions+shows this window and emits
+  // `overlay-refresh`. Re-arm the single-capture latch, drop the previous frame,
+  // and load the new frozen screenshot. A real failure here means a stuck overlay,
+  // so cancel in that case.
+  useEffect(() => {
+    const un = listen("overlay-refresh", () => {
+      resetCaptureLatch();
+      setData(null);
+      getOverlayData(monitorId).then(setData).catch(() => cancelCapture());
+    });
+    return () => { un.then((f) => f()); };
   }, [monitorId]);
 
   // Global Esc handler — cancel the capture from any mode.

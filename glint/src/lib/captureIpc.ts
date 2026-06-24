@@ -68,6 +68,16 @@ export async function getOverlayData(monitorId: number): Promise<OverlayData> {
 let settled = false;
 
 /**
+ * Reset the single-capture latch. The overlay window is now REUSED across
+ * captures (pre-warmed, hidden between uses), so each new capture must clear the
+ * latch — otherwise the first commit/cancel would have permanently disarmed it.
+ * Called by OverlayApp when it receives `overlay-refresh`.
+ */
+export function resetCaptureLatch(): void {
+  settled = false;
+}
+
+/**
  * Commit the selected rect as a capture.
  * rect must be in logical/CSS px (same coordinate space as WindowRect).
  *
