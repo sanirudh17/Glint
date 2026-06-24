@@ -65,10 +65,10 @@ A small `shell_integration` module (e.g. `src-tauri/src/shell_integration.rs`):
 - `register() -> Result<(), String>` — idempotent write of caption + icon + command (self-heals a
   stale exe path after the app is moved/updated).
 - `unregister() -> Result<(), String>` — deletes `…\shell\Glint` (and its `command` subkey).
-- **Startup self-heal** in `lib.rs` setup: if the user's setting `explorer_menu_enabled` is ON
-  (default true) and (`!is_registered()` or the stored exe path is stale), call `register()`.
-  If the setting is OFF and it is currently registered, leave it (the toggle drives removal, not
-  startup) — or, simplest: startup only *adds* when enabled+missing; the toggle handles removal.
+- **Startup self-heal** in `lib.rs` setup (decisive rule): `if explorer_menu_enabled && (!is_registered() || stored exe path is stale) { register() }`.
+  Startup **only ever adds/refreshes** — it never removes. Removal is solely the toggle's job
+  (toggle OFF → `unregister()` immediately + persist `explorer_menu_enabled = false`, so the next
+  launch sees the setting OFF and does nothing). Default `explorer_menu_enabled = true`.
 - Two Tauri commands exposed to the frontend Settings toggle:
   `shell_register_explorer_menu()` and `shell_unregister_explorer_menu()`, each also persisting
   the `explorer_menu_enabled` setting via the existing frontend settings mechanism (or a paired
