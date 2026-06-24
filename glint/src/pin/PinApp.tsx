@@ -5,7 +5,7 @@
  * mouse-wheel or corner handles to resize (aspect locked); right-click for
  * Copy / Save to Library / Opacity / Close. Ephemeral — closing clears it.
  */
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
 import { LogicalSize } from "@tauri-apps/api/dpi";
 import { getPinData, pinSave, pinCopy, pinClose, type PinData } from "../lib/pin";
@@ -23,6 +23,7 @@ export function PinApp() {
   const [menu, setMenu] = useState<Menu>(null);
   const [flash, setFlash] = useState<string | null>(null);
   const flashTimer = useRef<number | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
   // Max logical size = the window's monitor; filled in on mount.
   const maxRef = useRef<{ w: number; h: number }>({ w: 4000, h: 4000 });
 
@@ -51,6 +52,20 @@ export function PinApp() {
     flashTimer.current = window.setTimeout(() => setFlash(null), 1600);
   }, []);
 
+  // Keep the right-click menu fully inside the pin window. The menu is HTML, so
+  // it's clamped to the window/viewport — opened at the raw click point near the
+  // right/bottom edge it would spill off-window and look "submerged". Measure it
+  // and pull it back in. Runs before paint (useLayoutEffect) so there's no flicker.
+  useLayoutEffect(() => {
+    const el = menuRef.current;
+    if (!menu || !el) return;
+    const r = el.getBoundingClientRect();
+    const x = Math.max(0, Math.min(menu.x, window.innerWidth - r.width));
+    const y = Math.max(0, Math.min(menu.y, window.innerHeight - r.height));
+    el.style.left = `${x}px`;
+    el.style.top = `${y}px`;
+  }, [menu]);
+
   // Esc closes (works once the window has focus, e.g. after a click).
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -78,7 +93,7 @@ export function PinApp() {
   // Move: drag the image (left button, not a handle).
   const onImgPointerDown = (e: React.PointerEvent) => {
     if (e.button !== 0) return;
-    getCurrentWindow().startDragging().catch(() => {});
+    getCurrentWindow().startDragging().catch((err) => console.error("pin move failed", err));
   };
 
   // Scroll to scale (aspect locked).
@@ -154,7 +169,7 @@ export function PinApp() {
       </button>
 
       {menu && (
-        <div className="pin-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
+        <div ref={menuRef} className="pin-menu" style={{ left: menu.x, top: menu.y }} onClick={(e) => e.stopPropagation()}>
           <button className="pin-menu-item" onClick={doCopy}>Copy</button>
           <button className="pin-menu-item" onClick={doSave}>Save to Library</button>
           <div className="pin-menu-sep" />

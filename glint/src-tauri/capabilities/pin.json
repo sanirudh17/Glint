@@ -1,0 +1,14 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "pin",
+  "description": "Capability for floating Pin-to-Screen windows (move, resize, monitor query).",
+  "windows": ["pin-*"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-start-dragging",
+    "core:window:allow-set-size",
+    "core:window:allow-current-monitor",
+    "core:window:allow-inner-size",
+    "core:window:allow-scale-factor"
+  ]
+}
