@@ -16,6 +16,9 @@
 - [ ] Settings → General → toggle **OFF** → entry disappears from the right-click menu (toast confirms); toggle **ON** → it returns.
 - [ ] Right-click a non-image / feed a bad path → friendly toast, no crash.
 - [ ] Move/rename `glint.exe`, relaunch → entry self-heals to the new path.
+- [ ] **Regression (window hijack):** take a capture so the HUD is showing → **Open in Glint** on an image → the HUD stays a HUD (does NOT turn into a mini-annotator); then press Ctrl+Shift+1 → the **selection overlay** appears (NOT a stuck fullscreen annotator), capture completes normally.
+
+> **Note (Win11 placement):** the entry lives under Explorer's **"Show more options"** (Shift+F10), not the top-level menu. Top-level placement on Windows 11 requires a packaged build (MSIX/sparse package) with an `IExplorerCommand` COM handler — a future task for when Glint ships a real installer.
 
 ## Notes carried from review (for at-screen attention)
 - **T1 (registry) — reviewer subagent (sonnet): Approved, spec compliant, 0 Critical/Important.** Minor notes deferred to the final whole-branch review:
