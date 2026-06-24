@@ -66,6 +66,8 @@ interface EditorState {
   projectPath: string | null;
   projectName: string | null;
   dirty: boolean;
+  /** Eraser footprint radius in image px (tool setting, not part of the doc). */
+  eraserSize: number;
 
   setBase: (b: EditorBase) => void;
   loadDoc: (
@@ -82,6 +84,10 @@ interface EditorState {
   add: (a: Annotation) => void;
   update: (id: string, patch: Partial<Annotation>) => void;
   remove: (id: string) => void;
+  /** Replace the whole annotation list in one shot (used by the eraser, which
+      can split/drop several strokes per dab). Marks the doc dirty. */
+  setAnnotations: (list: Annotation[]) => void;
+  setEraserSize: (n: number) => void;
   clearAll: () => void;
   setCrop: (c: Crop) => void;
   resetCrop: () => void;
@@ -114,6 +120,7 @@ const INITIAL = {
   projectPath: null as string | null,
   projectName: null as string | null,
   dirty: false,
+  eraserSize: 16,
 };
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -155,6 +162,17 @@ export const useEditorStore = create<EditorState>((set) => ({
       selectedId: s.selectedId === id ? null : s.selectedId,
       dirty: true,
     })),
+
+  // Wholesale replace (eraser). Drops the selection if the selected annotation
+  // is no longer present in the new list.
+  setAnnotations: (list) =>
+    set((s) => ({
+      annotations: list,
+      dirty: true,
+      selectedId: list.some((a) => a.id === s.selectedId) ? s.selectedId : null,
+    })),
+
+  setEraserSize: (n) => set({ eraserSize: n }),
 
   // Wipe every annotation in one gesture (a single undoable step). No-op — and
   // crucially no spurious history entry — when there's nothing to clear. The

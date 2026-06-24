@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, forwardRef } from "react"
 import { Stage, Layer, Group, Rect, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useEditorStore } from "../../editor/useEditorStore";
-import { newId, nextStepNumber, type Annotation, type TextAnno } from "../../editor/model";
+import { newId, nextStepNumber, eraseAt, type Annotation, type TextAnno } from "../../editor/model";
 import { computeLayout } from "../../editor/composition";
 import { getGradient, konvaGradient } from "../../editor/gradients";
 import { AnnotationNode } from "./AnnotationNode";
@@ -37,6 +37,8 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const add = useEditorStore((s) => s.add);
   const update = useEditorStore((s) => s.update);
   const remove = useEditorStore((s) => s.remove);
+  const setAnnotations = useEditorStore((s) => s.setAnnotations);
+  const eraserSize = useEditorStore((s) => s.eraserSize);
   const pushHistory = useEditorStore((s) => s.pushHistory);
   const setCrop = useEditorStore((s) => s.setCrop);
   const setTool = useEditorStore((s) => s.setTool);
@@ -195,25 +197,38 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     };
   };
 
-  // Eraser: delete whatever annotation is under the pointer. Resolves the hit
-  // shape up to its owning annotation id (step/blur are Groups), then removes it.
-  // Pushes history once per gesture so a drag-wipe is a single undo step.
-  const eraseAtPointer = (stage: Konva.Stage) => {
+  // Resolve the annotation id under the pointer (walking up step/blur Groups).
+  const annoIdAt = (stage: Konva.Stage, ids: Set<string>): string | null => {
     const pos = stage.getPointerPosition();
-    if (!pos) return;
+    if (!pos) return null;
     const hit = stage.getIntersection(pos);
-    if (!hit) return;
-    const ids = new Set(useEditorStore.getState().annotations.map((a) => a.id));
+    if (!hit) return null;
     let node: Konva.Node | null = hit;
     while (node && node !== stage) {
       const id = node.id();
-      if (id && ids.has(id)) {
-        if (!eraseStroke.current) { pushHistory(); eraseStroke.current = true; }
-        remove(id);
-        return;
-      }
+      if (id && ids.has(id)) return id;
       node = node.getParent();
     }
+    return null;
+  };
+
+  // One eraser "dab": scrub-erase freehand strokes the circle (radius eraserSize)
+  // covers — splitting a stroke it crosses — and delete a whole non-freehand shape
+  // the pointer is directly over (shapes have no partial state). History is pushed
+  // once per gesture so a drag-wipe collapses to a single undo.
+  const eraseAtPointer = (stage: Konva.Stage) => {
+    const cur = useEditorStore.getState().annotations;
+    const { x, y } = imgPoint(stage);
+    const hitId = annoIdAt(stage, new Set(cur.map((a) => a.id)));
+    let dropId: string | null = null;
+    if (hitId) {
+      const a = cur.find((n) => n.id === hitId);
+      if (a && a.type !== "pen" && a.type !== "highlight") dropId = hitId;
+    }
+    const next = eraseAt(cur, x, y, eraserSize, dropId);
+    if (next === cur) return; // nothing under the circle
+    if (!eraseStroke.current) { pushHistory(); eraseStroke.current = true; }
+    setAnnotations(next);
   };
 
   const onDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
@@ -313,6 +328,20 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     }
   };
 
+  // A circle cursor sized to the eraser footprint (radius × on-screen scale) so
+  // the user sees exactly what a dab will wipe. Black + thin white ring reads on
+  // any background. The OS draws it under the pointer — no per-move re-render.
+  const eraserCursor = (() => {
+    const d = Math.max(8, Math.round(eraserSize * 2 * scale));
+    const c = d / 2;
+    const rr = c - 1.5;
+    const svg =
+      `<svg xmlns='http://www.w3.org/2000/svg' width='${d}' height='${d}'>` +
+      `<circle cx='${c}' cy='${c}' r='${rr}' fill='none' stroke='black' stroke-width='2.5'/>` +
+      `<circle cx='${c}' cy='${c}' r='${rr}' fill='none' stroke='white' stroke-width='1'/></svg>`;
+    return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${c} ${c}, crosshair`;
+  })();
+
   return (
     <div className="editor-canvas" ref={wrapRef}>
       {/* A relative box exactly the size of the stage, so the absolutely-
@@ -331,7 +360,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         onMouseMove={onMove}
         onMouseUp={onUp}
         onDblClick={onDblClick}
-        style={{ cursor: tool === "select" ? "default" : "crosshair" }}
+        style={{ cursor: tool === "select" ? "default" : tool === "eraser" ? eraserCursor : "crosshair" }}
       >
         {/* Background fill (gradient/solid). Transparent → no rect → alpha in export. */}
         {frame.enabled && frame.background.type !== "transparent" && (

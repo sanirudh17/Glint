@@ -89,3 +89,65 @@ export function nextStepNumber(list: Annotation[]): number {
   const nums = list.filter((a): a is StepAnno => a.type === "step").map((a) => a.number);
   return nums.length ? Math.max(...nums) + 1 : 1;
 }
+
+/**
+ * Split a freehand stroke where an eraser circle (center ex,ey, `radius`) covers
+ * its vertices, dropping the covered points. Returns `[a]` (the original, same
+ * ref) when the circle touches none of its vertices. Otherwise returns the
+ * surviving sub-strokes — a stroke broken in the middle becomes two — discarding
+ * any fragment with fewer than 2 points. Extra segments get fresh ids.
+ */
+function splitFreehand(a: FreehandAnno, ex: number, ey: number, radius: number): FreehandAnno[] {
+  const pts = a.points;
+  const r2 = radius * radius;
+  const runs: number[][] = [];
+  let run: number[] = [];
+  let erasedAny = false;
+  for (let i = 0; i + 1 < pts.length; i += 2) {
+    const dx = pts[i] - ex;
+    const dy = pts[i + 1] - ey;
+    if (dx * dx + dy * dy <= r2) {
+      erasedAny = true;
+      if (run.length >= 4) runs.push(run);
+      run = [];
+    } else {
+      run.push(pts[i], pts[i + 1]);
+    }
+  }
+  if (run.length >= 4) runs.push(run);
+  if (!erasedAny) return [a];
+  return runs.map((points, i) => (i === 0 ? { ...a, points } : { ...a, id: newId(), points }));
+}
+
+/**
+ * Apply one eraser "dab" at (ex,ey) with `radius`: split freehand strokes whose
+ * vertices the circle covers (precise partial erase), and drop `dropId` — a whole
+ * non-freehand shape the caller resolved by hit-testing (shapes erase on contact;
+ * there's no partial rectangle/arrow). Returns the SAME array reference when
+ * nothing changed, so callers can cheaply skip a no-op update.
+ */
+export function eraseAt(
+  list: Annotation[],
+  ex: number,
+  ey: number,
+  radius: number,
+  dropId: string | null,
+): Annotation[] {
+  let changed = false;
+  const out: Annotation[] = [];
+  for (const a of list) {
+    if (a.id === dropId) { changed = true; continue; }
+    if (a.type === "pen" || a.type === "highlight") {
+      const segs = splitFreehand(a, ex, ey, radius);
+      if (segs.length === 1 && segs[0] === a) {
+        out.push(a);
+      } else {
+        changed = true;
+        out.push(...segs);
+      }
+    } else {
+      out.push(a);
+    }
+  }
+  return changed ? out : list;
+}

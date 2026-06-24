@@ -50,7 +50,7 @@ export default function EditorView() {
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
         e.preventDefault();
-        window.dispatchEvent(new CustomEvent("glint:save-project", { detail: { asNew: e.shiftKey } }));
+        window.dispatchEvent(new CustomEvent("glint:save-project"));
         return;
       }
       if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {

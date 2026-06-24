@@ -4,7 +4,9 @@ import {
   updateAnnotation,
   deleteAnnotation,
   nextStepNumber,
+  eraseAt,
   type Annotation,
+  type FreehandAnno,
   type StepAnno,
 } from "./model";
 
@@ -15,6 +17,9 @@ const rect = (id: string): Annotation => ({
 const step = (id: string, number: number): StepAnno => ({
   id, type: "step", z: 0, style: { color: "#fff", strokeWidth: 3, fontSize: 24 },
   x: 0, y: 0, number,
+});
+const pen = (id: string, points: number[]): FreehandAnno => ({
+  id, type: "pen", z: 0, style: { color: "#fff", strokeWidth: 3, fontSize: 24 }, points,
 });
 
 describe("annotation model", () => {
@@ -40,5 +45,42 @@ describe("annotation model", () => {
 
   it("nextStepNumber is max+1 across existing steps", () => {
     expect(nextStepNumber([step("a", 1), step("b", 3), rect("c")])).toBe(4);
+  });
+});
+
+describe("eraseAt", () => {
+  it("returns the same array reference when nothing is under the circle", () => {
+    const list = [pen("p", [0, 0, 10, 0, 20, 0])];
+    expect(eraseAt(list, 100, 100, 5, null)).toBe(list);
+  });
+
+  it("drops a non-freehand shape by dropId, leaving others", () => {
+    const list = [rect("a"), rect("b")];
+    const next = eraseAt(list, 999, 999, 5, "a");
+    expect(next.map((n) => n.id)).toEqual(["b"]);
+  });
+
+  it("trims covered vertices off the end of a freehand stroke", () => {
+    // circle at (20,0) r=5 covers only the last vertex (20,0).
+    const next = eraseAt([pen("p", [0, 0, 10, 0, 20, 0])], 20, 0, 5, null);
+    expect(next).toHaveLength(1);
+    expect((next[0] as FreehandAnno).points).toEqual([0, 0, 10, 0]);
+  });
+
+  it("splits a freehand stroke into two when erased in the middle", () => {
+    // circle at (20,0) r=5 covers the middle vertex (20,0) of a 5-point line.
+    const next = eraseAt([pen("p", [0, 0, 10, 0, 20, 0, 30, 0, 40, 0])], 20, 0, 5, null);
+    expect(next).toHaveLength(2);
+    expect((next[0] as FreehandAnno).points).toEqual([0, 0, 10, 0]);
+    expect((next[1] as FreehandAnno).points).toEqual([30, 0, 40, 0]);
+    // the split segment gets a fresh id; the first keeps the original
+    expect(next[0].id).toBe("p");
+    expect(next[1].id).not.toBe("p");
+  });
+
+  it("removes a freehand stroke entirely when no 2-point run survives", () => {
+    // both vertices within the circle → no run of >=2 points remains.
+    const next = eraseAt([pen("p", [0, 0, 2, 0])], 1, 0, 5, null);
+    expect(next).toHaveLength(0);
   });
 });

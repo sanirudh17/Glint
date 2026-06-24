@@ -17,10 +17,10 @@ export function ProjectBar() {
   const projectName = useEditorStore((s) => s.projectName);
   const pushToast = useAppStore((s) => s.pushToast);
 
-  const doSave = useCallback(async (asNew: boolean) => {
+  const doSave = useCallback(async () => {
     const { projectPath, annotations, crop, frame } = useEditorStore.getState();
     const doc = { annotations, crop, frame };
-    let path = asNew ? null : projectPath;
+    let path = projectPath;
     if (!path) {
       path = await pickSavePath(projectName ?? "Untitled.glint");
       if (!path) return; // cancelled
@@ -46,12 +46,9 @@ export function ProjectBar() {
     }
   }, [pushToast]);
 
-  // Keyboard shortcuts (Ctrl+S / Ctrl+Shift+S) dispatch this event from EditorView.
+  // Ctrl+S (from EditorView) dispatches this event → the same save path.
   useEffect(() => {
-    const onSaveEvent = (e: Event) => {
-      const asNew = Boolean((e as CustomEvent<{ asNew: boolean }>).detail?.asNew);
-      void doSave(asNew);
-    };
+    const onSaveEvent = () => { void doSave(); };
     window.addEventListener("glint:save-project", onSaveEvent);
     return () => window.removeEventListener("glint:save-project", onSaveEvent);
   }, [doSave]);
@@ -61,7 +58,7 @@ export function ProjectBar() {
       <button className="editor-export-btn" onClick={doOpen} title="Open a .glint project">
         <FolderOpen size={16} strokeWidth={1.75} /> Open
       </button>
-      <button className="editor-export-btn" onClick={() => doSave(false)} title="Save project (Ctrl+S) · Ctrl+Shift+S saves a copy">
+      <button className="editor-export-btn" onClick={() => doSave()} title="Save project (Ctrl+S)">
         <Save size={16} strokeWidth={1.75} /> Save
       </button>
     </div>
