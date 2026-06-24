@@ -1,12 +1,16 @@
-//! The post-capture HUD window — a single borderless, transparent, always-on-top
-//! card at the bottom-left of the capture monitor. Like the capture overlay, the
-//! HUD webview is built ONCE (pre-warmed, hidden) and reused: each capture
-//! repositions it, tells the React app to reload the new result (`hud-refresh`),
-//! and shows it WITHOUT stealing focus (the user may be about to drag into another
-//! app). On dismiss it is HIDDEN, not closed, so the next capture pays no
-//! webview-creation cost.
+//! The post-capture HUD window — a single transient, borderless, transparent,
+//! always-on-top bar at the bottom-centre of the capture monitor. Owned by
+//! tray-core exactly like the capture overlay: always torn down on the next
+//! capture and on dismiss so no orphan window is ever left behind.
+//!
+//! NOTE: unlike the capture overlay, the HUD is built fresh each capture and
+//! CLOSED (not hidden) on teardown. A reuse/pre-warm attempt regressed it: the
+//! HUD intentionally never takes focus, and a focus-less transparent WebView2
+//! window that is hidden and re-shown repeatedly gets its renderer suspended by
+//! Windows' occlusion handling and stops repainting after a few cycles. Building
+//! fresh keeps it reliable. (The overlay can be reused because it takes focus.)
 
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const HUD_LABEL: &str = "hud";
 
@@ -20,9 +24,16 @@ const MARGIN_X: f64 = 20.0;
 // taskbar (precise work-area insetting is a later polish pass).
 const MARGIN_Y: f64 = 48.0;
 
-fn build(app: &AppHandle) -> tauri::Result<WebviewWindow> {
+/// Open a fresh HUD window for the current capture result. Tears down any prior
+/// HUD first (only one result is ever current). Must run off the main thread —
+/// building a webview synchronously on the main thread deadlocks the event loop
+/// (see `capture::begin_spawned`). It's called from `finish_commit`, which already
+/// runs on a background thread.
+pub fn open(app: &AppHandle) -> tauri::Result<()> {
+    teardown(app);
+
     let url = WebviewUrl::App("index.html#/hud".into());
-    WebviewWindowBuilder::new(app, HUD_LABEL, url)
+    let win = WebviewWindowBuilder::new(app, HUD_LABEL, url)
         .title("Glint")
         .decorations(false)
         .transparent(true)
@@ -34,30 +45,7 @@ fn build(app: &AppHandle) -> tauri::Result<WebviewWindow> {
         .focused(false)
         .inner_size(HUD_W, HUD_H)
         .visible(false) // shown after it positions to the monitor
-        .build()
-}
-
-/// Build the HUD window once, hidden, so the first capture's HUD doesn't pay the
-/// webview-creation cost. Idempotent. Safe from a spawned thread.
-pub fn prewarm(app: &AppHandle) {
-    if app.get_webview_window(HUD_LABEL).is_some() {
-        return;
-    }
-    if let Err(e) = build(app) {
-        log::warn!("hud prewarm failed (will build on demand): {e}");
-    }
-}
-
-/// Show the HUD for the current capture result. Reuses the pre-warmed window when
-/// present; builds on demand otherwise. Must run off the main thread — building a
-/// webview synchronously on the main thread deadlocks the event loop (see
-/// `capture::begin_spawned`). It's called from `finish_commit`, already on a
-/// background thread.
-pub fn open(app: &AppHandle) -> tauri::Result<()> {
-    let win = match app.get_webview_window(HUD_LABEL) {
-        Some(w) => w,
-        None => build(app)?,
-    };
+        .build()?;
 
     // Position bottom-LEFT of the primary monitor (CleanShot-style corner).
     if let Some(monitor) = win.primary_monitor()? {
@@ -74,20 +62,13 @@ pub fn open(app: &AppHandle) -> tauri::Result<()> {
         log::warn!("hud: no primary monitor; using default window position");
     }
 
-    // Tell the (already-mounted) HUD app to load the new capture result. The
-    // mount-time fetch only covers the on-demand fallback build.
-    let _ = app.emit_to(HUD_LABEL, "hud-refresh", ());
-
-    // Show WITHOUT set_focus — the HUD must never steal focus from the foreground
-    // app (the user may be about to drag the thumbnail into it).
     win.show()?;
     Ok(())
 }
 
-/// Hide the HUD window (kept alive for reuse — never closed). Safe to call when
-/// none exists.
+/// Close the HUD window if it's open. Safe to call when none exists.
 pub fn teardown(app: &AppHandle) {
     if let Some(win) = app.get_webview_window(HUD_LABEL) {
-        let _ = win.hide();
+        let _ = win.close();
     }
 }

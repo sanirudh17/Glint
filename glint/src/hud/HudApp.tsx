@@ -10,7 +10,6 @@
  * any app. Viewfinder corner ticks echo the capture crosshair. Esc dismisses.
  */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { listen } from "@tauri-apps/api/event";
 import {
   getHudData,
   hudCopy,
@@ -31,24 +30,11 @@ export function HudApp() {
   const [status, setStatus] = useState<string | null>(null);
   const statusTimer = useRef<number | null>(null);
 
-  // The HUD window is pre-warmed and REUSED across captures. The mount-time fetch
-  // only covers the on-demand fallback build (a fresh window with a live result);
-  // when pre-warmed at startup there's no result yet, so a failure here is expected
-  // — stay on the loading card, don't dismiss.
+  // Fetch the current capture result. On failure, close the HUD so we never
+  // strand an empty card on screen. (The HUD is built fresh each capture, so this
+  // mount-time fetch always has a live result.)
   useEffect(() => {
-    getHudData().then(setData).catch(() => {});
-  }, []);
-
-  // Each capture, the backend repositions+shows this window and emits `hud-refresh`.
-  // Drop the previous result and load the new one. A real failure means a stuck
-  // card, so dismiss in that case.
-  useEffect(() => {
-    const un = listen("hud-refresh", () => {
-      setStatus(null);
-      setData(null);
-      getHudData().then(setData).catch(() => hudDismiss());
-    });
-    return () => { un.then((f) => f()); };
+    getHudData().then(setData).catch(() => hudDismiss());
   }, []);
 
   // Esc dismisses, mirroring the capture overlay.

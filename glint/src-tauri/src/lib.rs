@@ -108,16 +108,17 @@ pub fn run() {
             }
             app.manage(Db(std::sync::Mutex::new(conn)));
 
-            // Pre-warm the capture overlay + HUD webviews (hidden) so the first
-            // capture doesn't pay the webview-creation cost — the dominant source
-            // of the open/HUD delay. Off-thread + delayed so it never blocks
-            // startup; the on-demand builds remain the fallback.
+            // Pre-warm the capture OVERLAY webview (hidden) so the first capture
+            // doesn't pay the webview-creation cost — the dominant source of the
+            // open delay. The overlay is safe to reuse because it takes focus on
+            // show; the HUD is NOT pre-warmed/reused (it must stay focus-less, and
+            // a hidden focus-less WebView2 stops repainting after a few cycles).
+            // Off-thread + delayed so it never blocks startup.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(500));
                     crate::overlay::prewarm(&h, 0);
-                    crate::hud::prewarm(&h);
                 });
             }
 
