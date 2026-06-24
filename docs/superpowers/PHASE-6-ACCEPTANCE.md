@@ -1,6 +1,6 @@
 # Phase 6 — "Open in Glint" — Acceptance
 
-**Status:** Built on `phase-6-open-in-glint`; awaiting at-screen acceptance.
+**Status:** ACCEPTED (at-screen) + merged to master. Explorer verb works (via Win11 "Show more options"); Open-in-Glint opens the editor; the window-hijack regression is fixed (commit 4d59517 — the real fix was a main-window guard in App.tsx, not the earlier emit_to). Save/Export reuse Phase 5c (same code path).
 **Spec:** specs/2026-06-24-glint-phase6-open-in-glint-design.md
 **Plan:** plans/2026-06-24-glint-phase6-open-in-glint.md
 

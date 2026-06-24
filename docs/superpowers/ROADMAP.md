@@ -27,7 +27,10 @@ capture/library/editor path.
   parses argv; warm start routes through `tauri-plugin-single-instance`; both funnel into one
   `open_image_path` that decodes → re-encodes PNG → opens an **Untitled** external doc (no Library
   row). Non-destructive: Save = new `.glint`, Export = new PNG; the source file is never touched.
-  New dep: `winreg`. *Built — awaiting at-screen.* (See PHASE-6-ACCEPTANCE.md.)
+  New dep: `winreg`. *Merged to master.* At-screen round fixed a window-hijack bug
+  (editor-open navigation must be guarded to the main window — all windows share one `<App/>`).
+  Note: on Windows 11 the entry sits under Explorer's "Show more options"; top-level placement
+  needs a packaged build + `IExplorerCommand` (future). (See PHASE-6-ACCEPTANCE.md.)
 
 ## Planned
 
