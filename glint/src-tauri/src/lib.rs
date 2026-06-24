@@ -17,10 +17,12 @@ use capture::commands::{
     hud_dismiss, hud_reveal, hud_save,
 };
 use editor::commands::{
-    editor_copy, editor_flatten_temp, editor_open_capture, editor_open_from_last, editor_save,
-    editor_source, project_open, project_save, projects_resolve,
+    consume_pending_external_open, editor_copy, editor_flatten_temp, editor_open_capture,
+    editor_open_from_last, editor_save, editor_source, project_open, project_save,
+    projects_resolve,
 };
 use settings::commands::{settings_get_all, settings_set, SettingsState};
+use shell_integration::{shell_register_explorer_menu, shell_unregister_explorer_menu};
 
 /// tray-core's owned connection to the captures table (same glint.db plugin-sql uses).
 pub struct Db(pub std::sync::Mutex<rusqlite::Connection>);
@@ -56,8 +58,18 @@ fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
-        .plugin(tauri_plugin_single_instance::init(|app, _argv, _cwd| {
-            window::focus_main(app);
+        .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
+            // A second launch (e.g. "Open in Glint" while Glint is already running)
+            // delivers its argv here. If it names an image, open it; otherwise just
+            // bring the existing window forward (the prior behaviour).
+            match crate::editor::commands::first_image_arg(&argv) {
+                Some(path) => {
+                    if let Err(e) = crate::editor::commands::open_image_path(app, &path, false) {
+                        let _ = tauri::Emitter::emit(app, "glint-toast", e);
+                    }
+                }
+                None => window::focus_main(app),
+            }
         }))
         .plugin(
             tauri_plugin_log::Builder::new()
@@ -84,6 +96,7 @@ pub fn run() {
         .manage(crate::capture::CaptureState::default())
         .manage(crate::capture::LastCaptureState::default())
         .manage(crate::editor::EditorState::default())
+        .manage(crate::editor::PendingOpen::default())
         .setup(|app| {
             tray::build(app.handle())?;
             shortcuts::register(app.handle())?;
@@ -109,6 +122,22 @@ pub fn run() {
             }
             app.manage(Db(std::sync::Mutex::new(conn)));
 
+            // Self-heal the Explorer "Open in Glint" verb: if enabled (default true)
+            // and not already registered for THIS exe path, (re)register. HKCU-only,
+            // no admin. Startup never removes — the Settings toggle drives removal.
+            {
+                let enabled = {
+                    let state = app.state::<SettingsState>();
+                    let s = state.0.lock().unwrap();
+                    s.explorer_menu_enabled
+                };
+                if enabled && !crate::shell_integration::is_registered() {
+                    if let Err(e) = crate::shell_integration::register() {
+                        log::warn!("explorer menu register failed: {e}");
+                    }
+                }
+            }
+
             // Pre-warm the capture OVERLAY webview (hidden) so the first capture
             // doesn't pay the webview-creation cost — the dominant source of the
             // open delay. The overlay is safe to reuse because it takes focus on
@@ -121,6 +150,18 @@ pub fn run() {
                     std::thread::sleep(std::time::Duration::from_millis(500));
                     crate::overlay::prewarm(&h, 0);
                 });
+            }
+
+            // Cold start: launched with an image path ("Open in Glint" while Glint
+            // was not running). Decode + load it now (synchronous so the pending
+            // flag is set before the webview mounts and reads it).
+            {
+                let args: Vec<String> = std::env::args().collect();
+                if let Some(path) = crate::editor::commands::first_image_arg(&args) {
+                    if let Err(e) = crate::editor::commands::open_image_path(app.handle(), &path, true) {
+                        log::warn!("cold-start open failed: {e}");
+                    }
+                }
             }
 
             log::info!("Glint started");
@@ -169,6 +210,9 @@ pub fn run() {
             project_save,
             project_open,
             projects_resolve,
+            consume_pending_external_open,
+            shell_register_explorer_menu,
+            shell_unregister_explorer_menu,
         ])
         .run(tauri::generate_context!())
         .expect("error while running Glint");
