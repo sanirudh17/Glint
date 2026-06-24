@@ -34,4 +34,5 @@ tauri-plugin-drag = "2"
 tauri-plugin-dialog = "2"
 chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
+winreg = "0.52"
 

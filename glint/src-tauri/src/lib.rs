@@ -6,6 +6,7 @@ mod hud;
 mod overlay;
 mod paths;
 mod settings;
+mod shell_integration;
 mod shortcuts;
 mod tray;
 mod window;
