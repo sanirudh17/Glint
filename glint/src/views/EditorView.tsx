@@ -48,7 +48,7 @@ export default function EditorView() {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
-      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "s") {
+      if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "s") {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("glint:save-project"));
         return;
@@ -64,6 +64,9 @@ export default function EditorView() {
         remove(selectedId);
         return;
       }
+      // Single-key tool shortcuts must not fire on modifier combos, or e.g.
+      // Ctrl+Shift+S would select Step and Ctrl+C would select Crop.
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const t = keys[e.key.toLowerCase()];
       // No-op when the tool is already active — avoids a needless store update
       // (and selection clear) on a repeated tool key, e.g. "c" mid-crop.
