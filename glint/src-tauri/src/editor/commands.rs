@@ -2,7 +2,7 @@ use base64::Engine;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager, State};
 
-use crate::editor::{EditorSource, EditorState};
+use crate::editor::{EditorSource, EditorState, PendingOpen};
 use crate::editor::document;
 
 #[derive(Serialize)]
@@ -251,6 +251,73 @@ pub fn project_open(app: AppHandle, ed: State<EditorState>, path: String) -> Res
     Ok(())
 }
 
+/// Supported source extensions, matching the `image` decode features and the
+/// `image` perceived-type the shell verb is registered under.
+const IMAGE_EXTS: [&str; 6] = ["png", "jpg", "jpeg", "webp", "bmp", "gif"];
+
+/// The first argument that points to an existing file with a supported image
+/// extension. Pure (no app handle) so it is unit-testable; used by both the
+/// cold-start argv parse and the warm-start single-instance callback.
+pub fn first_image_arg(args: &[String]) -> Option<String> {
+    args.iter()
+        .find(|a| {
+            let lower = a.to_lowercase();
+            IMAGE_EXTS.iter().any(|ext| lower.ends_with(&format!(".{ext}")))
+                && std::path::Path::new(a).is_file()
+        })
+        .cloned()
+}
+
+/// Load an external image file into the editor as a new Untitled document.
+/// Decodes the source, re-encodes to PNG (EditorState always holds PNG bytes),
+/// sets origin "external" (no Library row, no doc, no project path). On `cold`
+/// start, sets the PendingOpen flag so the frontend navigates on mount. Always
+/// shows/focuses the editor window. Never modifies the source file.
+pub fn open_image_path(app: &AppHandle, path: &str, cold: bool) -> Result<(), String> {
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let decoded = image::load_from_memory(&bytes)
+        .map_err(|_| {
+            let name = std::path::Path::new(path)
+                .file_name()
+                .map(|n| n.to_string_lossy().to_string())
+                .unwrap_or_else(|| path.to_string());
+            format!("Couldn't open {name} — not a supported image")
+        })?
+        .to_rgba8();
+    let (width, height) = (decoded.width(), decoded.height());
+    let img = crate::capture::frozen::CapturedImage { width, height, rgba: decoded.into_raw() };
+    let png = crate::capture::frozen::encode_png(&img).map_err(|e| e.to_string())?;
+
+    if let Some(ed) = app.try_state::<EditorState>() {
+        *ed.0.lock().unwrap() = Some(EditorSource {
+            png,
+            width,
+            height,
+            origin: "external".into(),
+            capture_id: None,
+            doc: None,
+            project_path: None,
+        });
+    }
+    if cold {
+        if let Some(p) = app.try_state::<PendingOpen>() {
+            *p.0.lock().unwrap() = true;
+        }
+    }
+    open_editor_window(app);
+    Ok(())
+}
+
+/// One-shot: returns whether a cold-start external open is pending, resetting the
+/// flag. The frontend calls this on mount to decide whether to navigate to /editor.
+#[tauri::command]
+pub fn consume_pending_external_open(pending: State<PendingOpen>) -> bool {
+    let mut p = pending.0.lock().unwrap();
+    let was = *p;
+    *p = false;
+    was
+}
+
 #[derive(Serialize)]
 pub struct RecentProjectDto {
     pub path: String,
@@ -273,4 +340,38 @@ pub fn projects_resolve(paths: Vec<String>) -> Vec<RecentProjectDto> {
             RecentProjectDto { path: p, name, exists }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::first_image_arg;
+
+    #[test]
+    fn ignores_when_no_image_arg() {
+        let args = vec!["glint.exe".to_string()];
+        assert_eq!(first_image_arg(&args), None);
+    }
+
+    #[test]
+    fn ignores_non_image_extension() {
+        let args = vec!["glint.exe".to_string(), "C:\\notes.txt".to_string()];
+        assert_eq!(first_image_arg(&args), None);
+    }
+
+    #[test]
+    fn finds_existing_image_file() {
+        let dir = std::env::temp_dir();
+        let p = dir.join("glint_test_arg.png");
+        std::fs::write(&p, b"not really a png, just needs to exist").unwrap();
+        let ps = p.to_string_lossy().to_string();
+        let args = vec!["glint.exe".to_string(), ps.clone()];
+        assert_eq!(first_image_arg(&args), Some(ps));
+        let _ = std::fs::remove_file(&p);
+    }
+
+    #[test]
+    fn ignores_image_extension_that_does_not_exist() {
+        let args = vec!["glint.exe".to_string(), "C:\\nope_missing_xyz.png".to_string()];
+        assert_eq!(first_image_arg(&args), None);
+    }
 }

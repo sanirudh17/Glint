@@ -21,5 +21,12 @@ pub struct EditorSource {
 #[derive(Default)]
 pub struct EditorState(pub Mutex<Option<EditorSource>>);
 
+/// One-shot flag: a cold-start "Open in Glint" launch set an external image into
+/// EditorState before the webview mounted. The frontend consumes this on mount to
+/// navigate to /editor (the `editor-open` emit can race a not-yet-mounted listener
+/// at cold start, so the flag — not the emit — drives cold-start navigation).
+#[derive(Default)]
+pub struct PendingOpen(pub Mutex<bool>);
+
 pub mod commands;
 pub mod document;

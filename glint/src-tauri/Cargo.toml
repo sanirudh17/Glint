@@ -27,7 +27,7 @@ tauri-plugin-log = "2.8.0"
 log = "0.4.33"
 tauri-plugin-global-shortcut = "2.3.2"
 xcap = "0.9.6"
-image = { version = "0.25", default-features = false, features = ["png"] }
+image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "gif"] }
 arboard = "3"
 base64 = "0.22"
 tauri-plugin-drag = "2"
