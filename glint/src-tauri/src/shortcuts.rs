@@ -52,6 +52,30 @@ pub fn register(app: &AppHandle) -> tauri::Result<()> {
                                 crate::capture::CaptureMode::Fullscreen,
                             );
                         }
+                        "copy_path" => {
+                            // Copy the most recent capture's file path to the clipboard.
+                            // Bring the main window forward so the confirmation toast is
+                            // visible (the app's standard feedback channel).
+                            window::focus_main(handle);
+                            let path = handle
+                                .state::<crate::capture::LastCaptureState>()
+                                .0
+                                .lock()
+                                .unwrap()
+                                .as_ref()
+                                .map(|l| l.path.clone());
+                            let msg = match path {
+                                Some(p) => match crate::clipboard::copy_text(&p) {
+                                    Ok(()) => "Path copied",
+                                    Err(e) => {
+                                        log::warn!("copy_path failed: {e}");
+                                        "Couldn't copy path"
+                                    }
+                                },
+                                None => "No capture to copy yet",
+                            };
+                            let _ = handle.emit("glint-toast", msg);
+                        }
                         other => {
                             window::focus_main(handle);
                             let _ = handle.emit("shortcut-fired", other);
