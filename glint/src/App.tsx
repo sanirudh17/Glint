@@ -65,6 +65,22 @@ export default function App() {
   }, []);
 
   useEffect(() => {
+    // Are we the main window? Every window (main, HUD `#/hud`, overlay `#/overlay`)
+    // loads the same index.html and mounts this same <App/> — they differ only by
+    // hash route. Tauri's listen() receives an event emitted to ANY target, so a
+    // listener registered here is live in EVERY window regardless of emit/emit_to.
+    // Anything that navigates the router must therefore run ONLY in the main
+    // window; otherwise the HUD turns into a mini-annotator and the pre-warmed
+    // overlay navigates to /editor (next capture shows a stuck fullscreen
+    // annotator). Toasts are fine in any window (e.g. glint-toast must reach the
+    // HUD's ToastHost for the copy-path hotkey).
+    let isMain = false;
+    try {
+      isMain = getCurrentWindow().label === "main";
+    } catch {
+      isMain = false;
+    }
+
     // Backend events → toasts. Each listen() returns an unlisten promise;
     // collect them all and tear down on cleanup to avoid leaks.
     const subs = [
@@ -91,11 +107,12 @@ export default function App() {
       }),
 
       // Editor entry points (HUD Annotate / Library Edit / open-in-editor) emit this.
-      // This listener must stay mounted for the editor to open — it does because
-      // the main window is only ever hidden, never destroyed (see lib.rs
-      // CloseRequested → hide), so this App tree is never torn down.
+      // MAIN WINDOW ONLY — see the isMain note above: navigating any other window
+      // to /editor is exactly the window-hijack bug. The main window is only ever
+      // hidden, never destroyed (lib.rs CloseRequested → hide), so this listener
+      // stays mounted for the whole session.
       listen("editor-open", () => {
-        router.navigate("/editor");
+        if (isMain) router.navigate("/editor");
       }),
     ];
 

@@ -25,12 +25,15 @@ pub struct EditorSourceDto {
 /// changed to truly close, this emit would fire into the void and the editor
 /// would silently fail to open.
 ///
-/// IMPORTANT: the `editor-open` event is emitted ONLY to the "main" window
-/// (`emit_to`), never broadcast. Every window (main, HUD, overlay) loads the
-/// same `index.html` and mounts the same `<App/>`, so a global `emit` would make
-/// the HUD navigate to /editor (turning it into a mini-annotator) and — worse —
-/// make the pre-warmed, hidden capture overlay navigate to /editor, so the next
-/// capture would show a borderless fullscreen annotator with no window controls.
+/// NOTE on the `editor-open` event: every window (main, HUD, overlay) loads the
+/// same `index.html` and mounts the same `<App/>`, and Tauri's JS `listen()`
+/// receives an event emitted to ANY target — so `emit_to("main", ...)` does NOT
+/// actually stop the HUD/overlay listeners from firing. The real guard against
+/// the window-hijack bug (HUD turning into a mini-annotator; the pre-warmed
+/// overlay navigating to /editor and showing a stuck fullscreen annotator on the
+/// next capture) lives in `App.tsx`: it only navigates when it is the "main"
+/// window. We still `emit_to("main", ...)` here to express intent (main is the
+/// only legitimate consumer).
 pub(crate) fn open_editor_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
         let _ = w.unminimize();
