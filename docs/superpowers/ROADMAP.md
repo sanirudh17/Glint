@@ -16,9 +16,10 @@ capture/library/editor path.
   backdrop, padding, rounded corners, drop shadow, aspect presets; live WYSIWYG; native-res
   export). *Merged to master.*
 - **Phase 5c — `.glint` save/load** (versioned, self-contained document: embedded base image +
-  opaque doc {annotations, crop, frame}; Save=project / Export=PNG; Ctrl+S / Ctrl+Shift+S; dirty
-  indicator in the titlebar; Home "Open Project" + Recent Projects). *Branch
-  `phase-5c-glint-document` — at-screen acceptance in progress.*
+  opaque doc {annotations, crop, frame}; Save=project / Export=PNG; Ctrl+S; dirty indicator in
+  the titlebar; Home "Open Project" + Recent Projects). Also shipped in the at-screen round: a
+  scrub **eraser** (sized footprint, partial freehand erase), **copy-path hotkey** wired up, and
+  a **capture-overlay reuse** speedup (pre-warmed webview). *Merged to master.*
 
 ## Planned
 

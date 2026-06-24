@@ -1,7 +1,7 @@
 # Phase 5c — `.glint` Document Save/Load — Acceptance
 
-**Status:** Built — pending at-screen acceptance.
-**Branch:** `phase-5c-glint-document`. **Spec:** specs/2026-06-23-glint-phase5c-glint-document-design.md.
+**Status:** ACCEPTED (at-screen) + merged to master.
+**Branch:** `phase-5c-glint-document` (merged, deleted). **Spec:** specs/2026-06-23-glint-phase5c-glint-document-design.md.
 **Plan:** plans/2026-06-23-glint-phase5c-glint-document.md.
 
 ## Automated (green gate) — PASSED
