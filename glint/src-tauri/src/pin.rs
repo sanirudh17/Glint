@@ -115,7 +115,13 @@ fn build_pin_window(app: &AppHandle, label: &str, nat_w: u32, nat_h: u32) -> tau
 }
 
 /// Pin the most recent capture (HUD "Pin" button).
-#[tauri::command]
+///
+/// `(async)` is load-bearing: it forces this command OFF the main thread.
+/// `build_pin_window` builds a `WebviewWindow`, and building a webview while the
+/// command occupies the main (event-loop) thread DEADLOCKS the loop — the same
+/// gotcha the capture overlay avoids by building from a spawned thread. Running
+/// the command on a worker thread lets the now-free event loop service the build.
+#[tauri::command(async)]
 pub fn pin_create_from_last(
     app: AppHandle,
     last: State<crate::capture::LastCaptureState>,
@@ -138,7 +144,10 @@ pub fn pin_create_from_last(
 }
 
 /// Pin a saved Library capture by id.
-#[tauri::command]
+///
+/// `(async)` is load-bearing — see [`pin_create_from_last`]: it runs this command
+/// off the main thread so `build_pin_window` can't deadlock the event loop.
+#[tauri::command(async)]
 pub fn pin_create_from_capture(
     app: AppHandle,
     db: State<crate::Db>,
