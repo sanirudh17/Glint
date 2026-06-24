@@ -7,7 +7,7 @@
  */
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import { getCurrentWindow, currentMonitor } from "@tauri-apps/api/window";
-import { LogicalSize } from "@tauri-apps/api/dpi";
+import { LogicalSize, LogicalPosition } from "@tauri-apps/api/dpi";
 import { getPinData, pinSave, pinCopy, pinClose, type PinData } from "../lib/pin";
 import { X } from "lucide-react";
 import "./pin.css";
@@ -77,17 +77,28 @@ export function PinApp() {
 
   const aspect = data ? data.width / data.height : 1;
 
-  // Apply a new WIDTH (logical), deriving height from the locked aspect, clamped.
-  const applyWidth = useCallback(
-    async (rawW: number) => {
+  // Clamp a desired WIDTH (logical) to [MIN, monitor], deriving height from the
+  // locked aspect and re-clamping if height escapes its own bounds. Returns the
+  // integer logical size to apply.
+  const clampSize = useCallback(
+    (rawW: number) => {
       const max = maxRef.current;
       let w = Math.max(MIN, Math.min(rawW, max.w));
       let h = w / aspect;
       if (h < MIN) { h = MIN; w = h * aspect; }
       if (h > max.h) { h = max.h; w = h * aspect; }
-      await getCurrentWindow().setSize(new LogicalSize(Math.round(w), Math.round(h)));
+      return { w: Math.round(w), h: Math.round(h) };
     },
     [aspect],
+  );
+
+  // Resize anchored at the top-left (used by the wheel zoom).
+  const applyWidth = useCallback(
+    async (rawW: number) => {
+      const { w, h } = clampSize(rawW);
+      await getCurrentWindow().setSize(new LogicalSize(w, h));
+    },
+    [clampSize],
   );
 
   // Move: drag the image (left button, not a handle).
@@ -105,26 +116,45 @@ export function PinApp() {
     applyWidth(curW * factor);
   };
 
-  // Corner handle drag → resize from the width delta.
+  // Corner handle drag → resize with the OPPOSITE corner anchored, so the grabbed
+  // corner tracks the cursor. We drive width from horizontal motion (aspect locks
+  // height) and reposition the window's top-left so the anchored edges stay put:
+  //   right corners (ne/se) keep the LEFT edge → x fixed; left corners keep RIGHT.
+  //   bottom corners (se/sw) keep the TOP edge → y fixed; top corners keep BOTTOM.
+  // Without the reposition the window only ever grew from its top-left origin, so
+  // every corner but SE felt like it dragged the wrong corner.
   const onHandleDown = (e: React.PointerEvent, corner: "nw" | "ne" | "sw" | "se") => {
     e.preventDefault();
     e.stopPropagation();
     const startX = e.screenX;
-    getCurrentWindow().innerSize().then(async (sz) => {
-      const scale = await getCurrentWindow().scaleFactor();
-      const startW = sz.width / scale;
-      const grows = corner === "ne" || corner === "se"; // dragging right edge outward grows
-      const onMove = (m: PointerEvent) => {
-        const dx = (m.screenX - startX) * (grows ? 1 : -1);
-        applyWidth(startW + dx);
-      };
-      const onUp = () => {
-        window.removeEventListener("pointermove", onMove);
-        window.removeEventListener("pointerup", onUp);
-      };
-      window.addEventListener("pointermove", onMove);
-      window.addEventListener("pointerup", onUp);
-    });
+    const win = getCurrentWindow();
+    Promise.all([win.innerSize(), win.outerPosition(), win.scaleFactor()])
+      .then(([sz, pos, scale]) => {
+        const startW = sz.width / scale;
+        const startH = sz.height / scale;
+        const startLeft = pos.x / scale;
+        const startTop = pos.y / scale;
+        const right = corner === "ne" || corner === "se";
+        const bottom = corner === "se" || corner === "sw";
+        const onMove = (m: PointerEvent) => {
+          const dx = m.screenX - startX;
+          const rawW = right ? startW + dx : startW - dx;
+          const { w, h } = clampSize(rawW);
+          // Keep the anchored corner fixed: shift top-left by the size change on
+          // the moving edges only.
+          const left = right ? startLeft : startLeft - (w - startW);
+          const top = bottom ? startTop : startTop - (h - startH);
+          win.setSize(new LogicalSize(w, h));
+          win.setPosition(new LogicalPosition(Math.round(left), Math.round(top)));
+        };
+        const onUp = () => {
+          window.removeEventListener("pointermove", onMove);
+          window.removeEventListener("pointerup", onUp);
+        };
+        window.addEventListener("pointermove", onMove);
+        window.addEventListener("pointerup", onUp);
+      })
+      .catch((err) => console.error("pin resize failed", err));
   };
 
   const onContextMenu = (e: React.MouseEvent) => {
