@@ -7,6 +7,7 @@ import SettingsView from "./views/SettingsView";
 import EditorView from "./views/EditorView";
 import { OverlayApp } from "./overlay/OverlayApp";
 import { HudApp } from "./hud/HudApp";
+import { PinApp } from "./pin/PinApp";
 import "./components/shell.css";
 
 /**
@@ -55,6 +56,15 @@ export const router = createHashRouter([
      */
     path: "/hud",
     element: <HudApp />,
+  },
+  {
+    /**
+     * Chrome-free pin route — a floating always-on-top image window. Like
+     * /overlay and /hud it sits outside AppShell so PinApp is the sole root.
+     * URL: tauri://localhost/#/pin (window label distinguishes each pin).
+     */
+    path: "/pin",
+    element: <PinApp />,
   },
   {
     path: "/",
