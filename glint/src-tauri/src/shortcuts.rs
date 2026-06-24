@@ -54,9 +54,9 @@ pub fn register(app: &AppHandle) -> tauri::Result<()> {
                         }
                         "copy_path" => {
                             // Copy the most recent capture's file path to the clipboard.
-                            // Bring the main window forward so the confirmation toast is
-                            // visible (the app's standard feedback channel).
-                            window::focus_main(handle);
+                            // Do NOT focus/raise the main window — the "Path copied" toast
+                            // already reaches the (always-on-top) HUD, which is feedback
+                            // enough; popping the app to the front is intrusive.
                             let path = handle
                                 .state::<crate::capture::LastCaptureState>()
                                 .0
