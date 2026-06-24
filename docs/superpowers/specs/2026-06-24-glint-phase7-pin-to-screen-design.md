@@ -20,10 +20,10 @@ save it, and close it. Multiple pins can coexist; they live only for the session
 ## Decisions locked at brainstorming
 
 1. **Entry points:** the post-capture **HUD Pin button** (already stubbed) + a **Library** "Pin to screen" action (card hover button + right-click). NOT the editor.
-2. **Interactions:** move (drag), resize (**both** scroll-to-scale AND hover corner handles, aspect locked), close, **adjust opacity**, **save to Library**. NO clipboard copy (out of scope this phase).
+2. **Interactions:** move (drag), resize (**both** scroll-to-scale AND hover corner handles, aspect locked), close, **adjust opacity**, **save to Library**, **copy to clipboard**. (Copy was added post-review at the user's discretion — near-zero cost since `clipboard::copy_image` already exists and is reused by `editor_copy`; completes the right-click menu naturally.)
 3. **Resize:** both scroll-to-scale and corner drag handles.
 4. **Persistence:** **ephemeral** — pins live only for the current session; quitting/closing clears them. No on-disk pin state.
-5. **Action UI:** a **right-click context menu** (Save to Library · Opacity ▸ · Close) plus a hover **×** for quick close.
+5. **Action UI:** a **right-click context menu** (Copy · Save to Library · Opacity ▸ · Close) plus a hover **×** for quick close.
 
 ## Architecture (Approach A — mirror the HUD/overlay pattern)
 
@@ -65,6 +65,8 @@ fragile; the codebase already has the clean Rust-state-fetch pattern from HUD/ov
 - `pin_save(app, db, pins, window) -> Result<String, String>` — write this pin's PNG as a NEW
   Library capture (reusing the `editor_save`/`hud_save` write+thumb+insert+emit path); returns
   the saved path.
+- `pin_copy(pins, window) -> Result<(), String>` — copy this pin's image to the clipboard,
+  decoding the stored PNG and reusing `crate::clipboard::copy_image` (exactly as `editor_copy`).
 - `pin_close(app, pins, window) -> Result<(), String>` — close the window and remove its entry
   from `PinState`. Also remove on the window's `Destroyed` event as a safety net (so an
   OS-driven close can't leak a `PinState` entry).
@@ -87,16 +89,17 @@ commands share one window-construction path.
     locked) via `setSize`, same clamps.
   - **Opacity:** CSS `opacity` on the `<img>` (window stays transparent). Levels 100/75/50/25%
     from the context menu; default 100%.
+  - **Copy:** `pin_copy()` → inline flash / toast "Copied to clipboard".
   - **Save:** `pin_save()` → inline flash / toast "Saved · <name>".
   - **Close:** hover **×** (top corner) + **Esc** + context-menu Close → `pin_close()`.
   - **Context menu:** a custom in-window menu div on `contextmenu` (the window is borderless, so
-    we render our own): **Save to Library**, **Opacity ▸ (100/75/50/25)**, **Close**. Dismisses
-    on outside click / Esc.
+    we render our own): **Copy**, **Save to Library**, **Opacity ▸ (100/75/50/25)**, **Close**.
+    Dismisses on outside click / Esc.
 - **HUD wiring:** replace the stubbed `case "pin"` in `HudApp` (`flash("Pinning arrives in Phase 7")`)
   with a call to `pin_create_from_last()` (then the HUD may stay or dismiss — see Edge cases).
 - **Library wiring:** add a "Pin to screen" affordance to the capture card (hover button +
   right-click menu) calling `pin_create_from_capture(id)`.
-- **IPC wrappers:** a small `src/lib/pin.ts` with typed wrappers for the five commands.
+- **IPC wrappers:** a small `src/lib/pin.ts` with typed wrappers for the six commands.
 
 ## Data flow
 
@@ -125,12 +128,12 @@ are per-label, resolving the label from the calling window.
   - Pin from the HUD button; pin from the Library (hover button + right-click).
   - Move (drag), resize by scroll, resize by corner handle (aspect locked, clamps hold).
   - Opacity 100/75/50/25 via right-click.
+  - Copy to clipboard (paste into another app).
   - Save to Library (appears in Library/Recent Captures).
   - Close via ×, Esc, and context-menu; multiple pins at once; quitting Glint clears all pins.
 
 ## Out of scope (this phase)
 
-- Clipboard **copy** from a pin (skipped by choice; trivial to add later).
 - **Persistence** across restart (ephemeral by decision).
 - **Click-through / ignore-cursor** ("ghost") mode.
 - Pinning from the **editor**.
