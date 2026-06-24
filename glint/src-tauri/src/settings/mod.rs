@@ -37,6 +37,7 @@ pub struct Settings {
     pub auto_save: bool,
     pub auto_copy: bool,
     pub open_in_editor: bool,
+    pub explorer_menu_enabled: bool,
 }
 
 impl Default for Settings {
@@ -48,6 +49,7 @@ impl Default for Settings {
             auto_save: true,
             auto_copy: true,
             open_in_editor: false,
+            explorer_menu_enabled: true,
         }
     }
 }
@@ -72,6 +74,10 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         }
         "open_in_editor" => {
             s.open_in_editor = value.as_bool().ok_or("open_in_editor must be boolean")?;
+        }
+        "explorer_menu_enabled" => {
+            s.explorer_menu_enabled =
+                value.as_bool().ok_or("explorer_menu_enabled must be boolean")?;
         }
         other => return Err(format!("unknown settings key: {other}")),
     }
@@ -145,5 +151,24 @@ mod tests {
         assert!(!s.open_in_editor);
         apply_update(&mut s, "open_in_editor", json!(true)).unwrap();
         assert!(s.open_in_editor);
+    }
+
+    #[test]
+    fn defaults_enable_explorer_menu() {
+        let s = Settings::default();
+        assert!(s.explorer_menu_enabled);
+    }
+
+    #[test]
+    fn apply_update_sets_explorer_menu_bool() {
+        let mut s = Settings::default();
+        apply_update(&mut s, "explorer_menu_enabled", json!(false)).unwrap();
+        assert!(!s.explorer_menu_enabled);
+    }
+
+    #[test]
+    fn apply_update_rejects_non_bool_explorer_menu() {
+        let mut s = Settings::default();
+        assert!(apply_update(&mut s, "explorer_menu_enabled", json!("yes")).is_err());
     }
 }
