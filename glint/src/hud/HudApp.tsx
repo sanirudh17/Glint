@@ -21,6 +21,7 @@ import {
   type HudData,
 } from "../lib/hudIpc";
 import { openEditorFromLast } from "../lib/editor";
+import { pinCreateFromLast } from "../lib/pin";
 import { HudActions, type HudAction } from "./HudActions";
 import { X } from "lucide-react";
 import "./hud.css";
@@ -80,7 +81,7 @@ export function HudApp() {
           await openEditorFromLast().catch(() => flash("Couldn't open editor"));
           break;
         case "pin":
-          flash("Pinning arrives in Phase 7");
+          await pinCreateFromLast().then(() => flash("Pinned")).catch(() => flash("Couldn't pin"));
           break;
         case "dismiss":
           hudDismiss();

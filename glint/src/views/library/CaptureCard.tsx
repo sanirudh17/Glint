@@ -1,7 +1,8 @@
-import { ExternalLink, FolderOpen, Copy, Pencil, Trash2 } from "lucide-react";
+import { ExternalLink, FolderOpen, Copy, Pencil, Pin, Trash2 } from "lucide-react";
 import type { CaptureItem } from "../../lib/captures";
 import { openCapture, revealCapture, copyCapture, deleteCapture, dragOut } from "../../lib/captures";
 import { openEditorCapture } from "../../lib/editor";
+import { pinCreateFromCapture } from "../../lib/pin";
 import { useAppStore } from "../../store/useAppStore";
 // Card styles live in library.css; import here so the card is styled wherever
 // it's used (the Library grid *and* the Home dashboard's recent-captures row).
@@ -60,6 +61,9 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
         </button>
         <button className="cap-btn" aria-label="Copy" title="Copy" onClick={() => act(() => copyCapture(item.id))}>
           <Copy size={15} strokeWidth={1.75} />
+        </button>
+        <button className="cap-btn" aria-label="Pin to screen" title="Pin to screen" onClick={() => act(() => pinCreateFromCapture(item.id))}>
+          <Pin size={15} strokeWidth={1.75} />
         </button>
         <button
           className="cap-btn cap-btn--danger"
