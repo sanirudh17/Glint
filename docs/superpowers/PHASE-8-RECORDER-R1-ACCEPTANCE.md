@@ -16,9 +16,10 @@ The recorder spawns a bundled **ffmpeg** sidecar. The binary is **git-ignored** 
 - This build was validated with ffmpeg 8.1.1 (gyan.dev essentials build).
 
 ## Automated (green gate)
-- [x] `cargo build` clean; `cargo test` green — **58 passed / 0 failed / 2 ignored**
+- [x] `cargo build` clean; `cargo test` green — **59 passed / 0 failed / 2 ignored**
   (the 2 ignored are display-only capture smoke tests). Recorder units: `even`,
-  `build_ffmpeg_args` (fullscreen + region), `normalize_region`, `recording_filename`.
+  `build_ffmpeg_args` (fullscreen + region + stderr-silencing), `normalize_region`,
+  `recording_filename`.
 - [x] `tsc --noEmit` clean; `vitest run` green (**46 passed**, incl. 5 `mmss` formatter
   assertions); `vite build` clean (pre-existing chunk-size warning only).
 
@@ -59,8 +60,16 @@ The recorder spawns a bundled **ffmpeg** sidecar. The binary is **git-ignored** 
 - **Region dims** are stored on the Library row; fullscreen dims are left unset (ffmpeg
   records at native resolution and the exact size isn't known at start).
 - **Single-user assumption:** only one recording at a time; a second `recorder_start`
-  while one is in flight is ignored. (A theoretical double-start race during the 3 s
-  countdown is not guarded — out of scope for a single-user app.)
+  while one is in flight is ignored. **Known deferred gap (single-user, accepted):** the
+  "already recording" guard runs *before* the 3 s countdown and the state slot isn't
+  filled until ffmpeg spawns, so triggering Record twice within that 3 s window (e.g. the
+  hotkey twice) would spawn two ffmpeg processes and orphan the first (no handle to stop
+  it). Closing this needs a `RecorderState` reservation slot taken before the countdown —
+  out of scope for a single-user R1; revisit if multi-trigger ever becomes likely.
+- **Stderr is silenced on purpose** (`-nostats -loglevel error`): the sidecar's event
+  channel is capacity-1 and isn't drained mid-recording, so a chatty stderr would back up
+  the pipe and stall ffmpeg. This is the fix that makes long recordings safe — hence the
+  multi-minute at-screen check above.
 - **Deferred:** **R2** = system audio + microphone (independently mutable, `dshow`
   inputs); **R3** = webcam overlay. The architecture (ffmpeg-only capture+encode behind
   the isolated `recorder/` module) is designed so both slot in without rework.
