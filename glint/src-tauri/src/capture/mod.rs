@@ -105,6 +105,7 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
     overlay::teardown_all(app);
     crate::hud::teardown(app);
 
+    let _perf = std::time::Instant::now();
     let capturer = XcapCapturer;
     let image = match capturer.capture_primary() {
         Ok(img) => img,
@@ -114,7 +115,12 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
             return;
         }
     };
-    log::info!("captured frozen frame: {}x{}", image.width, image.height);
+    log::info!(
+        "captured frozen frame: {}x{} [perf] screen grab: {}ms",
+        image.width,
+        image.height,
+        _perf.elapsed().as_millis()
+    );
 
     let monitor_id: u32 = 0; // single-monitor phase: primary keyed as 0
 
@@ -143,7 +149,10 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
     });
 
     match overlay::open_for_monitor(app, monitor_id) {
-        Ok(()) => log::info!("capture overlay opened (scale={scale})"),
+        Ok(()) => log::info!(
+            "capture overlay opened (scale={scale}) [perf] grab→overlay-shown: {}ms",
+            _perf.elapsed().as_millis()
+        ),
         Err(e) => {
             log::error!("overlay open failed: {e}");
             overlay::teardown_all(app);

@@ -27,15 +27,30 @@ pub struct OverlayData {
 }
 
 /// Returns the frozen screenshot + metadata the overlay UI needs to render.
-#[tauri::command]
+///
+/// `(async)` runs this off the main thread: the backdrop encode would otherwise
+/// block the event loop (and the overlay's own responsiveness) while it ran. The
+/// backdrop is DISPLAY-ONLY — the committed capture crops the raw session pixels —
+/// so it uses the fast (larger, identical-pixels) encoder.
+#[tauri::command(async)]
 pub fn capture_overlay_data(
     _monitor_id: u32,
     state: State<CaptureState>,
 ) -> Result<OverlayData, String> {
     let guard = state.0.lock().unwrap();
     let session = guard.as_ref().ok_or("no active capture session")?;
-    let png = crate::capture::frozen::encode_png(&session.image).map_err(|e| e.to_string())?;
+    let _perf = std::time::Instant::now();
+    let png = crate::capture::frozen::encode_png_fast(&session.image).map_err(|e| e.to_string())?;
+    let _enc = _perf.elapsed().as_millis();
     let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+    log::info!(
+        "[perf] overlay_data: encode_png={_enc}ms total={}ms (png={}KB b64={}KB {}x{})",
+        _perf.elapsed().as_millis(),
+        png.len() / 1024,
+        b64.len() / 1024,
+        session.image.width,
+        session.image.height
+    );
     // Convert window rects from physical px to logical px (divide by scale).
     let windows = session
         .windows
@@ -107,6 +122,7 @@ fn finish_commit(
     session: crate::capture::CaptureSession,
     rect: RectArg,
 ) -> Result<(), String> {
+    let _perf = std::time::Instant::now();
     let phys = logical_to_physical(
         LogicalRect { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
         session.scale,
@@ -120,7 +136,13 @@ fn finish_commit(
         height: clamped.h,
         rgba: cropped.clone(),
     };
-    let png = crate::capture::frozen::encode_png(&out_img).map_err(|e| e.to_string())?;
+    let png = crate::capture::frozen::encode_png_fast(&out_img).map_err(|e| e.to_string())?;
+    log::info!(
+        "[perf] commit encode_png: {}ms ({}x{})",
+        _perf.elapsed().as_millis(),
+        clamped.w,
+        clamped.h
+    );
 
     // Read the live settings (hydrated at startup).
     let (auto_save, auto_copy, open_in_editor) = {
@@ -161,53 +183,22 @@ fn finish_commit(
         log::warn!("clipboard copy failed: {e}");
     }
 
-    // Mirror to a stable path (%USERPROFILE%\.glint\latest.png) for coding agents.
-    // Always — non-fatal.
-    if let Ok(home) = app.path().home_dir() {
-        let latest = crate::paths::latest_png(&home);
-        if let Some(parent) = latest.parent() {
-            let _ = std::fs::create_dir_all(parent);
-        }
-        if let Err(e) = std::fs::write(&latest, &png) {
-            log::warn!("latest.png mirror failed: {e}");
-        }
-    }
-
-    // Record in the Library when auto-saved: thumbnail + DB row + capture-saved event.
-    if saved {
-        let thumb_path = write_thumb(app, &cropped, clamped.w, clamped.h, &path_str);
-        let row = crate::db::NewCapture {
-            kind: "screenshot".into(),
-            path: path_str.clone(),
-            thumb_path,
-            width: Some(clamped.w as i64),
-            height: Some(clamped.h as i64),
-            bytes: Some(png.len() as i64),
-            created_at: std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(0),
-        };
-        let conn = app.state::<crate::Db>();
-        let guard = conn.0.lock().unwrap();
-        match crate::db::insert_capture(&guard, &row) {
-            Ok(_) => {
-                let _ = app.emit("capture-saved", ());
-            }
-            Err(e) => log::error!("insert_capture failed: {e}"),
-        }
-    }
-
-    // Stash the result for the HUD to act on (re-copy / drag / save / copy-path / reveal).
+    // Stash the result for the HUD to act on (re-copy / drag / save / copy-path /
+    // reveal) BEFORE opening the HUD, so its mount-time fetch sees this capture.
     *app.state::<crate::capture::LastCaptureState>().0.lock().unwrap() =
         Some(crate::capture::LastCapture {
             path: path_str.clone(),
             width: clamped.w,
             height: clamped.h,
-            rgba: cropped,
+            rgba: cropped.clone(),
             saved,
         });
 
+    // Open the HUD (or editor) NOW. The latest.png mirror and the Library
+    // thumbnail+row are bookkeeping the HUD doesn't depend on, so they run AFTER on
+    // a background thread (concurrent with the HUD's webview build) and never delay
+    // it. The saved file itself was already written above, so the HUD's
+    // reveal/drag/copy-path actions remain safe.
     if open_in_editor {
         // Skip the HUD — drop straight into the editor with this capture loaded.
         *app.state::<crate::editor::EditorState>().0.lock().unwrap() =
@@ -221,19 +212,73 @@ fn finish_commit(
                 project_path: None,
             });
         crate::editor::commands::open_editor_window(app);
-    } else if let Err(e) = crate::hud::open(app) {
-        // HUD failed to open — fall back to the Phase 2 success toast.
-        log::error!("hud open failed: {e}");
-        app.emit(
-            "capture-complete",
-            serde_json::json!({
-                "path": path_str,
-                "width": clamped.w,
-                "height": clamped.h,
-                "clipboard": clip.is_ok(),
-            }),
-        )
-        .map_err(|e| e.to_string())?;
+    } else {
+        log::info!("[perf] commit work before HUD: {}ms", _perf.elapsed().as_millis());
+        let _hud = std::time::Instant::now();
+        let hud_result = crate::hud::open(app);
+        log::info!(
+            "[perf] hud::open (webview build+show): {}ms (commit total: {}ms)",
+            _hud.elapsed().as_millis(),
+            _perf.elapsed().as_millis()
+        );
+        if let Err(e) = hud_result {
+            // HUD failed to open — fall back to the Phase 2 success toast.
+            log::error!("hud open failed: {e}");
+            app.emit(
+                "capture-complete",
+                serde_json::json!({
+                    "path": path_str,
+                    "width": clamped.w,
+                    "height": clamped.h,
+                    "clipboard": clip.is_ok(),
+                }),
+            )
+            .map_err(|e| e.to_string())?;
+        }
+    }
+
+    // Deferred Library/agent bookkeeping — runs off the HUD's critical path.
+    {
+        let app = app.clone();
+        let png = png; // saved-file bytes (already on disk); reused for mirror + size
+        let cropped = cropped; // full-res pixels for the thumbnail
+        let path_str = path_str;
+        std::thread::spawn(move || {
+            // Mirror to %USERPROFILE%\.glint\latest.png for coding agents — non-fatal.
+            if let Ok(home) = app.path().home_dir() {
+                let latest = crate::paths::latest_png(&home);
+                if let Some(parent) = latest.parent() {
+                    let _ = std::fs::create_dir_all(parent);
+                }
+                if let Err(e) = std::fs::write(&latest, &png) {
+                    log::warn!("latest.png mirror failed: {e}");
+                }
+            }
+            // Record in the Library when auto-saved: thumbnail + DB row + event.
+            if saved {
+                let thumb_path = write_thumb(&app, &cropped, clamped.w, clamped.h, &path_str);
+                let row = crate::db::NewCapture {
+                    kind: "screenshot".into(),
+                    path: path_str.clone(),
+                    thumb_path,
+                    width: Some(clamped.w as i64),
+                    height: Some(clamped.h as i64),
+                    bytes: Some(png.len() as i64),
+                    created_at: std::time::SystemTime::now()
+                        .duration_since(std::time::UNIX_EPOCH)
+                        .map(|d| d.as_secs() as i64)
+                        .unwrap_or(0),
+                };
+                let conn = app.state::<crate::Db>();
+                let guard = conn.0.lock().unwrap();
+                match crate::db::insert_capture(&guard, &row) {
+                    Ok(_) => {
+                        let _ = app.emit("capture-saved", ());
+                    }
+                    Err(e) => log::error!("insert_capture failed: {e}"),
+                }
+            }
+        });
     }
 
     Ok(())
