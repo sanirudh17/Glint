@@ -36,4 +36,8 @@ chrono = { version = "0.4.45", default-features = false, features = ["clock"] }
 rusqlite = { version = "0.32", features = ["bundled"] }
 winreg = "0.52"
 tauri-plugin-shell = "2"
+# Direct handle on the (already-transitive via Tauri) tokio runtime, only for
+# `tokio::time` — used to bound the recorder's graceful-stop wait and the
+# pre-record countdown. Unifies with Tauri's resolved tokio version.
+tokio = { version = "1", features = ["time"] }
 

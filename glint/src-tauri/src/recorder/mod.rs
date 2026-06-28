@@ -9,12 +9,15 @@ use std::sync::Mutex;
 use std::time::Instant;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
-use tauri_plugin_shell::process::CommandChild;
+use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
-/// One in-flight recording. Holds the ffmpeg child so stop can talk to its stdin.
+/// One in-flight recording. Holds the ffmpeg child so stop can talk to its stdin,
+/// plus the event receiver so stop can wait for ffmpeg to actually exit (and
+/// finish writing the moov atom) rather than guessing with a fixed delay.
 pub struct ActiveRecording {
     pub child: CommandChild,
+    pub rx: tauri::async_runtime::Receiver<CommandEvent>,
     pub out_path: String,
     pub width: u32,
     pub height: u32,
@@ -105,20 +108,25 @@ pub async fn recorder_start(
     let out_str = out.to_string_lossy().to_string();
 
     let (width, height) = match target {
+        // Region dims are known + stored on the Library row. Fullscreen records at
+        // native resolution; the exact dims aren't known here, so they stay 0/None.
         RecordTarget::Region { w, h, .. } => (w, h),
-        RecordTarget::Fullscreen => (0, 0), // filled by the monitor below if needed
+        RecordTarget::Fullscreen => (0, 0),
     };
 
     let args = ffmpeg::build_ffmpeg_args(&target, 30, &out_str);
-    let (_rx, child) = app
-        .shell()
-        .sidecar("ffmpeg").map_err(|e| e.to_string())?
-        .args(args)
-        .spawn()
-        .map_err(|e| format!("ffmpeg spawn: {e}"))?;
+    let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| {
+        let _ = app.emit("glint-toast", "Couldn't start the recorder");
+        format!("sidecar resolve: {e}")
+    })?;
+    let (rx, child) = sidecar.args(args).spawn().map_err(|e| {
+        let _ = app.emit("glint-toast", "Couldn't start the recorder");
+        format!("ffmpeg spawn: {e}")
+    })?;
 
     *app.state::<RecorderState>().0.lock().unwrap() = Some(ActiveRecording {
         child,
+        rx,
         out_path: out_str,
         width,
         height,
@@ -134,13 +142,28 @@ pub async fn recorder_start(
 pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     let rec = rec.ok_or("not recording")?;
-    let ActiveRecording { mut child, out_path, .. } = rec;
+    let ActiveRecording { mut child, mut rx, out_path, width, height, .. } = rec;
 
-    // Graceful stop: ffmpeg quits on 'q' and writes the moov atom. NEVER kill.
-    let _ = child.write(b"q");
-    // Give ffmpeg a moment to finalize; then ensure the process is gone.
-    std::thread::sleep(std::time::Duration::from_millis(800));
-    let _ = child.kill(); // no-op if already exited; safety net
+    // Graceful stop: ffmpeg quits on 'q' (trailing newline so the byte reliably
+    // reaches its stdin reader on Windows) and writes the moov atom. We then WAIT
+    // for ffmpeg to actually exit — finalizing/`+faststart` can take well over a
+    // second on a long recording — instead of guessing with a fixed delay. Killing
+    // mid-finalize corrupts the MP4, so kill is only a last resort if ffmpeg is
+    // still alive 30s after `q`.
+    let _ = child.write(b"q\n");
+    let exited = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        while let Some(ev) = rx.recv().await {
+            if matches!(ev, CommandEvent::Terminated(_)) {
+                break;
+            }
+        }
+    })
+    .await
+    .is_ok();
+    if !exited {
+        log::warn!("ffmpeg did not exit within 30s of 'q'; killing as a last resort");
+        let _ = child.kill();
+    }
 
     if !std::path::Path::new(&out_path).exists() {
         let _ = app.emit("glint-toast", "Recording failed to save");
@@ -158,8 +181,8 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
         kind: "recording".into(),
         path: out_path.clone(),
         thumb_path,
-        width: None,
-        height: None,
+        width: (width > 0).then_some(width as i64),
+        height: (height > 0).then_some(height as i64),
         bytes: Some(bytes),
         created_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -184,7 +207,9 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     if let Some(ActiveRecording { mut child, out_path, .. }) = rec {
-        let _ = child.write(b"q");
+        // Discarding the file, so finalization doesn't matter — ask ffmpeg to quit,
+        // give it a brief grace, then ensure the process is gone and delete the partial.
+        let _ = child.write(b"q\n");
         std::thread::sleep(std::time::Duration::from_millis(300));
         let _ = child.kill();
         let _ = std::fs::remove_file(&out_path);
