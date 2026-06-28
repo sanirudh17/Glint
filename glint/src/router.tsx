@@ -8,6 +8,8 @@ import EditorView from "./views/EditorView";
 import { OverlayApp } from "./overlay/OverlayApp";
 import { HudApp } from "./hud/HudApp";
 import { PinApp } from "./pin/PinApp";
+import { ControlBar } from "./recorder/ControlBar";
+import { Countdown } from "./recorder/Countdown";
 import "./components/shell.css";
 
 /**
@@ -65,6 +67,23 @@ export const router = createHashRouter([
      */
     path: "/pin",
     element: <PinApp />,
+  },
+  {
+    /**
+     * Chrome-free recorder control bar — floating REC indicator (dot + timer +
+     * Stop). Like /pin it sits outside AppShell so ControlBar is the sole root.
+     * URL: tauri://localhost/#/rec-bar
+     */
+    path: "/rec-bar",
+    element: <ControlBar />,
+  },
+  {
+    /**
+     * Chrome-free countdown overlay — 3·2·1 before recording starts. Fullscreen,
+     * click-through, closes itself at 0. URL: tauri://localhost/#/rec-countdown
+     */
+    path: "/rec-countdown",
+    element: <Countdown />,
   },
   {
     path: "/",

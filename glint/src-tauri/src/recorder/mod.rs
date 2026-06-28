@@ -4,6 +4,7 @@
 
 pub mod ffmpeg;
 pub mod thumb;
+pub mod windows;
 
 use std::sync::Mutex;
 use std::time::Instant;
@@ -132,6 +133,7 @@ pub async fn recorder_start(
         height,
         started: Instant::now(),
     });
+    let _ = windows::build_control_bar(&app);
     let _ = app.emit("recorder-started", ());
     Ok(())
 }
@@ -141,6 +143,7 @@ pub async fn recorder_start(
 #[tauri::command(async)]
 pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
+    windows::close_control_bar(&app);
     let rec = rec.ok_or("not recording")?;
     let ActiveRecording { mut child, mut rx, out_path, width, height, .. } = rec;
 
@@ -206,6 +209,7 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command(async)]
 pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
+    windows::close_control_bar(&app);
     if let Some(ActiveRecording { mut child, out_path, .. }) = rec {
         // Discarding the file, so finalization doesn't matter — ask ffmpeg to quit,
         // give it a brief grace, then ensure the process is gone and delete the partial.
