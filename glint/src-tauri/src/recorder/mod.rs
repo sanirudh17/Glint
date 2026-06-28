@@ -3,9 +3,32 @@
 //! only outbound coupling is on stop: write the MP4 + insert one Library row.
 
 pub mod ffmpeg;
+pub mod thumb;
 
-use tauri::AppHandle;
+use std::sync::Mutex;
+use std::time::Instant;
+use serde::Serialize;
+use tauri::{AppHandle, Emitter, Manager};
+use tauri_plugin_shell::process::CommandChild;
 use tauri_plugin_shell::ShellExt;
+
+/// One in-flight recording. Holds the ffmpeg child so stop can talk to its stdin.
+pub struct ActiveRecording {
+    pub child: CommandChild,
+    pub out_path: String,
+    pub width: u32,
+    pub height: u32,
+    pub started: Instant,
+}
+
+#[derive(Default)]
+pub struct RecorderState(pub Mutex<Option<ActiveRecording>>);
+
+#[derive(Serialize)]
+pub struct RecorderStatusDto {
+    pub recording: bool,
+    pub elapsed_secs: u64,
+}
 
 /// What to record. Region coords/size are PHYSICAL pixels on the primary monitor.
 #[derive(Clone, Copy, Debug)]
@@ -45,4 +68,137 @@ pub async fn recorder_ffmpeg_check(app: AppHandle) -> Result<String, String> {
         .map_err(|e| format!("spawn: {e}"))?;
     let text = String::from_utf8_lossy(&out.stdout);
     Ok(text.lines().next().unwrap_or("ffmpeg (no banner)").to_string())
+}
+
+/// Start recording. `mode` is "fullscreen" or "region"; region passes x/y/w/h
+/// (physical px). Spawns ffmpeg (capture+encode) and stores the child. Off the
+/// main thread so the spawn never blocks the event loop.
+#[tauri::command(async)]
+pub async fn recorder_start(
+    app: tauri::AppHandle,
+    mode: String,
+    x: Option<i32>,
+    y: Option<i32>,
+    w: Option<u32>,
+    h: Option<u32>,
+) -> Result<(), String> {
+    // Already recording? Ignore (single recording in R1).
+    if app.state::<RecorderState>().0.lock().unwrap().is_some() {
+        return Err("already recording".into());
+    }
+
+    let target = match mode.as_str() {
+        "fullscreen" => RecordTarget::Fullscreen,
+        "region" => {
+            let (x, y, w, h) = (x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0));
+            let (x, y, w, h) = normalize_region(x, y, w, h).ok_or("selection too small")?;
+            RecordTarget::Region { x, y, w, h }
+        }
+        other => return Err(format!("unknown mode: {other}")),
+    };
+
+    // Output path in Videos\Glint.
+    let videos = app.path().video_dir().map_err(|e| e.to_string())?;
+    let dir = videos.join("Glint");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let out = dir.join(recording_filename(chrono::Local::now()));
+    let out_str = out.to_string_lossy().to_string();
+
+    let (width, height) = match target {
+        RecordTarget::Region { w, h, .. } => (w, h),
+        RecordTarget::Fullscreen => (0, 0), // filled by the monitor below if needed
+    };
+
+    let args = ffmpeg::build_ffmpeg_args(&target, 30, &out_str);
+    let (_rx, child) = app
+        .shell()
+        .sidecar("ffmpeg").map_err(|e| e.to_string())?
+        .args(args)
+        .spawn()
+        .map_err(|e| format!("ffmpeg spawn: {e}"))?;
+
+    *app.state::<RecorderState>().0.lock().unwrap() = Some(ActiveRecording {
+        child,
+        out_path: out_str,
+        width,
+        height,
+        started: Instant::now(),
+    });
+    let _ = app.emit("recorder-started", ());
+    Ok(())
+}
+
+/// Stop + finalize: send `q` to ffmpeg (clean MP4), wait briefly, extract a
+/// thumbnail, insert the Library row, emit capture-saved. Off the main thread.
+#[tauri::command(async)]
+pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
+    let rec = app.state::<RecorderState>().0.lock().unwrap().take();
+    let rec = rec.ok_or("not recording")?;
+    let ActiveRecording { mut child, out_path, .. } = rec;
+
+    // Graceful stop: ffmpeg quits on 'q' and writes the moov atom. NEVER kill.
+    let _ = child.write(b"q");
+    // Give ffmpeg a moment to finalize; then ensure the process is gone.
+    std::thread::sleep(std::time::Duration::from_millis(800));
+    let _ = child.kill(); // no-op if already exited; safety net
+
+    if !std::path::Path::new(&out_path).exists() {
+        let _ = app.emit("glint-toast", "Recording failed to save");
+        return Err("no output file".into());
+    }
+    let bytes = std::fs::metadata(&out_path).map(|m| m.len() as i64).unwrap_or(0);
+    if bytes < 1024 {
+        let _ = std::fs::remove_file(&out_path);
+        let _ = app.emit("glint-toast", "Recording too short");
+        return Ok(());
+    }
+
+    let thumb_path = thumb::extract_thumb(&app, &out_path).await;
+    let row = crate::db::NewCapture {
+        kind: "recording".into(),
+        path: out_path.clone(),
+        thumb_path,
+        width: None,
+        height: None,
+        bytes: Some(bytes),
+        created_at: std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_secs() as i64)
+            .unwrap_or(0),
+    };
+    {
+        let db = app.state::<crate::Db>();
+        let conn = db.0.lock().unwrap();
+        if let Err(e) = crate::db::insert_capture(&conn, &row) {
+            log::error!("recording insert_capture failed: {e}");
+        }
+    }
+    let _ = app.emit("capture-saved", ());
+    let _ = app.emit("recorder-stopped", ());
+    let _ = app.emit("glint-toast", "Recording saved");
+    Ok(())
+}
+
+/// Discard an in-flight recording: stop ffmpeg and delete the partial file.
+#[tauri::command(async)]
+pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
+    let rec = app.state::<RecorderState>().0.lock().unwrap().take();
+    if let Some(ActiveRecording { mut child, out_path, .. }) = rec {
+        let _ = child.write(b"q");
+        std::thread::sleep(std::time::Duration::from_millis(300));
+        let _ = child.kill();
+        let _ = std::fs::remove_file(&out_path);
+    }
+    let _ = app.emit("recorder-stopped", ());
+    Ok(())
+}
+
+#[tauri::command]
+pub fn recorder_status(app: tauri::AppHandle) -> Option<RecorderStatusDto> {
+    let state = app.state::<RecorderState>();
+    let guard = state.0.lock().unwrap();
+    guard.as_ref().map(|r| RecorderStatusDto {
+        recording: true,
+        elapsed_secs: r.started.elapsed().as_secs(),
+    })
 }
