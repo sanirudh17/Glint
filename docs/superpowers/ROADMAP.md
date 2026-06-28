@@ -40,10 +40,27 @@ capture/library/editor path.
   hover **×** and Esc to close. Opacity is plain CSS on the `<img>` (no OS window-alpha API).
   Reuses the existing save/thumb/clipboard helpers; no new dependencies; zero recorder coupling.
   *Built — awaiting at-screen.* (See PHASE-7-ACCEPTANCE.md.)
+- **Phase 8 — Screen Recorder (R1: core video)** (silent screen recording to MP4). A new
+  **isolated** `recorder/` module owns a bundled **ffmpeg** sidecar that captures the screen
+  (`gdigrab`) **and** encodes H.264/yuv420p/30 fps/`+faststart` in one process — no Rust capture
+  loop. Record the **fullscreen** primary monitor or a dragged **region** (a live, non-frozen
+  selector). A 3·2·1 countdown precedes recording; a floating always-on-top **control bar**
+  (REC dot · timer · Stop) drives it. Stop is **graceful** — send `q\n` and wait for ffmpeg to
+  actually exit (writes a valid `moov`), force-kill only as a 30 s last resort. The finished MP4
+  lands in `Videos\Glint\` and inserts one `kind="recording"` Library row (▶ badge; Open/Reveal/
+  Delete only). Entry points: tray **Record** submenu (Region/Fullscreen/Stop), the `record`
+  hotkey, and a Home button. New deps: `tauri-plugin-shell` (sidecar spawn) + `tokio` (`time`,
+  already transitive). **Recorder isolation honored:** capture/editor/library import nothing from
+  `recorder/`; the only coupling is the outbound MP4 + Library row + `capture-saved` emit.
+  *Built — awaiting at-screen.* (See PHASE-8-RECORDER-R1-ACCEPTANCE.md.)
 
 ## Planned
 
-_(next phase TBD — Phase 7 awaiting at-screen acceptance)_
+- **Phase 8 R2 — Recording audio:** system audio + microphone as ffmpeg `dshow` inputs, each
+  independently toggleable/mutable, muxed into the MP4; control-bar audio toggles.
+- **Phase 8 R3 — Webcam overlay:** a composited camera bubble (position/size) recorded into the
+  video via ffmpeg's `overlay` filter; control-bar webcam toggle.
+- _(Phases 7 and 8 R1 awaiting at-screen acceptance.)_
 
 ## Out of scope (project-wide, unchanged)
 Cloud/upload/share-links, teams/collaboration, login/auth, web backend/network calls, scrolling
