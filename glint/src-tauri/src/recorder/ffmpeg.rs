@@ -8,9 +8,22 @@ pub fn even(n: u32) -> u32 {
 /// Build the ffmpeg arg list: capture the screen via gdigrab and encode H.264 MP4.
 /// `-preset ultrafast` keeps encoding real-time at 30 fps; `+faststart` + a clean
 /// `q`-driven stop yield a seekable, playable file.
+///
+/// `-nostats -loglevel error` is load-bearing, not cosmetic: the sidecar's
+/// stdout/stderr event channel has capacity 1 and we don't drain it while
+/// recording (only on stop). ffmpeg streams a per-frame stats line to stderr by
+/// default; with the channel full the reader thread parks, stops draining the
+/// stderr pipe, and once the OS pipe buffer fills ffmpeg blocks on `write()` —
+/// stalling the capture on long recordings. Keeping stderr quiet after startup
+/// avoids that backpressure entirely.
 pub fn build_ffmpeg_args(target: &RecordTarget, fps: u32, out: &str) -> Vec<String> {
-    let mut a: Vec<String> = vec!["-y".into(), "-f".into(), "gdigrab".into(),
-        "-framerate".into(), fps.to_string()];
+    let mut a: Vec<String> = vec![
+        "-y".into(),
+        "-nostats".into(),
+        "-loglevel".into(), "error".into(),
+        "-f".into(), "gdigrab".into(),
+        "-framerate".into(), fps.to_string(),
+    ];
     if let RecordTarget::Region { x, y, w, h } = target {
         a.extend([
             "-offset_x".into(), x.to_string(),
@@ -33,6 +46,15 @@ pub fn build_ffmpeg_args(target: &RecordTarget, fps: u32, out: &str) -> Vec<Stri
 mod tests {
     use super::*;
     use crate::recorder::RecordTarget;
+
+    #[test]
+    fn args_silence_stderr_to_avoid_pipe_backpressure() {
+        // The undrained capacity-1 sidecar channel stalls ffmpeg if stderr is chatty;
+        // these flags keep it quiet after startup. Guard against a regression.
+        let a = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4");
+        assert!(a.iter().any(|s| s == "-nostats"));
+        assert!(a.windows(2).any(|w| w[0] == "-loglevel" && w[1] == "error"));
+    }
 
     #[test]
     fn even_rounds_down() {

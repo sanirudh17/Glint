@@ -92,6 +92,16 @@ pub fn build_countdown(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
+/// Close the countdown overlay if it is open. Rust owns the teardown so the digit
+/// is gone before capture begins (it must never bleed into the first frames) and a
+/// countdown webview that failed to self-close can't be left orphaned. Safe to call
+/// when none exists.
+pub fn close_countdown(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window(COUNTDOWN_LABEL) {
+        let _ = w.close();
+    }
+}
+
 pub const SELECT_LABEL: &str = "rec-select";
 
 /// Full-screen, transparent, LIVE (non-frozen) region selector. Takes focus so it

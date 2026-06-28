@@ -95,16 +95,28 @@ pub async fn recorder_start(
         "fullscreen" => RecordTarget::Fullscreen,
         "region" => {
             let (x, y, w, h) = (x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0));
-            let (x, y, w, h) = normalize_region(x, y, w, h).ok_or("selection too small")?;
+            // The selector window is already closed by the time we get here, so a
+            // toast (not the gone window) is the only way the user sees this.
+            let (x, y, w, h) = normalize_region(x, y, w, h).ok_or_else(|| {
+                let _ = app.emit("glint-toast", "Selection too small to record");
+                "selection too small".to_string()
+            })?;
             RecordTarget::Region { x, y, w, h }
         }
         other => return Err(format!("unknown mode: {other}")),
     };
 
-    // Output path in Videos\Glint.
-    let videos = app.path().video_dir().map_err(|e| e.to_string())?;
+    // Output path in Videos\Glint. Toast on failure — callers spawn-and-forget the
+    // Result, so a bare Err would leave the user with nothing happening.
+    let videos = app.path().video_dir().map_err(|e| {
+        let _ = app.emit("glint-toast", "Couldn't start the recorder");
+        e.to_string()
+    })?;
     let dir = videos.join("Glint");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| {
+        let _ = app.emit("glint-toast", "Couldn't start the recorder");
+        e.to_string()
+    })?;
     let out = dir.join(recording_filename(chrono::Local::now()));
     let out_str = out.to_string_lossy().to_string();
 
@@ -115,9 +127,12 @@ pub async fn recorder_start(
         RecordTarget::Fullscreen => (0, 0),
     };
 
-    // 3-2-1 countdown (the window closes itself at 0).
+    // 3-2-1 countdown, then Rust closes it BEFORE capture starts so the digit can
+    // never bleed into the first recorded frames (and a webview that failed to
+    // self-close isn't left orphaned on screen).
     let _ = windows::build_countdown(&app);
     tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+    windows::close_countdown(&app);
 
     let args = ffmpeg::build_ffmpeg_args(&target, 30, &out_str);
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| {
@@ -214,11 +229,12 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
+    windows::close_countdown(&app); // in case cancel races the countdown
     if let Some(ActiveRecording { mut child, out_path, .. }) = rec {
         // Discarding the file, so finalization doesn't matter — ask ffmpeg to quit,
         // give it a brief grace, then ensure the process is gone and delete the partial.
         let _ = child.write(b"q\n");
-        std::thread::sleep(std::time::Duration::from_millis(300));
+        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
         let _ = child.kill();
         let _ = std::fs::remove_file(&out_path);
     }
