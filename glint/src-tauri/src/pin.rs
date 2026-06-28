@@ -192,16 +192,12 @@ pub fn pin_data(pins: State<PinState>, window: WebviewWindow) -> Result<PinDataD
     })
 }
 
-/// Save this pin's image as a NEW Library capture (never overwrites). Reuses the
-/// same write+thumb+insert+emit path as `editor_save`/`hud_save`.
-#[tauri::command]
-pub fn pin_save(
-    app: AppHandle,
-    db: State<crate::Db>,
-    pins: State<PinState>,
-    window: WebviewWindow,
-) -> Result<String, String> {
-    let d = pins.get(window.label()).ok_or("no pin data for this window")?;
+/// Save `label`'s pinned image as a NEW Library capture (never overwrites). Reuses
+/// the same write+thumb+insert+emit path as `editor_save`/`hud_save`. Shared by the
+/// `pin_save` command and the right-click menu.
+pub fn save_pin(app: &AppHandle, label: &str) -> Result<String, String> {
+    let pins = app.state::<PinState>();
+    let d = pins.get(label).ok_or("no pin data for this window")?;
     let pictures = app.path().picture_dir().map_err(|e| e.to_string())?;
     let dir = crate::paths::glint_save_dir(&pictures);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -212,7 +208,7 @@ pub fn pin_save(
 
     let rgba = image::load_from_memory(&d.png).map_err(|e| e.to_string())?.to_rgba8();
     let (w, h) = (rgba.width(), rgba.height());
-    let thumb_path = crate::capture::commands::write_thumb(&app, &rgba.into_raw(), w, h, &dest_str);
+    let thumb_path = crate::capture::commands::write_thumb(app, &rgba.into_raw(), w, h, &dest_str);
     let row = crate::db::NewCapture {
         kind: "screenshot".into(),
         path: dest_str.clone(),
@@ -226,33 +222,104 @@ pub fn pin_save(
             .unwrap_or(0),
     };
     {
+        let db = app.state::<crate::Db>();
         let conn = db.0.lock().unwrap();
         if let Err(e) = crate::db::insert_capture(&conn, &row) {
             log::error!("pin_save insert_capture failed: {e}");
         }
     }
-    let _ = tauri::Emitter::emit(&app, "capture-saved", ());
+    let _ = tauri::Emitter::emit(app, "capture-saved", ());
     Ok(dest_str)
 }
 
-/// Copy this pin's image to the clipboard (reuses `clipboard::copy_image`).
-#[tauri::command]
-pub fn pin_copy(pins: State<PinState>, window: WebviewWindow) -> Result<(), String> {
-    let d = pins.get(window.label()).ok_or("no pin data for this window")?;
+/// Copy `label`'s pinned image to the clipboard. Shared by the command + menu.
+pub fn copy_pin(app: &AppHandle, label: &str) -> Result<(), String> {
+    let pins = app.state::<PinState>();
+    let d = pins.get(label).ok_or("no pin data for this window")?;
     let rgba = image::load_from_memory(&d.png).map_err(|e| e.to_string())?.to_rgba8();
     let (w, h) = (rgba.width(), rgba.height());
     crate::clipboard::copy_image(&rgba.into_raw(), w, h)
 }
 
-/// Close this pin: drop its bytes and close the window.
-#[tauri::command]
-pub fn pin_close(app: AppHandle, pins: State<PinState>, window: WebviewWindow) -> Result<(), String> {
-    let label = window.label().to_string();
-    pins.remove(&label);
-    if let Some(w) = app.get_webview_window(&label) {
+/// Close `label`'s pin: drop its bytes and close the window. Shared by cmd + menu.
+pub fn close_pin(app: &AppHandle, label: &str) {
+    app.state::<PinState>().remove(label);
+    if let Some(w) = app.get_webview_window(label) {
         let _ = w.close();
     }
+}
+
+#[tauri::command]
+pub fn pin_save(app: AppHandle, window: WebviewWindow) -> Result<String, String> {
+    save_pin(&app, window.label())
+}
+
+#[tauri::command]
+pub fn pin_copy(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
+    copy_pin(&app, window.label())
+}
+
+#[tauri::command]
+pub fn pin_close(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
+    close_pin(&app, window.label());
     Ok(())
+}
+
+/// Show the pin's right-click menu as a NATIVE OS context menu. An HTML menu is
+/// clamped to the (image-sized) window, so on a short/narrow pin it was clipped;
+/// a native menu floats above the window and is never cut off. Item ids encode the
+/// pin label (`pin-menu|<label>|<action>`) so the app-global menu handler routes
+/// each click back to the right pin. `(async)` keeps the blocking popup off the
+/// main thread.
+#[tauri::command(async)]
+pub fn pin_context_menu(app: AppHandle, window: WebviewWindow) -> Result<(), String> {
+    use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
+    let label = window.label();
+    let item = |action: &str, text: &str| {
+        MenuItem::with_id(&app, format!("pin-menu|{label}|{action}"), text, true, None::<&str>)
+    };
+    let copy = item("copy", "Copy").map_err(|e| e.to_string())?;
+    let save = item("save", "Save to Library").map_err(|e| e.to_string())?;
+    let op100 = item("op100", "100%").map_err(|e| e.to_string())?;
+    let op75 = item("op75", "75%").map_err(|e| e.to_string())?;
+    let op50 = item("op50", "50%").map_err(|e| e.to_string())?;
+    let op25 = item("op25", "25%").map_err(|e| e.to_string())?;
+    let opacity = Submenu::with_id_and_items(
+        &app,
+        format!("pin-menu|{label}|opacity"),
+        "Opacity",
+        true,
+        &[&op100, &op75, &op50, &op25],
+    )
+    .map_err(|e| e.to_string())?;
+    let close = item("close", "Close").map_err(|e| e.to_string())?;
+    let sep1 = PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+    let sep2 = PredefinedMenuItem::separator(&app).map_err(|e| e.to_string())?;
+    let menu = Menu::with_items(&app, &[&copy, &save, &sep1, &opacity, &sep2, &close])
+        .map_err(|e| e.to_string())?;
+    window.popup_menu(&menu).map_err(|e| e.to_string())
+}
+
+/// Route a pin context-menu click (parsed from a `pin-menu|<label>|<action>` id) to
+/// the matching pin. Called from the app-global menu-event handler in `lib.rs`.
+/// Opacity is the pin's frontend CSS state, so it's delivered as an event the
+/// PinApp applies; the payload carries the label because Tauri delivers events to
+/// every window's listeners (see the one-shared-App gotcha).
+pub fn handle_menu_action(app: &AppHandle, label: &str, action: &str) {
+    use tauri::Emitter;
+    let flash = |msg: &str| {
+        let _ = app.emit_to(label, "pin-flash", serde_json::json!({ "label": label, "msg": msg }));
+    };
+    match action {
+        "copy" => flash(if copy_pin(app, label).is_ok() { "Copied" } else { "Couldn't copy" }),
+        "save" => flash(if save_pin(app, label).is_ok() { "Saved to Library" } else { "Couldn't save" }),
+        "close" => close_pin(app, label),
+        "op100" | "op75" | "op50" | "op25" => {
+            let pct: u32 = action[2..].parse().unwrap_or(100);
+            let _ = app.emit_to(label, "pin-opacity", serde_json::json!({ "label": label, "pct": pct }));
+        }
+        _ => {}
+    }
 }
 
 #[cfg(test)]

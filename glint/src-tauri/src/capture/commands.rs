@@ -174,6 +174,7 @@ fn finish_commit(
     let path_str = path.to_string_lossy().to_string();
 
     // Copy to clipboard (gated by auto_copy) — non-fatal: log a warning but carry on.
+    let _cb = std::time::Instant::now();
     let clip = if auto_copy {
         clipboard::copy_image(&cropped, clamped.w, clamped.h)
     } else {
@@ -182,6 +183,7 @@ fn finish_commit(
     if let Err(ref e) = clip {
         log::warn!("clipboard copy failed: {e}");
     }
+    log::info!("[perf] commit clipboard copy: {}ms (auto_copy={auto_copy})", _cb.elapsed().as_millis());
 
     // Stash the result for the HUD to act on (re-copy / drag / save / copy-path /
     // reveal) BEFORE opening the HUD, so its mount-time fetch sees this capture.

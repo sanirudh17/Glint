@@ -24,7 +24,8 @@ use editor::commands::{
 };
 use settings::commands::{settings_get_all, settings_set, SettingsState};
 use pin::{
-    pin_close, pin_copy, pin_create_from_capture, pin_create_from_last, pin_data, pin_save,
+    pin_close, pin_context_menu, pin_copy, pin_create_from_capture, pin_create_from_last, pin_data,
+    pin_save,
 };
 use shell_integration::{shell_register_explorer_menu, shell_unregister_explorer_menu};
 
@@ -235,7 +236,21 @@ pub fn run() {
             pin_save,
             pin_copy,
             pin_close,
+            pin_context_menu,
         ])
+        .on_menu_event(|app, event| {
+            // Pin right-click menus pop up via WebviewWindow::popup_menu and route
+            // here (the tray keeps its own handler). Item ids are
+            // `pin-menu|<label>|<action>`; everything else is ignored.
+            if let Some((label, action)) = event
+                .id()
+                .as_ref()
+                .strip_prefix("pin-menu|")
+                .and_then(|rest| rest.split_once('|'))
+            {
+                crate::pin::handle_menu_action(app, label, action);
+            }
+        })
         .run(tauri::generate_context!())
         .expect("error while running Glint");
 }
