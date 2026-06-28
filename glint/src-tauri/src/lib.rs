@@ -91,6 +91,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -238,6 +239,7 @@ pub fn run() {
             pin_copy,
             pin_close,
             pin_context_menu,
+            recorder::recorder_ffmpeg_check,
         ])
         .on_menu_event(|app, event| {
             // Pin right-click menus pop up via WebviewWindow::popup_menu and route
