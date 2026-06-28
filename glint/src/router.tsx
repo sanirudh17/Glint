@@ -10,6 +10,7 @@ import { HudApp } from "./hud/HudApp";
 import { PinApp } from "./pin/PinApp";
 import { ControlBar } from "./recorder/ControlBar";
 import { Countdown } from "./recorder/Countdown";
+import { RegionSelect } from "./recorder/RegionSelect";
 import "./components/shell.css";
 
 /**
@@ -84,6 +85,16 @@ export const router = createHashRouter([
      */
     path: "/rec-countdown",
     element: <Countdown />,
+  },
+  {
+    /**
+     * Chrome-free live region selector — fullscreen transparent overlay where the
+     * user drags a rectangle to define the recording region. Takes focus (not
+     * click-through) so it receives pointer and Esc events.
+     * URL: tauri://localhost/#/rec-select
+     */
+    path: "/rec-select",
+    element: <RegionSelect />,
   },
   {
     path: "/",

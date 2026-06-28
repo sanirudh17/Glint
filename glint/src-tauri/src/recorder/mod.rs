@@ -222,6 +222,11 @@ pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+#[tauri::command(async)]
+pub async fn recorder_open_region_selector(app: tauri::AppHandle) -> Result<(), String> {
+    windows::build_region_selector(&app).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 pub fn recorder_status(app: tauri::AppHandle) -> Option<RecorderStatusDto> {
     let state = app.state::<RecorderState>();

@@ -91,3 +91,22 @@ pub fn build_countdown(app: &AppHandle) -> tauri::Result<()> {
     win.show()?;
     Ok(())
 }
+
+pub const SELECT_LABEL: &str = "rec-select";
+
+/// Full-screen, transparent, LIVE (non-frozen) region selector. Takes focus so it
+/// gets pointer + Esc. Covers the primary monitor.
+pub fn build_region_selector(app: &AppHandle) -> tauri::Result<()> {
+    if app.get_webview_window(SELECT_LABEL).is_some() { return Ok(()); }
+    let win = WebviewWindowBuilder::new(app, SELECT_LABEL, WebviewUrl::App("index.html#/rec-select".into()))
+        .title("Glint Select Region").decorations(false).transparent(true)
+        .always_on_top(true).skip_taskbar(true).resizable(false).shadow(false)
+        .focused(true).visible(false).build()?;
+    if let Some(m) = win.primary_monitor()? {
+        let pos = m.position(); let size = m.size();
+        win.set_position(tauri::PhysicalPosition { x: pos.x, y: pos.y })?;
+        win.set_size(tauri::PhysicalSize { width: size.width, height: size.height })?;
+    }
+    win.show()?; win.set_focus()?;
+    Ok(())
+}
