@@ -13,18 +13,18 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let cap_area = MenuItem::with_id(app, "cap_area", "Capture Area", true, None::<&str>)?;
     let cap_win = MenuItem::with_id(app, "cap_window", "Capture Window", true, None::<&str>)?;
     let cap_full = MenuItem::with_id(app, "cap_full", "Capture Fullscreen", true, None::<&str>)?;
-    let record = MenuItem::with_id(app, "record", "Start Recording", true, None::<&str>)?;
     let capture = Submenu::with_id_and_items(app, "capture", "Capture", true,
         &[&cap_area, &cap_win, &cap_full])?;
 
-    // TEMPORARY tray items for Task 3 at-screen testing (replaced by real submenu in Task 6).
-    let rec_full = MenuItem::with_id(app, "rec_full", "Start Fullscreen Recording", true, None::<&str>)?;
+    // Record submenu — replaces the temporary standalone items from Task 3.
+    let rec_region = MenuItem::with_id(app, "rec_region", "Record Region", true, None::<&str>)?;
+    let rec_full = MenuItem::with_id(app, "rec_full", "Record Fullscreen", true, None::<&str>)?;
     let rec_stop = MenuItem::with_id(app, "rec_stop", "Stop Recording", true, None::<&str>)?;
+    let record = Submenu::with_id_and_items(app, "record_menu", "Record", true,
+        &[&rec_region, &rec_full, &rec_stop])?;
 
     let menu = Menu::with_items(app, &[
         &open, &capture, &record,
-        &PredefinedMenuItem::separator(app)?,
-        &rec_full, &rec_stop,
         &PredefinedMenuItem::separator(app)?,
         &settings,
         &PredefinedMenuItem::separator(app)?,
@@ -49,18 +49,22 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
             "cap_full" => {
                 crate::capture::begin_spawned(app, crate::capture::CaptureMode::Fullscreen);
             }
-            "rec_full" => {
-                let app2 = app.clone();
+            "rec_region" => {
+                let a = app.clone();
                 tauri::async_runtime::spawn(async move {
-                    if let Err(e) = crate::recorder::recorder_start(app2.clone(), "fullscreen".into(), None, None, None, None).await {
-                        let _ = tauri::Emitter::emit(&app2, "glint-toast", format!("Record failed: {e}"));
-                    }
+                    let _ = crate::recorder::recorder_open_region_selector(a).await;
+                });
+            }
+            "rec_full" => {
+                let a = app.clone();
+                tauri::async_runtime::spawn(async move {
+                    let _ = crate::recorder::recorder_start(a, "fullscreen".into(), None, None, None, None).await;
                 });
             }
             "rec_stop" => {
-                let app2 = app.clone();
+                let a = app.clone();
                 tauri::async_runtime::spawn(async move {
-                    let _ = crate::recorder::recorder_stop(app2).await;
+                    let _ = crate::recorder::recorder_stop(a).await;
                 });
             }
             other => {

@@ -115,6 +115,10 @@ pub async fn recorder_start(
         RecordTarget::Fullscreen => (0, 0),
     };
 
+    // 3-2-1 countdown (the window closes itself at 0).
+    let _ = windows::build_countdown(&app);
+    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+
     let args = ffmpeg::build_ffmpeg_args(&target, 30, &out_str);
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| {
         let _ = app.emit("glint-toast", "Couldn't start the recorder");

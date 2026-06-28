@@ -52,6 +52,12 @@ pub fn register(app: &AppHandle) -> tauri::Result<()> {
                                 crate::capture::CaptureMode::Fullscreen,
                             );
                         }
+                        "record" => {
+                            let h = handle.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let _ = crate::recorder::recorder_open_region_selector(h).await;
+                            });
+                        }
                         "copy_path" => {
                             // Copy the most recent capture's file path to the clipboard.
                             // Do NOT focus/raise the main window — the "Path copied" toast
