@@ -17,6 +17,10 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
+/// Capture/encode frame rate. 60 for smooth motion; gdigrab's actually-delivered
+/// rate still depends on the machine and screen resolution.
+const FPS: u32 = 60;
+
 /// One running ffmpeg span — a contiguous stretch of recording between pauses.
 /// Holds the child (to send `q` on stdin) and its event receiver (to wait for a
 /// clean exit + finished moov atom rather than guessing with a fixed delay).
@@ -491,7 +495,7 @@ pub async fn recorder_start(
     // optimistic (both toggles when any audio) and refined once ffmpeg is running.
     *app.state::<RecorderState>().0.lock().unwrap() = Some(ActiveRecording {
         target,
-        fps: 30,
+        fps: FPS,
         out_path: out_str.clone(),
         width,
         height,
@@ -507,8 +511,9 @@ pub async fn recorder_start(
     let _ = windows::build_control_bar(&app);
 
     // Bring segment 0 up behind the visible bar. Pause/resume appends further
-    // segments; stop concatenates them.
-    let seg0 = match spawn_segment(&app, target, 30, &segment_path(&out_str, 0), 0, audio_cfg, &controls).await {
+    // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual
+    // delivered rate still depends on the machine/screen resolution).
+    let seg0 = match spawn_segment(&app, target, FPS, &segment_path(&out_str, 0), 0, audio_cfg, &controls).await {
         Ok(s) => s,
         Err(e) => {
             windows::close_control_bar(&app);
