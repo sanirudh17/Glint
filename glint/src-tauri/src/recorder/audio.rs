@@ -122,9 +122,13 @@ pub fn start_capture(
 
         let mut queue: std::collections::VecDeque<u8> = std::collections::VecDeque::new();
         while !stop.load(Ordering::Relaxed) {
-            if h_event.wait_for_event(200).is_err() {
-                continue; // timeout; re-check stop
-            }
+            // Wait for the next buffer, but read on a timeout too. WASAPI *loopback*
+            // (system audio) can stop signaling its event — notably after a
+            // pause/resume re-open — while the render device keeps buffering audio;
+            // relying on the event alone then yields total silence for that segment.
+            // Polling on every wake keeps system audio flowing; an empty read is a
+            // cheap no-op. The short timeout also bounds the stop-flag latency.
+            let _ = h_event.wait_for_event(100);
             if capture.read_from_device_to_deque(&mut queue).is_err() {
                 break;
             }
