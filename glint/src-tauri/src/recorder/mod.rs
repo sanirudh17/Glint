@@ -2,7 +2,9 @@
 //! sidecar; the screenshot/library/editor path imports nothing from here. The
 //! only outbound coupling is on stop: write the MP4 + insert one Library row.
 
+pub mod audio;
 pub mod ffmpeg;
+pub mod pipes;
 pub mod thumb;
 pub mod windows;
 
@@ -200,6 +202,57 @@ pub async fn recorder_ffmpeg_check(app: AppHandle) -> Result<String, String> {
         .map_err(|e| format!("spawn: {e}"))?;
     let text = String::from_utf8_lossy(&out.stdout);
     Ok(text.lines().next().unwrap_or("ffmpeg (no banner)").to_string())
+}
+
+/// Spike/health-check for the audio chain: capture ~1.5s of SYSTEM audio via
+/// WASAPI loopback → named pipe → ffmpeg → temp .m4a, and return the byte size.
+/// Run once at-screen (with sound playing) to confirm the mechanism before the
+/// recorder depends on it. Off the main thread.
+#[tauri::command(async)]
+pub async fn recorder_audio_check(app: tauri::AppHandle) -> Result<u64, String> {
+    use std::sync::atomic::AtomicBool;
+    use std::sync::Arc;
+    use tokio::io::AsyncWriteExt;
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let muted = Arc::new(AtomicBool::new(false));
+    let (fmt, mut rx, handle) =
+        audio::start_capture(audio::Source::System, muted, stop.clone())?;
+
+    let path = pipes::pipe_path("probe", 0);
+    let mut server = pipes::create_server(&path).map_err(|e| format!("pipe: {e}"))?;
+
+    let out = std::env::temp_dir().join("glint-audio-probe.m4a");
+    let out_str = out.to_string_lossy().to_string();
+    let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("sidecar: {e}"))?;
+    let (_rx2, child) = sidecar
+        .args([
+            "-y", "-loglevel", "error",
+            "-thread_queue_size", "1024",
+            "-f", "f32le", "-ar", &fmt.sample_rate.to_string(), "-ac", &fmt.channels.to_string(),
+            "-i", &path, "-t", "1.5", "-c:a", "aac", &out_str,
+        ])
+        .spawn()
+        .map_err(|e| format!("spawn: {e}"))?;
+
+    server.connect().await.map_err(|e| format!("connect: {e}"))?;
+    // Pump for ~1.5s, then stop.
+    let pump = tokio::spawn(async move {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(1500);
+        while tokio::time::Instant::now() < deadline {
+            match tokio::time::timeout(std::time::Duration::from_millis(300), rx.recv()).await {
+                Ok(Some(buf)) => { let _ = server.write_all(&buf).await; }
+                _ => {}
+            }
+        }
+    });
+    let _ = pump.await;
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let _ = handle.join();
+    drop(child); // ffmpeg sees EOF / closes
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    std::fs::metadata(&out_str).map(|m| m.len()).map_err(|e| format!("no output: {e}"))
 }
 
 /// Start recording. `mode` is "fullscreen" or "region"; region passes x/y/w/h

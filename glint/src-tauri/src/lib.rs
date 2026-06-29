@@ -241,6 +241,7 @@ pub fn run() {
             pin_close,
             pin_context_menu,
             recorder::recorder_ffmpeg_check,
+            recorder::recorder_audio_check,
             recorder::recorder_start,
             recorder::recorder_pause,
             recorder::recorder_resume,
