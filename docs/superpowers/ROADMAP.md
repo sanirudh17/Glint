@@ -54,13 +54,23 @@ capture/library/editor path.
   `recorder/`; the only coupling is the outbound MP4 + Library row + `capture-saved` emit.
   *Built — awaiting at-screen.* (See PHASE-8-RECORDER-R1-ACCEPTANCE.md.)
 
+- **Phase 8 — Screen Recorder (R2: audio)** (system audio + microphone). Both sources are
+  **install-free** via **WASAPI** (system = default render endpoint opened in loopback; mic =
+  default capture endpoint), streamed as f32le PCM over **Windows named pipes** into the same
+  per-segment ffmpeg, which **mixes** (`amix`) and encodes **AAC** (192k) next to the gdigrab
+  video. Each source is independently selectable (per-recording **chips** on the selector, seeded
+  from new `record_system_audio`/`record_microphone` settings) and **live-mutable** from the
+  control bar (mute writes silence, keeping streams continuous + A/V-synced). Pause/resume/concat
+  are unchanged — each segment carries its own audio. A source is only opened if enabled at start
+  (privacy); each pipe accept is bounded by a 3 s timeout that toasts + drops a failed source
+  rather than hanging. New deps: `wasapi`, `tokio` (`net`/`io-util`/`sync`). **Recorder isolation
+  still honored.** *Built — awaiting at-screen.* (See PHASE-8-RECORDER-R2-ACCEPTANCE.md.)
+
 ## Planned
 
-- **Phase 8 R2 — Recording audio:** system audio + microphone as ffmpeg `dshow` inputs, each
-  independently toggleable/mutable, muxed into the MP4; control-bar audio toggles.
 - **Phase 8 R3 — Webcam overlay:** a composited camera bubble (position/size) recorded into the
   video via ffmpeg's `overlay` filter; control-bar webcam toggle.
-- _(Phases 7 and 8 R1 awaiting at-screen acceptance.)_
+- _(Phases 7 and 8 R1/R2 awaiting at-screen acceptance.)_
 
 ## Out of scope (project-wide, unchanged)
 Cloud/upload/share-links, teams/collaboration, login/auth, web backend/network calls, scrolling
