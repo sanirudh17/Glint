@@ -6,8 +6,12 @@
   font-size: 13px; user-select: none; -webkit-user-select: none;
 }
 .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff3b30; animation: rec-pulse 1.2s infinite; }
+.rec-dot--paused { background: #f5a623; animation: none; }
 @keyframes rec-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
 .rec-time { font-variant-numeric: tabular-nums; min-width: 44px; }
+.rec-pause { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
+.rec-pause:hover { background: rgba(255,255,255,0.24); }
+.rec-pause:disabled { opacity: 0.5; cursor: default; }
 .rec-stop { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: #ff3b30; color: #fff; cursor: pointer; }
 .rec-countdown {
   width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center;

@@ -13,16 +13,136 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
-/// One in-flight recording. Holds the ffmpeg child so stop can talk to its stdin,
-/// plus the event receiver so stop can wait for ffmpeg to actually exit (and
-/// finish writing the moov atom) rather than guessing with a fixed delay.
-pub struct ActiveRecording {
+/// One running ffmpeg span — a contiguous stretch of recording between pauses.
+/// Holds the child (to send `q` on stdin) and its event receiver (to wait for a
+/// clean exit + finished moov atom rather than guessing with a fixed delay).
+pub struct Segment {
     pub child: CommandChild,
     pub rx: tauri::async_runtime::Receiver<CommandEvent>,
+    pub path: String,
+}
+
+/// One in-flight recording. Pause/resume splits it into segments: pausing stops
+/// the running span, resuming spawns the next, and stop concatenates them — so
+/// the paused time is genuinely cut from the result (CleanShot-style), not frozen.
+pub struct ActiveRecording {
+    pub target: RecordTarget,
+    pub fps: u32,
     pub out_path: String,
     pub width: u32,
     pub height: u32,
     pub started: Instant,
+    /// Index of the NEXT segment file to spawn (segment 0 starts at recorder_start).
+    pub seg_index: usize,
+    /// Completed segment file paths, in playback order.
+    pub done: Vec<String>,
+    /// The currently-recording span. `None` while paused.
+    pub current: Option<Segment>,
+}
+
+/// `{out_dir}/{stem}.part{idx}.mp4` — per-segment temp file beside the final output.
+fn segment_path(out_path: &str, idx: usize) -> String {
+    let p = std::path::Path::new(out_path);
+    let parent = p.parent().unwrap_or_else(|| std::path::Path::new("."));
+    let stem = p
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "Glint".into());
+    parent
+        .join(format!("{stem}.part{idx}.mp4"))
+        .to_string_lossy()
+        .to_string()
+}
+
+/// Spawn one ffmpeg span writing to `path`. Off the main thread (called from async).
+fn spawn_segment(
+    app: &AppHandle,
+    target: RecordTarget,
+    fps: u32,
+    path: &str,
+) -> Result<Segment, String> {
+    let args = ffmpeg::build_ffmpeg_args(&target, fps, path);
+    let sidecar = app
+        .shell()
+        .sidecar("ffmpeg")
+        .map_err(|e| format!("sidecar resolve: {e}"))?;
+    let (rx, child) = sidecar
+        .args(args)
+        .spawn()
+        .map_err(|e| format!("ffmpeg spawn: {e}"))?;
+    Ok(Segment { child, rx, path: path.to_string() })
+}
+
+/// Stop one span gracefully: `q` on stdin (trailing newline so the byte reaches
+/// ffmpeg's stdin reader on Windows), then WAIT for ffmpeg to actually exit — a
+/// long span's `+faststart` finalize can take a while, and killing mid-finalize
+/// corrupts the MP4. Kill only as a last resort 30s after `q`.
+async fn finish_segment(seg: Segment) {
+    let Segment { mut child, mut rx, .. } = seg;
+    let _ = child.write(b"q\n");
+    let exited = tokio::time::timeout(std::time::Duration::from_secs(30), async {
+        while let Some(ev) = rx.recv().await {
+            if matches!(ev, CommandEvent::Terminated(_)) {
+                break;
+            }
+        }
+    })
+    .await
+    .is_ok();
+    if !exited {
+        log::warn!("ffmpeg segment did not exit within 30s of 'q'; killing as a last resort");
+        let _ = child.kill();
+    }
+}
+
+/// Assemble the recorded segments into the final `out_path`. One real span → a
+/// plain rename (the no-pause common case, ~free). Multiple → concat-copy (no
+/// re-encode). Drops empty/failed spans. Cleans up all segment files. Returns
+/// whether `out_path` ended up present.
+async fn assemble_segments(app: &AppHandle, segs: &[String], out_path: &str) -> bool {
+    let real: Vec<&String> = segs
+        .iter()
+        .filter(|s| std::fs::metadata(s).map(|m| m.len() >= 1024).unwrap_or(false))
+        .collect();
+    let ok = match real.as_slice() {
+        [] => false,
+        [only] => std::fs::rename(only, out_path).is_ok(),
+        many => concat_segments(app, many, out_path).await,
+    };
+    for s in segs {
+        let _ = std::fs::remove_file(s);
+    }
+    ok && std::path::Path::new(out_path).exists()
+}
+
+/// Concat same-params H.264 spans with the concat demuxer + stream copy (no
+/// re-encode). Forward-slash, single-quoted paths in the list file keep the
+/// demuxer happy on Windows; our date-based names contain no quotes.
+async fn concat_segments(app: &AppHandle, segs: &[&String], out_path: &str) -> bool {
+    let list_path = format!("{out_path}.concat.txt");
+    let mut content = String::new();
+    for s in segs {
+        content.push_str(&format!("file '{}'\n", s.replace('\\', "/")));
+    }
+    if std::fs::write(&list_path, &content).is_err() {
+        return false;
+    }
+    let sidecar = match app.shell().sidecar("ffmpeg") {
+        Ok(s) => s,
+        Err(_) => {
+            let _ = std::fs::remove_file(&list_path);
+            return false;
+        }
+    };
+    let out = sidecar
+        .args([
+            "-y", "-loglevel", "error", "-f", "concat", "-safe", "0",
+            "-i", list_path.as_str(), "-c", "copy", "-movflags", "+faststart", out_path,
+        ])
+        .output()
+        .await;
+    let _ = std::fs::remove_file(&list_path);
+    matches!(out, Ok(o) if o.status.success()) && std::path::Path::new(out_path).exists()
 }
 
 #[derive(Default)]
@@ -139,26 +259,90 @@ pub async fn recorder_start(
     tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
     windows::close_countdown(&app);
 
-    let args = ffmpeg::build_ffmpeg_args(&target, 30, &out_str);
-    let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| {
+    // Segment 0. Pause/resume appends further segments; stop concatenates them.
+    let seg0 = spawn_segment(&app, target, 30, &segment_path(&out_str, 0)).map_err(|e| {
         let _ = app.emit("glint-toast", "Couldn't start the recorder");
-        format!("sidecar resolve: {e}")
-    })?;
-    let (rx, child) = sidecar.args(args).spawn().map_err(|e| {
-        let _ = app.emit("glint-toast", "Couldn't start the recorder");
-        format!("ffmpeg spawn: {e}")
+        e
     })?;
 
     *app.state::<RecorderState>().0.lock().unwrap() = Some(ActiveRecording {
-        child,
-        rx,
+        target,
+        fps: 30,
         out_path: out_str,
         width,
         height,
         started: Instant::now(),
+        seg_index: 1,
+        done: Vec::new(),
+        current: Some(seg0),
     });
     let _ = windows::build_control_bar(&app);
     let _ = app.emit("recorder-started", ());
+    Ok(())
+}
+
+/// Pause: stop the running span (a clean, self-contained MP4) and keep it. The
+/// timer in the bar stops; resume spawns the next span, and stop stitches them —
+/// so the paused interval is excised from the final video.
+#[tauri::command(async)]
+pub async fn recorder_pause(app: tauri::AppHandle) -> Result<(), String> {
+    // Take the running span out under the lock; finish it without holding the lock.
+    let seg = {
+        let state = app.state::<RecorderState>();
+        let mut guard = state.0.lock().unwrap();
+        match guard.as_mut() {
+            Some(rec) if rec.current.is_some() => {
+                let seg = rec.current.take().unwrap();
+                rec.done.push(seg.path.clone());
+                Some(seg)
+            }
+            _ => None,
+        }
+    };
+    let seg = seg.ok_or("not recording, or already paused")?;
+    finish_segment(seg).await;
+    let _ = app.emit("recorder-paused", ());
+    Ok(())
+}
+
+/// Resume: spawn the next span. Inverse of pause.
+#[tauri::command(async)]
+pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
+    // Read what we need under the lock; spawn outside it (spawn can block briefly).
+    let info = {
+        let state = app.state::<RecorderState>();
+        let guard = state.0.lock().unwrap();
+        match guard.as_ref() {
+            Some(rec) if rec.current.is_none() => {
+                Some((rec.target, rec.fps, rec.out_path.clone(), rec.seg_index))
+            }
+            _ => None,
+        }
+    };
+    let (target, fps, out_path, idx) = info.ok_or("not paused")?;
+    let path = segment_path(&out_path, idx);
+    let seg = spawn_segment(&app, target, fps, &path).map_err(|e| {
+        let _ = app.emit("glint-toast", "Couldn't resume recording");
+        e
+    })?;
+
+    // Store it back. If the recording was stopped/canceled meanwhile (single-user,
+    // unlikely), don't leak the orphan span — finish it and drop its file.
+    let mut seg_opt = Some(seg);
+    {
+        let state = app.state::<RecorderState>();
+        let mut guard = state.0.lock().unwrap();
+        if let Some(rec) = guard.as_mut() {
+            rec.current = seg_opt.take();
+            rec.seg_index += 1;
+        }
+    }
+    if let Some(orphan) = seg_opt {
+        finish_segment(orphan).await;
+        let _ = std::fs::remove_file(&path);
+        return Err("recording ended before resume".into());
+    }
+    let _ = app.emit("recorder-resumed", ());
     Ok(())
 }
 
@@ -169,30 +353,17 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
     let rec = rec.ok_or("not recording")?;
-    let ActiveRecording { mut child, mut rx, out_path, width, height, .. } = rec;
+    let ActiveRecording { out_path, width, height, mut done, current, .. } = rec;
 
-    // Graceful stop: ffmpeg quits on 'q' (trailing newline so the byte reliably
-    // reaches its stdin reader on Windows) and writes the moov atom. We then WAIT
-    // for ffmpeg to actually exit — finalizing/`+faststart` can take well over a
-    // second on a long recording — instead of guessing with a fixed delay. Killing
-    // mid-finalize corrupts the MP4, so kill is only a last resort if ffmpeg is
-    // still alive 30s after `q`.
-    let _ = child.write(b"q\n");
-    let exited = tokio::time::timeout(std::time::Duration::from_secs(30), async {
-        while let Some(ev) = rx.recv().await {
-            if matches!(ev, CommandEvent::Terminated(_)) {
-                break;
-            }
-        }
-    })
-    .await
-    .is_ok();
-    if !exited {
-        log::warn!("ffmpeg did not exit within 30s of 'q'; killing as a last resort");
-        let _ = child.kill();
+    // Finish the running span (None if we stopped while paused), then stitch all
+    // recorded spans into the final file. Each span exits cleanly (q + wait) so
+    // its moov atom is written before the concat/rename.
+    if let Some(seg) = current {
+        let p = seg.path.clone();
+        finish_segment(seg).await;
+        done.push(p);
     }
-
-    if !std::path::Path::new(&out_path).exists() {
+    if !assemble_segments(&app, &done, &out_path).await {
         let _ = app.emit("glint-toast", "Recording failed to save");
         return Err("no output file".into());
     }
@@ -235,12 +406,18 @@ pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
     windows::close_countdown(&app); // in case cancel races the countdown
-    if let Some(ActiveRecording { mut child, out_path, .. }) = rec {
-        // Discarding the file, so finalization doesn't matter — ask ffmpeg to quit,
-        // give it a brief grace, then ensure the process is gone and delete the partial.
-        let _ = child.write(b"q\n");
-        tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-        let _ = child.kill();
+    if let Some(ActiveRecording { mut done, current, out_path, .. }) = rec {
+        // Discarding everything, so finalization doesn't matter — quit the running
+        // span fast, then delete every segment file (and any assembled output).
+        if let Some(Segment { mut child, path, .. }) = current {
+            let _ = child.write(b"q\n");
+            tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+            let _ = child.kill();
+            done.push(path);
+        }
+        for s in &done {
+            let _ = std::fs::remove_file(s);
+        }
         let _ = std::fs::remove_file(&out_path);
     }
     let _ = app.emit("recorder-stopped", ());

@@ -242,6 +242,8 @@ pub fn run() {
             pin_context_menu,
             recorder::recorder_ffmpeg_check,
             recorder::recorder_start,
+            recorder::recorder_pause,
+            recorder::recorder_resume,
             recorder::recorder_stop,
             recorder::recorder_cancel,
             recorder::recorder_status,

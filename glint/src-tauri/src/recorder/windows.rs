@@ -26,7 +26,7 @@ pub fn build_control_bar(app: &AppHandle) -> tauri::Result<()> {
     .resizable(false)
     .shadow(false)
     .focused(false)
-    .inner_size(180.0, 44.0)
+    .inner_size(216.0, 44.0)
     .visible(false)
     .build()?;
 
@@ -34,7 +34,7 @@ pub fn build_control_bar(app: &AppHandle) -> tauri::Result<()> {
         let s = m.scale_factor();
         let pos = m.position();
         let size = m.size();
-        let bar_w = (180.0 * s) as i32;
+        let bar_w = (216.0 * s) as i32;
         let bar_h = (44.0 * s) as i32;
         let x = pos.x + (size.width as i32 - bar_w) / 2;
         let y = pos.y + size.height as i32 - bar_h - (60.0 * s) as i32;
@@ -44,7 +44,34 @@ pub fn build_control_bar(app: &AppHandle) -> tauri::Result<()> {
     }
 
     win.show()?;
+    exclude_from_capture(&win);
     Ok(())
+}
+
+/// Mark a window as excluded from screen capture (Win10 2004+). The control bar
+/// must stay visible on screen yet never appear in the recorded video — gdigrab
+/// BitBlt-captures the desktop, and WDA_EXCLUDEFROMCAPTURE omits this window from
+/// that capture while leaving it on screen. Best-effort: logs and moves on if the
+/// handle or the call is unavailable (the bar simply shows in the video then).
+fn exclude_from_capture(win: &tauri::WebviewWindow) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE,
+    };
+    let raw = match win.window_handle() {
+        Ok(h) => h.as_raw(),
+        Err(e) => {
+            log::warn!("rec-bar: no window handle for capture-exclusion: {e}");
+            return;
+        }
+    };
+    if let RawWindowHandle::Win32(h) = raw {
+        let hwnd = HWND(h.hwnd.get() as *mut core::ffi::c_void);
+        if let Err(e) = unsafe { SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) } {
+            log::warn!("rec-bar: SetWindowDisplayAffinity failed: {e}");
+        }
+    }
 }
 
 /// Close the control bar if it is open. Safe to call when none exists.
