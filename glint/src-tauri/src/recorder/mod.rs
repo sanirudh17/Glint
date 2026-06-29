@@ -143,24 +143,32 @@ async fn spawn_segment(
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("sidecar resolve: {e}"))?;
     let (rx_ev, child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
 
-    // ffmpeg is now opening each pipe as a client; accept + start pumping.
+    // ffmpeg is now opening each pipe as a client; accept + start pumping. Bound
+    // the accept: if ffmpeg never opens a pipe (bad args / sidecar died), an
+    // unbounded `connect()` would wedge recorder_start/recorder_resume forever and
+    // the capture channel would grow without limit. On timeout or error, stop the
+    // capture thread and toast — recording proceeds with whatever pipes connected.
     let mut audio_caps = Vec::new();
     for p in pending {
-        if let Err(e) = p.server.connect().await {
-            log::warn!("{} pipe connect failed: {e}", p.tag);
-            p.stop.store(true, Ordering::Relaxed);
-            let _ = p.thread.join();
-            continue;
-        }
-        let mut server = p.server;
-        let mut rx = p.rx;
-        let pump = tokio::spawn(async move {
-            while let Some(buf) = rx.recv().await {
-                if server.write_all(&buf).await.is_err() { break; }
+        match tokio::time::timeout(std::time::Duration::from_secs(3), p.server.connect()).await {
+            Ok(Ok(())) => {
+                let mut server = p.server;
+                let mut rx = p.rx;
+                let pump = tokio::spawn(async move {
+                    while let Some(buf) = rx.recv().await {
+                        if server.write_all(&buf).await.is_err() { break; }
+                    }
+                    let _ = server.shutdown().await;
+                });
+                audio_caps.push(AudioCapture { stop: p.stop, thread: p.thread, pump });
+                continue;
             }
-            let _ = server.shutdown().await;
-        });
-        audio_caps.push(AudioCapture { stop: p.stop, thread: p.thread, pump });
+            Ok(Err(e)) => log::warn!("{} pipe connect failed: {e}", p.tag),
+            Err(_) => log::warn!("{} pipe never connected (ffmpeg open timed out)", p.tag),
+        }
+        p.stop.store(true, Ordering::Relaxed);
+        let _ = p.thread.join();
+        let _ = app.emit("glint-toast", format!("{} audio unavailable", if p.tag == "mic" { "Microphone" } else { "System" }));
     }
 
     Ok(Segment { child, rx: rx_ev, path: path.to_string(), audio: audio_caps })
