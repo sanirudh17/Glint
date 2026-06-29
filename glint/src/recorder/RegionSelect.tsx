@@ -19,8 +19,9 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Monitor } from "lucide-react";
+import { Monitor, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import { recorderStartRegion, recorderStartFullscreen } from "../lib/recorder";
+import { useAppStore } from "../store/useAppStore";
 import "./recorder.css";
 
 type Rect = { x: number; y: number; w: number; h: number };
@@ -65,6 +66,15 @@ export function RegionSelect() {
   // at its physical origin and never moves, so a single read is enough.
   const [env, setEnv] = useState<{ scale: number; ox: number; oy: number }>({ scale: 1, ox: 0, oy: 0 });
 
+  // Audio-source intent for THIS recording, seeded from saved settings. The chips
+  // hold local state only — they don't persist back (Settings owns the default).
+  const settings = useAppStore((s) => s.settings);
+  const [sys, setSys] = useState(true);
+  const [mic, setMic] = useState(false);
+  useEffect(() => {
+    if (settings) { setSys(settings.record_system_audio ?? true); setMic(settings.record_microphone ?? false); }
+  }, [settings]);
+
   useEffect(() => {
     const w = getCurrentWindow();
     Promise.all([w.scaleFactor(), w.outerPosition()])
@@ -84,14 +94,14 @@ export function RegionSelect() {
       y: Math.round(env.oy + rect.y * env.scale),
       w: Math.round(rect.w * env.scale),
       h: Math.round(rect.h * env.scale),
-    }).catch(() => { /* a toast already surfaces start failures */ });
-  }, [rect, env]);
+    }, { system: sys, mic }).catch(() => { /* a toast already surfaces start failures */ });
+  }, [rect, env, sys, mic]);
 
   const confirmFullscreen = useCallback(() => {
     if (confirmed.current) return;
     confirmed.current = true;
-    recorderStartFullscreen().catch(() => { /* toast surfaces failures */ });
-  }, []);
+    recorderStartFullscreen({ system: sys, mic }).catch(() => { /* toast surfaces failures */ });
+  }, [sys, mic]);
 
   // Esc cancels (closing is safe — no follow-up IPC). Enter confirms the region.
   useEffect(() => {
@@ -189,6 +199,22 @@ export function RegionSelect() {
           {rect ? "↵ Enter to record · drag handles to adjust · Esc to cancel"
                 : "Drag to select a region · Esc to cancel"}
         </span>
+        <button
+          className={`rec-sel-chip${sys ? "" : " rec-sel-chip--off"}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setSys((v) => !v)}
+          title="System audio"
+        >
+          {sys ? <Volume2 size={14} /> : <VolumeX size={14} />} System
+        </button>
+        <button
+          className={`rec-sel-chip${mic ? "" : " rec-sel-chip--off"}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setMic((v) => !v)}
+          title="Microphone"
+        >
+          {mic ? <Mic size={14} /> : <MicOff size={14} />} Mic
+        </button>
         <button className="rec-sel-fullbtn" onPointerDown={(e) => e.stopPropagation()} onClick={confirmFullscreen}>
           <Monitor size={15} strokeWidth={2} /> Record Full Screen
         </button>
