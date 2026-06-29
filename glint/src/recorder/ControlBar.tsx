@@ -1,7 +1,7 @@
 /** ControlBar.tsx — the floating REC indicator (route #/rec-bar). */
 import { useEffect, useState } from "react";
-import { recorderStop, recorderPause, recorderResume } from "../lib/recorder";
-import { Square, Pause, Play } from "lucide-react";
+import { recorderStop, recorderPause, recorderResume, recorderStatus, recorderSetMute } from "../lib/recorder";
+import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import "./recorder.css";
 
 export function mmss(total: number): string {
@@ -13,6 +13,21 @@ export function ControlBar() {
   const [secs, setSecs] = useState(0);
   const [paused, setPaused] = useState(false);
   const [busy, setBusy] = useState(false);
+  // Which audio sources are active + their live mute state. null until status
+  // loads; a source inactive at start renders no toggle.
+  const [audio, setAudio] = useState<{ system: boolean; mic: boolean; sysMuted: boolean; micMuted: boolean } | null>(null);
+
+  useEffect(() => {
+    recorderStatus().then((s) => {
+      if (s) setAudio({ system: s.system, mic: s.mic, sysMuted: s.system_muted, micMuted: s.mic_muted });
+    }).catch(() => {});
+  }, []);
+
+  // Flip local state only on a successful set — backend errors leave it as-is.
+  async function toggleMute(src: "system" | "mic", next: boolean) {
+    try { await recorderSetMute(src, next); } catch { return; }
+    setAudio((a) => a && { ...a, ...(src === "system" ? { sysMuted: next } : { micMuted: next }) });
+  }
 
   // The timer counts only while running — paused time is excised from the video,
   // so the elapsed shown here matches the final recording's duration.
@@ -37,6 +52,26 @@ export function ControlBar() {
     <div className="rec-bar">
       <span className={`rec-dot${paused ? " rec-dot--paused" : ""}`} aria-hidden />
       <span className="rec-time">{mmss(secs)}</span>
+      {audio?.system && (
+        <button
+          className={`rec-atog${audio.sysMuted ? " rec-atog--off" : ""}`}
+          onClick={() => toggleMute("system", !audio.sysMuted)}
+          title={audio.sysMuted ? "Unmute system audio" : "Mute system audio"}
+          aria-label="Toggle system audio"
+        >
+          {audio.sysMuted ? <VolumeX size={13} /> : <Volume2 size={13} />}
+        </button>
+      )}
+      {audio?.mic && (
+        <button
+          className={`rec-atog${audio.micMuted ? " rec-atog--off" : ""}`}
+          onClick={() => toggleMute("mic", !audio.micMuted)}
+          title={audio.micMuted ? "Unmute microphone" : "Mute microphone"}
+          aria-label="Toggle microphone"
+        >
+          {audio.micMuted ? <MicOff size={13} /> : <Mic size={13} />}
+        </button>
+      )}
       <button
         className="rec-pause"
         onClick={togglePause}

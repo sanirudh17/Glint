@@ -1,7 +1,14 @@
 /** recorder.ts — typed wrappers for the screen recorder's Rust commands. */
 import { invoke } from "@tauri-apps/api/core";
 
-export interface RecorderStatus { recording: boolean; elapsed_secs: number }
+export interface RecorderStatus {
+  recording: boolean;
+  elapsed_secs: number;
+  system: boolean;
+  mic: boolean;
+  system_muted: boolean;
+  mic_muted: boolean;
+}
 
 export const recorderStartFullscreen = (audio?: { system: boolean; mic: boolean }): Promise<void> =>
   invoke<void>("recorder_start", { mode: "fullscreen", system: audio?.system ?? true, mic: audio?.mic ?? false });
@@ -16,3 +23,5 @@ export const recorderStop = (): Promise<void> => invoke<void>("recorder_stop");
 export const recorderCancel = (): Promise<void> => invoke<void>("recorder_cancel");
 export const recorderStatus = (): Promise<RecorderStatus | null> =>
   invoke<RecorderStatus | null>("recorder_status");
+export const recorderSetMute = (source: "system" | "mic", muted: boolean): Promise<void> =>
+  invoke<void>("recorder_set_mute", { source, muted });

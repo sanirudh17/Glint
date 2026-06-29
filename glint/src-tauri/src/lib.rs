@@ -248,6 +248,7 @@ pub fn run() {
             recorder::recorder_stop,
             recorder::recorder_cancel,
             recorder::recorder_status,
+            recorder::recorder_set_mute,
             recorder::recorder_open_region_selector,
         ])
         .on_menu_event(|app, event| {

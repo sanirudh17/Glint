@@ -259,6 +259,10 @@ pub struct RecorderState(pub Mutex<Option<ActiveRecording>>);
 pub struct RecorderStatusDto {
     pub recording: bool,
     pub elapsed_secs: u64,
+    pub system: bool,
+    pub mic: bool,
+    pub system_muted: bool,
+    pub mic_muted: bool,
 }
 
 /// What to record. Region coords/size are PHYSICAL pixels on the primary monitor.
@@ -624,5 +628,25 @@ pub fn recorder_status(app: tauri::AppHandle) -> Option<RecorderStatusDto> {
     guard.as_ref().map(|r| RecorderStatusDto {
         recording: true,
         elapsed_secs: r.started.elapsed().as_secs(),
+        system: r.audio_cfg.system,
+        mic: r.audio_cfg.mic,
+        system_muted: r.controls.system_muted.load(std::sync::atomic::Ordering::Relaxed),
+        mic_muted: r.controls.mic_muted.load(std::sync::atomic::Ordering::Relaxed),
     })
+}
+
+/// Toggle a source's live mute. Muting writes silence into that source's pipe, so
+/// the stream stays continuous and A/V-synced. No-op-erroring if not recording.
+#[tauri::command]
+pub fn recorder_set_mute(app: tauri::AppHandle, source: String, muted: bool) -> Result<(), String> {
+    let state = app.state::<RecorderState>();
+    let guard = state.0.lock().unwrap();
+    let rec = guard.as_ref().ok_or("not recording")?;
+    let flag = match source.as_str() {
+        "system" => &rec.controls.system_muted,
+        "mic" => &rec.controls.mic_muted,
+        other => return Err(format!("unknown source: {other}")),
+    };
+    flag.store(muted, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
 }

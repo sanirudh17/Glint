@@ -12,6 +12,9 @@
 .rec-pause { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
 .rec-pause:hover { background: rgba(255,255,255,0.24); }
 .rec-pause:disabled { opacity: 0.5; cursor: default; }
+.rec-atog { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
+.rec-atog:hover { background: rgba(255,255,255,0.24); }
+.rec-atog--off { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); }
 .rec-stop { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: #ff3b30; color: #fff; cursor: pointer; }
 .rec-countdown {
   width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center;
