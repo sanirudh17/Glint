@@ -35,6 +35,11 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
         .icon(app.default_window_icon().unwrap().clone())
         .tooltip("Glint")
         .menu(&menu)
+        // Left-click reopens the window (the app hides to tray on close, so this is
+        // the primary way back); the menu is reserved for right-click. Without this,
+        // Windows' default shows the menu on left-click and there's no obvious
+        // one-click path to restore a closed window.
+        .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
             "open" => window::focus_main(app),
             "settings" => {
