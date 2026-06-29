@@ -103,7 +103,11 @@ pub fn build_ffmpeg_args(target: &RecordTarget, fps: u32, out: &str, audio: &[Au
             1 => audio_tail(&mut a, format!("[1:a]aresample=async=1,{AFMT}[aout]")),
             n => {
                 let labels: String = (1..=n).map(|i| format!("[{i}:a]")).collect();
-                audio_tail(&mut a, format!("{labels}amix=inputs={n}:duration=longest,aresample=async=1,{AFMT}[aout]"));
+                // normalize=0: don't scale each input by 1/N (the default), which
+                // halves a source's volume — thin/quiet mic and system. Since the
+                // unselected source is muted (silence), summing at full level keeps
+                // the active source(s) at their true loudness.
+                audio_tail(&mut a, format!("{labels}amix=inputs={n}:duration=longest:normalize=0,aresample=async=1,{AFMT}[aout]"));
             }
         }
     }
@@ -186,7 +190,7 @@ mod tests {
     #[test]
     fn two_sources_use_amix() {
         let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000), ai(44100)], true);
-        assert!(v.iter().any(|s| s == "[1:a][2:a]amix=inputs=2:duration=longest,aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[aout]"));
+        assert!(v.iter().any(|s| s == "[1:a][2:a]amix=inputs=2:duration=longest:normalize=0,aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[aout]"));
         assert!(v.windows(2).any(|w| w[0] == "-c:a" && w[1] == "aac"));
         // both rates present as input options
         assert!(v.windows(2).any(|w| w[0] == "-ar" && w[1] == "48000"));
