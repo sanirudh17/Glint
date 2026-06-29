@@ -235,7 +235,16 @@ pub async fn recorder_audio_check(app: tauri::AppHandle) -> Result<u64, String> 
         .spawn()
         .map_err(|e| format!("spawn: {e}"))?;
 
-    server.connect().await.map_err(|e| format!("connect: {e}"))?;
+    // Bound the wait: if ffmpeg never opens the pipe (bad args / sidecar died),
+    // connect() would otherwise await a client forever and the unbounded capture
+    // channel would grow without limit. Stop the capture thread on that path.
+    tokio::time::timeout(std::time::Duration::from_secs(3), server.connect())
+        .await
+        .map_err(|_| {
+            stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            "ffmpeg never connected to the audio pipe".to_string()
+        })?
+        .map_err(|e| format!("connect: {e}"))?;
     // Pump for ~1.5s, then stop.
     let pump = tokio::spawn(async move {
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(1500);
