@@ -1,4 +1,7 @@
 .rec-bar {
+  /* Center the pill inside its (wider, transparent) window so the icons sit in
+     the middle with equal space on both sides, instead of hugging the left. */
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
   display: inline-flex; align-items: center; gap: 10px;
   background: rgba(20,20,24,0.92); color: #fff;
   padding: 6px 12px; border-radius: 999px;
