@@ -1,5 +1,6 @@
 /** ControlBar.tsx — the floating REC indicator (route #/rec-bar). */
 import { useEffect, useState } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { recorderStop, recorderPause, recorderResume, recorderStatus, recorderSetMute } from "../lib/recorder";
 import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
 import "./recorder.css";
@@ -13,14 +14,22 @@ export function ControlBar() {
   const [secs, setSecs] = useState(0);
   const [paused, setPaused] = useState(false);
   const [busy, setBusy] = useState(false);
-  // Which audio sources are active + their live mute state. null until status
-  // loads; a source inactive at start renders no toggle.
+  // Which audio sources are available + their live mute state. null until status
+  // loads. Both system and mic show whenever the recording has any audio, so either
+  // can be muted/unmuted live (a source off at start simply begins muted).
   const [audio, setAudio] = useState<{ system: boolean; mic: boolean; sysMuted: boolean; micMuted: boolean } | null>(null);
 
   useEffect(() => {
-    recorderStatus().then((s) => {
-      if (s) setAudio({ system: s.system, mic: s.mic, sysMuted: s.system_muted, micMuted: s.mic_muted });
-    }).catch(() => {});
+    const load = () =>
+      recorderStatus().then((s) => {
+        if (s) setAudio({ system: s.system, mic: s.mic, sysMuted: s.system_muted, micMuted: s.mic_muted });
+      }).catch(() => {});
+    // The bar appears the instant the countdown ends (before ffmpeg is fully up),
+    // so the first read uses optimistic availability; refresh when the recording
+    // is actually running to drop a toggle for a source whose device was missing.
+    load();
+    const un = listen("recorder-started", load);
+    return () => { un.then((f) => f()).catch(() => {}); };
   }, []);
 
   // Flip local state only on a successful set — backend errors leave it as-is.

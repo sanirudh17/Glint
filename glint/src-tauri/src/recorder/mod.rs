@@ -31,6 +31,8 @@ pub struct Segment {
 /// One source's live capture: the WASAPI thread + the tokio pump task feeding its
 /// pipe, with a shared stop flag. Dropping/awaiting both ends the pipe → ffmpeg EOF.
 pub struct AudioCapture {
+    /// Which source this is ("sys" | "mic") — drives the control bar's toggles.
+    pub tag: &'static str,
     pub stop: Arc<AtomicBool>,
     pub thread: std::thread::JoinHandle<()>,
     pub pump: tokio::task::JoinHandle<()>,
@@ -41,6 +43,17 @@ pub struct AudioCapture {
 pub struct AudioControls {
     pub system_muted: Arc<AtomicBool>,
     pub mic_muted: Arc<AtomicBool>,
+}
+
+impl AudioControls {
+    /// Initial mute state — a source that was off in the selector starts muted so it
+    /// can be unmuted live (both sources are opened when a recording has any audio).
+    fn new(system_muted: bool, mic_muted: bool) -> Self {
+        Self {
+            system_muted: Arc::new(AtomicBool::new(system_muted)),
+            mic_muted: Arc::new(AtomicBool::new(mic_muted)),
+        }
+    }
 }
 
 /// One in-flight recording. Pause/resume splits it into segments: pausing stops
@@ -59,8 +72,13 @@ pub struct ActiveRecording {
     pub done: Vec<String>,
     /// The currently-recording span. `None` while paused.
     pub current: Option<Segment>,
-    /// Audio sources resolved once at start (a source absent here is never opened).
+    /// What the user selected at start (drives initial mute state).
     pub audio_cfg: AudioConfig,
+    /// Whether each source actually opened — drives which toggles the control bar
+    /// shows. Both open whenever the recording has any audio (so either can be
+    /// unmuted live); a source whose device is missing is the only one omitted.
+    pub sys_avail: bool,
+    pub mic_avail: bool,
     /// Mute flags shared across all segments of this recording.
     pub controls: AudioControls,
 }
@@ -97,6 +115,10 @@ async fn spawn_segment(
     // open is dropped with a toast; recording proceeds with whatever remains.
     struct Pending {
         tag: &'static str,
+        /// Was this source ON in the selector? Only enabled-then-failed sources
+        /// toast — a source we open just to allow live-unmute shouldn't nag if its
+        /// device is missing.
+        user_enabled: bool,
         input: ffmpeg::AudioInput,
         server: tokio::net::windows::named_pipe::NamedPipeServer,
         stop: Arc<AtomicBool>,
@@ -105,18 +127,25 @@ async fn spawn_segment(
     }
     let mut pending: Vec<Pending> = Vec::new();
 
-    let mut want: Vec<(&'static str, audio::Source, Arc<AtomicBool>)> = Vec::new();
-    if cfg.system { want.push(("sys", audio::Source::System, controls.system_muted.clone())); }
-    if cfg.mic { want.push(("mic", audio::Source::Mic, controls.mic_muted.clone())); }
+    // Open BOTH sources whenever the recording has any audio, so either can be
+    // muted/unmuted live from the control bar. The one that was off in the selector
+    // starts muted (writes silence — no content leaks); the user can unmute it
+    // mid-recording. (Opening the mic to allow this lights the OS mic indicator.)
+    let mut want: Vec<(&'static str, audio::Source, Arc<AtomicBool>, bool)> = Vec::new();
+    if cfg.system || cfg.mic {
+        want.push(("sys", audio::Source::System, controls.system_muted.clone(), cfg.system));
+        want.push(("mic", audio::Source::Mic, controls.mic_muted.clone(), cfg.mic));
+    }
 
-    for (tag, source, muted) in want {
+    for (tag, source, muted, user_enabled) in want {
+        let label = if tag == "mic" { "Microphone" } else { "System" };
         let stop = Arc::new(AtomicBool::new(false));
         match audio::start_capture(source, muted, stop.clone()) {
             Ok((fmt, rx, thread)) => {
                 let pp = pipes::pipe_path(tag, seg_index);
                 match pipes::create_server(&pp) {
                     Ok(server) => pending.push(Pending {
-                        tag,
+                        tag, user_enabled,
                         input: ffmpeg::AudioInput { pipe_path: pp, sample_rate: fmt.sample_rate, channels: fmt.channels },
                         server, stop, rx, thread,
                     }),
@@ -124,13 +153,13 @@ async fn spawn_segment(
                         log::warn!("{tag} pipe failed: {e}");
                         stop.store(true, Ordering::Relaxed);
                         let _ = thread.join();
-                        let _ = app.emit("glint-toast", format!("{} audio unavailable", if tag == "mic" { "Microphone" } else { "System" }));
+                        if user_enabled { let _ = app.emit("glint-toast", format!("{label} audio unavailable")); }
                     }
                 }
             }
             Err(e) => {
                 log::warn!("{tag} capture failed: {e}");
-                let _ = app.emit("glint-toast", format!("{} audio unavailable", if tag == "mic" { "Microphone" } else { "System" }));
+                if user_enabled { let _ = app.emit("glint-toast", format!("{label} audio unavailable")); }
             }
         }
     }
@@ -171,7 +200,7 @@ async fn spawn_segment(
                     }
                     let _ = server.shutdown().await;
                 });
-                audio_caps.push(AudioCapture { stop: p.stop, thread: p.thread, pump });
+                audio_caps.push(AudioCapture { tag: p.tag, stop: p.stop, thread: p.thread, pump });
                 continue;
             }
             Ok(Err(e)) => log::warn!("{} pipe connect failed: {e}", p.tag),
@@ -179,7 +208,9 @@ async fn spawn_segment(
         }
         p.stop.store(true, Ordering::Relaxed);
         let _ = p.thread.join();
-        let _ = app.emit("glint-toast", format!("{} audio unavailable", if p.tag == "mic" { "Microphone" } else { "System" }));
+        if p.user_enabled {
+            let _ = app.emit("glint-toast", format!("{} audio unavailable", if p.tag == "mic" { "Microphone" } else { "System" }));
+        }
     }
 
     Ok(Segment { child, rx: rx_ev, path: path.to_string(), audio: audio_caps })
@@ -450,30 +481,67 @@ pub async fn recorder_start(
     windows::close_countdown(&app);
 
     let audio_cfg = AudioConfig { system: system.unwrap_or(true), mic: mic.unwrap_or(false) };
-    let controls = AudioControls::default();
+    // A source off in the selector starts muted so it can be unmuted live.
+    let controls = AudioControls::new(!audio_cfg.system, !audio_cfg.mic);
+    let any_audio = audio_cfg.system || audio_cfg.mic;
 
-    // Segment 0. Pause/resume appends further segments; stop concatenates them.
-    let seg0 = spawn_segment(&app, target, 30, &segment_path(&out_str, 0), 0, audio_cfg, &controls)
-        .await
-        .map_err(|e| {
-            let _ = app.emit("glint-toast", "Couldn't start the recorder");
-            e
-        })?;
-
+    // Show the control bar IMMEDIATELY (no dead gap while ffmpeg's gdigrab input
+    // initializes, which takes ~1s+). A preliminary state with `current: None`
+    // backs the bar and gives Stop a target until segment 0 is up; availability is
+    // optimistic (both toggles when any audio) and refined once ffmpeg is running.
     *app.state::<RecorderState>().0.lock().unwrap() = Some(ActiveRecording {
         target,
         fps: 30,
-        out_path: out_str,
+        out_path: out_str.clone(),
         width,
         height,
         started: Instant::now(),
         seg_index: 1,
         done: Vec::new(),
-        current: Some(seg0),
+        current: None,
         audio_cfg,
-        controls,
+        sys_avail: any_audio,
+        mic_avail: any_audio,
+        controls: controls.clone(),
     });
     let _ = windows::build_control_bar(&app);
+
+    // Bring segment 0 up behind the visible bar. Pause/resume appends further
+    // segments; stop concatenates them.
+    let seg0 = match spawn_segment(&app, target, 30, &segment_path(&out_str, 0), 0, audio_cfg, &controls).await {
+        Ok(s) => s,
+        Err(e) => {
+            windows::close_control_bar(&app);
+            *app.state::<RecorderState>().0.lock().unwrap() = None;
+            let _ = app.emit("glint-toast", "Couldn't start the recorder");
+            return Err(e);
+        }
+    };
+
+    // Patch in the running span + accurate per-source availability. Decide under
+    // the lock and move `seg0` either into the state or back out, so any teardown
+    // await happens after the guard is dropped (the guard isn't Send).
+    let sys_avail = seg0.audio.iter().any(|c| c.tag == "sys");
+    let mic_avail = seg0.audio.iter().any(|c| c.tag == "mic");
+    let orphan = {
+        let state = app.state::<RecorderState>();
+        let mut guard = state.0.lock().unwrap();
+        match guard.as_mut() {
+            Some(rec) => {
+                rec.sys_avail = sys_avail;
+                rec.mic_avail = mic_avail;
+                rec.current = Some(seg0);
+                None
+            }
+            // stop/cancel raced during ffmpeg init — the slot is gone; hand seg0 back.
+            None => Some(seg0),
+        }
+    };
+    if let Some(seg0) = orphan {
+        finish_segment(seg0).await;
+        let _ = std::fs::remove_file(segment_path(&out_str, 0));
+        return Ok(());
+    }
     let _ = app.emit("recorder-started", ());
     Ok(())
 }
@@ -639,8 +707,8 @@ pub fn recorder_status(app: tauri::AppHandle) -> Option<RecorderStatusDto> {
     guard.as_ref().map(|r| RecorderStatusDto {
         recording: true,
         elapsed_secs: r.started.elapsed().as_secs(),
-        system: r.audio_cfg.system,
-        mic: r.audio_cfg.mic,
+        system: r.sys_avail,
+        mic: r.mic_avail,
         system_muted: r.controls.system_muted.load(std::sync::atomic::Ordering::Relaxed),
         mic_muted: r.controls.mic_muted.load(std::sync::atomic::Ordering::Relaxed),
     })
