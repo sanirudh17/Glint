@@ -302,6 +302,48 @@ async fn concat_segments(app: &AppHandle, segs: &[&String], out_path: &str) -> b
 #[derive(Default)]
 pub struct RecorderState(pub Mutex<Option<ActiveRecording>>);
 
+/// The just-finished recording, surfaced by the post-recording HUD (id for the
+/// Library actions, path for drag-out, thumb for the preview).
+pub struct LastRecording {
+    pub id: i64,
+    pub path: String,
+    pub thumb_path: Option<String>,
+}
+
+#[derive(Default)]
+pub struct RecorderHud(pub Mutex<Option<LastRecording>>);
+
+#[derive(Serialize)]
+pub struct RecHudDataDto {
+    pub id: i64,
+    pub path: String,
+    pub thumb_data_url: Option<String>,
+}
+
+/// Data for the post-recording HUD: the saved recording's id/path + its thumbnail
+/// as a data URL. Recorder-owned (reads only recorder state + the thumb file).
+#[tauri::command]
+pub fn rec_hud_data(app: tauri::AppHandle) -> Option<RecHudDataDto> {
+    use base64::Engine;
+    let state = app.state::<RecorderHud>();
+    let guard = state.0.lock().unwrap();
+    let last = guard.as_ref()?;
+    let thumb_data_url = last.thumb_path.as_ref().and_then(|p| {
+        let bytes = std::fs::read(p).ok()?;
+        Some(format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        ))
+    });
+    Some(RecHudDataDto { id: last.id, path: last.path.clone(), thumb_data_url })
+}
+
+/// Dismiss the post-recording HUD.
+#[tauri::command]
+pub fn rec_hud_dismiss(app: tauri::AppHandle) {
+    windows::close_rec_hud(&app);
+}
+
 #[derive(Serialize)]
 pub struct RecorderStatusDto {
     pub recording: bool,
@@ -441,6 +483,8 @@ pub async fn recorder_start(
     // IPC survives (closing destroys its JS context) and a full-screen capture
     // never includes the transparent overlay. No-op for a tray/hotkey fullscreen.
     windows::close_region_selector(&app);
+    // Dismiss a lingering post-recording HUD from a previous take.
+    windows::close_rec_hud(&app);
 
     let target = match mode.as_str() {
         "fullscreen" => RecordTarget::Fullscreen,
@@ -659,16 +703,33 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0),
     };
-    {
+    let rec_id = {
         let db = app.state::<crate::Db>();
         let conn = db.0.lock().unwrap();
-        if let Err(e) = crate::db::insert_capture(&conn, &row) {
-            log::error!("recording insert_capture failed: {e}");
+        match crate::db::insert_capture(&conn, &row) {
+            Ok(id) => Some(id),
+            Err(e) => {
+                log::error!("recording insert_capture failed: {e}");
+                None
+            }
         }
-    }
+    };
     let _ = app.emit("capture-saved", ());
     let _ = app.emit("recorder-stopped", ());
-    let _ = app.emit("glint-toast", "Recording saved");
+
+    // Post-recording HUD: a floating panel with the new video's thumbnail + quick
+    // drag-out / Open / Reveal / Copy-path actions (CleanShot-style), so the user
+    // can act on the recording without opening the Library. Only on a real save.
+    if let Some(id) = rec_id {
+        *app.state::<RecorderHud>().0.lock().unwrap() = Some(LastRecording {
+            id,
+            path: out_path.clone(),
+            thumb_path: row.thumb_path.clone(),
+        });
+        let _ = windows::build_rec_hud(&app);
+    } else {
+        let _ = app.emit("glint-toast", "Recording saved");
+    }
     Ok(())
 }
 

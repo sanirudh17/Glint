@@ -76,3 +76,32 @@
   padding: 6px 10px; border-radius: 8px; font-size: 12px; cursor: pointer;
 }
 .rec-sel-chip--off { color: rgba(255,255,255,0.45); border-color: rgba(255,255,255,0.08); }
+
+/* ── Post-recording HUD (#/rec-hud) ─────────────────────────────────────────
+   A small corner card: video thumbnail (draggable) + a row of quick actions. */
+.rec-hud {
+  position: fixed; left: 12px; bottom: 12px;
+  width: 220px; display: flex; flex-direction: column; gap: 8px;
+  padding: 10px; border-radius: 12px;
+  background: rgba(20,20,24,0.94); border: 1px solid rgba(255,255,255,0.12);
+  box-shadow: 0 8px 28px rgba(0,0,0,0.5);
+  user-select: none; -webkit-user-select: none;
+}
+.rec-hud-thumb {
+  position: relative; width: 100%; aspect-ratio: 16 / 9; overflow: hidden;
+  border-radius: 8px; background: #0c0c10; cursor: grab;
+}
+.rec-hud-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.rec-hud-thumb--empty { width: 100%; height: 100%; background: #14141a; }
+.rec-hud-play {
+  position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+  color: #fff; pointer-events: none;
+  background: radial-gradient(circle at center, rgba(0,0,0,0.35), rgba(0,0,0,0) 60%);
+}
+.rec-hud-actions { display: flex; gap: 6px; justify-content: space-between; }
+.rec-hud-btn {
+  flex: 1; display: inline-flex; align-items: center; justify-content: center;
+  height: 28px; border: none; border-radius: 7px; cursor: pointer;
+  background: rgba(255,255,255,0.10); color: #fff;
+}
+.rec-hud-btn:hover { background: rgba(255,255,255,0.20); }

@@ -17,7 +17,8 @@ import App from "./App";
     hash.startsWith("#/pin") ||
     hash.startsWith("#/rec-bar") ||
     hash.startsWith("#/rec-countdown") ||
-    hash.startsWith("#/rec-select")
+    hash.startsWith("#/rec-select") ||
+    hash.startsWith("#/rec-hud")
   ) {
     document.documentElement.style.background = "transparent";
     document.body.style.background = "transparent";

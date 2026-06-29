@@ -11,6 +11,7 @@ import { PinApp } from "./pin/PinApp";
 import { ControlBar } from "./recorder/ControlBar";
 import { Countdown } from "./recorder/Countdown";
 import { RegionSelect } from "./recorder/RegionSelect";
+import { RecHud } from "./recorder/RecHud";
 import "./components/shell.css";
 
 /**
@@ -95,6 +96,14 @@ export const router = createHashRouter([
      */
     path: "/rec-select",
     element: <RegionSelect />,
+  },
+  {
+    /**
+     * Chrome-free post-recording HUD — a floating card with the finished video's
+     * thumbnail + quick actions, bottom-left. URL: tauri://localhost/#/rec-hud
+     */
+    path: "/rec-hud",
+    element: <RecHud />,
   },
   {
     path: "/",

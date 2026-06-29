@@ -106,6 +106,7 @@ pub fn run() {
         .manage(crate::editor::PendingOpen::default())
         .manage(crate::pin::PinState::default())
         .manage(crate::recorder::RecorderState::default())
+        .manage(crate::recorder::RecorderHud::default())
         .setup(|app| {
             tray::build(app.handle())?;
             shortcuts::register(app.handle())?;
@@ -252,6 +253,8 @@ pub fn run() {
             recorder::recorder_status,
             recorder::recorder_set_mute,
             recorder::recorder_open_region_selector,
+            recorder::rec_hud_data,
+            recorder::rec_hud_dismiss,
         ])
         .on_menu_event(|app, event| {
             // Pin right-click menus pop up via WebviewWindow::popup_menu and route
