@@ -55,12 +55,6 @@ pub fn build_ffmpeg_args(target: &RecordTarget, fps: u32, out: &str, audio: &[Au
     for ai in audio {
         a.extend([
             "-thread_queue_size".into(), "1024".into(),
-            // Stamp each PCM chunk with the wall-clock time ffmpeg reads it so the
-            // audio shares gdigrab's wall clock; `aresample=async=1` below then aligns
-            // the two (padding a little leading silence if audio starts a touch after
-            // the first video frame). Without this, raw f32le is stamped from sample 0
-            // and the audio rides ahead of the video.
-            "-use_wallclock_as_timestamps".into(), "1".into(),
             "-f".into(), "f32le".into(),
             "-ar".into(), ai.sample_rate.to_string(),
             "-ac".into(), ai.channels.to_string(),
@@ -203,13 +197,6 @@ mod tests {
     fn audio_inputs_carry_thread_queue_size() {
         let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000)], true);
         assert!(v.windows(2).any(|w| w[0] == "-thread_queue_size" && w[1] == "1024"));
-    }
-
-    #[test]
-    fn audio_inputs_use_wallclock_timestamps_for_av_sync() {
-        // Without wall-clock stamping, raw f32le rides ahead of the gdigrab video.
-        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000)], true);
-        assert!(v.windows(2).any(|w| w[0] == "-use_wallclock_as_timestamps" && w[1] == "1"));
     }
 
     #[test]

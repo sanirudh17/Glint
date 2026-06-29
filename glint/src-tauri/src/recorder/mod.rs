@@ -158,12 +158,13 @@ async fn spawn_segment(
                 let mut server = p.server;
                 let mut rx = p.rx;
                 let pump = tokio::spawn(async move {
-                    // Drop the pre-roll: audio captured while ffmpeg was still opening
-                    // its gdigrab input (before it began reading this pipe) would
-                    // otherwise be prepended to the stream and shove all audio behind
-                    // the video. Discard it so audio starts ~aligned with the first
-                    // video frame; `-use_wallclock_as_timestamps` + `aresample=async`
-                    // then keep them locked.
+                    // Drop the pre-roll: the capture thread starts streaming the moment
+                    // the source opens, but ffmpeg (a polling pipeline) only pulls its
+                    // first frame from any input once ALL inputs are open — so the audio
+                    // buffered before this pipe connected would be prepended to the
+                    // stream and shove every bit of audio behind the video. Discarding
+                    // it lines audio's first sample up with ffmpeg's first video frame;
+                    // `aresample=async=1` then absorbs any residual drift.
                     while rx.try_recv().is_ok() {}
                     while let Some(buf) = rx.recv().await {
                         if server.write_all(&buf).await.is_err() { break; }
