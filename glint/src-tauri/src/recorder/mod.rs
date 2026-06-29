@@ -61,7 +61,7 @@ fn spawn_segment(
     fps: u32,
     path: &str,
 ) -> Result<Segment, String> {
-    let args = ffmpeg::build_ffmpeg_args(&target, fps, path);
+    let args = ffmpeg::build_ffmpeg_args(&target, fps, path, &[]);
     let sidecar = app
         .shell()
         .sidecar("ffmpeg")
@@ -159,6 +159,14 @@ pub struct RecorderStatusDto {
 pub enum RecordTarget {
     Fullscreen,
     Region { x: i32, y: i32, w: u32, h: u32 },
+}
+
+/// Which audio sources a recording captures. Resolved once at start from the
+/// frontend's request; a source absent here is never opened (mic privacy).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AudioConfig {
+    pub system: bool,
+    pub mic: bool,
 }
 
 /// Round a region rect for recording: even w/h (yuv420p requires it); reject if
