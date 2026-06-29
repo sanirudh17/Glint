@@ -14,7 +14,10 @@ import App from "./App";
   if (
     hash.startsWith("#/overlay") ||
     hash.startsWith("#/hud") ||
-    hash.startsWith("#/pin")
+    hash.startsWith("#/pin") ||
+    hash.startsWith("#/rec-bar") ||
+    hash.startsWith("#/rec-countdown") ||
+    hash.startsWith("#/rec-select")
   ) {
     document.documentElement.style.background = "transparent";
     document.body.style.background = "transparent";

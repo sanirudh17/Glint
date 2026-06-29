@@ -6,6 +6,7 @@ mod hud;
 mod overlay;
 mod paths;
 mod pin;
+mod recorder;
 mod settings;
 mod shell_integration;
 mod shortcuts;
@@ -90,6 +91,7 @@ pub fn run() {
                 .build(),
         )
         .plugin(tauri_plugin_global_shortcut::Builder::new().build())
+        .plugin(tauri_plugin_shell::init())
         .plugin(tauri_plugin_drag::init())
         .plugin(tauri_plugin_dialog::init())
         .plugin(
@@ -103,6 +105,7 @@ pub fn run() {
         .manage(crate::editor::EditorState::default())
         .manage(crate::editor::PendingOpen::default())
         .manage(crate::pin::PinState::default())
+        .manage(crate::recorder::RecorderState::default())
         .setup(|app| {
             tray::build(app.handle())?;
             shortcuts::register(app.handle())?;
@@ -237,6 +240,14 @@ pub fn run() {
             pin_copy,
             pin_close,
             pin_context_menu,
+            recorder::recorder_ffmpeg_check,
+            recorder::recorder_start,
+            recorder::recorder_pause,
+            recorder::recorder_resume,
+            recorder::recorder_stop,
+            recorder::recorder_cancel,
+            recorder::recorder_status,
+            recorder::recorder_open_region_selector,
         ])
         .on_menu_event(|app, event| {
             // Pin right-click menus pop up via WebviewWindow::popup_menu and route

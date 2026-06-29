@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
+import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, FileText } from "lucide-react";
 import { Button, Card, EmptyState } from "../components/ui";
@@ -143,7 +144,7 @@ export default function HomeView() {
             variant="subtle"
             size="md"
             icon={Video}
-            onClick={() => pushToast("Recording arrives in a later phase")}
+            onClick={() => invoke("recorder_open_region_selector")}
           >
             Record
           </Button>
