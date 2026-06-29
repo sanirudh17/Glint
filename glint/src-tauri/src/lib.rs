@@ -14,9 +14,9 @@ mod tray;
 mod window;
 
 use capture::commands::{
-    capture_cancel, capture_commit, capture_copy, capture_delete, capture_open,
-    capture_overlay_data, capture_reveal, captures_list, hud_copy, hud_copy_path, hud_data,
-    hud_dismiss, hud_reveal, hud_save,
+    capture_cancel, capture_commit, capture_copy, capture_copy_path, capture_delete, capture_open,
+    capture_overlay_data, capture_reveal, captures_list, drag_blank_icon, hud_copy, hud_copy_path,
+    hud_data, hud_dismiss, hud_reveal, hud_save,
 };
 use editor::commands::{
     consume_pending_external_open, editor_copy, editor_flatten_temp, editor_open_capture,
@@ -220,7 +220,9 @@ pub fn run() {
             capture_open,
             capture_reveal,
             capture_copy,
+            capture_copy_path,
             capture_delete,
+            drag_blank_icon,
             editor_open_from_last,
             editor_open_capture,
             editor_source,
