@@ -32,8 +32,8 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
     <div
       className="cap-card"
       role="listitem"
-      onPointerDown={isRecording ? undefined : () => dragOut(item.path)}
-      title={isRecording ? undefined : "Drag to share"}
+      onPointerDown={() => dragOut(item.path)}
+      title="Drag to share"
     >
       <div className="cap-thumb">
         {item.thumb_data_url ? (
