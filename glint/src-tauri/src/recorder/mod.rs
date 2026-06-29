@@ -91,6 +91,11 @@ pub async fn recorder_start(
         return Err("already recording".into());
     }
 
+    // The selector (if this start came from it) closes itself, so the frontend's
+    // IPC survives (closing destroys its JS context) and a full-screen capture
+    // never includes the transparent overlay. No-op for a tray/hotkey fullscreen.
+    windows::close_region_selector(&app);
+
     let target = match mode.as_str() {
         "fullscreen" => RecordTarget::Fullscreen,
         "region" => {

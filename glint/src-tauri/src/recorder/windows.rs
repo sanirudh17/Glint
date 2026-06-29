@@ -120,3 +120,13 @@ pub fn build_region_selector(app: &AppHandle) -> tauri::Result<()> {
     win.show()?; win.set_focus()?;
     Ok(())
 }
+
+/// Close the region selector if it is open. Rust owns this teardown: the selector
+/// must NOT close itself before invoking `recorder_start` (closing destroys its
+/// webview's JS context, so the IPC never fires), and a full-screen recording
+/// would otherwise capture the transparent overlay. Safe to call when none exists.
+pub fn close_region_selector(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window(SELECT_LABEL) {
+        let _ = w.close();
+    }
+}
