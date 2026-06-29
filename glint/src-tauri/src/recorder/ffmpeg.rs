@@ -10,6 +10,8 @@ pub struct AudioInput {
     pub pipe_path: String,
     pub sample_rate: u32,
     pub channels: u16,
+    /// Microphone (vs system loopback) — gets a light voice EQ before mixing.
+    pub is_mic: bool,
 }
 
 /// Build the ffmpeg arg list: capture the screen via gdigrab and encode H.264 MP4.
@@ -86,6 +88,10 @@ pub fn build_ffmpeg_args(target: &RecordTarget, fps: u32, out: &str, audio: &[Au
     // are byte-for-byte identical across segments regardless of which/how many
     // sources connected — the invariant concat `-c copy` relies on.
     const AFMT: &str = "aformat=sample_rates=48000:channel_layouts=stereo";
+    // Light voice EQ applied to the MIC only (system audio passes through clean):
+    // de-rumble below 80 Hz + a gentle 3 kHz presence bell to counter a
+    // muffled/distant mic. Conservative so it doesn't add hiss.
+    const MIC_FX: &str = "highpass=f=80,equalizer=f=3000:width_type=o:width=1.5:g=3";
     let audio_tail = |a: &mut Vec<String>, fc: String| {
         a.extend([
             "-filter_complex".into(), fc,
@@ -100,14 +106,28 @@ pub fn build_ffmpeg_args(target: &RecordTarget, fps: u32, out: &str, audio: &[Au
     } else {
         match audio.len() {
             0 => {}
-            1 => audio_tail(&mut a, format!("[1:a]aresample=async=1,{AFMT}[aout]")),
+            1 => {
+                let fx = if audio[0].is_mic { format!(",{MIC_FX}") } else { String::new() };
+                audio_tail(&mut a, format!("[1:a]aresample=async=1{fx},{AFMT}[aout]"));
+            }
             n => {
-                let labels: String = (1..=n).map(|i| format!("[{i}:a]")).collect();
+                // Pre-filter mic inputs (voice EQ); system inputs pass straight in.
                 // normalize=0: don't scale each input by 1/N (the default), which
                 // halves a source's volume — thin/quiet mic and system. Since the
                 // unselected source is muted (silence), summing at full level keeps
                 // the active source(s) at their true loudness.
-                audio_tail(&mut a, format!("{labels}amix=inputs={n}:duration=longest:normalize=0,aresample=async=1,{AFMT}[aout]"));
+                let mut chains = String::new();
+                let mut labels = String::new();
+                for (idx, ai) in audio.iter().enumerate() {
+                    let i = idx + 1;
+                    if ai.is_mic {
+                        chains.push_str(&format!("[{i}:a]{MIC_FX}[m{i}];"));
+                        labels.push_str(&format!("[m{i}]"));
+                    } else {
+                        labels.push_str(&format!("[{i}:a]"));
+                    }
+                }
+                audio_tail(&mut a, format!("{chains}{labels}amix=inputs={n}:duration=longest:normalize=0,aresample=async=1,{AFMT}[aout]"));
             }
         }
     }
@@ -160,7 +180,10 @@ mod tests {
     }
 
     fn ai(rate: u32) -> AudioInput {
-        AudioInput { pipe_path: format!("\\\\.\\pipe\\glint-{rate}"), sample_rate: rate, channels: 2 }
+        AudioInput { pipe_path: format!("\\\\.\\pipe\\glint-{rate}"), sample_rate: rate, channels: 2, is_mic: false }
+    }
+    fn ai_mic(rate: u32) -> AudioInput {
+        AudioInput { pipe_path: format!("\\\\.\\pipe\\glint-mic-{rate}"), sample_rate: rate, channels: 2, is_mic: true }
     }
 
     #[test]
@@ -185,6 +208,16 @@ mod tests {
         assert!(!v.iter().any(|s| s.contains("amix")));
         assert!(v.windows(2).any(|w| w[0] == "-c:a" && w[1] == "aac"));
         assert!(v.windows(2).any(|w| w[0] == "-map" && w[1] == "[aout]"));
+    }
+
+    #[test]
+    fn mic_gets_voice_eq_system_does_not() {
+        // Single mic source: EQ inline before the format normalize.
+        let m = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai_mic(48000)], true);
+        assert!(m.iter().any(|s| s == "[1:a]aresample=async=1,highpass=f=80,equalizer=f=3000:width_type=o:width=1.5:g=3,aformat=sample_rates=48000:channel_layouts=stereo[aout]"));
+        // System (input 1) passes through; mic (input 2) is pre-filtered then mixed.
+        let both = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000), ai_mic(48000)], true);
+        assert!(both.iter().any(|s| s == "[2:a]highpass=f=80,equalizer=f=3000:width_type=o:width=1.5:g=3[m2];[1:a][m2]amix=inputs=2:duration=longest:normalize=0,aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[aout]"));
     }
 
     #[test]

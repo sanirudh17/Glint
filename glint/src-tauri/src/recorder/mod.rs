@@ -146,11 +146,12 @@ async fn spawn_segment(
         let stop = Arc::new(AtomicBool::new(false));
         match audio::start_capture(source, muted, stop.clone()) {
             Ok((fmt, rx, thread)) => {
+                log::info!("{tag} capture negotiated {}Hz {}ch", fmt.sample_rate, fmt.channels);
                 let pp = pipes::pipe_path(tag, seg_index);
                 match pipes::create_server(&pp) {
                     Ok(server) => pending.push(Pending {
                         tag, user_enabled,
-                        input: ffmpeg::AudioInput { pipe_path: pp, sample_rate: fmt.sample_rate, channels: fmt.channels },
+                        input: ffmpeg::AudioInput { pipe_path: pp, sample_rate: fmt.sample_rate, channels: fmt.channels, is_mic: tag == "mic" },
                         server, stop, rx, thread,
                     }),
                     Err(e) => {
@@ -169,7 +170,7 @@ async fn spawn_segment(
     }
 
     let inputs: Vec<ffmpeg::AudioInput> = pending.iter().map(|p| ffmpeg::AudioInput {
-        pipe_path: p.input.pipe_path.clone(), sample_rate: p.input.sample_rate, channels: p.input.channels,
+        pipe_path: p.input.pipe_path.clone(), sample_rate: p.input.sample_rate, channels: p.input.channels, is_mic: p.input.is_mic,
     }).collect();
 
     // `want_audio` is the recording's intent (system or mic enabled), not how many
