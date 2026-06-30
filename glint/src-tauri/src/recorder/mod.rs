@@ -299,8 +299,13 @@ async fn concat_segments(app: &AppHandle, segs: &[&String], out_path: &str) -> b
     matches!(out, Ok(o) if o.status.success()) && std::path::Path::new(out_path).exists()
 }
 
+/// `.0` is the active recording; `.1` is a start reservation held across the
+/// countdown + ffmpeg spawn. The active slot isn't filled until ffmpeg is up, so
+/// without the reservation a second trigger during the countdown would pass the
+/// `is_some()` guard and spawn a parallel ffmpeg (same-second filename collision +
+/// a leaked span).
 #[derive(Default)]
-pub struct RecorderState(pub Mutex<Option<ActiveRecording>>);
+pub struct RecorderState(pub Mutex<Option<ActiveRecording>>, pub AtomicBool);
 
 /// The just-finished recording, surfaced by the post-recording HUD (id for the
 /// Library actions, path for drag-out, thumb for the preview).
@@ -338,10 +343,12 @@ pub fn rec_hud_data(app: tauri::AppHandle) -> Option<RecHudDataDto> {
     Some(RecHudDataDto { id: last.id, path: last.path.clone(), thumb_data_url })
 }
 
-/// Dismiss the post-recording HUD.
+/// Dismiss the post-recording HUD and drop the recording it referenced (so a
+/// stale path/id doesn't linger past the card).
 #[tauri::command]
 pub fn rec_hud_dismiss(app: tauri::AppHandle) {
     windows::close_rec_hud(&app);
+    *app.state::<RecorderHud>().0.lock().unwrap() = None;
 }
 
 #[derive(Serialize)]
@@ -522,6 +529,15 @@ pub async fn recorder_start(
         RecordTarget::Fullscreen => (0, 0),
     };
 
+    // Reserve the start slot for the countdown + spawn window. `state.0` stays None
+    // until ffmpeg is up, so the `is_some()` guard at the top can't catch a SECOND
+    // trigger fired during the 3s countdown — without this reservation both would
+    // spawn an ffmpeg, colliding on the same-second filename (corrupt output) and
+    // leaking a span. Released on every exit path below.
+    if app.state::<RecorderState>().1.swap(true, Ordering::SeqCst) {
+        return Err("already starting".into());
+    }
+
     // 3-2-1 countdown, then Rust closes it BEFORE capture starts so the digit can
     // never bleed into the first recorded frames (and a webview that failed to
     // self-close isn't left orphaned on screen).
@@ -563,6 +579,7 @@ pub async fn recorder_start(
         Err(e) => {
             windows::close_control_bar(&app);
             *app.state::<RecorderState>().0.lock().unwrap() = None;
+            app.state::<RecorderState>().1.store(false, Ordering::SeqCst);
             let _ = app.emit("glint-toast", "Couldn't start the recorder");
             return Err(e);
         }
@@ -587,6 +604,9 @@ pub async fn recorder_start(
             None => Some(seg0),
         }
     };
+    // Release the start reservation now that the active slot is filled (or the race
+    // resolved) — re-entry is governed by the `is_some()` guard from here on.
+    app.state::<RecorderState>().1.store(false, Ordering::SeqCst);
     if let Some(seg0) = orphan {
         finish_segment(seg0).await;
         let _ = std::fs::remove_file(segment_path(&out_str, 0));
@@ -628,7 +648,9 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
         let state = app.state::<RecorderState>();
         let guard = state.0.lock().unwrap();
         match guard.as_ref() {
-            Some(rec) if rec.current.is_none() => {
+            // `current.is_none()` also holds during the preliminary start state (seg0
+            // not up yet); require a completed span so resume can't run mid-init.
+            Some(rec) if rec.current.is_none() && !rec.done.is_empty() => {
                 Some((rec.target, rec.fps, rec.out_path.clone(), rec.seg_index, rec.audio_cfg, rec.controls.clone()))
             }
             _ => None,
@@ -678,6 +700,12 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
         let p = seg.path.clone();
         finish_segment(seg).await;
         done.push(p);
+    }
+    // Stopped before any span was captured (e.g. Stop tapped during the ~1s ffmpeg
+    // init) — nothing to save, and it wasn't a failure, so discard quietly.
+    if done.is_empty() {
+        let _ = app.emit("recorder-stopped", ());
+        return Ok(());
     }
     if !assemble_segments(&app, &done, &out_path).await {
         let _ = app.emit("glint-toast", "Recording failed to save");

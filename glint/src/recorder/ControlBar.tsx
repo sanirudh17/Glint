@@ -27,9 +27,12 @@ export function ControlBar() {
     // The bar appears the instant the countdown ends (before ffmpeg is fully up),
     // so the first read uses optimistic availability; refresh when the recording
     // is actually running to drop a toggle for a source whose device was missing.
+    // A delayed re-read is a fallback in case the bar's webview cold-loads after
+    // `recorder-started` already fired (event missed).
     load();
     const un = listen("recorder-started", load);
-    return () => { un.then((f) => f()).catch(() => {}); };
+    const t = window.setTimeout(load, 2000);
+    return () => { window.clearTimeout(t); un.then((f) => f()).catch(() => {}); };
   }, []);
 
   // Flip local state only on a successful set — backend errors leave it as-is.
