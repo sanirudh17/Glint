@@ -85,6 +85,9 @@ pub struct ActiveRecording {
     pub mic_avail: bool,
     /// Mute flags shared across all segments of this recording.
     pub controls: AudioControls,
+    /// Whether the webcam bubble is currently open (sibling window — not encoded
+    /// by ffmpeg, gdigrab records it as part of the screen).
+    pub webcam_on: bool,
 }
 
 /// `{out_dir}/{stem}.part{idx}.mp4` — per-segment temp file beside the final output.
@@ -359,6 +362,7 @@ pub struct RecorderStatusDto {
     pub mic: bool,
     pub system_muted: bool,
     pub mic_muted: bool,
+    pub webcam: bool,
 }
 
 /// What to record. Region coords/size are PHYSICAL pixels on the primary monitor.
@@ -480,6 +484,7 @@ pub async fn recorder_start(
     h: Option<u32>,
     system: Option<bool>,
     mic: Option<bool>,
+    webcam: Option<bool>,
 ) -> Result<(), String> {
     // Already recording? Ignore (single recording in R1).
     if app.state::<RecorderState>().0.lock().unwrap().is_some() {
@@ -549,6 +554,7 @@ pub async fn recorder_start(
     // A source off in the selector starts muted so it can be unmuted live.
     let controls = AudioControls::new(!audio_cfg.system, !audio_cfg.mic);
     let any_audio = audio_cfg.system || audio_cfg.mic;
+    let want_cam = webcam.unwrap_or(false);
 
     // Show the control bar IMMEDIATELY (no dead gap while ffmpeg's gdigrab input
     // initializes, which takes ~1s+). A preliminary state with `current: None`
@@ -568,8 +574,15 @@ pub async fn recorder_start(
         sys_avail: any_audio,
         mic_avail: any_audio,
         controls: controls.clone(),
+        webcam_on: want_cam,
     });
     let _ = windows::build_control_bar(&app);
+    // Open the webcam bubble now (after the countdown) so the user can frame during
+    // the ~1s ffmpeg init. It's a sibling window — gdigrab records it as screen
+    // content; no ffmpeg args need to change.
+    if want_cam {
+        let _ = windows::build_cam_bubble(&app, target, 170.0);
+    }
 
     // Bring segment 0 up behind the visible bar. Pause/resume appends further
     // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual
@@ -578,6 +591,7 @@ pub async fn recorder_start(
         Ok(s) => s,
         Err(e) => {
             windows::close_control_bar(&app);
+            windows::close_cam_bubble(&app);
             *app.state::<RecorderState>().0.lock().unwrap() = None;
             app.state::<RecorderState>().1.store(false, Ordering::SeqCst);
             let _ = app.emit("glint-toast", "Couldn't start the recorder");
@@ -690,6 +704,7 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
+    windows::close_cam_bubble(&app);
     let rec = rec.ok_or("not recording")?;
     let ActiveRecording { out_path, width, height, mut done, current, .. } = rec;
 
@@ -766,6 +781,7 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
+    windows::close_cam_bubble(&app);
     windows::close_countdown(&app); // in case cancel races the countdown
     if let Some(ActiveRecording { mut done, current, out_path, .. }) = rec {
         // Discarding everything, so finalization doesn't matter — quit the running
@@ -806,14 +822,8 @@ pub fn recorder_status(app: tauri::AppHandle) -> Option<RecorderStatusDto> {
         mic: r.mic_avail,
         system_muted: r.controls.system_muted.load(std::sync::atomic::Ordering::Relaxed),
         mic_muted: r.controls.mic_muted.load(std::sync::atomic::Ordering::Relaxed),
+        webcam: r.webcam_on,
     })
-}
-
-/// TEMP (Task 1 spike): open the webcam bubble to prove getUserMedia works in
-/// WebView2. Removed in Task 4. Uses a fullscreen target + medium diameter.
-#[tauri::command(async)]
-pub async fn recorder_cam_spike(app: tauri::AppHandle) -> Result<(), String> {
-    windows::build_cam_bubble(&app, RecordTarget::Fullscreen, 170.0).map_err(|e| e.to_string())
 }
 
 /// Toggle a source's live mute. Muting writes silence into that source's pipe, so
@@ -829,5 +839,22 @@ pub fn recorder_set_mute(app: tauri::AppHandle, source: String, muted: bool) -> 
         other => return Err(format!("unknown source: {other}")),
     };
     flag.store(muted, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+/// Toggle the webcam bubble live. Independent of ffmpeg (just a sibling on-screen
+/// window gdigrab records), so this is instant — no segment restart. No-op-erroring
+/// if not recording.
+#[tauri::command]
+pub fn recorder_set_webcam(app: tauri::AppHandle, on: bool) -> Result<(), String> {
+    let target = {
+        let state = app.state::<RecorderState>();
+        let mut guard = state.0.lock().unwrap();
+        let rec = guard.as_mut().ok_or("not recording")?;
+        rec.webcam_on = on;
+        rec.target
+    };
+    if on { let _ = windows::build_cam_bubble(&app, target, 170.0); }
+    else { windows::close_cam_bubble(&app); }
     Ok(())
 }

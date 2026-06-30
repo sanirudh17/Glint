@@ -1,8 +1,8 @@
 /** ControlBar.tsx — the floating REC indicator (route #/rec-bar). */
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { recorderStop, recorderPause, recorderResume, recorderStatus, recorderSetMute } from "../lib/recorder";
-import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
+import { recorderStop, recorderPause, recorderResume, recorderStatus, recorderSetMute, recorderSetWebcam } from "../lib/recorder";
+import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX, Video, VideoOff } from "lucide-react";
 import "./recorder.css";
 
 export function mmss(total: number): string {
@@ -18,11 +18,16 @@ export function ControlBar() {
   // loads. Both system and mic show whenever the recording has any audio, so either
   // can be muted/unmuted live (a source off at start simply begins muted).
   const [audio, setAudio] = useState<{ system: boolean; mic: boolean; sysMuted: boolean; micMuted: boolean } | null>(null);
+  // Webcam toggle — always shown so it can be enabled live even if off at start.
+  const [camOn, setCamOn] = useState(false);
 
   useEffect(() => {
     const load = () =>
       recorderStatus().then((s) => {
-        if (s) setAudio({ system: s.system, mic: s.mic, sysMuted: s.system_muted, micMuted: s.mic_muted });
+        if (s) {
+          setAudio({ system: s.system, mic: s.mic, sysMuted: s.system_muted, micMuted: s.mic_muted });
+          setCamOn(s.webcam);
+        }
       }).catch(() => {});
     // The bar appears the instant the countdown ends (before ffmpeg is fully up),
     // so the first read uses optimistic availability; refresh when the recording
@@ -39,6 +44,11 @@ export function ControlBar() {
   async function toggleMute(src: "system" | "mic", next: boolean) {
     try { await recorderSetMute(src, next); } catch { return; }
     setAudio((a) => a && { ...a, ...(src === "system" ? { sysMuted: next } : { micMuted: next }) });
+  }
+
+  async function toggleWebcam(next: boolean) {
+    try { await recorderSetWebcam(next); } catch { return; }
+    setCamOn(next);
   }
 
   // The timer counts only while running — paused time is excised from the video,
@@ -84,6 +94,14 @@ export function ControlBar() {
           {audio.micMuted ? <MicOff size={13} /> : <Mic size={13} />}
         </button>
       )}
+      <button
+        className={`rec-atog${camOn ? "" : " rec-atog--off"}`}
+        onClick={() => toggleWebcam(!camOn)}
+        title={camOn ? "Turn off webcam" : "Turn on webcam"}
+        aria-label="Toggle webcam"
+      >
+        {camOn ? <Video size={13} /> : <VideoOff size={13} />}
+      </button>
       <button
         className="rec-pause"
         onClick={togglePause}
