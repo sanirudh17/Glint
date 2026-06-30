@@ -14,16 +14,11 @@ export function RecCam() {
   const [sizeIdx, setSizeIdx] = useState(1);
 
   useEffect(() => {
-    const stopStream = () => {
-      streamRef.current?.getTracks().forEach((t) => t.stop());
-      streamRef.current = null;
-    };
-    // CRITICAL: a webview destroyed while its MediaStream is still live wedges the
-    // shared WebView2 process (app-wide freeze). React cleanup doesn't reliably run
-    // on webview teardown, so stop the camera tracks on EVERY close path — this fires
-    // for the ✕ button, recorder_set_webcam(false), and recorder stop/cancel alike.
-    const unlistenPromise = getCurrentWindow().onCloseRequested(() => stopStream());
-
+    // Do NOT register onCloseRequested here. @tauri-apps/api's onCloseRequested
+    // defers the window teardown to this webview's JS handshake, which is unreliable
+    // for this transparent/focus-less bubble — it left the window lingering after
+    // stop and broke re-enabling (build_cam_bubble early-returns while the label
+    // still exists). The recorder tears this window down with destroy() instead.
     navigator.mediaDevices.getUserMedia({ video: true, audio: false })
       .then((s) => {
         // Resolves only AFTER the user grants the WebView2 camera prompt, so this
@@ -35,11 +30,11 @@ export function RecCam() {
       .catch(() => {
         emit("rec-cam-failed").catch(() => {}); // unblock recorder_start's wait
         emit("glint-toast", "Camera unavailable").catch(() => {});
-        getCurrentWindow().close().catch(() => {});
+        getCurrentWindow().destroy().catch(() => {});
       });
     return () => {
-      unlistenPromise.then((u) => u()).catch(() => {});
-      stopStream();
+      streamRef.current?.getTracks().forEach((t) => t.stop());
+      streamRef.current = null;
     };
   }, []);
 
@@ -60,13 +55,13 @@ export function RecCam() {
 
   // The ✕ must turn the webcam off THROUGH the recorder so the shared state and the
   // control-bar toggle both update — closing the window directly leaves webcam_on=true
-  // (stale) and the enable toggle dead. recorder_set_webcam(false) closes this bubble.
+  // (stale) and the enable toggle dead. recorder_set_webcam(false) destroys this bubble.
   // Stop the stream first (the invoke destroys this JS context before cleanup runs).
   function close() {
     streamRef.current?.getTracks().forEach((t) => t.stop());
     streamRef.current = null;
     invoke("recorder_set_webcam", { on: false }).catch(() =>
-      getCurrentWindow().close().catch(() => {}),
+      getCurrentWindow().destroy().catch(() => {}),
     );
   }
 

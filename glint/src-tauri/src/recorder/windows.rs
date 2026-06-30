@@ -281,8 +281,15 @@ fn primary_work_area() -> Option<windows::Win32::Foundation::RECT> {
 }
 
 /// Close the webcam bubble if open. Safe when none exists.
+///
+/// Uses `destroy()`, not `close()`: `close()` fires CloseRequested and defers the
+/// actual teardown to the webview's JS, which proved unreliable for this transparent,
+/// focus-less bubble — it lingered on screen after stop (a black circle, still
+/// captured) and blocked re-enabling, since `build_cam_bubble` early-returns while the
+/// label still exists. `destroy()` force-tears it down immediately and releases the
+/// camera with the webview.
 pub fn close_cam_bubble(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(CAM_LABEL) {
-        let _ = w.close();
+        let _ = w.destroy();
     }
 }
