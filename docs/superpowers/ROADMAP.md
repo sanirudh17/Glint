@@ -52,7 +52,7 @@ capture/library/editor path.
   hotkey, and a Home button. New deps: `tauri-plugin-shell` (sidecar spawn) + `tokio` (`time`,
   already transitive). **Recorder isolation honored:** capture/editor/library import nothing from
   `recorder/`; the only coupling is the outbound MP4 + Library row + `capture-saved` emit.
-  *Built — awaiting at-screen.* (See PHASE-8-RECORDER-R1-ACCEPTANCE.md.)
+  *Shipped — at-screen verified.* (See PHASE-8-RECORDER-R1-ACCEPTANCE.md.)
 
 - **Phase 8 — Screen Recorder (R2: audio)** (system audio + microphone). Both sources are
   **install-free** via **WASAPI** (system = default render endpoint opened in loopback; mic =
@@ -64,7 +64,7 @@ capture/library/editor path.
   are unchanged — each segment carries its own audio. A source is only opened if enabled at start
   (privacy); each pipe accept is bounded by a 3 s timeout that toasts + drops a failed source
   rather than hanging. New deps: `wasapi`, `tokio` (`net`/`io-util`/`sync`). **Recorder isolation
-  still honored.** *Built — awaiting at-screen.* (See PHASE-8-RECORDER-R2-ACCEPTANCE.md.)
+  still honored.** *Shipped — at-screen verified (system + mic audio confirmed).* (See PHASE-8-RECORDER-R2-ACCEPTANCE.md.)
 
 - **Phase 8 — Screen Recorder (R3: webcam overlay)** (live camera bubble). A circular webcam
   bubble is a recorder-owned on-screen window (`rec-cam`) rendering the default camera via the
@@ -75,12 +75,13 @@ capture/library/editor path.
   per-recording via a **Webcam chip** on the selector (seeded from a new `record_webcam` setting) and
   **togglable live** from the control bar — instant, since it's independent of ffmpeg (no segment
   restart). **Recorder isolation still honored** (a sibling window + toggle; recorder imports nothing
-  new from capture/editor/overlay). *Built — awaiting at-screen.* (See
-  PHASE-8-RECORDER-R3-ACCEPTANCE.md.)
+  new from capture/editor/overlay). *Shipped — at-screen verified (circle, drag/resize, live
+  toggle off/on, ✕, clean teardown on stop).* (See PHASE-8-RECORDER-R3-ACCEPTANCE.md.)
 
 ## Planned
 
-- _(Phases 7 and 8 R1/R2/R3 awaiting at-screen acceptance.)_
+- _(Next phase TBD.)_ Deferred recorder follow-ups (accepted gaps, not yet scheduled): mic RAW
+  capture for a fuller voice timbre, true 60 fps via `ddagrab`, and a webcam device picker.
 
 ## Out of scope (project-wide, unchanged)
 Cloud/upload/share-links, teams/collaboration, login/auth, web backend/network calls, scrolling
