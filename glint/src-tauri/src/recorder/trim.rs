@@ -3,6 +3,7 @@
 //! ffmpeg pass from recording; the gdigrab capture path is untouched.
 
 use std::path::{Path, PathBuf};
+use tauri_plugin_shell::ShellExt;
 
 #[derive(serde::Serialize, Clone)]
 pub struct ProbeResult {
@@ -138,6 +139,26 @@ pub fn build_trim_args(input: &str, output: &str, keep: &[(f64, f64)], has_audio
     }
     a.extend(["-movflags".into(), "+faststart".into(), output.into()]);
     a
+}
+
+#[tauri::command(async)]
+pub async fn recorder_trim_probe(app: tauri::AppHandle, path: String) -> Result<ProbeResult, String> {
+    let sidecar = app.shell().sidecar("ffprobe").map_err(|e| format!("ffprobe resolve: {e}"))?;
+    let out = sidecar
+        .args([
+            "-v", "error",
+            "-show_streams", "-show_format",
+            "-of", "json",
+            &path,
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("ffprobe run: {e}"))?;
+    if !out.status.success() {
+        return Err(format!("ffprobe exited {:?}", out.status.code()));
+    }
+    let json = String::from_utf8_lossy(&out.stdout);
+    parse_ffprobe_json(&json)
 }
 
 #[cfg(test)]

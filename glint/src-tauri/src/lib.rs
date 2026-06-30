@@ -256,6 +256,7 @@ pub fn run() {
             recorder::recorder_open_region_selector,
             recorder::rec_hud_data,
             recorder::rec_hud_dismiss,
+            crate::recorder::trim::recorder_trim_probe,
         ])
         .on_menu_event(|app, event| {
             // Pin right-click menus pop up via WebviewWindow::popup_menu and route

@@ -6,6 +6,7 @@
 # will have schema files for capabilities auto-completion
 /gen/schemas
 
-# Bundled ffmpeg sidecar (~97MB) — copied per machine, never committed.
-# Required at runtime; see PHASE-8 acceptance doc for the install step.
+# Bundled ffmpeg/ffprobe sidecars (~100MB each) — copied per machine, never committed.
+# Required at runtime; see PHASE-8/9 acceptance docs for the install step.
 /binaries/ffmpeg-*
+/binaries/ffprobe-*
