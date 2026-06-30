@@ -26,7 +26,7 @@ pub fn build_control_bar(app: &AppHandle) -> tauri::Result<()> {
     .resizable(false)
     .shadow(false)
     .focused(false)
-    .inner_size(216.0, 44.0)
+    .inner_size(280.0, 44.0)
     .visible(false)
     .build()?;
 
@@ -34,7 +34,7 @@ pub fn build_control_bar(app: &AppHandle) -> tauri::Result<()> {
         let s = m.scale_factor();
         let pos = m.position();
         let size = m.size();
-        let bar_w = (216.0 * s) as i32;
+        let bar_w = (280.0 * s) as i32;
         let bar_h = (44.0 * s) as i32;
         let x = pos.x + (size.width as i32 - bar_w) / 2;
         let y = pos.y + size.height as i32 - bar_h - (60.0 * s) as i32;
@@ -125,6 +125,51 @@ pub fn build_countdown(app: &AppHandle) -> tauri::Result<()> {
 /// when none exists.
 pub fn close_countdown(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(COUNTDOWN_LABEL) {
+        let _ = w.close();
+    }
+}
+
+pub const REC_HUD_LABEL: &str = "rec-hud";
+
+/// Post-recording HUD — a small focus-less, transparent, always-on-top card at the
+/// bottom-left of the primary monitor (mirrors the screenshot HUD's corner). Shows
+/// the finished recording's thumbnail + quick actions. Built fresh each time; tears
+/// down any prior HUD first. Recording is already stopped, so it isn't excluded from
+/// capture.
+pub fn build_rec_hud(app: &AppHandle) -> tauri::Result<()> {
+    close_rec_hud(app);
+    let win = WebviewWindowBuilder::new(app, REC_HUD_LABEL, WebviewUrl::App("index.html#/rec-hud".into()))
+        .title("Glint Recording")
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .shadow(false)
+        .focused(false)
+        .inner_size(244.0, 172.0)
+        .visible(false)
+        .build()?;
+
+    if let Some(m) = win.primary_monitor()? {
+        let s = m.scale_factor();
+        let pos = m.position();
+        let size = m.size();
+        let hud_h = (172.0 * s) as i32;
+        let x = pos.x + (20.0 * s) as i32;
+        let y = pos.y + size.height as i32 - hud_h - (48.0 * s) as i32;
+        win.set_position(tauri::PhysicalPosition { x, y })?;
+    } else {
+        log::warn!("rec-hud: no primary monitor; using default window position");
+    }
+
+    win.show()?;
+    Ok(())
+}
+
+/// Close the post-recording HUD if it is open. Safe to call when none exists.
+pub fn close_rec_hud(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window(REC_HUD_LABEL) {
         let _ = w.close();
     }
 }

@@ -14,9 +14,9 @@ mod tray;
 mod window;
 
 use capture::commands::{
-    capture_cancel, capture_commit, capture_copy, capture_delete, capture_open,
-    capture_overlay_data, capture_reveal, captures_list, hud_copy, hud_copy_path, hud_data,
-    hud_dismiss, hud_reveal, hud_save,
+    capture_cancel, capture_commit, capture_copy, capture_copy_path, capture_delete, capture_open,
+    capture_overlay_data, capture_reveal, captures_list, drag_blank_icon, hud_copy, hud_copy_path,
+    hud_data, hud_dismiss, hud_reveal, hud_save,
 };
 use editor::commands::{
     consume_pending_external_open, editor_copy, editor_flatten_temp, editor_open_capture,
@@ -106,6 +106,7 @@ pub fn run() {
         .manage(crate::editor::PendingOpen::default())
         .manage(crate::pin::PinState::default())
         .manage(crate::recorder::RecorderState::default())
+        .manage(crate::recorder::RecorderHud::default())
         .setup(|app| {
             tray::build(app.handle())?;
             shortcuts::register(app.handle())?;
@@ -220,7 +221,9 @@ pub fn run() {
             capture_open,
             capture_reveal,
             capture_copy,
+            capture_copy_path,
             capture_delete,
+            drag_blank_icon,
             editor_open_from_last,
             editor_open_capture,
             editor_source,
@@ -241,13 +244,17 @@ pub fn run() {
             pin_close,
             pin_context_menu,
             recorder::recorder_ffmpeg_check,
+            recorder::recorder_audio_check,
             recorder::recorder_start,
             recorder::recorder_pause,
             recorder::recorder_resume,
             recorder::recorder_stop,
             recorder::recorder_cancel,
             recorder::recorder_status,
+            recorder::recorder_set_mute,
             recorder::recorder_open_region_selector,
+            recorder::rec_hud_data,
+            recorder::rec_hud_dismiss,
         ])
         .on_menu_event(|app, event| {
             // Pin right-click menus pop up via WebviewWindow::popup_menu and route

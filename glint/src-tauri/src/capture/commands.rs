@@ -526,6 +526,31 @@ pub fn capture_reveal(db: State<crate::Db>, id: i64) -> Result<(), String> {
     reveal_in_explorer(&path)
 }
 
+/// Copy a Library item's absolute file path to the clipboard as text. Unlike
+/// `capture_copy` (which decodes an image) this works for recordings too, and is
+/// the handy way to reference a video file elsewhere (e.g. paste it to a tool).
+#[tauri::command]
+pub fn capture_copy_path(db: State<crate::Db>, id: i64) -> Result<(), String> {
+    let path = path_for_existing(&db, id)?;
+    clipboard::copy_text(&path)
+}
+
+/// Return the path to a 1×1 transparent PNG (created once in the cache dir), used
+/// as the drag-out preview icon so dragging a capture/recording shows no big ghost
+/// image — just the OS drag cursor. The drag plugin requires *some* icon path.
+#[tauri::command]
+pub fn drag_blank_icon(app: AppHandle) -> Result<String, String> {
+    let dir = app.path().app_cache_dir().map_err(|e| e.to_string())?;
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let p = dir.join("glint-drag-blank.png");
+    if !p.exists() {
+        image::RgbaImage::from_pixel(1, 1, image::Rgba([0, 0, 0, 0]))
+            .save(&p)
+            .map_err(|e| e.to_string())?;
+    }
+    Ok(p.to_string_lossy().to_string())
+}
+
 /// Re-copy a Library capture image to the clipboard (decode PNG → rgba).
 #[tauri::command]
 pub fn capture_copy(db: State<crate::Db>, id: i64) -> Result<(), String> {

@@ -20,4 +20,5 @@ export const listCaptures = (): Promise<CaptureItem[]> => invoke<CaptureItem[]>(
 export const openCapture = (id: number): Promise<void> => invoke<void>("capture_open", { id });
 export const revealCapture = (id: number): Promise<void> => invoke<void>("capture_reveal", { id });
 export const copyCapture = (id: number): Promise<void> => invoke<void>("capture_copy", { id });
+export const copyCapturePath = (id: number): Promise<void> => invoke<void>("capture_copy_path", { id });
 export const deleteCapture = (id: number): Promise<void> => invoke<void>("capture_delete", { id });

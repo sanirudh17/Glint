@@ -1,6 +1,6 @@
 import { ExternalLink, FolderOpen, Copy, Pencil, Pin, Trash2, Play } from "lucide-react";
 import type { CaptureItem } from "../../lib/captures";
-import { openCapture, revealCapture, copyCapture, deleteCapture, dragOut } from "../../lib/captures";
+import { openCapture, revealCapture, copyCapture, copyCapturePath, deleteCapture, dragOut } from "../../lib/captures";
 import { openEditorCapture } from "../../lib/editor";
 import { pinCreateFromCapture } from "../../lib/pin";
 import { useAppStore } from "../../store/useAppStore";
@@ -32,8 +32,8 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
     <div
       className="cap-card"
       role="listitem"
-      onPointerDown={isRecording ? undefined : () => dragOut(item.path)}
-      title={isRecording ? undefined : "Drag to share"}
+      onPointerDown={() => dragOut(item.path)}
+      title="Drag to share"
     >
       <div className="cap-thumb">
         {item.thumb_data_url ? (
@@ -63,6 +63,14 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
             </button>
             <button className="cap-btn" aria-label="Reveal in Explorer" title="Reveal" onClick={() => act(() => revealCapture(item.id))}>
               <FolderOpen size={15} strokeWidth={1.75} />
+            </button>
+            <button
+              className="cap-btn"
+              aria-label="Copy file path"
+              title="Copy file path"
+              onClick={() => act(async () => { await copyCapturePath(item.id); pushToast("Path copied"); })}
+            >
+              <Copy size={15} strokeWidth={1.75} />
             </button>
             <button
               className="cap-btn cap-btn--danger"

@@ -57,11 +57,19 @@ export const hudReveal = (): Promise<void> => invoke<void>("hud_reveal");
 /** Close the HUD window. */
 export const hudDismiss = (): Promise<void> => invoke<void>("hud_dismiss");
 
+// A 1×1 transparent PNG used as the drag preview so dragging shows only the OS
+// drag cursor — not a big ghost of the image. Pre-fetched at module load because
+// the OS drag must start synchronously inside the pointerdown gesture (awaiting
+// inside dragOut would drop the gesture and the drag wouldn't begin).
+let blankDragIcon: string | null = null;
+void invoke<string>("drag_blank_icon").then((p) => { blankDragIcon = p; }).catch(() => {});
+
 /**
- * Drag the real PNG out of the HUD into any app (proven plugin path).
- * The file itself doubles as the drag icon.
+ * Drag the real file out into any app (proven plugin path). Uses a blank 1×1
+ * drag icon so there's no oversized image-preview ghost — just the cursor. Falls
+ * back to the file itself as the icon if the blank one isn't ready yet (rare).
  */
 export function dragOut(path: string): void {
   // mode: "copy" — drops a copy, leaving Glint's temp file in place.
-  void startDrag({ item: [path], icon: path });
+  void startDrag({ item: [path], icon: blankDragIcon ?? path, mode: "copy" });
 }

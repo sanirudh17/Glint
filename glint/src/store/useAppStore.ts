@@ -13,6 +13,8 @@ export interface Settings {
   auto_copy: boolean;
   open_in_editor: boolean;
   explorer_menu_enabled: boolean;
+  record_system_audio: boolean;
+  record_microphone: boolean;
 }
 
 export interface Toast {
@@ -30,6 +32,8 @@ interface AppState {
   setAutoCopy: (on: boolean) => Promise<void>;
   setOpenInEditor: (on: boolean) => Promise<void>;
   setExplorerMenu: (on: boolean) => Promise<void>;
+  setRecordSystemAudio: (on: boolean) => Promise<void>;
+  setRecordMicrophone: (on: boolean) => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -51,6 +55,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     let auto_copy = rustSettings.auto_copy;
     let open_in_editor = rustSettings.open_in_editor;
     let explorer_menu_enabled = rustSettings.explorer_menu_enabled;
+    let record_system_audio = rustSettings.record_system_audio;
+    let record_microphone = rustSettings.record_microphone;
     try {
       const dbTheme = await readSetting<Theme>("theme");
       if (dbTheme) theme = dbTheme;
@@ -64,11 +70,15 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (dbOpenInEditor !== null) open_in_editor = dbOpenInEditor;
       const dbExplorerMenu = await readSetting<boolean>("explorer_menu_enabled");
       if (dbExplorerMenu !== null) explorer_menu_enabled = dbExplorerMenu;
+      const dbRecordSystem = await readSetting<boolean>("record_system_audio");
+      if (dbRecordSystem !== null) record_system_audio = dbRecordSystem;
+      const dbRecordMic = await readSetting<boolean>("record_microphone");
+      if (dbRecordMic !== null) record_microphone = dbRecordMic;
     } catch {
       // plugin-sql unavailable (e.g. plain Vite dev server) — use Rust defaults.
     }
 
-    const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy, open_in_editor, explorer_menu_enabled };
+    const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy, open_in_editor, explorer_menu_enabled, record_system_audio, record_microphone };
     set({ settings: merged });
     applyTheme(theme);
     applyAccent(accent);
@@ -120,6 +130,18 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch {
       get().pushToast("Couldn't update the right-click menu");
     }
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setRecordSystemAudio: async (on: boolean) => {
+    const updated = await saveSetting("record_system_audio", on);
+    await persistSetting("record_system_audio", on);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setRecordMicrophone: async (on: boolean) => {
+    const updated = await saveSetting("record_microphone", on);
+    await persistSetting("record_microphone", on);
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 

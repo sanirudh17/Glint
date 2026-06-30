@@ -1,4 +1,7 @@
 .rec-bar {
+  /* Center the pill inside its (wider, transparent) window so the icons sit in
+     the middle with equal space on both sides, instead of hugging the left. */
+  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
   display: inline-flex; align-items: center; gap: 10px;
   background: rgba(20,20,24,0.92); color: #fff;
   padding: 6px 12px; border-radius: 999px;
@@ -12,6 +15,9 @@
 .rec-pause { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
 .rec-pause:hover { background: rgba(255,255,255,0.24); }
 .rec-pause:disabled { opacity: 0.5; cursor: default; }
+.rec-atog { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
+.rec-atog:hover { background: rgba(255,255,255,0.24); }
+.rec-atog--off { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); }
 .rec-stop { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: #ff3b30; color: #fff; cursor: pointer; }
 .rec-countdown {
   width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center;
@@ -64,3 +70,21 @@
   font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .rec-sel-fullbtn:hover { background: #6d8bff; }
+.rec-sel-chip {
+  pointer-events: auto; display: inline-flex; align-items: center; gap: 5px;
+  background: rgba(20,22,30,0.7); color: #fff; border: 1px solid rgba(255,255,255,0.16);
+  padding: 6px 10px; border-radius: 8px; font-size: 12px; cursor: pointer;
+}
+.rec-sel-chip--off { color: rgba(255,255,255,0.45); border-color: rgba(255,255,255,0.08); }
+
+/* ── Post-recording HUD (#/rec-hud) ─────────────────────────────────────────
+   Reuses the screenshot HUD's card/toolbar styles (hud.css); only the centered
+   play badge is recorder-specific. It fades on hover so the toolbar is unobscured. */
+.rec-hud-play-badge {
+  position: absolute; inset: 0; z-index: 3;
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255, 255, 255, 0.92); pointer-events: none;
+  filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
+  transition: opacity 150ms var(--ease, ease);
+}
+.hud-card:hover .rec-hud-play-badge { opacity: 0; }

@@ -38,6 +38,8 @@ pub struct Settings {
     pub auto_copy: bool,
     pub open_in_editor: bool,
     pub explorer_menu_enabled: bool,
+    pub record_system_audio: bool,
+    pub record_microphone: bool,
 }
 
 impl Default for Settings {
@@ -50,6 +52,8 @@ impl Default for Settings {
             auto_copy: true,
             open_in_editor: false,
             explorer_menu_enabled: true,
+            record_system_audio: true,
+            record_microphone: false,
         }
     }
 }
@@ -78,6 +82,13 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         "explorer_menu_enabled" => {
             s.explorer_menu_enabled =
                 value.as_bool().ok_or("explorer_menu_enabled must be boolean")?;
+        }
+        "record_system_audio" => {
+            s.record_system_audio =
+                value.as_bool().ok_or("record_system_audio must be boolean")?;
+        }
+        "record_microphone" => {
+            s.record_microphone = value.as_bool().ok_or("record_microphone must be boolean")?;
         }
         other => return Err(format!("unknown settings key: {other}")),
     }
@@ -170,5 +181,21 @@ mod tests {
     fn apply_update_rejects_non_bool_explorer_menu() {
         let mut s = Settings::default();
         assert!(apply_update(&mut s, "explorer_menu_enabled", json!("yes")).is_err());
+    }
+
+    #[test]
+    fn defaults_audio_system_on_mic_off() {
+        let s = Settings::default();
+        assert!(s.record_system_audio);
+        assert!(!s.record_microphone);
+    }
+
+    #[test]
+    fn apply_update_sets_audio_bools() {
+        let mut s = Settings::default();
+        apply_update(&mut s, "record_microphone", json!(true)).unwrap();
+        assert!(s.record_microphone);
+        apply_update(&mut s, "record_system_audio", json!(false)).unwrap();
+        assert!(!s.record_system_audio);
     }
 }

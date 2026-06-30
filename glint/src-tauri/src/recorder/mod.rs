@@ -2,16 +2,24 @@
 //! sidecar; the screenshot/library/editor path imports nothing from here. The
 //! only outbound coupling is on stop: write the MP4 + insert one Library row.
 
+pub mod audio;
 pub mod ffmpeg;
+pub mod pipes;
 pub mod thumb;
 pub mod windows;
 
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::Arc;
 use std::sync::Mutex;
 use std::time::Instant;
 use serde::Serialize;
 use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
+
+/// Capture/encode frame rate. 60 for smooth motion; gdigrab's actually-delivered
+/// rate still depends on the machine and screen resolution.
+const FPS: u32 = 60;
 
 /// One running ffmpeg span — a contiguous stretch of recording between pauses.
 /// Holds the child (to send `q` on stdin) and its event receiver (to wait for a
@@ -20,6 +28,36 @@ pub struct Segment {
     pub child: CommandChild,
     pub rx: tauri::async_runtime::Receiver<CommandEvent>,
     pub path: String,
+    /// Live audio captures feeding this span's ffmpeg via named pipes.
+    pub audio: Vec<AudioCapture>,
+}
+
+/// One source's live capture: the WASAPI thread + the tokio pump task feeding its
+/// pipe, with a shared stop flag. Dropping/awaiting both ends the pipe → ffmpeg EOF.
+pub struct AudioCapture {
+    /// Which source this is ("sys" | "mic") — drives the control bar's toggles.
+    pub tag: &'static str,
+    pub stop: Arc<AtomicBool>,
+    pub thread: std::thread::JoinHandle<()>,
+    pub pump: tokio::task::JoinHandle<()>,
+}
+
+/// Mute flags that persist across segments (a muted source stays muted after resume).
+#[derive(Clone, Default)]
+pub struct AudioControls {
+    pub system_muted: Arc<AtomicBool>,
+    pub mic_muted: Arc<AtomicBool>,
+}
+
+impl AudioControls {
+    /// Initial mute state — a source that was off in the selector starts muted so it
+    /// can be unmuted live (both sources are opened when a recording has any audio).
+    fn new(system_muted: bool, mic_muted: bool) -> Self {
+        Self {
+            system_muted: Arc::new(AtomicBool::new(system_muted)),
+            mic_muted: Arc::new(AtomicBool::new(mic_muted)),
+        }
+    }
 }
 
 /// One in-flight recording. Pause/resume splits it into segments: pausing stops
@@ -38,6 +76,15 @@ pub struct ActiveRecording {
     pub done: Vec<String>,
     /// The currently-recording span. `None` while paused.
     pub current: Option<Segment>,
+    /// What the user selected at start (drives initial mute state).
+    pub audio_cfg: AudioConfig,
+    /// Whether each source actually opened — drives which toggles the control bar
+    /// shows. Both open whenever the recording has any audio (so either can be
+    /// unmuted live); a source whose device is missing is the only one omitted.
+    pub sys_avail: bool,
+    pub mic_avail: bool,
+    /// Mute flags shared across all segments of this recording.
+    pub controls: AudioControls,
 }
 
 /// `{out_dir}/{stem}.part{idx}.mp4` — per-segment temp file beside the final output.
@@ -54,23 +101,124 @@ fn segment_path(out_path: &str, idx: usize) -> String {
         .to_string()
 }
 
-/// Spawn one ffmpeg span writing to `path`. Off the main thread (called from async).
-fn spawn_segment(
+/// Spawn one ffmpeg span writing to `path`, capturing the configured audio sources
+/// into per-source named pipes that ffmpeg mixes + muxes. Async: it awaits each
+/// pipe's connect after ffmpeg opens it.
+async fn spawn_segment(
     app: &AppHandle,
     target: RecordTarget,
     fps: u32,
     path: &str,
+    seg_index: usize,
+    cfg: AudioConfig,
+    controls: &AudioControls,
 ) -> Result<Segment, String> {
-    let args = ffmpeg::build_ffmpeg_args(&target, fps, path);
-    let sidecar = app
-        .shell()
-        .sidecar("ffmpeg")
-        .map_err(|e| format!("sidecar resolve: {e}"))?;
-    let (rx, child) = sidecar
-        .args(args)
-        .spawn()
-        .map_err(|e| format!("ffmpeg spawn: {e}"))?;
-    Ok(Segment { child, rx, path: path.to_string() })
+    use tokio::io::AsyncWriteExt;
+
+    // Resolve sources → (tag, muted flag, started capture). A source that fails to
+    // open is dropped with a toast; recording proceeds with whatever remains.
+    struct Pending {
+        tag: &'static str,
+        /// Was this source ON in the selector? Only enabled-then-failed sources
+        /// toast — a source we open just to allow live-unmute shouldn't nag if its
+        /// device is missing.
+        user_enabled: bool,
+        input: ffmpeg::AudioInput,
+        server: tokio::net::windows::named_pipe::NamedPipeServer,
+        stop: Arc<AtomicBool>,
+        rx: tokio::sync::mpsc::UnboundedReceiver<Vec<u8>>,
+        thread: std::thread::JoinHandle<()>,
+    }
+    let mut pending: Vec<Pending> = Vec::new();
+
+    // Open BOTH sources whenever the recording has any audio, so either can be
+    // muted/unmuted live from the control bar. The one that was off in the selector
+    // starts muted (writes silence — no content leaks); the user can unmute it
+    // mid-recording. (Opening the mic to allow this lights the OS mic indicator.)
+    let mut want: Vec<(&'static str, audio::Source, Arc<AtomicBool>, bool)> = Vec::new();
+    if cfg.system || cfg.mic {
+        want.push(("sys", audio::Source::System, controls.system_muted.clone(), cfg.system));
+        want.push(("mic", audio::Source::Mic, controls.mic_muted.clone(), cfg.mic));
+    }
+
+    for (tag, source, muted, user_enabled) in want {
+        let label = if tag == "mic" { "Microphone" } else { "System" };
+        let stop = Arc::new(AtomicBool::new(false));
+        match audio::start_capture(source, muted, stop.clone()) {
+            Ok((fmt, rx, thread)) => {
+                log::info!("{tag} capture negotiated {}Hz {}ch", fmt.sample_rate, fmt.channels);
+                let pp = pipes::pipe_path(tag, seg_index);
+                match pipes::create_server(&pp) {
+                    Ok(server) => pending.push(Pending {
+                        tag, user_enabled,
+                        input: ffmpeg::AudioInput { pipe_path: pp, sample_rate: fmt.sample_rate, channels: fmt.channels, is_mic: tag == "mic" },
+                        server, stop, rx, thread,
+                    }),
+                    Err(e) => {
+                        log::warn!("{tag} pipe failed: {e}");
+                        stop.store(true, Ordering::Relaxed);
+                        let _ = thread.join();
+                        if user_enabled { let _ = app.emit("glint-toast", format!("{label} audio unavailable")); }
+                    }
+                }
+            }
+            Err(e) => {
+                log::warn!("{tag} capture failed: {e}");
+                if user_enabled { let _ = app.emit("glint-toast", format!("{label} audio unavailable")); }
+            }
+        }
+    }
+
+    let inputs: Vec<ffmpeg::AudioInput> = pending.iter().map(|p| ffmpeg::AudioInput {
+        pipe_path: p.input.pipe_path.clone(), sample_rate: p.input.sample_rate, channels: p.input.channels, is_mic: p.input.is_mic,
+    }).collect();
+
+    // `want_audio` is the recording's intent (system or mic enabled), not how many
+    // sources actually connected this segment — so a segment whose sources all failed
+    // still gets a silent aac track and stays concat-copy compatible with audio segments.
+    let args = ffmpeg::build_ffmpeg_args(&target, fps, path, &inputs, cfg.system || cfg.mic);
+    let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("sidecar resolve: {e}"))?;
+    let (rx_ev, child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
+
+    // ffmpeg is now opening each pipe as a client; accept + start pumping. Bound
+    // the accept: if ffmpeg never opens a pipe (bad args / sidecar died), an
+    // unbounded `connect()` would wedge recorder_start/recorder_resume forever and
+    // the capture channel would grow without limit. On timeout or error, stop the
+    // capture thread and toast — recording proceeds with whatever pipes connected.
+    let mut audio_caps = Vec::new();
+    for p in pending {
+        match tokio::time::timeout(std::time::Duration::from_secs(3), p.server.connect()).await {
+            Ok(Ok(())) => {
+                let mut server = p.server;
+                let mut rx = p.rx;
+                let pump = tokio::spawn(async move {
+                    // Drop the pre-roll: the capture thread starts streaming the moment
+                    // the source opens, but ffmpeg (a polling pipeline) only pulls its
+                    // first frame from any input once ALL inputs are open — so the audio
+                    // buffered before this pipe connected would be prepended to the
+                    // stream and shove every bit of audio behind the video. Discarding
+                    // it lines audio's first sample up with ffmpeg's first video frame;
+                    // `aresample=async=1` then absorbs any residual drift.
+                    while rx.try_recv().is_ok() {}
+                    while let Some(buf) = rx.recv().await {
+                        if server.write_all(&buf).await.is_err() { break; }
+                    }
+                    let _ = server.shutdown().await;
+                });
+                audio_caps.push(AudioCapture { tag: p.tag, stop: p.stop, thread: p.thread, pump });
+                continue;
+            }
+            Ok(Err(e)) => log::warn!("{} pipe connect failed: {e}", p.tag),
+            Err(_) => log::warn!("{} pipe never connected (ffmpeg open timed out)", p.tag),
+        }
+        p.stop.store(true, Ordering::Relaxed);
+        let _ = p.thread.join();
+        if p.user_enabled {
+            let _ = app.emit("glint-toast", format!("{} audio unavailable", if p.tag == "mic" { "Microphone" } else { "System" }));
+        }
+    }
+
+    Ok(Segment { child, rx: rx_ev, path: path.to_string(), audio: audio_caps })
 }
 
 /// Stop one span gracefully: `q` on stdin (trailing newline so the byte reaches
@@ -78,7 +226,7 @@ fn spawn_segment(
 /// long span's `+faststart` finalize can take a while, and killing mid-finalize
 /// corrupts the MP4. Kill only as a last resort 30s after `q`.
 async fn finish_segment(seg: Segment) {
-    let Segment { mut child, mut rx, .. } = seg;
+    let Segment { mut child, mut rx, audio, .. } = seg;
     let _ = child.write(b"q\n");
     let exited = tokio::time::timeout(std::time::Duration::from_secs(30), async {
         while let Some(ev) = rx.recv().await {
@@ -92,6 +240,12 @@ async fn finish_segment(seg: Segment) {
     if !exited {
         log::warn!("ffmpeg segment did not exit within 30s of 'q'; killing as a last resort");
         let _ = child.kill();
+    }
+    // ffmpeg done → stop capture threads, drain pumps.
+    for cap in audio {
+        cap.stop.store(true, Ordering::Relaxed);
+        let _ = cap.thread.join();
+        let _ = cap.pump.await;
     }
 }
 
@@ -145,13 +299,66 @@ async fn concat_segments(app: &AppHandle, segs: &[&String], out_path: &str) -> b
     matches!(out, Ok(o) if o.status.success()) && std::path::Path::new(out_path).exists()
 }
 
+/// `.0` is the active recording; `.1` is a start reservation held across the
+/// countdown + ffmpeg spawn. The active slot isn't filled until ffmpeg is up, so
+/// without the reservation a second trigger during the countdown would pass the
+/// `is_some()` guard and spawn a parallel ffmpeg (same-second filename collision +
+/// a leaked span).
 #[derive(Default)]
-pub struct RecorderState(pub Mutex<Option<ActiveRecording>>);
+pub struct RecorderState(pub Mutex<Option<ActiveRecording>>, pub AtomicBool);
+
+/// The just-finished recording, surfaced by the post-recording HUD (id for the
+/// Library actions, path for drag-out, thumb for the preview).
+pub struct LastRecording {
+    pub id: i64,
+    pub path: String,
+    pub thumb_path: Option<String>,
+}
+
+#[derive(Default)]
+pub struct RecorderHud(pub Mutex<Option<LastRecording>>);
+
+#[derive(Serialize)]
+pub struct RecHudDataDto {
+    pub id: i64,
+    pub path: String,
+    pub thumb_data_url: Option<String>,
+}
+
+/// Data for the post-recording HUD: the saved recording's id/path + its thumbnail
+/// as a data URL. Recorder-owned (reads only recorder state + the thumb file).
+#[tauri::command]
+pub fn rec_hud_data(app: tauri::AppHandle) -> Option<RecHudDataDto> {
+    use base64::Engine;
+    let state = app.state::<RecorderHud>();
+    let guard = state.0.lock().unwrap();
+    let last = guard.as_ref()?;
+    let thumb_data_url = last.thumb_path.as_ref().and_then(|p| {
+        let bytes = std::fs::read(p).ok()?;
+        Some(format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(bytes)
+        ))
+    });
+    Some(RecHudDataDto { id: last.id, path: last.path.clone(), thumb_data_url })
+}
+
+/// Dismiss the post-recording HUD and drop the recording it referenced (so a
+/// stale path/id doesn't linger past the card).
+#[tauri::command]
+pub fn rec_hud_dismiss(app: tauri::AppHandle) {
+    windows::close_rec_hud(&app);
+    *app.state::<RecorderHud>().0.lock().unwrap() = None;
+}
 
 #[derive(Serialize)]
 pub struct RecorderStatusDto {
     pub recording: bool,
     pub elapsed_secs: u64,
+    pub system: bool,
+    pub mic: bool,
+    pub system_muted: bool,
+    pub mic_muted: bool,
 }
 
 /// What to record. Region coords/size are PHYSICAL pixels on the primary monitor.
@@ -159,6 +366,14 @@ pub struct RecorderStatusDto {
 pub enum RecordTarget {
     Fullscreen,
     Region { x: i32, y: i32, w: u32, h: u32 },
+}
+
+/// Which audio sources a recording captures. Resolved once at start from the
+/// frontend's request; a source absent here is never opened (mic privacy).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct AudioConfig {
+    pub system: bool,
+    pub mic: bool,
 }
 
 /// Round a region rect for recording: even w/h (yuv420p requires it); reject if
@@ -194,6 +409,64 @@ pub async fn recorder_ffmpeg_check(app: AppHandle) -> Result<String, String> {
     Ok(text.lines().next().unwrap_or("ffmpeg (no banner)").to_string())
 }
 
+/// Spike/health-check for the audio chain: capture ~1.5s of SYSTEM audio via
+/// WASAPI loopback → named pipe → ffmpeg → temp .m4a, and return the byte size.
+/// Run once at-screen (with sound playing) to confirm the mechanism before the
+/// recorder depends on it. Off the main thread.
+#[tauri::command(async)]
+pub async fn recorder_audio_check(app: tauri::AppHandle) -> Result<u64, String> {
+    use tokio::io::AsyncWriteExt;
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let muted = Arc::new(AtomicBool::new(false));
+    let (fmt, mut rx, handle) =
+        audio::start_capture(audio::Source::System, muted, stop.clone())?;
+
+    let path = pipes::pipe_path("probe", 0);
+    let mut server = pipes::create_server(&path).map_err(|e| format!("pipe: {e}"))?;
+
+    let out = std::env::temp_dir().join("glint-audio-probe.m4a");
+    let out_str = out.to_string_lossy().to_string();
+    let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("sidecar: {e}"))?;
+    let (_rx2, child) = sidecar
+        .args([
+            "-y", "-loglevel", "error",
+            "-thread_queue_size", "1024",
+            "-f", "f32le", "-ar", &fmt.sample_rate.to_string(), "-ac", &fmt.channels.to_string(),
+            "-i", &path, "-t", "1.5", "-c:a", "aac", &out_str,
+        ])
+        .spawn()
+        .map_err(|e| format!("spawn: {e}"))?;
+
+    // Bound the wait: if ffmpeg never opens the pipe (bad args / sidecar died),
+    // connect() would otherwise await a client forever and the unbounded capture
+    // channel would grow without limit. Stop the capture thread on that path.
+    tokio::time::timeout(std::time::Duration::from_secs(3), server.connect())
+        .await
+        .map_err(|_| {
+            stop.store(true, std::sync::atomic::Ordering::Relaxed);
+            "ffmpeg never connected to the audio pipe".to_string()
+        })?
+        .map_err(|e| format!("connect: {e}"))?;
+    // Pump for ~1.5s, then stop.
+    let pump = tokio::spawn(async move {
+        let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(1500);
+        while tokio::time::Instant::now() < deadline {
+            match tokio::time::timeout(std::time::Duration::from_millis(300), rx.recv()).await {
+                Ok(Some(buf)) => { let _ = server.write_all(&buf).await; }
+                _ => {}
+            }
+        }
+    });
+    let _ = pump.await;
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let _ = handle.join();
+    drop(child); // ffmpeg sees EOF / closes
+    tokio::time::sleep(std::time::Duration::from_millis(500)).await;
+
+    std::fs::metadata(&out_str).map(|m| m.len()).map_err(|e| format!("no output: {e}"))
+}
+
 /// Start recording. `mode` is "fullscreen" or "region"; region passes x/y/w/h
 /// (physical px). Spawns ffmpeg (capture+encode) and stores the child. Off the
 /// main thread so the spawn never blocks the event loop.
@@ -205,6 +478,8 @@ pub async fn recorder_start(
     y: Option<i32>,
     w: Option<u32>,
     h: Option<u32>,
+    system: Option<bool>,
+    mic: Option<bool>,
 ) -> Result<(), String> {
     // Already recording? Ignore (single recording in R1).
     if app.state::<RecorderState>().0.lock().unwrap().is_some() {
@@ -215,6 +490,8 @@ pub async fn recorder_start(
     // IPC survives (closing destroys its JS context) and a full-screen capture
     // never includes the transparent overlay. No-op for a tray/hotkey fullscreen.
     windows::close_region_selector(&app);
+    // Dismiss a lingering post-recording HUD from a previous take.
+    windows::close_rec_hud(&app);
 
     let target = match mode.as_str() {
         "fullscreen" => RecordTarget::Fullscreen,
@@ -252,6 +529,15 @@ pub async fn recorder_start(
         RecordTarget::Fullscreen => (0, 0),
     };
 
+    // Reserve the start slot for the countdown + spawn window. `state.0` stays None
+    // until ffmpeg is up, so the `is_some()` guard at the top can't catch a SECOND
+    // trigger fired during the 3s countdown — without this reservation both would
+    // spawn an ffmpeg, colliding on the same-second filename (corrupt output) and
+    // leaking a span. Released on every exit path below.
+    if app.state::<RecorderState>().1.swap(true, Ordering::SeqCst) {
+        return Err("already starting".into());
+    }
+
     // 3-2-1 countdown, then Rust closes it BEFORE capture starts so the digit can
     // never bleed into the first recorded frames (and a webview that failed to
     // self-close isn't left orphaned on screen).
@@ -259,24 +545,73 @@ pub async fn recorder_start(
     tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
     windows::close_countdown(&app);
 
-    // Segment 0. Pause/resume appends further segments; stop concatenates them.
-    let seg0 = spawn_segment(&app, target, 30, &segment_path(&out_str, 0)).map_err(|e| {
-        let _ = app.emit("glint-toast", "Couldn't start the recorder");
-        e
-    })?;
+    let audio_cfg = AudioConfig { system: system.unwrap_or(true), mic: mic.unwrap_or(false) };
+    // A source off in the selector starts muted so it can be unmuted live.
+    let controls = AudioControls::new(!audio_cfg.system, !audio_cfg.mic);
+    let any_audio = audio_cfg.system || audio_cfg.mic;
 
+    // Show the control bar IMMEDIATELY (no dead gap while ffmpeg's gdigrab input
+    // initializes, which takes ~1s+). A preliminary state with `current: None`
+    // backs the bar and gives Stop a target until segment 0 is up; availability is
+    // optimistic (both toggles when any audio) and refined once ffmpeg is running.
     *app.state::<RecorderState>().0.lock().unwrap() = Some(ActiveRecording {
         target,
-        fps: 30,
-        out_path: out_str,
+        fps: FPS,
+        out_path: out_str.clone(),
         width,
         height,
         started: Instant::now(),
         seg_index: 1,
         done: Vec::new(),
-        current: Some(seg0),
+        current: None,
+        audio_cfg,
+        sys_avail: any_audio,
+        mic_avail: any_audio,
+        controls: controls.clone(),
     });
     let _ = windows::build_control_bar(&app);
+
+    // Bring segment 0 up behind the visible bar. Pause/resume appends further
+    // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual
+    // delivered rate still depends on the machine/screen resolution).
+    let seg0 = match spawn_segment(&app, target, FPS, &segment_path(&out_str, 0), 0, audio_cfg, &controls).await {
+        Ok(s) => s,
+        Err(e) => {
+            windows::close_control_bar(&app);
+            *app.state::<RecorderState>().0.lock().unwrap() = None;
+            app.state::<RecorderState>().1.store(false, Ordering::SeqCst);
+            let _ = app.emit("glint-toast", "Couldn't start the recorder");
+            return Err(e);
+        }
+    };
+
+    // Patch in the running span + accurate per-source availability. Decide under
+    // the lock and move `seg0` either into the state or back out, so any teardown
+    // await happens after the guard is dropped (the guard isn't Send).
+    let sys_avail = seg0.audio.iter().any(|c| c.tag == "sys");
+    let mic_avail = seg0.audio.iter().any(|c| c.tag == "mic");
+    let orphan = {
+        let state = app.state::<RecorderState>();
+        let mut guard = state.0.lock().unwrap();
+        match guard.as_mut() {
+            Some(rec) => {
+                rec.sys_avail = sys_avail;
+                rec.mic_avail = mic_avail;
+                rec.current = Some(seg0);
+                None
+            }
+            // stop/cancel raced during ffmpeg init — the slot is gone; hand seg0 back.
+            None => Some(seg0),
+        }
+    };
+    // Release the start reservation now that the active slot is filled (or the race
+    // resolved) — re-entry is governed by the `is_some()` guard from here on.
+    app.state::<RecorderState>().1.store(false, Ordering::SeqCst);
+    if let Some(seg0) = orphan {
+        finish_segment(seg0).await;
+        let _ = std::fs::remove_file(segment_path(&out_str, 0));
+        return Ok(());
+    }
     let _ = app.emit("recorder-started", ());
     Ok(())
 }
@@ -313,18 +648,21 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
         let state = app.state::<RecorderState>();
         let guard = state.0.lock().unwrap();
         match guard.as_ref() {
-            Some(rec) if rec.current.is_none() => {
-                Some((rec.target, rec.fps, rec.out_path.clone(), rec.seg_index))
+            // `current.is_none()` also holds during the preliminary start state (seg0
+            // not up yet); require a completed span so resume can't run mid-init.
+            Some(rec) if rec.current.is_none() && !rec.done.is_empty() => {
+                Some((rec.target, rec.fps, rec.out_path.clone(), rec.seg_index, rec.audio_cfg, rec.controls.clone()))
             }
             _ => None,
         }
     };
-    let (target, fps, out_path, idx) = info.ok_or("not paused")?;
+    let (target, fps, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
     let path = segment_path(&out_path, idx);
-    let seg = spawn_segment(&app, target, fps, &path).map_err(|e| {
-        let _ = app.emit("glint-toast", "Couldn't resume recording");
-        e
-    })?;
+    let seg = spawn_segment(&app, target, fps, &path, idx, cfg, &controls).await
+        .map_err(|e| {
+            let _ = app.emit("glint-toast", "Couldn't resume recording");
+            e
+        })?;
 
     // Store it back. If the recording was stopped/canceled meanwhile (single-user,
     // unlikely), don't leak the orphan span — finish it and drop its file.
@@ -363,6 +701,12 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
         finish_segment(seg).await;
         done.push(p);
     }
+    // Stopped before any span was captured (e.g. Stop tapped during the ~1s ffmpeg
+    // init) — nothing to save, and it wasn't a failure, so discard quietly.
+    if done.is_empty() {
+        let _ = app.emit("recorder-stopped", ());
+        return Ok(());
+    }
     if !assemble_segments(&app, &done, &out_path).await {
         let _ = app.emit("glint-toast", "Recording failed to save");
         return Err("no output file".into());
@@ -387,16 +731,33 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
             .map(|d| d.as_secs() as i64)
             .unwrap_or(0),
     };
-    {
+    let rec_id = {
         let db = app.state::<crate::Db>();
         let conn = db.0.lock().unwrap();
-        if let Err(e) = crate::db::insert_capture(&conn, &row) {
-            log::error!("recording insert_capture failed: {e}");
+        match crate::db::insert_capture(&conn, &row) {
+            Ok(id) => Some(id),
+            Err(e) => {
+                log::error!("recording insert_capture failed: {e}");
+                None
+            }
         }
-    }
+    };
     let _ = app.emit("capture-saved", ());
     let _ = app.emit("recorder-stopped", ());
-    let _ = app.emit("glint-toast", "Recording saved");
+
+    // Post-recording HUD: a floating panel with the new video's thumbnail + quick
+    // drag-out / Open / Reveal / Copy-path actions (CleanShot-style), so the user
+    // can act on the recording without opening the Library. Only on a real save.
+    if let Some(id) = rec_id {
+        *app.state::<RecorderHud>().0.lock().unwrap() = Some(LastRecording {
+            id,
+            path: out_path.clone(),
+            thumb_path: row.thumb_path.clone(),
+        });
+        let _ = windows::build_rec_hud(&app);
+    } else {
+        let _ = app.emit("glint-toast", "Recording saved");
+    }
     Ok(())
 }
 
@@ -409,10 +770,15 @@ pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(ActiveRecording { mut done, current, out_path, .. }) = rec {
         // Discarding everything, so finalization doesn't matter — quit the running
         // span fast, then delete every segment file (and any assembled output).
-        if let Some(Segment { mut child, path, .. }) = current {
+        if let Some(Segment { mut child, path, audio, .. }) = current {
             let _ = child.write(b"q\n");
             tokio::time::sleep(std::time::Duration::from_millis(300)).await;
             let _ = child.kill();
+            for cap in audio {
+                cap.stop.store(true, Ordering::Relaxed);
+                let _ = cap.thread.join();
+                let _ = cap.pump.await;
+            }
             done.push(path);
         }
         for s in &done {
@@ -436,5 +802,25 @@ pub fn recorder_status(app: tauri::AppHandle) -> Option<RecorderStatusDto> {
     guard.as_ref().map(|r| RecorderStatusDto {
         recording: true,
         elapsed_secs: r.started.elapsed().as_secs(),
+        system: r.sys_avail,
+        mic: r.mic_avail,
+        system_muted: r.controls.system_muted.load(std::sync::atomic::Ordering::Relaxed),
+        mic_muted: r.controls.mic_muted.load(std::sync::atomic::Ordering::Relaxed),
     })
+}
+
+/// Toggle a source's live mute. Muting writes silence into that source's pipe, so
+/// the stream stays continuous and A/V-synced. No-op-erroring if not recording.
+#[tauri::command]
+pub fn recorder_set_mute(app: tauri::AppHandle, source: String, muted: bool) -> Result<(), String> {
+    let state = app.state::<RecorderState>();
+    let guard = state.0.lock().unwrap();
+    let rec = guard.as_ref().ok_or("not recording")?;
+    let flag = match source.as_str() {
+        "system" => &rec.controls.system_muted,
+        "mic" => &rec.controls.mic_muted,
+        other => return Err(format!("unknown source: {other}")),
+    };
+    flag.store(muted, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
 }

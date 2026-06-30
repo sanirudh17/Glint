@@ -1,5 +1,6 @@
 import { Info } from "lucide-react";
-import { Section, Field, Select } from "../../components/ui";
+import { Section, Field, Select, Switch } from "../../components/ui";
+import { useAppStore } from "../../store/useAppStore";
 
 const FPS_OPTIONS = [
   { value: "60", label: "60 fps" },
@@ -14,6 +15,10 @@ const CODEC_OPTIONS = [
 ];
 
 export function Recording() {
+  const settings = useAppStore((s) => s.settings);
+  const setRecordSystemAudio = useAppStore((s) => s.setRecordSystemAudio);
+  const setRecordMicrophone = useAppStore((s) => s.setRecordMicrophone);
+
   return (
     <Section
       title="Recording"
@@ -37,11 +42,17 @@ export function Recording() {
           </span>
         </div>
       </Field>
-      <Field label="Record audio" hint="Include system audio in recordings.">
-        <span className="settings-phase-note" style={{ marginTop: 0 }}>
-          <Info size={12} strokeWidth={1.75} />
-          Available in a later phase
-        </span>
+      <Field label="Record system audio" hint="Include speaker/app audio in recordings by default.">
+        <Switch
+          checked={settings?.record_system_audio ?? true}
+          onChange={(v) => setRecordSystemAudio(v)}
+        />
+      </Field>
+      <Field label="Record microphone" hint="Include your microphone in recordings by default.">
+        <Switch
+          checked={settings?.record_microphone ?? false}
+          onChange={(v) => setRecordMicrophone(v)}
+        />
       </Field>
     </Section>
   );

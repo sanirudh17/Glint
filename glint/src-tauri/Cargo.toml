@@ -39,7 +39,9 @@ tauri-plugin-shell = "2"
 # Direct handle on the (already-transitive via Tauri) tokio runtime, only for
 # `tokio::time` — used to bound the recorder's graceful-stop wait and the
 # pre-record countdown. Unifies with Tauri's resolved tokio version.
-tokio = { version = "1", features = ["time"] }
+tokio = { version = "1", features = ["time", "net", "io-util", "sync", "rt"] }
+# WASAPI capture (mic) + loopback (system audio) — install-free system audio.
+wasapi = "0.15"
 # Win32 SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE) so the recorder control
 # bar is excluded from gdigrab's screen capture (visible on screen, absent from
 # the video). HWND is fetched via raw-window-handle to stay version-independent
