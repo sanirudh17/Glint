@@ -2,6 +2,93 @@
 //! `thumb` + `crate::db` only — nothing from capture/editor/overlay. A SEPARATE
 //! ffmpeg pass from recording; the gdigrab capture path is untouched.
 
+use std::path::{Path, PathBuf};
+
+#[derive(serde::Serialize, Clone)]
+pub struct ProbeResult {
+    pub duration_secs: f64,
+    pub has_audio: bool,
+    pub fps: f64,
+    pub width: u32,
+    pub height: u32,
+}
+
+/// Parse `ffprobe -show_streams -show_format -of json` output.
+pub fn parse_ffprobe_json(json: &str) -> Result<ProbeResult, String> {
+    let v: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
+    let streams = v.get("streams").and_then(|s| s.as_array()).ok_or("no streams")?;
+    let mut width = 0u32;
+    let mut height = 0u32;
+    let mut fps = 0.0f64;
+    let mut has_audio = false;
+    for s in streams {
+        match s.get("codec_type").and_then(|c| c.as_str()) {
+            Some("video") => {
+                width = s.get("width").and_then(|x| x.as_u64()).unwrap_or(0) as u32;
+                height = s.get("height").and_then(|x| x.as_u64()).unwrap_or(0) as u32;
+                if let Some(r) = s.get("avg_frame_rate").and_then(|x| x.as_str()) {
+                    if let Some((n, d)) = r.split_once('/') {
+                        let n: f64 = n.parse().unwrap_or(0.0);
+                        let d: f64 = d.parse().unwrap_or(0.0);
+                        if d > 0.0 { fps = n / d; }
+                    }
+                }
+            }
+            Some("audio") => has_audio = true,
+            _ => {}
+        }
+    }
+    let duration_secs = v.get("format")
+        .and_then(|f| f.get("duration"))
+        .and_then(|d| d.as_str())
+        .and_then(|d| d.parse::<f64>().ok())
+        .unwrap_or(0.0);
+    Ok(ProbeResult { duration_secs, has_audio, fps, width, height })
+}
+
+/// Validate + sort keep-regions: non-empty, each (start < end), all within
+/// [0, duration], and non-overlapping after sorting by start.
+pub fn validate_keep(keep: &[(f64, f64)], duration: f64) -> Result<Vec<(f64, f64)>, String> {
+    if keep.is_empty() {
+        return Err("nothing to keep".into());
+    }
+    let mut v = keep.to_vec();
+    v.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let mut prev_end = 0.0;
+    for (i, (s, e)) in v.iter().enumerate() {
+        if !(e > s) {
+            return Err("empty keep-region".into());
+        }
+        if *s < -1e-6 || *e > duration + 1e-3 {
+            return Err("keep-region out of bounds".into());
+        }
+        if i > 0 && *s < prev_end - 1e-6 {
+            return Err("overlapping keep-regions".into());
+        }
+        prev_end = *e;
+    }
+    Ok(v)
+}
+
+/// True when the edit changes nothing: a single region spanning ~the whole file.
+pub fn is_noop(keep: &[(f64, f64)], duration: f64) -> bool {
+    keep.len() == 1 && keep[0].0 <= 1e-3 && keep[0].1 >= duration - 0.05
+}
+
+/// Derive `<name> (trimmed).mp4` next to the source; append a counter on collision.
+pub fn trimmed_output_path(src: &Path) -> PathBuf {
+    let dir = src.parent().unwrap_or_else(|| Path::new("."));
+    let stem = src.file_stem().map(|s| s.to_string_lossy().to_string()).unwrap_or_default();
+    let ext = src.extension().map(|s| s.to_string_lossy().to_string()).unwrap_or_else(|| "mp4".into());
+    let mut candidate = dir.join(format!("{stem} (trimmed).{ext}"));
+    let mut n = 2;
+    while candidate.exists() {
+        candidate = dir.join(format!("{stem} (trimmed {n}).{ext}"));
+        n += 1;
+    }
+    candidate
+}
+
 /// Build the ffmpeg args for a frame-accurate trim: trim each keep-region and
 /// concat them in one re-encode pass. `keep` is a list of (start, end) seconds in
 /// the source timeline (already validated: sorted, non-overlapping, in-bounds).
@@ -102,5 +189,60 @@ mod tests {
         assert!(a.windows(2).any(|w| w[0] == "-loglevel" && w[1] == "error"));
         assert!(a.windows(2).any(|w| w[0] == "-progress" && w[1] == "pipe:1"));
         assert!(a.iter().any(|s| s == "-y"));
+    }
+
+    #[test]
+    fn parses_ffprobe_streams_and_format() {
+        let json = r#"{
+          "streams": [
+            {"codec_type":"video","width":1920,"height":1080,"avg_frame_rate":"30/1"},
+            {"codec_type":"audio","sample_rate":"48000"}
+          ],
+          "format": {"duration":"12.500000"}
+        }"#;
+        let p = parse_ffprobe_json(json).unwrap();
+        assert_eq!(p.width, 1920);
+        assert_eq!(p.height, 1080);
+        assert_eq!(p.has_audio, true);
+        assert!((p.duration_secs - 12.5).abs() < 1e-6);
+        assert!((p.fps - 30.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn parses_video_only_no_audio() {
+        let json = r#"{"streams":[{"codec_type":"video","width":1280,"height":720,"avg_frame_rate":"60/1"}],"format":{"duration":"3.0"}}"#;
+        let p = parse_ffprobe_json(json).unwrap();
+        assert_eq!(p.has_audio, false);
+        assert!((p.fps - 60.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn validate_sorts_and_rejects_overlap_and_oob() {
+        // sorted + in-bounds OK
+        assert_eq!(validate_keep(&[(3.0, 4.0), (0.0, 1.0)], 10.0).unwrap(), vec![(0.0, 1.0), (3.0, 4.0)]);
+        // overlap rejected
+        assert!(validate_keep(&[(0.0, 2.0), (1.0, 3.0)], 10.0).is_err());
+        // out of bounds rejected
+        assert!(validate_keep(&[(0.0, 11.0)], 10.0).is_err());
+        // zero/negative length rejected
+        assert!(validate_keep(&[(2.0, 2.0)], 10.0).is_err());
+        // empty rejected
+        assert!(validate_keep(&[], 10.0).is_err());
+    }
+
+    #[test]
+    fn noop_when_single_full_span() {
+        assert!(is_noop(&[(0.0, 10.0)], 10.0));
+        assert!(is_noop(&[(0.0, 9.98)], 10.0)); // within tolerance of full
+        assert!(!is_noop(&[(0.0, 5.0)], 10.0));
+        assert!(!is_noop(&[(0.0, 4.0), (6.0, 10.0)], 10.0)); // a gap exists
+    }
+
+    #[test]
+    fn trimmed_name_appends_suffix_and_counter() {
+        use std::path::Path;
+        // Base case appends " (trimmed)" before the extension.
+        let p = trimmed_output_path(Path::new("C:/x/Glint 2026 at 10.00.00.mp4"));
+        assert_eq!(p.file_name().unwrap().to_string_lossy(), "Glint 2026 at 10.00.00 (trimmed).mp4");
     }
 }
