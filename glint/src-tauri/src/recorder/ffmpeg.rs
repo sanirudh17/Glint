@@ -88,10 +88,14 @@ pub fn build_ffmpeg_args(target: &RecordTarget, fps: u32, out: &str, audio: &[Au
     // are byte-for-byte identical across segments regardless of which/how many
     // sources connected — the invariant concat `-c copy` relies on.
     const AFMT: &str = "aformat=sample_rates=48000:channel_layouts=stereo";
-    // Light voice EQ applied to the MIC only (system audio passes through clean):
-    // de-rumble below 80 Hz + a gentle 3 kHz presence bell to counter a
-    // muffled/distant mic. Conservative so it doesn't add hiss.
-    const MIC_FX: &str = "highpass=f=80,equalizer=f=3000:width_type=o:width=1.5:g=3";
+    // Voice cleanup applied to the MIC only (system audio passes through clean):
+    //  • pan=stereo|c0=c0|c1=c0 — collapse to dual-mono from the left channel, so a
+    //    mono mic that Windows presents as fake-stereo can't sound hollow/phasey and
+    //    the result is mono-compatible.
+    //  • highpass 80 Hz — de-rumble.
+    //  • -2 dB bell @ 400 Hz — reduce boxiness ("hollow").
+    //  • +3 dB bell @ 3.5 kHz — presence/clarity.
+    const MIC_FX: &str = "pan=stereo|c0=c0|c1=c0,highpass=f=80,equalizer=f=400:width_type=o:width=1.4:g=-2,equalizer=f=3500:width_type=o:width=1.4:g=3";
     let audio_tail = |a: &mut Vec<String>, fc: String| {
         a.extend([
             "-filter_complex".into(), fc,
@@ -212,12 +216,13 @@ mod tests {
 
     #[test]
     fn mic_gets_voice_eq_system_does_not() {
-        // Single mic source: EQ inline before the format normalize.
+        const FX: &str = "pan=stereo|c0=c0|c1=c0,highpass=f=80,equalizer=f=400:width_type=o:width=1.4:g=-2,equalizer=f=3500:width_type=o:width=1.4:g=3";
+        // Single mic source: cleanup inline before the format normalize.
         let m = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai_mic(48000)], true);
-        assert!(m.iter().any(|s| s == "[1:a]aresample=async=1,highpass=f=80,equalizer=f=3000:width_type=o:width=1.5:g=3,aformat=sample_rates=48000:channel_layouts=stereo[aout]"));
+        assert!(m.iter().any(|s| *s == format!("[1:a]aresample=async=1,{FX},aformat=sample_rates=48000:channel_layouts=stereo[aout]")));
         // System (input 1) passes through; mic (input 2) is pre-filtered then mixed.
         let both = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000), ai_mic(48000)], true);
-        assert!(both.iter().any(|s| s == "[2:a]highpass=f=80,equalizer=f=3000:width_type=o:width=1.5:g=3[m2];[1:a][m2]amix=inputs=2:duration=longest:normalize=0,aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[aout]"));
+        assert!(both.iter().any(|s| *s == format!("[2:a]{FX}[m2];[1:a][m2]amix=inputs=2:duration=longest:normalize=0,aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[aout]")));
     }
 
     #[test]
