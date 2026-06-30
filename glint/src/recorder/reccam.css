@@ -1,7 +1,19 @@
-.reccam { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: transparent; }
+.reccam { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: transparent; cursor: grab; }
+.reccam:active { cursor: grabbing; }
 .reccam-video {
   width: 100%; height: 100%; object-fit: cover; border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.85);
-  box-shadow: 0 6px 22px rgba(0,0,0,0.45);
-  background: #0c0c10;
+  border: 2px solid rgba(255,255,255,0.85); box-shadow: 0 6px 22px rgba(0,0,0,0.45);
+  background: #0c0c10; pointer-events: none;
 }
+/* Hidden at rest so they never appear in the recorded frame; shown on hover. */
+.reccam-controls {
+  position: absolute; bottom: 10%; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 6px; opacity: 0; transition: opacity 140ms ease;
+}
+.reccam:hover .reccam-controls { opacity: 1; }
+.reccam-btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 24px; height: 24px; border: none; border-radius: 50%;
+  background: rgba(8,9,13,0.72); color: #fff; cursor: pointer;
+}
+.reccam-btn:hover { background: rgba(8,9,13,0.95); }
