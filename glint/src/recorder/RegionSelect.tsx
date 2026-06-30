@@ -19,7 +19,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Monitor, Mic, MicOff, Volume2, VolumeX } from "lucide-react";
+import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff } from "lucide-react";
 import { recorderStartRegion, recorderStartFullscreen } from "../lib/recorder";
 import { useAppStore } from "../store/useAppStore";
 import "./recorder.css";
@@ -71,8 +71,13 @@ export function RegionSelect() {
   const settings = useAppStore((s) => s.settings);
   const [sys, setSys] = useState(true);
   const [mic, setMic] = useState(false);
+  const [cam, setCam] = useState(false);
   useEffect(() => {
-    if (settings) { setSys(settings.record_system_audio ?? true); setMic(settings.record_microphone ?? false); }
+    if (settings) {
+      setSys(settings.record_system_audio ?? true);
+      setMic(settings.record_microphone ?? false);
+      setCam(settings.record_webcam ?? false);
+    }
   }, [settings]);
 
   useEffect(() => {
@@ -94,14 +99,14 @@ export function RegionSelect() {
       y: Math.round(env.oy + rect.y * env.scale),
       w: Math.round(rect.w * env.scale),
       h: Math.round(rect.h * env.scale),
-    }, { system: sys, mic }).catch(() => { /* a toast already surfaces start failures */ });
-  }, [rect, env, sys, mic]);
+    }, { system: sys, mic, webcam: cam }).catch(() => { /* a toast already surfaces start failures */ });
+  }, [rect, env, sys, mic, cam]);
 
   const confirmFullscreen = useCallback(() => {
     if (confirmed.current) return;
     confirmed.current = true;
-    recorderStartFullscreen({ system: sys, mic }).catch(() => { /* toast surfaces failures */ });
-  }, [sys, mic]);
+    recorderStartFullscreen({ system: sys, mic, webcam: cam }).catch(() => { /* toast surfaces failures */ });
+  }, [sys, mic, cam]);
 
   // Esc cancels (closing is safe — no follow-up IPC). Enter confirms the region.
   useEffect(() => {
@@ -214,6 +219,14 @@ export function RegionSelect() {
           title="Microphone"
         >
           {mic ? <Mic size={14} /> : <MicOff size={14} />} Mic
+        </button>
+        <button
+          className={`rec-sel-chip${cam ? "" : " rec-sel-chip--off"}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setCam((v) => !v)}
+          title="Webcam"
+        >
+          {cam ? <Video size={14} /> : <VideoOff size={14} />} Cam
         </button>
         <button className="rec-sel-fullbtn" onPointerDown={(e) => e.stopPropagation()} onClick={confirmFullscreen}>
           <Monitor size={15} strokeWidth={2} /> Record Full Screen

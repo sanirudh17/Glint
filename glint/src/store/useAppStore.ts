@@ -15,6 +15,7 @@ export interface Settings {
   explorer_menu_enabled: boolean;
   record_system_audio: boolean;
   record_microphone: boolean;
+  record_webcam: boolean;
 }
 
 export interface Toast {
@@ -34,6 +35,7 @@ interface AppState {
   setExplorerMenu: (on: boolean) => Promise<void>;
   setRecordSystemAudio: (on: boolean) => Promise<void>;
   setRecordMicrophone: (on: boolean) => Promise<void>;
+  setRecordWebcam: (on: boolean) => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -57,6 +59,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     let explorer_menu_enabled = rustSettings.explorer_menu_enabled;
     let record_system_audio = rustSettings.record_system_audio;
     let record_microphone = rustSettings.record_microphone;
+    let record_webcam = rustSettings.record_webcam;
     try {
       const dbTheme = await readSetting<Theme>("theme");
       if (dbTheme) theme = dbTheme;
@@ -74,11 +77,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (dbRecordSystem !== null) record_system_audio = dbRecordSystem;
       const dbRecordMic = await readSetting<boolean>("record_microphone");
       if (dbRecordMic !== null) record_microphone = dbRecordMic;
+      const dbRecordWebcam = await readSetting<boolean>("record_webcam");
+      if (dbRecordWebcam !== null) record_webcam = dbRecordWebcam;
     } catch {
       // plugin-sql unavailable (e.g. plain Vite dev server) — use Rust defaults.
     }
 
-    const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy, open_in_editor, explorer_menu_enabled, record_system_audio, record_microphone };
+    const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy, open_in_editor, explorer_menu_enabled, record_system_audio, record_microphone, record_webcam };
     set({ settings: merged });
     applyTheme(theme);
     applyAccent(accent);
@@ -142,6 +147,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setRecordMicrophone: async (on: boolean) => {
     const updated = await saveSetting("record_microphone", on);
     await persistSetting("record_microphone", on);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setRecordWebcam: async (on: boolean) => {
+    const updated = await saveSetting("record_webcam", on);
+    await persistSetting("record_webcam", on);
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 

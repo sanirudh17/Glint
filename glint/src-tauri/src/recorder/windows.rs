@@ -202,3 +202,94 @@ pub fn close_region_selector(app: &AppHandle) {
         let _ = w.close();
     }
 }
+
+pub const CAM_LABEL: &str = "rec-cam";
+
+/// Live webcam bubble — a focus-less, transparent, always-on-top circular window
+/// rendering the default camera. Unlike the control bar it is NOT excluded from
+/// capture: gdigrab records it as part of the screen. Positioned bottom-right of
+/// the recording area so it starts inside a region recording.
+pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, diameter: f64) -> tauri::Result<()> {
+    if app.get_webview_window(CAM_LABEL).is_some() {
+        return Ok(());
+    }
+    let win = WebviewWindowBuilder::new(app, CAM_LABEL, WebviewUrl::App("index.html#/rec-cam".into()))
+        .title("Glint Camera")
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .shadow(false)
+        .focused(false)
+        .inner_size(diameter, diameter)
+        .visible(false)
+        .build()?;
+
+    if let Some(m) = win.primary_monitor()? {
+        let s = m.scale_factor();
+        // Recording area in PHYSICAL px (region coords are physical; fullscreen = monitor).
+        let (rx, ry, rw, rh) = match target {
+            crate::recorder::RecordTarget::Region { x, y, w, h } => (x, y, w as i32, h as i32),
+            crate::recorder::RecordTarget::Fullscreen => {
+                let pos = m.position();
+                let size = m.size();
+                (pos.x, pos.y, size.width as i32, size.height as i32)
+            }
+        };
+        let d = (diameter * s) as i32;
+        let margin = (24.0 * s) as i32;
+        let x = rx + rw - d - margin;
+        let mut y = ry + rh - d - margin;
+        // Keep the bubble above the taskbar: clamp its bottom to the primary
+        // monitor's WORK AREA. For a fullscreen recording the area is the whole
+        // monitor (taskbar included), so an un-clamped bottom-right lands the
+        // bubble under the taskbar where it can't be seen or dragged.
+        if let Some(wa) = primary_work_area() {
+            let max_y = wa.bottom - d - margin;
+            if y > max_y {
+                y = max_y;
+            }
+        }
+        win.set_position(tauri::PhysicalPosition { x, y })?;
+    } else {
+        log::warn!("rec-cam: no primary monitor; default position");
+    }
+
+    win.show()?;
+    Ok(())
+}
+
+/// Primary monitor work area (screen minus the taskbar) in physical pixels.
+/// Used to keep the webcam bubble above the taskbar. Best-effort: returns None
+/// if the Win32 call fails, in which case the caller keeps the un-clamped pos.
+fn primary_work_area() -> Option<windows::Win32::Foundation::RECT> {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SystemParametersInfoW, SPI_GETWORKAREA, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+    };
+    let mut rect = RECT::default();
+    let ok = unsafe {
+        SystemParametersInfoW(
+            SPI_GETWORKAREA,
+            0,
+            Some(&mut rect as *mut _ as *mut core::ffi::c_void),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+    };
+    ok.is_ok().then_some(rect)
+}
+
+/// Close the webcam bubble if open. Safe when none exists.
+///
+/// Uses `destroy()`, not `close()`: `close()` fires CloseRequested and defers the
+/// actual teardown to the webview's JS, which proved unreliable for this transparent,
+/// focus-less bubble — it lingered on screen after stop (a black circle, still
+/// captured) and blocked re-enabling, since `build_cam_bubble` early-returns while the
+/// label still exists. `destroy()` force-tears it down immediately and releases the
+/// camera with the webview.
+pub fn close_cam_bubble(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window(CAM_LABEL) {
+        let _ = w.destroy();
+    }
+}

@@ -12,6 +12,7 @@ import { ControlBar } from "./recorder/ControlBar";
 import { Countdown } from "./recorder/Countdown";
 import { RegionSelect } from "./recorder/RegionSelect";
 import { RecHud } from "./recorder/RecHud";
+import { RecCam } from "./recorder/RecCam";
 import "./components/shell.css";
 
 /**
@@ -104,6 +105,15 @@ export const router = createHashRouter([
      */
     path: "/rec-hud",
     element: <RecHud />,
+  },
+  {
+    /**
+     * Chrome-free webcam bubble — a circular live camera feed that sits on screen
+     * and is intentionally NOT excluded from capture so gdigrab records it.
+     * URL: tauri://localhost/#/rec-cam
+     */
+    path: "/rec-cam",
+    element: <RecCam />,
   },
   {
     path: "/",

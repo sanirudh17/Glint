@@ -18,6 +18,7 @@ export function Recording() {
   const settings = useAppStore((s) => s.settings);
   const setRecordSystemAudio = useAppStore((s) => s.setRecordSystemAudio);
   const setRecordMicrophone = useAppStore((s) => s.setRecordMicrophone);
+  const setRecordWebcam = useAppStore((s) => s.setRecordWebcam);
 
   return (
     <Section
@@ -52,6 +53,12 @@ export function Recording() {
         <Switch
           checked={settings?.record_microphone ?? false}
           onChange={(v) => setRecordMicrophone(v)}
+        />
+      </Field>
+      <Field label="Record webcam" hint="Include your webcam in recordings by default.">
+        <Switch
+          checked={settings?.record_webcam ?? false}
+          onChange={(v) => setRecordWebcam(v)}
         />
       </Field>
     </Section>

@@ -85,6 +85,9 @@ pub struct ActiveRecording {
     pub mic_avail: bool,
     /// Mute flags shared across all segments of this recording.
     pub controls: AudioControls,
+    /// Whether the webcam bubble is currently open (sibling window — not encoded
+    /// by ffmpeg, gdigrab records it as part of the screen).
+    pub webcam_on: bool,
 }
 
 /// `{out_dir}/{stem}.part{idx}.mp4` — per-segment temp file beside the final output.
@@ -359,6 +362,7 @@ pub struct RecorderStatusDto {
     pub mic: bool,
     pub system_muted: bool,
     pub mic_muted: bool,
+    pub webcam: bool,
 }
 
 /// What to record. Region coords/size are PHYSICAL pixels on the primary monitor.
@@ -467,6 +471,28 @@ pub async fn recorder_audio_check(app: tauri::AppHandle) -> Result<u64, String> 
     std::fs::metadata(&out_str).map(|m| m.len()).map_err(|e| format!("no output: {e}"))
 }
 
+/// Block until the webcam bubble reports its camera is live (`rec-cam-ready`, fired
+/// after getUserMedia resolves — i.e. the user pressed Allow) or failed/denied
+/// (`rec-cam-failed`), or 20s elapse. Called before the countdown so the WebView2
+/// camera-permission prompt is resolved up front and never recorded; bounded so a
+/// stuck prompt or a missing event can't wedge the start.
+async fn wait_for_cam_ready(app: &AppHandle) {
+    use tauri::Listener;
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+    let txr = tx.clone();
+    let ready = app.once("rec-cam-ready", move |_| {
+        if let Some(t) = txr.lock().unwrap().take() { let _ = t.send(()); }
+    });
+    let txf = tx.clone();
+    let failed = app.once("rec-cam-failed", move |_| {
+        if let Some(t) = txf.lock().unwrap().take() { let _ = t.send(()); }
+    });
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(20), rx).await;
+    app.unlisten(ready);
+    app.unlisten(failed);
+}
+
 /// Start recording. `mode` is "fullscreen" or "region"; region passes x/y/w/h
 /// (physical px). Spawns ffmpeg (capture+encode) and stores the child. Off the
 /// main thread so the spawn never blocks the event loop.
@@ -480,6 +506,7 @@ pub async fn recorder_start(
     h: Option<u32>,
     system: Option<bool>,
     mic: Option<bool>,
+    webcam: Option<bool>,
 ) -> Result<(), String> {
     // Already recording? Ignore (single recording in R1).
     if app.state::<RecorderState>().0.lock().unwrap().is_some() {
@@ -538,6 +565,17 @@ pub async fn recorder_start(
         return Err("already starting".into());
     }
 
+    // Webcam enabled: open the bubble and WAIT for the camera to go live (permission
+    // granted) — or fail/timeout — BEFORE the countdown. getUserMedia's WebView2
+    // permission prompt is then resolved up front, so it never lands in the recording
+    // and the countdown/capture don't begin until the user has pressed Allow. The
+    // bubble stays open through the countdown so the user can frame.
+    let want_cam = webcam.unwrap_or(false);
+    if want_cam {
+        let _ = windows::build_cam_bubble(&app, target, 170.0);
+        wait_for_cam_ready(&app).await;
+    }
+
     // 3-2-1 countdown, then Rust closes it BEFORE capture starts so the digit can
     // never bleed into the first recorded frames (and a webview that failed to
     // self-close isn't left orphaned on screen).
@@ -568,6 +606,7 @@ pub async fn recorder_start(
         sys_avail: any_audio,
         mic_avail: any_audio,
         controls: controls.clone(),
+        webcam_on: want_cam,
     });
     let _ = windows::build_control_bar(&app);
 
@@ -578,6 +617,7 @@ pub async fn recorder_start(
         Ok(s) => s,
         Err(e) => {
             windows::close_control_bar(&app);
+            windows::close_cam_bubble(&app);
             *app.state::<RecorderState>().0.lock().unwrap() = None;
             app.state::<RecorderState>().1.store(false, Ordering::SeqCst);
             let _ = app.emit("glint-toast", "Couldn't start the recorder");
@@ -690,6 +730,7 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
+    windows::close_cam_bubble(&app);
     let rec = rec.ok_or("not recording")?;
     let ActiveRecording { out_path, width, height, mut done, current, .. } = rec;
 
@@ -766,6 +807,7 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
+    windows::close_cam_bubble(&app);
     windows::close_countdown(&app); // in case cancel races the countdown
     if let Some(ActiveRecording { mut done, current, out_path, .. }) = rec {
         // Discarding everything, so finalization doesn't matter — quit the running
@@ -806,6 +848,7 @@ pub fn recorder_status(app: tauri::AppHandle) -> Option<RecorderStatusDto> {
         mic: r.mic_avail,
         system_muted: r.controls.system_muted.load(std::sync::atomic::Ordering::Relaxed),
         mic_muted: r.controls.mic_muted.load(std::sync::atomic::Ordering::Relaxed),
+        webcam: r.webcam_on,
     })
 }
 
@@ -822,5 +865,33 @@ pub fn recorder_set_mute(app: tauri::AppHandle, source: String, muted: bool) -> 
         other => return Err(format!("unknown source: {other}")),
     };
     flag.store(muted, std::sync::atomic::Ordering::Relaxed);
+    Ok(())
+}
+
+/// Toggle the webcam bubble live. Independent of ffmpeg (just a sibling on-screen
+/// window gdigrab records), so this is instant — no segment restart. No-op-erroring
+/// if not recording.
+///
+/// MUST be `#[tauri::command(async)]`: it builds/closes a WebView2 window
+/// (`build_cam_bubble`/`close_cam_bubble`), and per windows.rs those builds have to
+/// run OFF the main thread or they deadlock WebView2 — freezing the WHOLE app (the
+/// control bar, selector, HUD, main window all share one WebView2 process). A sync
+/// command runs on the main thread, so the control-bar webcam toggle and the bubble's
+/// ✕ both hard-locked the app until Alt-F4. The std::Mutex guard below is dropped
+/// before this function ever yields, so making it async stays sound.
+#[tauri::command(async)]
+pub async fn recorder_set_webcam(app: tauri::AppHandle, on: bool) -> Result<(), String> {
+    let target = {
+        let state = app.state::<RecorderState>();
+        let mut guard = state.0.lock().unwrap();
+        let rec = guard.as_mut().ok_or("not recording")?;
+        rec.webcam_on = on;
+        rec.target
+    };
+    if on { let _ = windows::build_cam_bubble(&app, target, 170.0); }
+    else { windows::close_cam_bubble(&app); }
+    // Notify the control bar so its toggle reflects the change — this is the path the
+    // bubble's ✕ button takes, and the bar would otherwise still read "on".
+    let _ = app.emit_to(windows::BAR_LABEL, "recorder-webcam", on);
     Ok(())
 }

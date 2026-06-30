@@ -40,6 +40,7 @@ pub struct Settings {
     pub explorer_menu_enabled: bool,
     pub record_system_audio: bool,
     pub record_microphone: bool,
+    pub record_webcam: bool,
 }
 
 impl Default for Settings {
@@ -54,6 +55,7 @@ impl Default for Settings {
             explorer_menu_enabled: true,
             record_system_audio: true,
             record_microphone: false,
+            record_webcam: false,
         }
     }
 }
@@ -89,6 +91,9 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         }
         "record_microphone" => {
             s.record_microphone = value.as_bool().ok_or("record_microphone must be boolean")?;
+        }
+        "record_webcam" => {
+            s.record_webcam = value.as_bool().ok_or("record_webcam must be boolean")?;
         }
         other => return Err(format!("unknown settings key: {other}")),
     }
@@ -197,5 +202,17 @@ mod tests {
         assert!(s.record_microphone);
         apply_update(&mut s, "record_system_audio", json!(false)).unwrap();
         assert!(!s.record_system_audio);
+    }
+
+    #[test]
+    fn defaults_webcam_off() {
+        assert!(!Settings::default().record_webcam);
+    }
+
+    #[test]
+    fn apply_update_sets_webcam() {
+        let mut s = Settings::default();
+        apply_update(&mut s, "record_webcam", serde_json::json!(true)).unwrap();
+        assert!(s.record_webcam);
     }
 }

@@ -66,11 +66,21 @@ capture/library/editor path.
   rather than hanging. New deps: `wasapi`, `tokio` (`net`/`io-util`/`sync`). **Recorder isolation
   still honored.** *Built — awaiting at-screen.* (See PHASE-8-RECORDER-R2-ACCEPTANCE.md.)
 
+- **Phase 8 — Screen Recorder (R3: webcam overlay)** (live camera bubble). A circular webcam
+  bubble is a recorder-owned on-screen window (`rec-cam`) rendering the default camera via the
+  browser `getUserMedia` (video-only, local device, no network). Because it sits on screen and is
+  **not** capture-excluded, **gdigrab records it for free** — the ffmpeg/gdigrab pipeline is
+  **completely untouched** (no `dshow`, no `overlay` filter). It's draggable, has Small/Medium/Large
+  preset sizes, un-mirrored, opens bottom-right of the recording area during the countdown. Enabled
+  per-recording via a **Webcam chip** on the selector (seeded from a new `record_webcam` setting) and
+  **togglable live** from the control bar — instant, since it's independent of ffmpeg (no segment
+  restart). **Recorder isolation still honored** (a sibling window + toggle; recorder imports nothing
+  new from capture/editor/overlay). *Built — awaiting at-screen.* (See
+  PHASE-8-RECORDER-R3-ACCEPTANCE.md.)
+
 ## Planned
 
-- **Phase 8 R3 — Webcam overlay:** a composited camera bubble (position/size) recorded into the
-  video via ffmpeg's `overlay` filter; control-bar webcam toggle.
-- _(Phases 7 and 8 R1/R2 awaiting at-screen acceptance.)_
+- _(Phases 7 and 8 R1/R2/R3 awaiting at-screen acceptance.)_
 
 ## Out of scope (project-wide, unchanged)
 Cloud/upload/share-links, teams/collaboration, login/auth, web backend/network calls, scrolling

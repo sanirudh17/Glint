@@ -252,6 +252,7 @@ pub fn run() {
             recorder::recorder_cancel,
             recorder::recorder_status,
             recorder::recorder_set_mute,
+            recorder::recorder_set_webcam,
             recorder::recorder_open_region_selector,
             recorder::rec_hud_data,
             recorder::rec_hud_dismiss,
