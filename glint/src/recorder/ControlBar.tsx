@@ -36,8 +36,15 @@ export function ControlBar() {
     // `recorder-started` already fired (event missed).
     load();
     const un = listen("recorder-started", load);
+    // The bubble's ✕ turns the webcam off through the backend, which emits this so
+    // the toggle here reflects the change (otherwise it would still read "on").
+    const unCam = listen<boolean>("recorder-webcam", (e) => setCamOn(e.payload));
     const t = window.setTimeout(load, 2000);
-    return () => { window.clearTimeout(t); un.then((f) => f()).catch(() => {}); };
+    return () => {
+      window.clearTimeout(t);
+      un.then((f) => f()).catch(() => {});
+      unCam.then((f) => f()).catch(() => {});
+    };
   }, []);
 
   // Flip local state only on a successful set — backend errors leave it as-is.

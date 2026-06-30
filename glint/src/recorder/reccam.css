@@ -1,6 +1,7 @@
-/* The CIRCLE lives on the container: border-radius on a <video> doesn't clip the
-   video pixels in WebView2 (it renders square with a round border), so we make the
-   container round + overflow:hidden and let it clip the video to a circle. */
+/* The CIRCLE: neither border-radius nor overflow:hidden reliably clips a composited
+   <video> to a circle in WebView2 (it renders square with a round border), so the
+   bulletproof fix is clip-path: circle(50%) on the video itself. The container keeps
+   border-radius for the white ring. */
 .reccam {
   position: fixed; inset: 0; box-sizing: border-box;
   display: flex; align-items: center; justify-content: center;
@@ -9,7 +10,10 @@
   background: #0c0c10; cursor: grab;
 }
 .reccam:active { cursor: grabbing; }
-.reccam-video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
+.reccam-video {
+  width: 100%; height: 100%; object-fit: cover; pointer-events: none;
+  clip-path: circle(50%);
+}
 /* Hidden at rest so they never appear in the recorded frame; shown on hover. */
 .reccam-controls {
   position: absolute; bottom: 10%; left: 50%; transform: translateX(-50%);

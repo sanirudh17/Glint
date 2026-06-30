@@ -882,5 +882,8 @@ pub fn recorder_set_webcam(app: tauri::AppHandle, on: bool) -> Result<(), String
     };
     if on { let _ = windows::build_cam_bubble(&app, target, 170.0); }
     else { windows::close_cam_bubble(&app); }
+    // Notify the control bar so its toggle reflects the change — this is the path the
+    // bubble's ✕ button takes, and the bar would otherwise still read "on".
+    let _ = app.emit_to(windows::BAR_LABEL, "recorder-webcam", on);
     Ok(())
 }

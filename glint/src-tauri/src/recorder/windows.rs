@@ -239,13 +239,45 @@ pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, 
         };
         let d = (diameter * s) as i32;
         let margin = (24.0 * s) as i32;
-        win.set_position(tauri::PhysicalPosition { x: rx + rw - d - margin, y: ry + rh - d - margin })?;
+        let x = rx + rw - d - margin;
+        let mut y = ry + rh - d - margin;
+        // Keep the bubble above the taskbar: clamp its bottom to the primary
+        // monitor's WORK AREA. For a fullscreen recording the area is the whole
+        // monitor (taskbar included), so an un-clamped bottom-right lands the
+        // bubble under the taskbar where it can't be seen or dragged.
+        if let Some(wa) = primary_work_area() {
+            let max_y = wa.bottom - d - margin;
+            if y > max_y {
+                y = max_y;
+            }
+        }
+        win.set_position(tauri::PhysicalPosition { x, y })?;
     } else {
         log::warn!("rec-cam: no primary monitor; default position");
     }
 
     win.show()?;
     Ok(())
+}
+
+/// Primary monitor work area (screen minus the taskbar) in physical pixels.
+/// Used to keep the webcam bubble above the taskbar. Best-effort: returns None
+/// if the Win32 call fails, in which case the caller keeps the un-clamped pos.
+fn primary_work_area() -> Option<windows::Win32::Foundation::RECT> {
+    use windows::Win32::Foundation::RECT;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SystemParametersInfoW, SPI_GETWORKAREA, SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS,
+    };
+    let mut rect = RECT::default();
+    let ok = unsafe {
+        SystemParametersInfoW(
+            SPI_GETWORKAREA,
+            0,
+            Some(&mut rect as *mut _ as *mut core::ffi::c_void),
+            SYSTEM_PARAMETERS_INFO_UPDATE_FLAGS(0),
+        )
+    };
+    ok.is_ok().then_some(rect)
 }
 
 /// Close the webcam bubble if open. Safe when none exists.
