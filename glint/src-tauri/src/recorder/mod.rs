@@ -871,8 +871,16 @@ pub fn recorder_set_mute(app: tauri::AppHandle, source: String, muted: bool) -> 
 /// Toggle the webcam bubble live. Independent of ffmpeg (just a sibling on-screen
 /// window gdigrab records), so this is instant — no segment restart. No-op-erroring
 /// if not recording.
-#[tauri::command]
-pub fn recorder_set_webcam(app: tauri::AppHandle, on: bool) -> Result<(), String> {
+///
+/// MUST be `#[tauri::command(async)]`: it builds/closes a WebView2 window
+/// (`build_cam_bubble`/`close_cam_bubble`), and per windows.rs those builds have to
+/// run OFF the main thread or they deadlock WebView2 — freezing the WHOLE app (the
+/// control bar, selector, HUD, main window all share one WebView2 process). A sync
+/// command runs on the main thread, so the control-bar webcam toggle and the bubble's
+/// ✕ both hard-locked the app until Alt-F4. The std::Mutex guard below is dropped
+/// before this function ever yields, so making it async stays sound.
+#[tauri::command(async)]
+pub async fn recorder_set_webcam(app: tauri::AppHandle, on: bool) -> Result<(), String> {
     let target = {
         let state = app.state::<RecorderState>();
         let mut guard = state.0.lock().unwrap();
