@@ -202,3 +202,55 @@ pub fn close_region_selector(app: &AppHandle) {
         let _ = w.close();
     }
 }
+
+pub const CAM_LABEL: &str = "rec-cam";
+
+/// Live webcam bubble — a focus-less, transparent, always-on-top circular window
+/// rendering the default camera. Unlike the control bar it is NOT excluded from
+/// capture: gdigrab records it as part of the screen. Positioned bottom-right of
+/// the recording area so it starts inside a region recording.
+pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, diameter: f64) -> tauri::Result<()> {
+    if app.get_webview_window(CAM_LABEL).is_some() {
+        return Ok(());
+    }
+    let win = WebviewWindowBuilder::new(app, CAM_LABEL, WebviewUrl::App("index.html#/rec-cam".into()))
+        .title("Glint Camera")
+        .decorations(false)
+        .transparent(true)
+        .always_on_top(true)
+        .skip_taskbar(true)
+        .resizable(false)
+        .shadow(false)
+        .focused(false)
+        .inner_size(diameter, diameter)
+        .visible(false)
+        .build()?;
+
+    if let Some(m) = win.primary_monitor()? {
+        let s = m.scale_factor();
+        // Recording area in PHYSICAL px (region coords are physical; fullscreen = monitor).
+        let (rx, ry, rw, rh) = match target {
+            crate::recorder::RecordTarget::Region { x, y, w, h } => (x, y, w as i32, h as i32),
+            crate::recorder::RecordTarget::Fullscreen => {
+                let pos = m.position();
+                let size = m.size();
+                (pos.x, pos.y, size.width as i32, size.height as i32)
+            }
+        };
+        let d = (diameter * s) as i32;
+        let margin = (24.0 * s) as i32;
+        win.set_position(tauri::PhysicalPosition { x: rx + rw - d - margin, y: ry + rh - d - margin })?;
+    } else {
+        log::warn!("rec-cam: no primary monitor; default position");
+    }
+
+    win.show()?;
+    Ok(())
+}
+
+/// Close the webcam bubble if open. Safe when none exists.
+pub fn close_cam_bubble(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window(CAM_LABEL) {
+        let _ = w.close();
+    }
+}

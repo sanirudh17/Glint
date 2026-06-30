@@ -20,8 +20,10 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let rec_region = MenuItem::with_id(app, "rec_region", "Record Region", true, None::<&str>)?;
     let rec_full = MenuItem::with_id(app, "rec_full", "Record Fullscreen", true, None::<&str>)?;
     let rec_stop = MenuItem::with_id(app, "rec_stop", "Stop Recording", true, None::<&str>)?;
+    // TEMP (Task 1 spike) — removed in Task 4.
+    let rec_cam_test = MenuItem::with_id(app, "rec_cam_test", "Test Webcam (spike)", true, None::<&str>)?;
     let record = Submenu::with_id_and_items(app, "record_menu", "Record", true,
-        &[&rec_region, &rec_full, &rec_stop])?;
+        &[&rec_region, &rec_full, &rec_stop, &rec_cam_test])?;
 
     let menu = Menu::with_items(app, &[
         &open, &capture, &record,
@@ -71,6 +73,10 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
                 tauri::async_runtime::spawn(async move {
                     let _ = crate::recorder::recorder_stop(a).await;
                 });
+            }
+            "rec_cam_test" => {
+                let a = app.clone();
+                tauri::async_runtime::spawn(async move { let _ = crate::recorder::recorder_cam_spike(a).await; });
             }
             other => {
                 let _ = app.emit("tray-action", other.to_string());

@@ -809,6 +809,13 @@ pub fn recorder_status(app: tauri::AppHandle) -> Option<RecorderStatusDto> {
     })
 }
 
+/// TEMP (Task 1 spike): open the webcam bubble to prove getUserMedia works in
+/// WebView2. Removed in Task 4. Uses a fullscreen target + medium diameter.
+#[tauri::command(async)]
+pub async fn recorder_cam_spike(app: tauri::AppHandle) -> Result<(), String> {
+    windows::build_cam_bubble(&app, RecordTarget::Fullscreen, 170.0).map_err(|e| e.to_string())
+}
+
 /// Toggle a source's live mute. Muting writes silence into that source's pipe, so
 /// the stream stays continuous and A/V-synced. No-op-erroring if not recording.
 #[tauri::command]
