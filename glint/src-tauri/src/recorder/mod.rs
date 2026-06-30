@@ -471,6 +471,28 @@ pub async fn recorder_audio_check(app: tauri::AppHandle) -> Result<u64, String> 
     std::fs::metadata(&out_str).map(|m| m.len()).map_err(|e| format!("no output: {e}"))
 }
 
+/// Block until the webcam bubble reports its camera is live (`rec-cam-ready`, fired
+/// after getUserMedia resolves — i.e. the user pressed Allow) or failed/denied
+/// (`rec-cam-failed`), or 20s elapse. Called before the countdown so the WebView2
+/// camera-permission prompt is resolved up front and never recorded; bounded so a
+/// stuck prompt or a missing event can't wedge the start.
+async fn wait_for_cam_ready(app: &AppHandle) {
+    use tauri::Listener;
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+    let txr = tx.clone();
+    let ready = app.once("rec-cam-ready", move |_| {
+        if let Some(t) = txr.lock().unwrap().take() { let _ = t.send(()); }
+    });
+    let txf = tx.clone();
+    let failed = app.once("rec-cam-failed", move |_| {
+        if let Some(t) = txf.lock().unwrap().take() { let _ = t.send(()); }
+    });
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(20), rx).await;
+    app.unlisten(ready);
+    app.unlisten(failed);
+}
+
 /// Start recording. `mode` is "fullscreen" or "region"; region passes x/y/w/h
 /// (physical px). Spawns ffmpeg (capture+encode) and stores the child. Off the
 /// main thread so the spawn never blocks the event loop.
@@ -543,6 +565,17 @@ pub async fn recorder_start(
         return Err("already starting".into());
     }
 
+    // Webcam enabled: open the bubble and WAIT for the camera to go live (permission
+    // granted) — or fail/timeout — BEFORE the countdown. getUserMedia's WebView2
+    // permission prompt is then resolved up front, so it never lands in the recording
+    // and the countdown/capture don't begin until the user has pressed Allow. The
+    // bubble stays open through the countdown so the user can frame.
+    let want_cam = webcam.unwrap_or(false);
+    if want_cam {
+        let _ = windows::build_cam_bubble(&app, target, 170.0);
+        wait_for_cam_ready(&app).await;
+    }
+
     // 3-2-1 countdown, then Rust closes it BEFORE capture starts so the digit can
     // never bleed into the first recorded frames (and a webview that failed to
     // self-close isn't left orphaned on screen).
@@ -554,7 +587,6 @@ pub async fn recorder_start(
     // A source off in the selector starts muted so it can be unmuted live.
     let controls = AudioControls::new(!audio_cfg.system, !audio_cfg.mic);
     let any_audio = audio_cfg.system || audio_cfg.mic;
-    let want_cam = webcam.unwrap_or(false);
 
     // Show the control bar IMMEDIATELY (no dead gap while ffmpeg's gdigrab input
     // initializes, which takes ~1s+). A preliminary state with `current: None`
@@ -577,12 +609,6 @@ pub async fn recorder_start(
         webcam_on: want_cam,
     });
     let _ = windows::build_control_bar(&app);
-    // Open the webcam bubble now (after the countdown) so the user can frame during
-    // the ~1s ffmpeg init. It's a sibling window — gdigrab records it as screen
-    // content; no ffmpeg args need to change.
-    if want_cam {
-        let _ = windows::build_cam_bubble(&app, target, 170.0);
-    }
 
     // Bring segment 0 up behind the visible bar. Pause/resume appends further
     // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual

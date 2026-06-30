@@ -14,8 +14,15 @@ export function RecCam() {
   useEffect(() => {
     let stream: MediaStream | null = null;
     navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-      .then((s) => { stream = s; if (videoRef.current) videoRef.current.srcObject = s; })
+      .then((s) => {
+        // Resolves only AFTER the user grants the WebView2 camera prompt, so this
+        // is the signal recorder_start waits on before starting the countdown.
+        stream = s;
+        if (videoRef.current) videoRef.current.srcObject = s;
+        emit("rec-cam-ready").catch(() => {});
+      })
       .catch(() => {
+        emit("rec-cam-failed").catch(() => {}); // unblock recorder_start's wait
         emit("glint-toast", "Camera unavailable").catch(() => {});
         getCurrentWindow().close().catch(() => {});
       });

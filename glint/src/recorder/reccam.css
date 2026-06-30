@@ -1,10 +1,15 @@
-.reccam { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; background: transparent; cursor: grab; }
-.reccam:active { cursor: grabbing; }
-.reccam-video {
-  width: 100%; height: 100%; object-fit: cover; border-radius: 50%;
-  border: 2px solid rgba(255,255,255,0.85); box-shadow: 0 6px 22px rgba(0,0,0,0.45);
-  background: #0c0c10; pointer-events: none;
+/* The CIRCLE lives on the container: border-radius on a <video> doesn't clip the
+   video pixels in WebView2 (it renders square with a round border), so we make the
+   container round + overflow:hidden and let it clip the video to a circle. */
+.reccam {
+  position: fixed; inset: 0; box-sizing: border-box;
+  display: flex; align-items: center; justify-content: center;
+  border-radius: 50%; overflow: hidden;
+  border: 2px solid rgba(255,255,255,0.85);
+  background: #0c0c10; cursor: grab;
 }
+.reccam:active { cursor: grabbing; }
+.reccam-video { width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
 /* Hidden at rest so they never appear in the recorded frame; shown on hover. */
 .reccam-controls {
   position: absolute; bottom: 10%; left: 50%; transform: translateX(-50%);
