@@ -33,12 +33,39 @@ pub fn assemble_text(lines: &[String]) -> Option<String> {
     }
 }
 
+/// How much to enlarge captured pixels before OCR. Windows.Media.Ocr recognizes
+/// small screenshot text far more accurately when glyphs are larger — native-res
+/// UI/terminal text (~10px tall) triggers l/1/I and m/rn confusions and dropped
+/// characters; enlarging to ~30px resolves most of them.
+const OCR_UPSCALE: f32 = 3.0;
+
+/// Target dimensions to feed the OCR engine: enlarge by `OCR_UPSCALE` for accuracy,
+/// but never exceed `max_dim` on the longest side. If the source ALREADY exceeds
+/// `max_dim` the factor drops below 1 and we downscale to fit (oversized bitmaps are
+/// rejected/truncated by the engine). Zero-area or zero `max_dim` → unchanged.
+pub fn ocr_target_dims(w: u32, h: u32, max_dim: u32) -> (u32, u32) {
+    if w == 0 || h == 0 || max_dim == 0 {
+        return (w, h);
+    }
+    let longest = w.max(h) as f32;
+    let factor = OCR_UPSCALE.min(max_dim as f32 / longest);
+    let tw = ((w as f32) * factor).round().max(1.0) as u32;
+    let th = ((h as f32) * factor).round().max(1.0) as u32;
+    (tw, th)
+}
+
 /// Run Windows.Media.Ocr on RGBA pixels. Fully local. Returns assembled text, or a
-/// user-facing error: no OCR language installed, empty input, or no text found.
+/// user-facing error: no OCR language installed or bad input. "No text found" is NOT
+/// an error — it yields an empty result so callers can show an empty state.
 ///
-/// Windows OCR wants a BGRA8 `SoftwareBitmap`; we swap R/B from our RGBA buffer. The
-/// async recognition is `.get()`-blocked — callers MUST run this off the main thread.
+/// The crop is UPSCALED (CatmullRom, ~[`OCR_UPSCALE`]×, capped to the engine's
+/// `MaxImageDimension`) before recognition: native-res screenshot text is small and
+/// Windows OCR is markedly more accurate on larger glyphs. Windows OCR wants a BGRA8
+/// `SoftwareBitmap`; we swap R/B from the (resized) RGBA buffer. The async
+/// recognition blocks — callers MUST run this off the main thread.
 pub fn recognize(rgba: &[u8], w: u32, h: u32) -> Result<OcrOutput, String> {
+    use image::{imageops::FilterType, ImageBuffer, Rgba};
+    use std::borrow::Cow;
     use windows::Graphics::Imaging::{BitmapPixelFormat, SoftwareBitmap};
     use windows::Media::Ocr::OcrEngine;
     use windows::Storage::Streams::DataWriter;
@@ -51,9 +78,22 @@ pub fn recognize(rgba: &[u8], w: u32, h: u32) -> Result<OcrOutput, String> {
         return Err("Couldn't read text".into());
     }
 
+    // Enlarge for accuracy, bounded by what the engine accepts. A smooth (low-ringing)
+    // filter keeps text edges clean; ringing would create new glyph confusions.
+    let max_dim = OcrEngine::MaxImageDimension().unwrap_or(10_000);
+    let (rw, rh) = ocr_target_dims(w, h, max_dim);
+    let work: Cow<[u8]> = if (rw, rh) == (w, h) {
+        Cow::Borrowed(rgba)
+    } else {
+        let src: ImageBuffer<Rgba<u8>, &[u8]> =
+            ImageBuffer::from_raw(w, h, rgba).ok_or("Couldn't read text")?;
+        let dst = image::imageops::resize(&src, rw, rh, FilterType::CatmullRom);
+        Cow::Owned(dst.into_raw())
+    };
+
     // RGBA -> BGRA (Windows imaging expects BGRA8 for OCR).
-    let mut bgra = vec![0u8; rgba.len()];
-    for (dst, src) in bgra.chunks_exact_mut(4).zip(rgba.chunks_exact(4)) {
+    let mut bgra = vec![0u8; work.len()];
+    for (dst, src) in bgra.chunks_exact_mut(4).zip(work.chunks_exact(4)) {
         dst[0] = src[2]; // B
         dst[1] = src[1]; // G
         dst[2] = src[0]; // R
@@ -67,8 +107,8 @@ pub fn recognize(rgba: &[u8], w: u32, h: u32) -> Result<OcrOutput, String> {
     let bitmap = SoftwareBitmap::CreateCopyFromBuffer(
         &buffer,
         BitmapPixelFormat::Bgra8,
-        w as i32,
-        h as i32,
+        rw as i32,
+        rh as i32,
     )
     .map_err(|e| e.to_string())?;
 
@@ -137,5 +177,29 @@ mod tests {
     fn single_line_no_newline() {
         let lines = vec!["solo".to_string()];
         assert_eq!(assemble_text(&lines).unwrap(), "solo");
+    }
+
+    #[test]
+    fn upscales_small_regions_by_the_factor() {
+        // 3x, comfortably under the cap.
+        assert_eq!(ocr_target_dims(800, 600, 10_000), (2400, 1800));
+    }
+
+    #[test]
+    fn caps_the_longest_side_at_max_dim() {
+        // 6000 * 3 = 18000 > 10000 → factor 10000/6000 ≈ 1.667.
+        assert_eq!(ocr_target_dims(6000, 400, 10_000), (10_000, 667));
+    }
+
+    #[test]
+    fn downscales_sources_already_over_max_dim() {
+        // 12000 already exceeds 10000 → factor 0.833, downscale to fit.
+        assert_eq!(ocr_target_dims(12_000, 400, 10_000), (10_000, 333));
+    }
+
+    #[test]
+    fn leaves_degenerate_inputs_unchanged() {
+        assert_eq!(ocr_target_dims(0, 0, 10_000), (0, 0));
+        assert_eq!(ocr_target_dims(100, 100, 0), (100, 100));
     }
 }

@@ -7,11 +7,17 @@ show it in a small review panel. No cloud, no upload, no bundled models.
 ## Architecture (as built)
 
 - **`ocr/` module (isolated).** `assemble_text` (pure line-join core) + `recognize`
-  (RGBA → BGRA `SoftwareBitmap` → `OcrEngine::TryCreateFromUserProfileLanguages` →
-  blocking wait via a completion-handler + channel, since windows-rs 0.62 dropped
+  (upscale → RGBA → BGRA `SoftwareBitmap` → `OcrEngine::TryCreateFromUserProfileLanguages`
+  → blocking wait via a completion-handler + channel, since windows-rs 0.62 dropped
   `IAsyncOperation::get()` and keeps `Async::join` private). `OcrState` stashes the
   last result for the panel; `commands.rs` is the thin Tauri surface; `window.rs`
   builds the decorated `#/ocr` panel off-thread.
+- **Accuracy: pre-OCR upscaling.** Native-res screenshot text (~10px) makes Windows
+  OCR drop/confuse glyphs (l↔1↔I, m↔rn). `recognize` enlarges the crop ~3×
+  (CatmullRom — smooth, low-ringing) before recognition, capped to the engine's
+  `MaxImageDimension` and downscaling oversized inputs to fit (which also prevents
+  silent truncation of very wide strips). Sizing logic is the pure, unit-tested
+  `ocr_target_dims`.
 - **Capture Text (live).** Reuses the existing frozen-overlay selector: the session
   carries a `CaptureIntent` (`Screenshot` default), `begin_ocr_capture` re-tags it to
   `Text` (and hides the main window first, like `capture_start`), and `capture_commit`
@@ -59,6 +65,8 @@ Run `npm run tauri dev`:
 - [ ] **Post-capture HUD → Extract text**: panel with the just-captured region's text.
 - [ ] Capture Text over: a **code** block, a **paragraph**, and **UI chrome** — text is
       reasonable; multi-line preserved.
+- [ ] **Accuracy on long/small text**: a wide region of small text reads back
+      cohesively (few dropped/confused characters) — the pre-OCR upscaling case.
 - [ ] **Copy** in the panel re-copies (whole text, or the current selection if any).
 - [ ] **Empty state**: capture a region with no text → "No text found in that region."
 - [ ] **No language pack** (if applicable): a graceful "install a language pack in
