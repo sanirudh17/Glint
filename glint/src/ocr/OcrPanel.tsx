@@ -8,7 +8,7 @@ import "./ocr.css";
 export function OcrPanel() {
   const [res, setRes] = useState<OcrResult | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [copied, setCopied] = useState(true); // the flow already copied on open
+  const [copied, setCopied] = useState(false); // nothing is copied until the user clicks Copy
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -34,12 +34,14 @@ export function OcrPanel() {
       <div className="ocr-header">
         {hasText ? (
           <>
-            <span className="ocr-ok">{copied ? "Copied to clipboard ✓" : "Edited"}</span>
+            <span className={copied ? "ocr-ok" : "ocr-muted"}>
+              {copied ? "Copied to clipboard ✓" : "Select text, or Copy all"}
+            </span>
             <span className="ocr-spacer" />
             <span className="ocr-counts">{countsLabel(res!)}</span>
           </>
         ) : (
-          <span className="ocr-ok">Captured text</span>
+          <span className="ocr-muted">Captured text</span>
         )}
       </div>
 

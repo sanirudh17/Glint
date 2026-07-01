@@ -32,14 +32,11 @@ pub fn ocr_copy(text: String) -> Result<(), String> {
     crate::clipboard::copy_text(&text)
 }
 
-/// Copy the text, stash the output for the panel, and open (or focus) the panel.
-/// Shared by every OCR flow. Runs off the main thread (callers are async/spawned).
+/// Stash the OCR output for the panel and open (or focus) it. Shared by every OCR
+/// flow. Deliberately does NOT copy to the clipboard — the user copies explicitly
+/// (all text or a selection) from the panel, so we never clutter their clipboard
+/// with text they didn't ask for. Runs off the main thread (callers are async/spawned).
 pub fn publish_and_open(app: &tauri::AppHandle, out: super::OcrOutput) {
-    // Don't clobber the clipboard with an empty string when nothing was recognized;
-    // the panel still opens to show its empty state.
-    if !out.text.is_empty() {
-        let _ = crate::clipboard::copy_text(&out.text);
-    }
     *app.state::<OcrState>().0.lock().unwrap() = Some(out);
     let _ = super::window::build_ocr_window(app);
 }
