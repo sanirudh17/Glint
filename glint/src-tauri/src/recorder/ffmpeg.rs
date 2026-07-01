@@ -35,7 +35,7 @@ pub struct AudioInput {
 /// segment carries exactly one aac stream: real sources are normalized to a
 /// canonical format, and a segment with zero connected sources gets a silent
 /// `anullsrc` track in that same format. All segments' aac is then concat-compatible.
-pub fn build_ffmpeg_args(target: &RecordTarget, fps: u32, out: &str, audio: &[AudioInput], want_audio: bool) -> Vec<String> {
+pub fn build_ffmpeg_args(target: &RecordTarget, fps: u32, out: &str, audio: &[AudioInput], want_audio: bool, draw_mouse: bool) -> Vec<String> {
     let mut a: Vec<String> = vec![
         "-y".into(),
         "-nostats".into(),
@@ -43,6 +43,10 @@ pub fn build_ffmpeg_args(target: &RecordTarget, fps: u32, out: &str, audio: &[Au
         "-f".into(), "gdigrab".into(),
         "-framerate".into(), fps.to_string(),
     ];
+    if !draw_mouse {
+        // Hide the OS cursor in the capture; the FX overlay draws our own pointer.
+        a.extend(["-draw_mouse".into(), "0".into()]);
+    }
     if let RecordTarget::Region { x, y, w, h } = target {
         a.extend([
             "-offset_x".into(), x.to_string(),
@@ -149,7 +153,7 @@ mod tests {
     fn args_silence_stderr_to_avoid_pipe_backpressure() {
         // The undrained capacity-1 sidecar channel stalls ffmpeg if stderr is chatty;
         // these flags keep it quiet after startup. Guard against a regression.
-        let a = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false);
+        let a = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false, true);
         assert!(a.iter().any(|s| s == "-nostats"));
         assert!(a.windows(2).any(|w| w[0] == "-loglevel" && w[1] == "error"));
     }
@@ -163,7 +167,7 @@ mod tests {
 
     #[test]
     fn fullscreen_args_have_no_offset() {
-        let a = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/out.mp4", &[], false);
+        let a = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/out.mp4", &[], false, true);
         assert!(a.contains(&"gdigrab".to_string()));
         assert!(a.contains(&"desktop".to_string()));
         assert!(!a.iter().any(|s| s == "-offset_x"));
@@ -177,10 +181,28 @@ mod tests {
     #[test]
     fn region_args_carry_offset_and_size() {
         let t = RecordTarget::Region { x: 100, y: 50, w: 640, h: 480 };
-        let a = build_ffmpeg_args(&t, 30, "C:/r.mp4", &[], false);
+        let a = build_ffmpeg_args(&t, 30, "C:/r.mp4", &[], false, true);
         assert!(a.windows(2).any(|w| w[0] == "-offset_x" && w[1] == "100"));
         assert!(a.windows(2).any(|w| w[0] == "-offset_y" && w[1] == "50"));
         assert!(a.windows(2).any(|w| w[0] == "-video_size" && w[1] == "640x480"));
+    }
+
+    #[test]
+    fn draw_mouse_off_inserts_flag() {
+        let a = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/out.mp4", &[], false, false);
+        // -draw_mouse 0 is a gdigrab input option: it must appear after "gdigrab"
+        // and before the "-i desktop" input.
+        let g = a.iter().position(|s| s == "gdigrab").unwrap();
+        let dm = a.iter().position(|s| s == "-draw_mouse").expect("draw_mouse present");
+        let input = a.iter().position(|s| s == "desktop").unwrap();
+        assert_eq!(a[dm + 1], "0");
+        assert!(g < dm && dm < input, "draw_mouse must sit between gdigrab and -i");
+    }
+
+    #[test]
+    fn draw_mouse_on_omits_flag() {
+        let a = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/out.mp4", &[], false, true);
+        assert!(!a.iter().any(|s| s == "-draw_mouse"));
     }
 
     fn ai(rate: u32) -> AudioInput {
@@ -193,7 +215,7 @@ mod tests {
     #[test]
     fn no_audio_is_identical_to_silent_video() {
         // No audio wanted → pure video, no aac stream, no filter, no silent pad.
-        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false);
+        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false, true);
         assert!(!v.iter().any(|s| s == "-c:a"));
         assert!(!v.iter().any(|s| s == "-filter_complex"));
         assert!(!v.iter().any(|s| s.contains("anullsrc")));
@@ -202,7 +224,7 @@ mod tests {
 
     #[test]
     fn one_source_maps_directly_no_amix() {
-        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000)], true);
+        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000)], true, true);
         // input 0 = video (desktop), input 1 = the pipe
         assert!(v.windows(2).any(|w| w[0] == "-f" && w[1] == "f32le"));
         assert!(v.windows(2).any(|w| w[0] == "-ar" && w[1] == "48000"));
@@ -218,16 +240,16 @@ mod tests {
     fn mic_gets_voice_eq_system_does_not() {
         const FX: &str = "pan=stereo|c0=c0|c1=c0,highpass=f=80,equalizer=f=400:width_type=o:width=1.4:g=-2,equalizer=f=3500:width_type=o:width=1.4:g=3";
         // Single mic source: cleanup inline before the format normalize.
-        let m = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai_mic(48000)], true);
+        let m = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai_mic(48000)], true, true);
         assert!(m.iter().any(|s| *s == format!("[1:a]aresample=async=1,{FX},aformat=sample_rates=48000:channel_layouts=stereo[aout]")));
         // System (input 1) passes through; mic (input 2) is pre-filtered then mixed.
-        let both = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000), ai_mic(48000)], true);
+        let both = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000), ai_mic(48000)], true, true);
         assert!(both.iter().any(|s| *s == format!("[2:a]{FX}[m2];[1:a][m2]amix=inputs=2:duration=longest:normalize=0,aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[aout]")));
     }
 
     #[test]
     fn two_sources_use_amix() {
-        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000), ai(44100)], true);
+        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000), ai(44100)], true, true);
         assert!(v.iter().any(|s| s == "[1:a][2:a]amix=inputs=2:duration=longest:normalize=0,aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[aout]"));
         assert!(v.windows(2).any(|w| w[0] == "-c:a" && w[1] == "aac"));
         // both rates present as input options
@@ -237,7 +259,7 @@ mod tests {
 
     #[test]
     fn audio_inputs_carry_thread_queue_size() {
-        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000)], true);
+        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000)], true, true);
         assert!(v.windows(2).any(|w| w[0] == "-thread_queue_size" && w[1] == "1024"));
     }
 
@@ -245,7 +267,7 @@ mod tests {
     fn want_audio_with_no_sources_injects_silent_aac() {
         // Audio wanted but no source connected this segment → a silent anullsrc track
         // keeps the segment's stream layout (video + 1 aac) homogeneous for concat-copy.
-        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], true);
+        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], true, true);
         assert!(v.windows(2).any(|w| w[0] == "-f" && w[1] == "lavfi"));
         assert!(v.iter().any(|s| s == "anullsrc=channel_layout=stereo:sample_rate=48000"));
         assert!(v.iter().any(|s| s == "[1:a]aformat=sample_rates=48000:channel_layouts=stereo[aout]"));
@@ -258,7 +280,7 @@ mod tests {
     #[test]
     fn no_silent_pad_when_audio_not_wanted() {
         // Empty audio + want_audio=false (no audio recording) must stay pure video.
-        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false);
+        let v = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false, true);
         assert!(!v.iter().any(|s| s.contains("anullsrc")));
         assert!(!v.iter().any(|s| s == "-c:a"));
     }

@@ -117,6 +117,7 @@ async fn spawn_segment(
     seg_index: usize,
     cfg: AudioConfig,
     controls: &AudioControls,
+    draw_mouse: bool,
 ) -> Result<Segment, String> {
     use tokio::io::AsyncWriteExt;
 
@@ -181,7 +182,7 @@ async fn spawn_segment(
     // `want_audio` is the recording's intent (system or mic enabled), not how many
     // sources actually connected this segment — so a segment whose sources all failed
     // still gets a silent aac track and stays concat-copy compatible with audio segments.
-    let args = ffmpeg::build_ffmpeg_args(&target, fps, path, &inputs, cfg.system || cfg.mic);
+    let args = ffmpeg::build_ffmpeg_args(&target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse);
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("sidecar resolve: {e}"))?;
     let (rx_ev, child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
 
@@ -626,7 +627,7 @@ pub async fn recorder_start(
     // Bring segment 0 up behind the visible bar. Pause/resume appends further
     // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual
     // delivered rate still depends on the machine/screen resolution).
-    let seg0 = match spawn_segment(&app, target, FPS, &segment_path(&out_str, 0), 0, audio_cfg, &controls).await {
+    let seg0 = match spawn_segment(&app, target, FPS, &segment_path(&out_str, 0), 0, audio_cfg, &controls, true).await {
         Ok(s) => s,
         Err(e) => {
             windows::close_control_bar(&app);
@@ -711,7 +712,7 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
     };
     let (target, fps, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
     let path = segment_path(&out_path, idx);
-    let seg = spawn_segment(&app, target, fps, &path, idx, cfg, &controls).await
+    let seg = spawn_segment(&app, target, fps, &path, idx, cfg, &controls, true).await
         .map_err(|e| {
             let _ = app.emit("glint-toast", "Couldn't resume recording");
             e
