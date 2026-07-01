@@ -90,14 +90,26 @@ capture/library/editor path.
   Library recording rows (`recorder_open_trim`, IPC by id — no cross-domain imports). **Recorder
   isolation honored** (`trim.rs` touches only `crate::db` + recorder-owned helpers); the recording
   ffmpeg/gdigrab/WASAPI path is **completely untouched** (0-line diff). New Cargo feature
-  `protocol-asset`; new sidecar `ffprobe`. *Built — awaiting at-screen.*
+  `protocol-asset`; new sidecar `ffprobe`. *Shipped — at-screen verified (drag-scrub trim, Save
+  copy/Overwrite, video "Open in Glint" via per-extension shell verb).*
   (See PHASE-9-RECORDING-TRIM-ACCEPTANCE.md.)
 
 ## Planned
 
-- _(Next phase TBD.)_ Deferred recorder follow-ups (accepted gaps, not yet scheduled): mic RAW
-  capture for a fuller voice timbre, true 60 fps via `ddagrab`, and a webcam device picker. Trim
-  follow-ups: clip reordering, redo, audio waveform, fades/speed changes.
+- **Phase 10 — OCR / Capture Text** (next up). Extract selectable text from a screenshot region
+  (CleanShot "Capture Text"). Local-only — no cloud OCR. Design TBD (brainstorm).
+
+- **Deferred CleanShot video-polish** (in-scope, not yet scheduled — parked for a later phase):
+  - **Click & keystroke highlighting** during recording (visualise clicks / show pressed keys).
+  - **Cursor highlight / spotlight**, cursor hide, and cursor-size options while recording.
+  - **Independent webcam layer** — reposition/resize/remove the webcam *after* recording (today
+    the bubble is baked into the video at capture time; a post-hoc layer would need a separate
+    webcam track, a bigger architectural change).
+
+- **Deferred recorder follow-ups** (accepted gaps): mic RAW capture for a fuller voice timbre,
+  true 60 fps via `ddagrab`, and a webcam device picker.
+
+- **Deferred trim follow-ups**: clip reordering, redo, audio waveform, fades/speed changes.
 
 ## Out of scope (project-wide, unchanged)
 Cloud/upload/share-links, teams/collaboration, login/auth, web backend/network calls, scrolling
