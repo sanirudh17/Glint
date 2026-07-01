@@ -61,17 +61,40 @@ fn is_registered_at(base: &str, exe: &str) -> bool {
     matches!(stored, Ok(s) if s == expected_command(exe))
 }
 
+/// Tell the shell that file associations changed, so a newly (un)registered verb shows
+/// up in Explorer's menu immediately instead of only after the association cache expires
+/// or explorer.exe restarts. Without this a first-ever registration (e.g. the new video
+/// verb) can stay invisible until the next reboot.
+fn notify_assoc_changed() {
+    const SHCNE_ASSOCCHANGED: i32 = 0x0800_0000;
+    const SHCNF_IDLIST: u32 = 0x0000;
+    #[link(name = "shell32")]
+    extern "system" {
+        fn SHChangeNotify(
+            event_id: i32,
+            flags: u32,
+            item1: *const std::ffi::c_void,
+            item2: *const std::ffi::c_void,
+        );
+    }
+    unsafe { SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, std::ptr::null(), std::ptr::null()) };
+}
+
 /// Register the verb at both production locations (image + video) for the current exe.
 pub fn register() -> Result<(), String> {
     let exe = current_exe_string()?;
     register_at(IMAGE_SHELL_KEY, &exe)?;
-    register_at(VIDEO_SHELL_KEY, &exe)
+    register_at(VIDEO_SHELL_KEY, &exe)?;
+    notify_assoc_changed();
+    Ok(())
 }
 
 /// Remove both production verbs.
 pub fn unregister() -> Result<(), String> {
     unregister_at(IMAGE_SHELL_KEY)?;
-    unregister_at(VIDEO_SHELL_KEY)
+    unregister_at(VIDEO_SHELL_KEY)?;
+    notify_assoc_changed();
+    Ok(())
 }
 
 /// Both verbs present AND pointing at the current exe? (A partial/stale registration —
