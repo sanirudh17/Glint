@@ -1,16 +1,19 @@
 //! Windows Explorer "Open in Glint" right-click verb (HKCU, no admin).
 //!
-//! Registers a single shell verb under the `image` perceived type, which Windows
-//! assigns to common raster formats (png/jpg/jpeg/webp/bmp/gif) — one durable
-//! entry instead of a per-extension fan-out. HKCU-only honours the no-admin /
-//! single-user constraint. Idempotent: `register()` is safe to call on every
-//! launch and self-heals a stale exe path after the app is moved or updated.
+//! Registers a shell verb under the `image` perceived type (png/jpg/jpeg/webp/bmp/gif
+//! → open in the editor) AND the `video` perceived type (mp4/mov/mkv/webm/avi… → open
+//! in the trim window) — one durable entry per type instead of a per-extension fan-out.
+//! HKCU-only honours the no-admin / single-user constraint. Idempotent: `register()` is
+//! safe to call on every launch and self-heals a stale exe path after the app is moved
+//! or updated.
 
 use winreg::enums::*;
 use winreg::RegKey;
 
-/// The shell-verb key under HKEY_CURRENT_USER (real, production location).
-const SHELL_KEY: &str = r"Software\Classes\SystemFileAssociations\image\shell\Glint";
+/// The image shell-verb key under HKEY_CURRENT_USER (real, production location).
+const IMAGE_SHELL_KEY: &str = r"Software\Classes\SystemFileAssociations\image\shell\Glint";
+/// The video shell-verb key — same verb, `video` perceived type (opens the trim window).
+const VIDEO_SHELL_KEY: &str = r"Software\Classes\SystemFileAssociations\video\shell\Glint";
 
 /// The launch command we store under `…\Glint\command` (default value).
 pub fn expected_command(exe: &str) -> String {
@@ -58,21 +61,24 @@ fn is_registered_at(base: &str, exe: &str) -> bool {
     matches!(stored, Ok(s) if s == expected_command(exe))
 }
 
-/// Register the verb at the production location for the current exe.
+/// Register the verb at both production locations (image + video) for the current exe.
 pub fn register() -> Result<(), String> {
     let exe = current_exe_string()?;
-    register_at(SHELL_KEY, &exe)
+    register_at(IMAGE_SHELL_KEY, &exe)?;
+    register_at(VIDEO_SHELL_KEY, &exe)
 }
 
-/// Remove the production verb.
+/// Remove both production verbs.
 pub fn unregister() -> Result<(), String> {
-    unregister_at(SHELL_KEY)
+    unregister_at(IMAGE_SHELL_KEY)?;
+    unregister_at(VIDEO_SHELL_KEY)
 }
 
-/// Is the production verb present AND pointing at the current exe?
+/// Both verbs present AND pointing at the current exe? (A partial/stale registration —
+/// e.g. only the image verb from a pre-video build — reads false and triggers a re-register.)
 pub fn is_registered() -> bool {
     match current_exe_string() {
-        Ok(exe) => is_registered_at(SHELL_KEY, &exe),
+        Ok(exe) => is_registered_at(IMAGE_SHELL_KEY, &exe) && is_registered_at(VIDEO_SHELL_KEY, &exe),
         Err(_) => false,
     }
 }

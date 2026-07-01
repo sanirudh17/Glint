@@ -107,6 +107,18 @@ pub fn update_capture_file(
     Ok(())
 }
 
+/// Look up a live (non-deleted) capture's id by exact file path. Used when a file is
+/// opened from Explorer so an in-place Overwrite can update the right Library row (a
+/// path with no row is an external file → the caller falls back to id -1).
+pub fn find_capture_id_by_path(conn: &Connection, path: &str) -> Option<i64> {
+    conn.query_row(
+        "SELECT id FROM captures WHERE path = ?1 AND deleted_at IS NULL ORDER BY id DESC LIMIT 1",
+        rusqlite::params![path],
+        |r| r.get::<_, i64>(0),
+    )
+    .ok()
+}
+
 pub fn list_captures(conn: &Connection) -> rusqlite::Result<Vec<CaptureRow>> {
     ensure_captures_table(conn)?;
     let mut stmt = conn.prepare(

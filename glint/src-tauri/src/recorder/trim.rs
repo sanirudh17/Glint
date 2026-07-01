@@ -163,6 +163,25 @@ pub async fn recorder_trim_probe(app: tauri::AppHandle, path: String) -> Result<
     parse_ffprobe_json(&json)
 }
 
+/// Video source extensions accepted for "Open in Glint" → trim. Matches the Windows
+/// `video` perceived type the shell verb registers under.
+pub const VIDEO_EXTS: [&str; 7] = ["mp4", "mov", "mkv", "webm", "avi", "m4v", "wmv"];
+
+/// True if `path` ends with a supported video extension (case-insensitive).
+pub fn is_video_path(path: &str) -> bool {
+    let lower = path.to_lowercase();
+    VIDEO_EXTS.iter().any(|ext| lower.ends_with(&format!(".{ext}")))
+}
+
+/// The first argv entry pointing at an existing file with a supported video extension.
+/// Pure (no app handle) so it's unit-testable; used by the cold-start argv parse and the
+/// warm-start single-instance callback to route a video to the trim window.
+pub fn first_video_arg(args: &[String]) -> Option<String> {
+    args.iter()
+        .find(|a| is_video_path(a) && std::path::Path::new(a).is_file())
+        .cloned()
+}
+
 /// Export the trimmed recording in one ffmpeg pass. Always encodes to a temp file
 /// first, then commits per `mode` ("copy" | "overwrite"). The original is never at
 /// risk mid-encode: on overwrite it is moved aside and only removed once the new file
@@ -258,7 +277,11 @@ pub async fn recorder_trim_export(
         let db = app.state::<crate::Db>();
         let conn = db.0.lock().unwrap();
         if mode == "overwrite" {
-            let _ = crate::db::update_capture_file(&conn, id, bytes, thumb.as_deref(), w, h);
+            // id < 0 == an external file with no Library row (opened via Explorer) — the
+            // file is replaced in place, there's just no row to refresh.
+            if id >= 0 {
+                let _ = crate::db::update_capture_file(&conn, id, bytes, thumb.as_deref(), w, h);
+            }
         } else {
             let row = crate::db::NewCapture {
                 kind: "recording".into(),
@@ -287,6 +310,23 @@ pub async fn recorder_trim_export(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn is_video_path_matches_known_extensions_case_insensitive() {
+        assert!(is_video_path(r"C:\clips\demo.mp4"));
+        assert!(is_video_path(r"C:\clips\DEMO.MOV"));
+        assert!(is_video_path("a.webm"));
+        assert!(!is_video_path(r"C:\pics\shot.png"));
+        assert!(!is_video_path(r"C:\notes.txt"));
+        assert!(!is_video_path("noext"));
+    }
+
+    #[test]
+    fn first_video_arg_ignores_nonvideo_and_missing_files() {
+        // A .png is never a video, and a non-existent .mp4 doesn't pass the is_file check.
+        let args = vec!["glint.exe".to_string(), r"C:\pics\shot.png".to_string(), r"C:\nope_missing_xyz.mp4".to_string()];
+        assert_eq!(first_video_arg(&args), None);
+    }
 
     #[test]
     fn video_only_two_regions_concat() {

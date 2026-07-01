@@ -13,7 +13,7 @@ export function General() {
     >
       <Field
         label="Open in Glint (right-click menu)"
-        hint="Add an &quot;Open in Glint&quot; entry to the Windows Explorer right-click menu for image files."
+        hint="Add an &quot;Open in Glint&quot; entry to the Windows Explorer right-click menu for image files (opens the editor) and video files (opens the trimmer)."
       >
         <Switch
           checked={settings?.explorer_menu_enabled ?? true}
