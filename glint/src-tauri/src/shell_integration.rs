@@ -67,7 +67,10 @@ fn is_registered_at(base: &str, exe: &str) -> bool {
 /// verb) can stay invisible until the next reboot.
 fn notify_assoc_changed() {
     const SHCNE_ASSOCCHANGED: i32 = 0x0800_0000;
-    const SHCNF_IDLIST: u32 = 0x0000;
+    // SHCNF_IDLIST (0x0000) + SHCNF_FLUSH (0x1000): flush synchronously so the shell has
+    // processed the association change before we return — improves first-time visibility
+    // of a brand-new verb without waiting for an explorer restart / reboot.
+    const SHCNF_IDLIST_FLUSH: u32 = 0x0000 | 0x1000;
     #[link(name = "shell32")]
     extern "system" {
         fn SHChangeNotify(
@@ -77,7 +80,7 @@ fn notify_assoc_changed() {
             item2: *const std::ffi::c_void,
         );
     }
-    unsafe { SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST, std::ptr::null(), std::ptr::null()) };
+    unsafe { SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST_FLUSH, std::ptr::null(), std::ptr::null()) };
 }
 
 /// Register the verb at both production locations (image + video) for the current exe.
