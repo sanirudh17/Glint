@@ -9,3 +9,6 @@ export interface OcrResult {
 
 export const ocrResult = (): Promise<OcrResult | null> =>
   invoke<OcrResult | null>("ocr_result");
+
+export const extractCapture = (id: number): Promise<void> =>
+  invoke<void>("ocr_extract_capture", { id });

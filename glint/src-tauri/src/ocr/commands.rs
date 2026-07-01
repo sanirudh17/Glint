@@ -25,3 +25,39 @@ pub fn ocr_result(app: tauri::AppHandle) -> Option<OcrResultDto> {
             word_count: o.word_count,
         })
 }
+
+/// Copy the text, stash the output for the panel, and open (or focus) the panel.
+/// Shared by every OCR flow. Runs off the main thread (callers are async/spawned).
+pub fn publish_and_open(app: &tauri::AppHandle, out: super::OcrOutput) {
+    let _ = crate::clipboard::copy_text(&out.text);
+    *app.state::<OcrState>().0.lock().unwrap() = Some(out);
+    let _ = super::window::build_ocr_window(app);
+}
+
+/// OCR an existing Library capture (image) by id: decode its PNG, recognize, copy,
+/// and open the panel. Async because it builds the panel window.
+#[tauri::command(async)]
+pub async fn ocr_extract_capture(app: tauri::AppHandle, id: i64) -> Result<(), String> {
+    let path = {
+        let db = app.state::<crate::Db>();
+        let conn = db.0.lock().unwrap();
+        crate::db::capture_path(&conn, id)
+            .map_err(|e| e.to_string())?
+            .ok_or("Couldn't open that capture")?
+    };
+    let bytes = std::fs::read(&path).map_err(|_| "Couldn't open that capture".to_string())?;
+    let img = image::load_from_memory(&bytes)
+        .map_err(|_| "Couldn't open that capture".to_string())?
+        .to_rgba8();
+    let (w, h) = (img.width(), img.height());
+    match super::recognize(&img.into_raw(), w, h) {
+        Ok(out) => {
+            publish_and_open(&app, out);
+            Ok(())
+        }
+        Err(e) => {
+            let _ = tauri::Emitter::emit(&app, "glint-toast", &e);
+            Err(e)
+        }
+    }
+}
