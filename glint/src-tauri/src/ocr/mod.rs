@@ -2,12 +2,20 @@
 //! (fully local, no cloud). ISOLATED from `recorder/` (imports nothing from it, and
 //! it imports nothing from here).
 
+pub mod commands;
+pub mod window;
+
 #[derive(Clone, serde::Serialize)]
 pub struct OcrOutput {
     pub text: String,
     pub line_count: usize,
     pub word_count: usize,
 }
+
+/// The last OCR result, stashed for the `#/ocr` panel to read back (mirrors the trim
+/// window's `TrimTarget` pattern).
+#[derive(Default)]
+pub struct OcrState(pub std::sync::Mutex<Option<OcrOutput>>);
 
 /// Join OCR lines into a single block of text: trim trailing whitespace per line,
 /// join with `\n`, drop a trailing blank tail. Empty / whitespace-only → None.

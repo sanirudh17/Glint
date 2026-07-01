@@ -112,6 +112,7 @@ pub fn run() {
         .manage(crate::recorder::RecorderState::default())
         .manage(crate::recorder::RecorderHud::default())
         .manage(crate::recorder::RecorderTrimState::default())
+        .manage(crate::ocr::OcrState::default())
         .setup(|app| {
             tray::build(app.handle())?;
             shortcuts::register(app.handle())?;
@@ -269,6 +270,7 @@ pub fn run() {
             crate::recorder::trim::recorder_trim_export,
             recorder::recorder_open_trim,
             recorder::recorder_trim_target,
+            crate::ocr::commands::ocr_result,
         ])
         .on_menu_event(|app, event| {
             // Pin right-click menus pop up via WebviewWindow::popup_menu and route

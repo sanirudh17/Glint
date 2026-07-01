@@ -14,6 +14,7 @@ import { RegionSelect } from "./recorder/RegionSelect";
 import { RecHud } from "./recorder/RecHud";
 import { RecCam } from "./recorder/RecCam";
 import { TrimView } from "./recorder/TrimView";
+import { OcrPanel } from "./ocr/OcrPanel";
 import "./components/shell.css";
 
 /**
@@ -124,6 +125,15 @@ export const router = createHashRouter([
      */
     path: "/rec-trim",
     element: <TrimView />,
+  },
+  {
+    /**
+     * Normal decorated OCR review panel — a small standalone window (its own OS
+     * titlebar) showing text extracted from a capture. Sits outside AppShell so
+     * OcrPanel is the sole root. URL: tauri://localhost/#/ocr
+     */
+    path: "/ocr",
+    element: <OcrPanel />,
   },
   {
     path: "/",
