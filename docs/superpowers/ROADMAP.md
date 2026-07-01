@@ -78,10 +78,26 @@ capture/library/editor path.
   new from capture/editor/overlay). *Shipped — at-screen verified (circle, drag/resize, live
   toggle off/on, ✕, clean teardown on stop).* (See PHASE-8-RECORDER-R3-ACCEPTANCE.md.)
 
+- **Phase 9 — Recording Trim / Quick-Edit** (multi-cut timeline trim of a finished recording). A
+  new **isolated** `recorder/trim.rs` opens a normal decorated **trim window** (`rec-trim`) whose
+  `<video>` plays the MP4 via the **asset protocol** (`convertFileSrc`). A pure timeline model
+  (`trimModel.ts`: split / delete keep-regions / undo) drives a track UI with **gap-skipping
+  preview playback** and frame-step (`1/fps` from a bundled **ffprobe** sidecar that also reports
+  duration + audio-presence). Export is **one** ffmpeg `filter_complex` pass (`trim`+`concat`,
+  re-encode → frame-accurate; audio interleaved when present), always to a **temp file first**,
+  then committed as **Save copy** (new `… (trimmed).mp4` + Library row) or **Overwrite**
+  (exit-checked, **rollback-safe** in-place replace + refreshed thumb). Opened from the HUD and
+  Library recording rows (`recorder_open_trim`, IPC by id — no cross-domain imports). **Recorder
+  isolation honored** (`trim.rs` touches only `crate::db` + recorder-owned helpers); the recording
+  ffmpeg/gdigrab/WASAPI path is **completely untouched** (0-line diff). New Cargo feature
+  `protocol-asset`; new sidecar `ffprobe`. *Built — awaiting at-screen.*
+  (See PHASE-9-RECORDING-TRIM-ACCEPTANCE.md.)
+
 ## Planned
 
 - _(Next phase TBD.)_ Deferred recorder follow-ups (accepted gaps, not yet scheduled): mic RAW
-  capture for a fuller voice timbre, true 60 fps via `ddagrab`, and a webcam device picker.
+  capture for a fuller voice timbre, true 60 fps via `ddagrab`, and a webcam device picker. Trim
+  follow-ups: clip reordering, redo, audio waveform, fades/speed changes.
 
 ## Out of scope (project-wide, unchanged)
 Cloud/upload/share-links, teams/collaboration, login/auth, web backend/network calls, scrolling
