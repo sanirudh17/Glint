@@ -15,8 +15,8 @@ pub fn build_ocr_window(app: &AppHandle) -> tauri::Result<()> {
         .title("Glint — Captured Text")
         .decorations(true)
         .resizable(true)
-        .inner_size(460.0, 420.0)
-        .min_inner_size(360.0, 280.0)
+        .inner_size(500.0, 620.0)
+        .min_inner_size(380.0, 400.0)
         .center()
         .visible(true)
         .build()?;
