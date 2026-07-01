@@ -14,6 +14,8 @@ const fmt = (s: number) => {
   return `${m}:${String(r).padStart(2, "0")}`;
 };
 
+const EPS = 1e-4;
+
 export function TrimView() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const [target, setTarget] = useState<{ id: number; path: string } | null>(null);
@@ -22,10 +24,18 @@ export function TrimView() {
   const [err, setErr] = useState<string | null>(null);
   const [clips, setClips] = useState<Clip[]>([]);
   const [history, setHistory] = useState<Clip[][]>([]);
-  const [selectedId, setSelectedId] = useState<number | null>(null);
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [exporting, setExporting] = useState<number | null>(null); // percent or null
+
+  // Scrub plumbing: the pointer drives the playhead instantly (so the red line is
+  // always glued to the cursor), while the <video> catches up via *coalesced* seeks —
+  // at most one seek is ever in flight; the latest requested time is remembered and
+  // applied when the previous seek finishes. This keeps a fast drag responsive instead
+  // of flooding the decoder with seeks it silently drops.
+  const draggingRef = useRef(false);
+  const seekingRef = useRef(false);
+  const pendingRef = useRef<number | null>(null);
 
   const duration = probe?.duration_secs ?? 0;
   const fps = probe?.fps && probe.fps > 0 ? probe.fps : 30;
@@ -33,6 +43,14 @@ export function TrimView() {
   const outDur = ranges.reduce((a, [s, e]) => a + (e - s), 0);
   const noop = ranges.length === 1 && ranges[0][0] <= 0.001 && ranges[0][1] >= duration - 0.05;
   const canSave = clips.length > 0 && keptCount(clips) > 0 && !noop && exporting === null;
+
+  // The "selected" block is simply the kept clip under the playhead — position the line
+  // in a section and Delete removes it. (At the very end, fall back to the last kept.)
+  const selected =
+    clips.find((c) => c.kept && playhead >= c.start - EPS && playhead < c.end - EPS) ??
+    (playhead >= duration - EPS ? [...clips].reverse().find((c) => c.kept) : undefined);
+  const selectedId = selected?.id ?? null;
+  const canDelete = selectedId != null && keptCount(clips) > 1 && exporting === null;
 
   useEffect(() => {
     trimTarget().then(async (t) => {
@@ -52,12 +70,48 @@ export function TrimView() {
     return () => { un.then((f) => f()).catch(() => {}); };
   }, []);
 
+  // ── video seek coalescing ───────────────────────────────────────────────────
+  const applyVideoSeek = useCallback((t: number) => {
+    const v = videoRef.current; if (!v) return;
+    const clamped = Math.max(0, Math.min(t, duration || t));
+    if (seekingRef.current) { pendingRef.current = clamped; return; }
+    seekingRef.current = true;
+    try { v.currentTime = clamped; } catch { seekingRef.current = false; }
+  }, [duration]);
+  const onSeeked = () => {
+    seekingRef.current = false;
+    if (pendingRef.current != null) {
+      const t = pendingRef.current; pendingRef.current = null;
+      applyVideoSeek(t);
+    }
+  };
+
+  // Drag scrub from the timeline: instant playhead + coalesced video seek. Pauses
+  // playback on grab so seeking and playback don't fight.
+  const scrub = useCallback((t: number, phase: "start" | "move" | "end") => {
+    const clamped = Math.max(0, Math.min(t, duration));
+    if (phase === "start") {
+      draggingRef.current = true;
+      const v = videoRef.current;
+      if (v && !v.paused) { v.pause(); setPlaying(false); }
+    }
+    setPlayhead(clamped);
+    applyVideoSeek(clamped);
+    if (phase === "end") draggingRef.current = false;
+  }, [duration, applyVideoSeek]);
+
+  // Programmatic seek (frame-step keys).
+  const seek = useCallback((t: number) => {
+    const clamped = Math.max(0, Math.min(t, duration));
+    setPlayhead(clamped);
+    applyVideoSeek(clamped);
+  }, [duration, applyVideoSeek]);
+
   const pushHistory = useCallback(() => setHistory((h) => [...h, clips]), [clips]);
   const doSplit = useCallback(() => { pushHistory(); setClips((c) => splitClips(c, playhead)); }, [pushHistory, playhead]);
   const doDelete = useCallback(() => {
-    if (selectedId == null) return;
-    if (keptCount(clips) <= 1) return; // can't delete the last block
-    pushHistory(); setClips((c) => setKept(c, selectedId, false)); setSelectedId(null);
+    if (selectedId == null || keptCount(clips) <= 1) return; // can't delete the last block
+    pushHistory(); setClips((c) => setKept(c, selectedId, false));
   }, [selectedId, clips, pushHistory]);
   const doUndo = useCallback(() => {
     setHistory((h) => { if (!h.length) return h; setClips(h[h.length - 1]); return h.slice(0, -1); });
@@ -66,6 +120,7 @@ export function TrimView() {
   // Gap-skipping playback: while playing, jump the playhead past removed regions.
   const onTimeUpdate = () => {
     const v = videoRef.current; if (!v) return;
+    if (draggingRef.current) return; // the pointer owns the playhead while scrubbing
     let t = v.currentTime;
     if (playing) {
       const inKept = ranges.some(([s, e]) => t >= s - 0.02 && t < e);
@@ -78,7 +133,6 @@ export function TrimView() {
     setPlayhead(t);
   };
 
-  const seek = (t: number) => { const v = videoRef.current; if (v) { v.currentTime = Math.max(0, Math.min(t, duration)); setPlayhead(v.currentTime); } };
   const togglePlay = () => { const v = videoRef.current; if (!v) return; if (v.paused) { v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); } };
 
   // Cancel/close: confirm first if there are unsaved cuts (each split/delete pushes
@@ -102,7 +156,7 @@ export function TrimView() {
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doSplit, doDelete, doUndo, playhead, fps, exporting, requestClose]);
+  }, [doSplit, doDelete, doUndo, seek, playhead, fps, exporting, requestClose]);
 
   const save = (mode: "copy" | "overwrite") => {
     if (!target || !probe || !canSave) return;
@@ -120,7 +174,9 @@ export function TrimView() {
           ref={videoRef}
           className="trim-video"
           src={src}
+          preload="auto"
           onTimeUpdate={onTimeUpdate}
+          onSeeked={onSeeked}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
         />
@@ -133,14 +189,14 @@ export function TrimView() {
         <span className="trim-time">{fmt(playhead)} / {fmt(duration)}</span>
         <span className="trim-spacer" />
         <button className="trim-iconbtn" onClick={doSplit} title="Split at playhead (S)"><Scissors size={16} /></button>
-        <button className="trim-iconbtn" onClick={doDelete} disabled={selectedId == null || keptCount(clips) <= 1} title="Remove selected (Del)"><Trash2 size={16} /></button>
+        <button className="trim-iconbtn" onClick={doDelete} disabled={!canDelete} title="Remove the section at the playhead (Del)"><Trash2 size={16} /></button>
         <button className="trim-iconbtn" onClick={doUndo} disabled={!history.length} title="Undo (Ctrl+Z)"><Undo2 size={16} /></button>
       </div>
 
       {probe && (
         <TrimTimeline
           clips={clips} duration={duration} playhead={playhead}
-          selectedId={selectedId} onSelect={setSelectedId} onSeek={seek}
+          selectedId={selectedId} onScrub={scrub}
         />
       )}
 
