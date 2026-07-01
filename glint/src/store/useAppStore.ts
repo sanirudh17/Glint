@@ -16,6 +16,11 @@ export interface Settings {
   record_system_audio: boolean;
   record_microphone: boolean;
   record_webcam: boolean;
+  record_click_viz: boolean;
+  record_keystrokes: boolean;
+  record_cursor_spotlight: boolean;
+  record_cursor_hide: boolean;
+  record_cursor_size: "off" | "large" | "xl";
 }
 
 export interface Toast {
