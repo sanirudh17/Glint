@@ -3,6 +3,7 @@ mod clipboard;
 mod db;
 mod editor;
 mod hud;
+mod ocr;
 mod overlay;
 mod paths;
 mod pin;
