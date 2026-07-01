@@ -20,11 +20,19 @@ Tool uses a newer engine not exposed via that API.) We switched to **Tesseract 5
   (preprocess → PNG → shell out to the `tesseract` CLI → parse stdout). `OcrState`
   stashes the last result for the panel; `commands.rs` is the thin Tauri surface;
   `window.rs` builds the decorated `#/ocr` panel off-thread.
-- **Tesseract binary.** Resolved from the standard install dirs
-  (`C:\Program Files\Tesseract-OCR\tesseract.exe`) then PATH (`resolve_tesseract`).
-  Invoked with `-l eng --oem 1 --psm 6` on a temp PNG, console suppressed
-  (`CREATE_NO_WINDOW`). Missing binary → a clear "install Tesseract (winget install
-  UB-Mannheim.TesseractOCR)" error. Install includes `eng.traineddata`.
+- **Tesseract binary (bundled, zero-install).** `resolve_tesseract` prefers a
+  self-contained **bundled** copy at `src-tauri/binaries/tesseract/` (`tesseract.exe`
+  + its DLLs + `tessdata/eng.traineddata`), then falls back to a standard install
+  (`C:\Program Files\Tesseract-OCR`) then PATH. Invoked with `-l eng --oem 1 --psm 6`
+  (bundled copy also gets `--tessdata-dir`) on a temp PNG, console suppressed
+  (`CREATE_NO_WINDOW`). Nothing found → a clear "winget install
+  UB-Mannheim.TesseractOCR" error.
+  - The `binaries/tesseract/` folder is **git-ignored** (~160MB — the same policy as
+    the ffmpeg/ffprobe sidecars; GitHub can't hold files this large well). Populate it
+    per machine with `powershell -File scripts/fetch-tesseract.ps1` (installs via winget
+    if needed, then copies the runtime in). `tauri.conf.json` `bundle.resources` maps
+    it to `tesseract/`, so `tauri build` packages it → **distributed apps are truly
+    zero-install**. Everything stays local — no cloud.
 - **Accuracy: pre-OCR preprocessing.** `recognize` preprocesses (`preprocess_to_png`):
   **grayscale** → **invert dark backgrounds** to dark-on-light (`is_dark_background`)
   → **upscale** ~3× (CatmullRom, capped to `OCR_MAX_DIM` — `ocr_target_dims`). We do

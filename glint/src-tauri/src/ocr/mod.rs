@@ -86,8 +86,8 @@ pub fn recognize(rgba: &[u8], w: u32, h: u32) -> Result<OcrOutput, String> {
         return Err("Couldn't read text".into());
     }
     let png = preprocess_to_png(rgba, w, h)?;
-    let exe = resolve_tesseract().ok_or_else(|| TESS_MISSING.to_string())?;
-    let raw = run_tesseract(&exe, &png)?;
+    let tess = resolve_tesseract().ok_or_else(|| TESS_MISSING.to_string())?;
+    let raw = run_tesseract(&tess, &png)?;
 
     let lines: Vec<String> = raw.lines().map(|l| l.to_string()).collect();
     let text = assemble_text(&lines).unwrap_or_default();
@@ -126,17 +126,52 @@ fn preprocess_to_png(rgba: &[u8], w: u32, h: u32) -> Result<Vec<u8>, String> {
     Ok(png)
 }
 
-/// Locate the `tesseract` executable: standard install dirs first, then PATH.
-fn resolve_tesseract() -> Option<std::path::PathBuf> {
+/// A located Tesseract: the executable plus an optional explicit `tessdata` dir (set
+/// only for the bundled copy — an installed Tesseract finds its own).
+struct TessLoc {
+    exe: std::path::PathBuf,
+    tessdata: Option<std::path::PathBuf>,
+}
+
+/// Directories that may hold a BUNDLED, self-contained Tesseract (`tesseract.exe` +
+/// its DLLs + `tessdata/`): the repo `binaries/tesseract` in dev, and the layouts
+/// Tauri's `bundle.resources` produces next to the installed exe in prod.
+fn bundled_tesseract_dirs() -> Vec<std::path::PathBuf> {
+    use std::path::PathBuf;
+    let mut dirs = vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries/tesseract")];
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            dirs.push(dir.join("tesseract"));
+            dirs.push(dir.join("resources/tesseract"));
+            dirs.push(dir.join("binaries/tesseract"));
+        }
+    }
+    dirs
+}
+
+/// Locate Tesseract: the bundled copy first (zero-install), then a standard install,
+/// then PATH.
+fn resolve_tesseract() -> Option<TessLoc> {
     use std::path::{Path, PathBuf};
 
-    const CANDIDATES: [&str; 2] = [
+    for base in bundled_tesseract_dirs() {
+        let exe = base.join("tesseract.exe");
+        if exe.exists() {
+            let td = base.join("tessdata");
+            return Some(TessLoc {
+                exe,
+                tessdata: td.is_dir().then_some(td),
+            });
+        }
+    }
+
+    const INSTALLED: [&str; 2] = [
         r"C:\Program Files\Tesseract-OCR\tesseract.exe",
         r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
     ];
-    for c in CANDIDATES {
+    for c in INSTALLED {
         if Path::new(c).exists() {
-            return Some(PathBuf::from(c));
+            return Some(TessLoc { exe: PathBuf::from(c), tessdata: None });
         }
     }
     // Fall back to PATH via `where` (console suppressed).
@@ -147,7 +182,7 @@ fn resolve_tesseract() -> Option<std::path::PathBuf> {
         if let Some(line) = String::from_utf8_lossy(&out.stdout).lines().next() {
             let p = PathBuf::from(line.trim());
             if p.exists() {
-                return Some(p);
+                return Some(TessLoc { exe: p, tessdata: None });
             }
         }
     }
@@ -156,8 +191,9 @@ fn resolve_tesseract() -> Option<std::path::PathBuf> {
 
 /// Run Tesseract on a PNG (via a temp file) and return its stdout text. `--psm 6`
 /// treats the selection as one uniform block (keeps line structure for terminals /
-/// code); LSTM engine (`--oem 1`), English.
-fn run_tesseract(exe: &std::path::Path, png: &[u8]) -> Result<String, String> {
+/// code); LSTM engine (`--oem 1`), English. The bundled copy gets an explicit
+/// `--tessdata-dir` so it never depends on a system install.
+fn run_tesseract(tess: &TessLoc, png: &[u8]) -> Result<String, String> {
     let path = std::env::temp_dir().join(format!(
         "glint-ocr-{}-{}.png",
         std::process::id(),
@@ -168,13 +204,14 @@ fn run_tesseract(exe: &std::path::Path, png: &[u8]) -> Result<String, String> {
     ));
     std::fs::write(&path, png).map_err(|e| format!("temp write: {e}"))?;
 
-    let result = no_window(
-        std::process::Command::new(exe)
-            .arg(&path)
-            .arg("stdout")
-            .args(["-l", "eng", "--oem", "1", "--psm", "6"]),
-    )
-    .output();
+    let mut cmd = std::process::Command::new(&tess.exe);
+    cmd.arg(&path)
+        .arg("stdout")
+        .args(["-l", "eng", "--oem", "1", "--psm", "6"]);
+    if let Some(td) = &tess.tessdata {
+        cmd.arg("--tessdata-dir").arg(td);
+    }
+    let result = no_window(&mut cmd).output();
     let _ = std::fs::remove_file(&path);
 
     let out = result.map_err(|e| format!("Couldn't run Tesseract: {e}"))?;
