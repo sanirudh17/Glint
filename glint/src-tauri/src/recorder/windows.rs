@@ -293,3 +293,33 @@ pub fn close_cam_bubble(app: &AppHandle) {
         let _ = w.destroy();
     }
 }
+
+pub const TRIM_LABEL: &str = "rec-trim";
+
+/// The trim / quick-edit window: a NORMAL decorated, focused, resizable app window
+/// (unlike the transparent recorder overlays). Built off the main thread (async
+/// command) per the window-build rule. Single instance — focus if already open.
+pub fn build_trim_window(app: &AppHandle) -> tauri::Result<()> {
+    if let Some(w) = app.get_webview_window(TRIM_LABEL) {
+        let _ = w.set_focus();
+        return Ok(());
+    }
+    let win = WebviewWindowBuilder::new(app, TRIM_LABEL, WebviewUrl::App("index.html#/rec-trim".into()))
+        .title("Glint — Trim Recording")
+        .decorations(true)
+        .resizable(true)
+        .inner_size(900.0, 600.0)
+        .min_inner_size(640.0, 460.0)
+        .center()
+        .visible(true)
+        .build()?;
+    let _ = win.set_focus();
+    Ok(())
+}
+
+/// Close the trim window if open.
+pub fn close_trim_window(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window(TRIM_LABEL) {
+        let _ = w.close();
+    }
+}

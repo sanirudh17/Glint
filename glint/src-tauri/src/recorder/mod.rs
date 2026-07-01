@@ -322,6 +322,17 @@ pub struct LastRecording {
 #[derive(Default)]
 pub struct RecorderHud(pub Mutex<Option<LastRecording>>);
 
+/// The recording the trim window is editing. Set by `recorder_open_trim` before the
+/// window builds; the window reads it back via `recorder_trim_target`.
+#[derive(Clone)]
+pub struct TrimTarget { pub id: i64, pub path: String }
+
+#[derive(Default)]
+pub struct RecorderTrimState(pub Mutex<Option<TrimTarget>>);
+
+#[derive(Serialize)]
+pub struct TrimTargetDto { pub id: i64, pub path: String }
+
 #[derive(Serialize)]
 pub struct RecHudDataDto {
     pub id: i64,
@@ -836,6 +847,28 @@ pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command(async)]
 pub async fn recorder_open_region_selector(app: tauri::AppHandle) -> Result<(), String> {
     windows::build_region_selector(&app).map_err(|e| e.to_string())
+}
+
+/// Open the trim window for a recording (from the HUD or Library). Single instance:
+/// if one is already open, focus it and toast rather than retargeting. Async because
+/// it builds a WebView2 window (must stay off the main thread — window-build rule).
+#[tauri::command(async)]
+pub async fn recorder_open_trim(app: tauri::AppHandle, id: i64, path: String) -> Result<(), String> {
+    if app.get_webview_window(windows::TRIM_LABEL).is_some() {
+        let _ = windows::build_trim_window(&app); // focuses existing
+        let _ = app.emit("glint-toast", "Close the current trim first");
+        return Ok(());
+    }
+    *app.state::<RecorderTrimState>().0.lock().unwrap() = Some(TrimTarget { id, path });
+    windows::build_trim_window(&app).map_err(|e| e.to_string())
+}
+
+/// The trim window reads back which recording it should edit.
+#[tauri::command]
+pub fn recorder_trim_target(app: tauri::AppHandle) -> Option<TrimTargetDto> {
+    app.state::<RecorderTrimState>().0.lock().unwrap()
+        .as_ref()
+        .map(|t| TrimTargetDto { id: t.id, path: t.path.clone() })
 }
 
 #[tauri::command]

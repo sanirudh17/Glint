@@ -1,0 +1,23 @@
+.trim-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #0c0c10;
+  color: #e8e8ee;
+  font: 13px system-ui, sans-serif;
+}
+.trim-video {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  background: #000;
+  object-fit: contain;
+}
+.trim-meta {
+  padding: 8px 12px;
+  opacity: 0.8;
+}
+.trim-error {
+  padding: 16px;
+  color: #ff8585;
+}
