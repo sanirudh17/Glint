@@ -263,7 +263,7 @@ pub fn run() {
             recorder::recorder_status,
             recorder::recorder_set_mute,
             recorder::recorder_set_webcam,
-            recorder::recorder_fx_overlay_check,
+            recorder::recorder_set_fx,
             recorder::recorder_open_region_selector,
             recorder::rec_hud_data,
             recorder::rec_hud_dismiss,

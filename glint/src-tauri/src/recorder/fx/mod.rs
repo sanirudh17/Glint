@@ -31,3 +31,48 @@ impl FxConfig {
         !(self.cursor_hide || self.cursor_size > 0)
     }
 }
+
+use tauri::AppHandle;
+use crate::recorder::RecordTarget;
+
+/// A running FX session: the overlay window + the input-hook thread. Started with a
+/// recording (when any effect is on) and torn down on stop/cancel.
+pub struct FxSession {
+    hooks: Option<hooks::HookHandle>,
+}
+
+/// Build the overlay (if any effect draws) and start the input hooks (if any effect
+/// needs them). Safe to call off the main thread — it builds a WebView2 window.
+pub fn start(app: &AppHandle, target: RecordTarget, cfg: FxConfig) -> FxSession {
+    if cfg.needs_overlay() {
+        let _ = window::build_fx_overlay(app, target);
+    }
+    let hooks = if cfg.needs_hooks() {
+        Some(hooks::start_hooks(app.clone(), cfg))
+    } else {
+        None
+    };
+    FxSession { hooks }
+}
+
+impl FxSession {
+    /// Stop the hooks (unhook + join) and destroy the overlay.
+    pub fn stop(self, app: &AppHandle) {
+        if let Some(h) = self.hooks {
+            h.stop();
+        }
+        window::close_fx_overlay(app);
+    }
+
+    /// Restart the input hooks with a new config, leaving the overlay untouched.
+    /// Used by live toggles — it (re)installs the keyboard hook when keystrokes
+    /// flips on and refreshes the mouse hook's active-effect flags.
+    pub fn restart_hooks(&mut self, app: &AppHandle, cfg: FxConfig) {
+        if let Some(h) = self.hooks.take() {
+            h.stop();
+        }
+        if cfg.needs_hooks() {
+            self.hooks = Some(hooks::start_hooks(app.clone(), cfg));
+        }
+    }
+}
