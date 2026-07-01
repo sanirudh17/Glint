@@ -4,6 +4,7 @@
 
 pub mod audio;
 pub mod ffmpeg;
+pub mod fx;
 pub mod pipes;
 pub mod thumb;
 pub mod trim;
