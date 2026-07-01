@@ -34,6 +34,14 @@ pub fn publish_and_open(app: &tauri::AppHandle, out: super::OcrOutput) {
     let _ = super::window::build_ocr_window(app);
 }
 
+/// Start a Capture Text session (freeze + overlay). On region commit, `capture_commit`
+/// routes to OCR. Async: it freezes the screen + shows the overlay off the main thread.
+#[tauri::command(async)]
+pub async fn ocr_capture_region(app: tauri::AppHandle) -> Result<(), String> {
+    crate::capture::begin_ocr_capture(&app);
+    Ok(())
+}
+
 /// OCR an existing Library capture (image) by id: decode its PNG, recognize, copy,
 /// and open the panel. Async because it builds the panel window.
 #[tauri::command(async)]

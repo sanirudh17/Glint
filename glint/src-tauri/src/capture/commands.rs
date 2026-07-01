@@ -106,13 +106,43 @@ pub fn capture_commit(
 
     let app2 = app.clone();
     std::thread::spawn(move || {
-        if let Err(e) = finish_commit(&app2, session, rect) {
+        let result = match session.intent {
+            crate::capture::CaptureIntent::Text => finish_ocr_commit(&app2, session, rect),
+            crate::capture::CaptureIntent::Screenshot => finish_commit(&app2, session, rect),
+        };
+        if let Err(e) = result {
             log::error!("capture commit failed: {e}");
             let _ = app2.emit("glint-toast", "Couldn't save capture");
         }
     });
 
     Ok(())
+}
+
+/// The OCR half of a commit: crop the frozen region, run OCR, publish to the panel.
+/// Cropping stays here (capture owns geometry); recognition is delegated to `ocr`.
+fn finish_ocr_commit(
+    app: &AppHandle,
+    session: crate::capture::CaptureSession,
+    rect: RectArg,
+) -> Result<(), String> {
+    let phys = logical_to_physical(
+        LogicalRect { x: rect.x, y: rect.y, w: rect.w, h: rect.h },
+        session.scale,
+    );
+    let clamped = clamp_rect(phys, session.image.width, session.image.height)
+        .ok_or("empty selection")?;
+    let cropped = crop_rgba(&session.image.rgba, session.image.width, session.image.height, clamped);
+    match crate::ocr::recognize(&cropped, clamped.w, clamped.h) {
+        Ok(out) => {
+            crate::ocr::commands::publish_and_open(app, out);
+            Ok(())
+        }
+        Err(e) => {
+            let _ = app.emit("glint-toast", &e);
+            Ok(()) // handled via toast; not a hard commit failure
+        }
+    }
 }
 
 /// The heavy half of a commit: crop, encode, write, copy to clipboard, emit.

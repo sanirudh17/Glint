@@ -272,6 +272,7 @@ pub fn run() {
             recorder::recorder_trim_target,
             crate::ocr::commands::ocr_result,
             crate::ocr::commands::ocr_extract_capture,
+            crate::ocr::commands::ocr_capture_region,
         ])
         .on_menu_event(|app, event| {
             // Pin right-click menus pop up via WebviewWindow::popup_menu and route

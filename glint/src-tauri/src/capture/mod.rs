@@ -18,6 +18,14 @@ pub enum CaptureMode {
     Window,
 }
 
+/// What a capture is FOR. Screenshot = the normal save/HUD pipeline; Text = OCR the
+/// region and show the result panel (no file, no Library row).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum CaptureIntent {
+    Screenshot,
+    Text,
+}
+
 impl FromStr for CaptureMode {
     type Err = ();
     fn from_str(s: &str) -> Result<Self, ()> {
@@ -54,6 +62,9 @@ pub struct CaptureSession {
     /// re-show + focus the main window so it (and its taskbar icon) returns.
     /// False for hotkey/tray captures, which never touched the main window.
     pub restore_main: bool,
+    /// What the committed region is FOR. Defaults to Screenshot; the Capture Text
+    /// entry point re-tags it to Text after the session is built.
+    pub intent: CaptureIntent,
 }
 
 #[derive(Default)]
@@ -146,6 +157,7 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
         windows,
         mode,
         restore_main,
+        intent: CaptureIntent::Screenshot,
     });
 
     match overlay::open_for_monitor(app, monitor_id) {
@@ -159,6 +171,17 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
             *app.state::<CaptureState>().0.lock().unwrap() = None;
             toast(app, "Couldn't open capture overlay");
         }
+    }
+}
+
+/// Begin a Capture Text session: an Area capture whose committed region is OCR'd
+/// instead of saved. Reuses the whole freeze/overlay path, then re-tags the freshly
+/// built session's intent to Text (`begin_restoring` stores the session before it
+/// returns). Must run off the main thread (it freezes + shows the overlay).
+pub fn begin_ocr_capture(app: &AppHandle) {
+    begin_restoring(app, CaptureMode::Area, true);
+    if let Some(session) = app.state::<CaptureState>().0.lock().unwrap().as_mut() {
+        session.intent = CaptureIntent::Text;
     }
 }
 
