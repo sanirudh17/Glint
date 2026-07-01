@@ -1,0 +1,37 @@
+.trim-root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  background: #0c0c10;
+  color: #e8e8ee;
+  font: 13px system-ui, sans-serif;
+}
+.trim-video {
+  flex: 1;
+  min-height: 0;
+  width: 100%;
+  background: #000;
+  object-fit: contain;
+}
+.trim-meta {
+  padding: 8px 12px;
+  opacity: 0.8;
+}
+.trim-error {
+  padding: 16px;
+  color: #ff8585;
+}
+.trim-transport, .trim-actions { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.trim-spacer { flex: 1; }
+.trim-time, .trim-out { opacity: 0.85; font-variant-numeric: tabular-nums; }
+.trim-iconbtn, .trim-btn { background: #1b1d27; color: #e8e8ee; border: 1px solid rgba(255,255,255,0.12); border-radius: 7px; padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.trim-iconbtn:disabled, .trim-btn:disabled { opacity: 0.4; cursor: default; }
+.trim-btn--primary { background: #5b7cfa; border-color: #5b7cfa; }
+.trim-track { position: relative; height: 56px; margin: 0 12px 4px; background: #14151c; border-radius: 8px; overflow: hidden; cursor: ew-resize; touch-action: none; }
+.trim-clip { position: absolute; top: 6px; bottom: 6px; background: #2f3a6b; border: 1px solid #5b7cfa; border-radius: 5px; box-sizing: border-box; pointer-events: none; }
+.trim-clip--gap { background: repeating-linear-gradient(45deg, #1a1b22, #1a1b22 6px, #15161c 6px, #15161c 12px); border-color: rgba(255,255,255,0.08); }
+.trim-clip--sel { outline: 2px solid #9db2ff; }
+.trim-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff5d5d; pointer-events: none; }
+.trim-progress { position: relative; flex: 1; height: 26px; background: #14151c; border-radius: 7px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.trim-progress-fill { position: absolute; left: 0; top: 0; bottom: 0; background: #5b7cfa55; }
+.trim-progress span { position: relative; font-size: 12px; }

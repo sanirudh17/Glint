@@ -1,6 +1,7 @@
-import { ExternalLink, FolderOpen, Copy, Pencil, Pin, Trash2, Play } from "lucide-react";
+import { ExternalLink, FolderOpen, Copy, Pencil, Pin, Trash2, Play, Scissors } from "lucide-react";
 import type { CaptureItem } from "../../lib/captures";
 import { openCapture, revealCapture, copyCapture, copyCapturePath, deleteCapture, dragOut } from "../../lib/captures";
+import { openTrim } from "../../lib/trim";
 import { openEditorCapture } from "../../lib/editor";
 import { pinCreateFromCapture } from "../../lib/pin";
 import { useAppStore } from "../../store/useAppStore";
@@ -63,6 +64,9 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
             </button>
             <button className="cap-btn" aria-label="Reveal in Explorer" title="Reveal" onClick={() => act(() => revealCapture(item.id))}>
               <FolderOpen size={15} strokeWidth={1.75} />
+            </button>
+            <button className="cap-btn" aria-label="Trim" title="Trim" onClick={() => act(() => openTrim(item.id, item.path))}>
+              <Scissors size={15} strokeWidth={1.75} />
             </button>
             <button
               className="cap-btn"

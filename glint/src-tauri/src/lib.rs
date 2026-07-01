@@ -66,15 +66,18 @@ pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // A second launch (e.g. "Open in Glint" while Glint is already running)
-            // delivers its argv here. If it names an image, open it; otherwise just
-            // bring the existing window forward (the prior behaviour).
+            // delivers its argv here. An image opens in the editor; a video opens in the
+            // trim window; anything else just brings the existing window forward.
             match crate::editor::commands::first_image_arg(&argv) {
                 Some(path) => {
                     if let Err(e) = crate::editor::commands::open_image_path(app, &path, false) {
                         let _ = tauri::Emitter::emit(app, "glint-toast", e);
                     }
                 }
-                None => window::focus_main(app),
+                None => match crate::recorder::trim::first_video_arg(&argv) {
+                    Some(vpath) => crate::recorder::open_trim_for_external(app, vpath),
+                    None => window::focus_main(app),
+                },
             }
         }))
         .plugin(
@@ -107,6 +110,7 @@ pub fn run() {
         .manage(crate::pin::PinState::default())
         .manage(crate::recorder::RecorderState::default())
         .manage(crate::recorder::RecorderHud::default())
+        .manage(crate::recorder::RecorderTrimState::default())
         .setup(|app| {
             tray::build(app.handle())?;
             shortcuts::register(app.handle())?;
@@ -162,15 +166,19 @@ pub fn run() {
                 });
             }
 
-            // Cold start: launched with an image path ("Open in Glint" while Glint
-            // was not running). Decode + load it now (synchronous so the pending
-            // flag is set before the webview mounts and reads it).
+            // Cold start: launched with a file path ("Open in Glint" while Glint was not
+            // running). An image loads in the editor now (synchronous so the pending flag
+            // is set before the webview mounts). A video opens the trim window — the build
+            // is spawned off-thread by open_trim_for_external (window-build rule), so it
+            // safely runs once the event loop starts.
             {
                 let args: Vec<String> = std::env::args().collect();
                 if let Some(path) = crate::editor::commands::first_image_arg(&args) {
                     if let Err(e) = crate::editor::commands::open_image_path(app.handle(), &path, true) {
                         log::warn!("cold-start open failed: {e}");
                     }
+                } else if let Some(vpath) = crate::recorder::trim::first_video_arg(&args) {
+                    crate::recorder::open_trim_for_external(app.handle(), vpath);
                 }
             }
 
@@ -256,6 +264,10 @@ pub fn run() {
             recorder::recorder_open_region_selector,
             recorder::rec_hud_data,
             recorder::rec_hud_dismiss,
+            crate::recorder::trim::recorder_trim_probe,
+            crate::recorder::trim::recorder_trim_export,
+            recorder::recorder_open_trim,
+            recorder::recorder_trim_target,
         ])
         .on_menu_event(|app, event| {
             // Pin right-click menus pop up via WebviewWindow::popup_menu and route

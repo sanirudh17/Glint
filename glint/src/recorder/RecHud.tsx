@@ -12,8 +12,9 @@
  */
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ExternalLink, FolderOpen, Copy, X, Play } from "lucide-react";
+import { ExternalLink, FolderOpen, Copy, X, Play, Scissors } from "lucide-react";
 import { dragOut } from "../lib/hudIpc";
+import { openTrim } from "../lib/trim";
 import "../hud/hud.css";
 import "./recorder.css";
 
@@ -73,6 +74,9 @@ export function RecHud() {
         {/* Scrim + action toolbar — revealed on hover. */}
         <div className="hud-scrim" aria-hidden="true" />
         <div className="hud-toolbar">
+          <button className="hud-btn" title="Trim" aria-label="Trim" onPointerDown={(e) => e.stopPropagation()} onClick={() => data && openTrim(data.id, data.path)}>
+            <Scissors size={16} strokeWidth={1.75} />
+          </button>
           <button className="hud-btn" title="Open" aria-label="Open" onPointerDown={(e) => e.stopPropagation()} onClick={() => act("capture_open")}>
             <ExternalLink size={16} strokeWidth={1.75} />
           </button>

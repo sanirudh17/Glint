@@ -27,7 +27,11 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": null,
+      "assetProtocol": {
+        "enable": true,
+        "scope": ["$VIDEO/Glint/**"]
+      }
     }
   },
   "bundle": {
@@ -40,6 +44,6 @@
       "icons/icon.icns",
       "icons/icon.ico"
     ],
-    "externalBin": ["binaries/ffmpeg"]
+    "externalBin": ["binaries/ffmpeg", "binaries/ffprobe"]
   }
 }

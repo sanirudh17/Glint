@@ -6,6 +6,7 @@ pub mod audio;
 pub mod ffmpeg;
 pub mod pipes;
 pub mod thumb;
+pub mod trim;
 pub mod windows;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -320,6 +321,17 @@ pub struct LastRecording {
 
 #[derive(Default)]
 pub struct RecorderHud(pub Mutex<Option<LastRecording>>);
+
+/// The recording the trim window is editing. Set by `recorder_open_trim` before the
+/// window builds; the window reads it back via `recorder_trim_target`.
+#[derive(Clone)]
+pub struct TrimTarget { pub id: i64, pub path: String }
+
+#[derive(Default)]
+pub struct RecorderTrimState(pub Mutex<Option<TrimTarget>>);
+
+#[derive(Serialize)]
+pub struct TrimTargetDto { pub id: i64, pub path: String }
 
 #[derive(Serialize)]
 pub struct RecHudDataDto {
@@ -835,6 +847,61 @@ pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command(async)]
 pub async fn recorder_open_region_selector(app: tauri::AppHandle) -> Result<(), String> {
     windows::build_region_selector(&app).map_err(|e| e.to_string())
+}
+
+/// Stash the trim target and grant the asset protocol read access to this exact file so
+/// the trim window's `<video>` can load it even when it lives outside `Videos\Glint`
+/// (external files opened via Explorer). For in-scope recordings the `allow_file` is a
+/// harmless no-op. Cheap + thread-safe — only the window *build* is thread-sensitive.
+fn prepare_trim_target(app: &tauri::AppHandle, id: i64, path: String) {
+    let _ = app.asset_protocol_scope().allow_file(&path);
+    *app.state::<RecorderTrimState>().0.lock().unwrap() = Some(TrimTarget { id, path });
+}
+
+/// Open the trim window for a recording (from the HUD or Library). Single instance:
+/// if one is already open, focus it and toast rather than retargeting. Async because
+/// it builds a WebView2 window (must stay off the main thread — window-build rule).
+#[tauri::command(async)]
+pub async fn recorder_open_trim(app: tauri::AppHandle, id: i64, path: String) -> Result<(), String> {
+    if app.get_webview_window(windows::TRIM_LABEL).is_some() {
+        let _ = windows::build_trim_window(&app); // focuses existing
+        let _ = app.emit("glint-toast", "Close the current trim first");
+        return Ok(());
+    }
+    prepare_trim_target(&app, id, path);
+    windows::build_trim_window(&app).map_err(|e| e.to_string())
+}
+
+/// Open the trim window for a file opened via Explorer ("Open in Glint" on a video).
+/// Resolves the Library row by path when the file is a known capture (so Overwrite
+/// updates the right row); otherwise opens it as an external file (id -1). Safe to call
+/// from the main thread — the window build is spawned off-thread (window-build rule).
+pub fn open_trim_for_external(app: &tauri::AppHandle, path: String) {
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        if app.get_webview_window(windows::TRIM_LABEL).is_some() {
+            let _ = windows::build_trim_window(&app); // focus existing
+            let _ = app.emit("glint-toast", "Close the current trim first");
+            return;
+        }
+        let id = {
+            let db = app.state::<crate::Db>();
+            let conn = db.0.lock().unwrap();
+            crate::db::find_capture_id_by_path(&conn, &path).unwrap_or(-1)
+        };
+        prepare_trim_target(&app, id, path);
+        if let Err(e) = windows::build_trim_window(&app) {
+            let _ = app.emit("glint-toast", format!("Couldn't open trim: {e}"));
+        }
+    });
+}
+
+/// The trim window reads back which recording it should edit.
+#[tauri::command]
+pub fn recorder_trim_target(app: tauri::AppHandle) -> Option<TrimTargetDto> {
+    app.state::<RecorderTrimState>().0.lock().unwrap()
+        .as_ref()
+        .map(|t| TrimTargetDto { id: t.id, path: t.path.clone() })
 }
 
 #[tauri::command]

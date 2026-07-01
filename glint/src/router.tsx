@@ -13,6 +13,7 @@ import { Countdown } from "./recorder/Countdown";
 import { RegionSelect } from "./recorder/RegionSelect";
 import { RecHud } from "./recorder/RecHud";
 import { RecCam } from "./recorder/RecCam";
+import { TrimView } from "./recorder/TrimView";
 import "./components/shell.css";
 
 /**
@@ -114,6 +115,15 @@ export const router = createHashRouter([
      */
     path: "/rec-cam",
     element: <RecCam />,
+  },
+  {
+    /**
+     * Normal decorated trim window — a standalone resizable app window (its own OS
+     * titlebar) for trimming a finished recording. Sits outside AppShell so TrimView
+     * is the sole root. URL: tauri://localhost/#/rec-trim
+     */
+    path: "/rec-trim",
+    element: <TrimView />,
   },
   {
     path: "/",
