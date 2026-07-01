@@ -13,6 +13,9 @@ export const ocrResult = (): Promise<OcrResult | null> =>
 export const extractCapture = (id: number): Promise<void> =>
   invoke<void>("ocr_extract_capture", { id });
 
+export const extractLast = (): Promise<void> =>
+  invoke<void>("ocr_extract_last");
+
 export const captureText = (): Promise<void> =>
   invoke<void>("ocr_capture_region");
 

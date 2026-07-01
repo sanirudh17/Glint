@@ -22,6 +22,7 @@ import {
 } from "../lib/hudIpc";
 import { openEditorFromLast } from "../lib/editor";
 import { pinCreateFromLast } from "../lib/pin";
+import { extractLast } from "../lib/ocr";
 import { HudActions, type HudAction } from "./HudActions";
 import { X } from "lucide-react";
 import "./hud.css";
@@ -79,6 +80,9 @@ export function HudApp() {
           break;
         case "annotate":
           await openEditorFromLast().catch(() => flash("Couldn't open editor"));
+          break;
+        case "extract-text":
+          await extractLast().then(() => flash("Text extracted")).catch(() => flash("Couldn't read text"));
           break;
         case "pin":
           await pinCreateFromLast().then(() => flash("Pinned")).catch(() => flash("Couldn't pin"));

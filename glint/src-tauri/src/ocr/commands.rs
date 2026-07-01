@@ -48,6 +48,28 @@ pub async fn ocr_capture_region(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// OCR the most recent capture straight from its in-memory RGBA (what the HUD acts
+/// on) — no Library id needed, mirroring `hud_copy`. Async: it builds the panel.
+#[tauri::command(async)]
+pub async fn ocr_extract_last(app: tauri::AppHandle) -> Result<(), String> {
+    let (rgba, w, h) = {
+        let state = app.state::<crate::capture::LastCaptureState>();
+        let guard = state.0.lock().unwrap();
+        let last = guard.as_ref().ok_or("No capture to read")?;
+        (last.rgba.clone(), last.width, last.height)
+    };
+    match super::recognize(&rgba, w, h) {
+        Ok(out) => {
+            publish_and_open(&app, out);
+            Ok(())
+        }
+        Err(e) => {
+            let _ = tauri::Emitter::emit(&app, "glint-toast", &e);
+            Err(e)
+        }
+    }
+}
+
 /// OCR an existing Library capture (image) by id: decode its PNG, recognize, copy,
 /// and open the panel. Async because it builds the panel window.
 #[tauri::command(async)]

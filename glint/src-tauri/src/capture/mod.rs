@@ -178,11 +178,27 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
 /// instead of saved. Reuses the whole freeze/overlay path, then re-tags the freshly
 /// built session's intent to Text (`begin_restoring` stores the session before it
 /// returns). Must run off the main thread (it freezes + shows the overlay).
+///
+/// Hides the main window first (like `capture_start`) so Glint isn't baked into the
+/// frozen frame, and gives the compositor a beat before freezing. `restore_main =
+/// true` re-shows it once the capture settles.
 pub fn begin_ocr_capture(app: &AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.hide();
+    }
+    std::thread::sleep(std::time::Duration::from_millis(200));
     begin_restoring(app, CaptureMode::Area, true);
     if let Some(session) = app.state::<CaptureState>().0.lock().unwrap().as_mut() {
         session.intent = CaptureIntent::Text;
     }
+}
+
+/// Spawn [`begin_ocr_capture`] on a background thread — the main-thread-safe entry
+/// point for the tray "Capture Text" item (building the overlay on the main thread
+/// deadlocks the event loop; see [`begin_spawned`]).
+pub fn begin_ocr_capture_spawned(app: &AppHandle) {
+    let app = app.clone();
+    std::thread::spawn(move || begin_ocr_capture(&app));
 }
 
 pub(crate) fn toast(app: &AppHandle, msg: &str) {

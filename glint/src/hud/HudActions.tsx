@@ -13,6 +13,7 @@ import {
   FolderOpen,
   Pencil,
   Pin,
+  ScanText,
   type LucideIcon,
 } from "lucide-react";
 
@@ -21,6 +22,7 @@ export type HudAction =
   | "copy-path"
   | "save"
   | "annotate"
+  | "extract-text"
   | "pin"
   | "dismiss";
 
@@ -45,6 +47,7 @@ export function HudActions({
       ? { id: "save", icon: FolderOpen, tip: "Reveal in folder" }
       : { id: "save", icon: Save,       tip: "Save" },
     { id: "annotate",  icon: Pencil, tip: "Annotate" },
+    { id: "extract-text", icon: ScanText, tip: "Extract text" },
     { id: "pin",       icon: Pin,    tip: "Pin" },
   ];
   return (

@@ -13,8 +13,9 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let cap_area = MenuItem::with_id(app, "cap_area", "Capture Area", true, None::<&str>)?;
     let cap_win = MenuItem::with_id(app, "cap_window", "Capture Window", true, None::<&str>)?;
     let cap_full = MenuItem::with_id(app, "cap_full", "Capture Fullscreen", true, None::<&str>)?;
+    let cap_text = MenuItem::with_id(app, "cap_text", "Capture Text", true, None::<&str>)?;
     let capture = Submenu::with_id_and_items(app, "capture", "Capture", true,
-        &[&cap_area, &cap_win, &cap_full])?;
+        &[&cap_area, &cap_win, &cap_full, &cap_text])?;
 
     // Record submenu — replaces the temporary standalone items from Task 3.
     let rec_region = MenuItem::with_id(app, "rec_region", "Record Region", true, None::<&str>)?;
@@ -54,6 +55,7 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
             "cap_full" => {
                 crate::capture::begin_spawned(app, crate::capture::CaptureMode::Fullscreen);
             }
+            "cap_text" => crate::capture::begin_ocr_capture_spawned(app),
             "rec_region" => {
                 let a = app.clone();
                 tauri::async_runtime::spawn(async move {

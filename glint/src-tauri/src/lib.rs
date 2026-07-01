@@ -272,6 +272,7 @@ pub fn run() {
             recorder::recorder_trim_target,
             crate::ocr::commands::ocr_result,
             crate::ocr::commands::ocr_extract_capture,
+            crate::ocr::commands::ocr_extract_last,
             crate::ocr::commands::ocr_capture_region,
             crate::ocr::commands::ocr_copy,
         ])
