@@ -49,16 +49,6 @@ wasapi = "0.15"
 windows = { version = "0.62", features = [
     "Win32_Foundation",
     "Win32_UI_WindowsAndMessaging",
-    "Foundation",
-    "Foundation_Collections",
-    "Globalization",
-    "Graphics_Imaging",
-    "Media_Ocr",
-    "Storage_Streams",
 ] }
-# Blocking `Async::join()` for the Windows.Media.Ocr async recognize call.
-# windows-rs 0.62 moved the async types + blocking helpers into windows-future;
-# `windows` depends on it but does not re-export the `Async` trait.
-windows-future = "0.3"
 raw-window-handle = "0.6"
 

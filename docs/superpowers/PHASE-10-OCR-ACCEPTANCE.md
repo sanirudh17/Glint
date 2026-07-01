@@ -1,27 +1,35 @@
 # Phase 10 — OCR / Capture Text — Acceptance
 
-Extract selectable text from a screen region or an existing screenshot using the
-**local** Windows OCR engine (`Windows.Media.Ocr`), copy it to the clipboard, and
-show it in a small review panel. No cloud, no upload, no bundled models.
+Extract selectable text from a screen region or an existing screenshot using a
+**local Tesseract** engine, copy it to the clipboard, and show it in a small review
+panel. No cloud, no upload.
+
+## Engine: Tesseract (not Windows.Media.Ocr)
+
+The phase originally used `Windows.Media.Ocr`, but at-screen testing showed it far
+less accurate than Windows Snipping Tool on small / dark-mode / terminal text — it
+dropped whole runs (backslash paths) and confused glyphs (`0.1.0`→`e.l.e`). A probe
+run of the same pixels through raw, contrast-stretched, and Otsu-binarized variants
+all garbled identically → the ceiling was the **engine**, not preprocessing. (Snipping
+Tool uses a newer engine not exposed via that API.) We switched to **Tesseract 5**
+(LSTM), which reads the same content essentially perfectly. Fully local; no cloud.
 
 ## Architecture (as built)
 
 - **`ocr/` module (isolated).** `assemble_text` (pure line-join core) + `recognize`
-  (upscale → RGBA → BGRA `SoftwareBitmap` → `OcrEngine::TryCreateFromUserProfileLanguages`
-  → blocking wait via a completion-handler + channel, since windows-rs 0.62 dropped
-  `IAsyncOperation::get()` and keeps `Async::join` private). `OcrState` stashes the
-  last result for the panel; `commands.rs` is the thin Tauri surface; `window.rs`
-  builds the decorated `#/ocr` panel off-thread.
-- **Accuracy: pre-OCR preprocessing.** Native-res screen text is a hard case for
-  Windows OCR. `recognize` preprocesses before recognition: **grayscale** →
-  **invert dark backgrounds** to dark-on-light (terminals / dark-mode UIs are
-  light-on-dark, the engine's weak spot — `is_dark_background`) → **auto-contrast
-  stretch** (2nd–98th luma percentiles, skipped for flat regions — `contrast_lut`) →
-  **upscale** ~3× (CatmullRom, smooth/low-ringing) capped to the engine's
-  `MaxImageDimension`, downscaling oversized inputs to fit (also prevents silent
-  truncation of very wide strips — `ocr_target_dims`). All three sizing/threshold
-  pieces are pure and unit-tested. Terminal/dark-mode punctuation-heavy text (paths
-  with `\`) remains the hardest content and won't be perfect.
+  (preprocess → PNG → shell out to the `tesseract` CLI → parse stdout). `OcrState`
+  stashes the last result for the panel; `commands.rs` is the thin Tauri surface;
+  `window.rs` builds the decorated `#/ocr` panel off-thread.
+- **Tesseract binary.** Resolved from the standard install dirs
+  (`C:\Program Files\Tesseract-OCR\tesseract.exe`) then PATH (`resolve_tesseract`).
+  Invoked with `-l eng --oem 1 --psm 6` on a temp PNG, console suppressed
+  (`CREATE_NO_WINDOW`). Missing binary → a clear "install Tesseract (winget install
+  UB-Mannheim.TesseractOCR)" error. Install includes `eng.traineddata`.
+- **Accuracy: pre-OCR preprocessing.** `recognize` preprocesses (`preprocess_to_png`):
+  **grayscale** → **invert dark backgrounds** to dark-on-light (`is_dark_background`)
+  → **upscale** ~3× (CatmullRom, capped to `OCR_MAX_DIM` — `ocr_target_dims`). We do
+  NOT binarize: Tesseract's Leptonica does adaptive thresholding better. Sizing +
+  polarity pieces are pure and unit-tested.
 - **Capture Text (live).** Reuses the existing frozen-overlay selector: the session
   carries a `CaptureIntent` (`Screenshot` default), `begin_ocr_capture` re-tags it to
   `Text` (and hides the main window first, like `capture_start`), and `capture_commit`
@@ -37,7 +45,8 @@ show it in a small review panel. No cloud, no upload, no bundled models.
 
 ## Automated gate (all green at ship)
 
-- `cargo test --lib` → **87 passed** (incl. `ocr::tests::*` — 5 `assemble_text` cases).
+- `cargo test --lib` → **92 passed** (incl. `ocr::tests::*` — assemble_text, ocr_target_dims,
+  is_dark_background).
 - `npx vitest run` → **55 passed** across 8 files (incl. `ocr/ocrPanelModel.test.ts`).
 - `npx tsc --noEmit` → clean. `npx vite build` → clean.
 

@@ -95,10 +95,14 @@ capture/library/editor path.
   (See PHASE-9-RECORDING-TRIM-ACCEPTANCE.md.)
 
 - **Phase 10 — OCR / Capture Text** (extract selectable text, CleanShot "Capture Text"). A new
-  **isolated** `ocr/` module owns the **local** `Windows.Media.Ocr` call: RGBA → BGRA
-  `SoftwareBitmap` → `OcrEngine::TryCreateFromUserProfileLanguages` → blocking wait via a
-  completion-handler + channel (windows-rs 0.62 dropped `IAsyncOperation::get()`), assembled
-  through a pure `assemble_text` core. No cloud, no bundled models. **Capture Text (live)** reuses
+  **isolated** `ocr/` module runs **local Tesseract 5** (LSTM): preprocess (grayscale → invert
+  dark backgrounds → ~3× upscale) → PNG → shell out to the `tesseract` CLI (`-l eng --oem 1
+  --psm 6`, console suppressed) → parse, assembled through a pure `assemble_text` core. The
+  binary is resolved from the standard install dir / PATH (missing → a clear "winget install
+  UB-Mannheim.TesseractOCR" message). **Engine note:** originally `Windows.Media.Ocr`, but it
+  proved far less accurate than Snipping Tool on small / dark-mode / terminal text (dropped
+  backslash paths, `0.1.0`→`e.l.e`); a probe confirmed the ceiling was the engine, not
+  preprocessing, so we switched to Tesseract. Fully local, no cloud. **Capture Text (live)** reuses
   the frozen-overlay selector — the session carries a `CaptureIntent` (`Screenshot` default),
   `begin_ocr_capture` re-tags it to `Text` (hiding the main window first), and `capture_commit`
   branches to `finish_ocr_commit` (crop stays in `capture/`, recognition in `ocr/`); no PNG, no

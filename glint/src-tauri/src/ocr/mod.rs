@@ -1,6 +1,8 @@
-//! OCR / Capture Text. Turns pixels into text via the Windows.Media.Ocr engine
-//! (fully local, no cloud). ISOLATED from `recorder/` (imports nothing from it, and
-//! it imports nothing from here).
+//! OCR / Capture Text. Turns pixels into text via a bundled/installed **Tesseract**
+//! engine (fully local, no cloud). We shell out to the `tesseract` CLI — the classic
+//! `Windows.Media.Ocr` engine proved far less accurate than Snipping Tool on small /
+//! dark-mode / terminal text, so we switched. ISOLATED from `recorder/` (imports
+//! nothing from it, and it imports nothing from here).
 
 pub mod commands;
 pub mod window;
@@ -33,16 +35,22 @@ pub fn assemble_text(lines: &[String]) -> Option<String> {
     }
 }
 
-/// How much to enlarge captured pixels before OCR. Windows.Media.Ocr recognizes
-/// small screenshot text far more accurately when glyphs are larger — native-res
-/// UI/terminal text (~10px tall) triggers l/1/I and m/rn confusions and dropped
-/// characters; enlarging to ~30px resolves most of them.
+/// How much to enlarge captured pixels before OCR. Tesseract wants text around
+/// ~30px tall (≈300 DPI); native-res screen text (~10px) is well below that, so we
+/// upscale first — the single biggest accuracy lever for screenshot OCR.
 const OCR_UPSCALE: f32 = 3.0;
 
+/// Upper bound on either side of the upscaled image, to keep Tesseract's runtime
+/// sane on huge regions (it has no hard limit of its own, unlike the old WinRT engine).
+const OCR_MAX_DIM: u32 = 8000;
+
+/// Message shown when the Tesseract binary can't be located.
+const TESS_MISSING: &str =
+    "Tesseract OCR isn't installed. Install it, then try again: winget install UB-Mannheim.TesseractOCR";
+
 /// Target dimensions to feed the OCR engine: enlarge by `OCR_UPSCALE` for accuracy,
-/// but never exceed `max_dim` on the longest side. If the source ALREADY exceeds
-/// `max_dim` the factor drops below 1 and we downscale to fit (oversized bitmaps are
-/// rejected/truncated by the engine). Zero-area or zero `max_dim` → unchanged.
+/// but never exceed `max_dim` on the longest side (downscaling a source that already
+/// exceeds it). Zero-area or zero `max_dim` → unchanged.
 pub fn ocr_target_dims(w: u32, h: u32, max_dim: u32) -> (u32, u32) {
     if w == 0 || h == 0 || max_dim == 0 {
         return (w, h);
@@ -55,7 +63,7 @@ pub fn ocr_target_dims(w: u32, h: u32, max_dim: u32) -> (u32, u32) {
 }
 
 /// Is this a mostly-DARK-background region (light text on dark — a terminal or
-/// dark-mode UI)? Windows OCR is tuned for dark-on-light, so we invert these first.
+/// dark-mode UI)? OCR is more reliable on dark-on-light, so we invert these first.
 /// `gray` is one luma byte per pixel.
 fn is_dark_background(gray: &[u8]) -> bool {
     if gray.is_empty() {
@@ -65,151 +73,123 @@ fn is_dark_background(gray: &[u8]) -> bool {
     (sum / gray.len() as u64) < 128
 }
 
-/// Build an auto-contrast lookup table stretching the 2nd–98th luma percentiles to
-/// the full 0–255 range, sharpening text/background separation. Returns `None` when
-/// the region has too little contrast to stretch safely (near-uniform regions —
-/// stretching would just amplify noise). `gray` is one luma byte per pixel.
-fn contrast_lut(gray: &[u8]) -> Option<[u8; 256]> {
-    if gray.is_empty() {
-        return None;
-    }
-    let mut hist = [0u32; 256];
-    for &v in gray {
-        hist[v as usize] += 1;
-    }
-    let total = gray.len() as f32;
-    let lo_count = (total * 0.02) as u32;
-    let hi_count = (total * 0.98) as u32;
-    let (mut lo, mut hi, mut lo_set, mut cum) = (0u8, 255u8, false, 0u32);
-    for (v, &count) in hist.iter().enumerate() {
-        cum += count;
-        if !lo_set && cum >= lo_count {
-            lo = v as u8;
-            lo_set = true;
-        }
-        if cum >= hi_count {
-            hi = v as u8;
-            break;
-        }
-    }
-    if (hi as i32) - (lo as i32) < 16 {
-        return None; // too flat to stretch
-    }
-    let span = (hi - lo) as f32;
-    let mut lut = [0u8; 256];
-    for (i, out) in lut.iter_mut().enumerate() {
-        let v = ((i as f32 - lo as f32) / span * 255.0).round().clamp(0.0, 255.0);
-        *out = v as u8;
-    }
-    Some(lut)
-}
-
-/// Run Windows.Media.Ocr on RGBA pixels. Fully local. Returns assembled text, or a
-/// user-facing error: no OCR language installed or bad input. "No text found" is NOT
-/// an error — it yields an empty result so callers can show an empty state.
+/// Recognize text in an RGBA crop via Tesseract. Fully local. Returns assembled text,
+/// or a user-facing error (Tesseract missing / failed / bad input). "No text found"
+/// is NOT an error — it yields an empty result so callers can show an empty state.
 ///
-/// The crop is PREPROCESSED before recognition, since native-res screen text is a
-/// hard case for Windows OCR: grayscale → invert dark backgrounds to dark-on-light
-/// (terminals / dark-mode UIs read poorly otherwise) → auto-contrast stretch →
-/// upscale (CatmullRom, ~[`OCR_UPSCALE`]×, capped to the engine's `MaxImageDimension`).
-/// The result is fed as a BGRA8 `SoftwareBitmap`. The async recognition blocks —
-/// callers MUST run this off the main thread.
+/// Preprocess → grayscale → invert dark backgrounds to dark-on-light → upscale, then
+/// hand a PNG to the `tesseract` CLI. Runs a child process — callers MUST run this off
+/// the main thread.
 pub fn recognize(rgba: &[u8], w: u32, h: u32) -> Result<OcrOutput, String> {
-    use image::{imageops::FilterType, ImageBuffer, Rgba};
-    use windows::Graphics::Imaging::{BitmapPixelFormat, SoftwareBitmap};
-    use windows::Media::Ocr::OcrEngine;
-    use windows::Storage::Streams::DataWriter;
-    use windows_future::AsyncOperationCompletedHandler;
-
-    const NO_LANG: &str =
-        "OCR isn't available — install a language pack in Windows Settings → Time & Language.";
-
     let need = w as usize * h as usize * 4;
     if w == 0 || h == 0 || rgba.len() < need {
         return Err("Couldn't read text".into());
     }
+    let png = preprocess_to_png(rgba, w, h)?;
+    let exe = resolve_tesseract().ok_or_else(|| TESS_MISSING.to_string())?;
+    let raw = run_tesseract(&exe, &png)?;
 
-    // Grayscale (Windows OCR grayscales internally anyway; doing it here lets us
-    // normalize polarity + contrast, which it does NOT do).
+    let lines: Vec<String> = raw.lines().map(|l| l.to_string()).collect();
+    let text = assemble_text(&lines).unwrap_or_default();
+    let line_count = text.lines().count();
+    let word_count = text.split_whitespace().count();
+    Ok(OcrOutput { text, line_count, word_count })
+}
+
+/// Grayscale → invert-if-dark → upscale → encode a grayscale PNG for Tesseract. We
+/// deliberately do NOT binarize: Tesseract's Leptonica does adaptive thresholding
+/// (better than a global threshold), so we feed it a clean, enlarged grayscale.
+fn preprocess_to_png(rgba: &[u8], w: u32, h: u32) -> Result<Vec<u8>, String> {
+    use image::{imageops::FilterType, ImageBuffer, Rgba};
+
+    let need = w as usize * h as usize * 4;
     let rgba_img: ImageBuffer<Rgba<u8>, &[u8]> =
         ImageBuffer::from_raw(w, h, &rgba[..need]).ok_or("Couldn't read text")?;
     let mut gray = image::imageops::grayscale(&rgba_img); // GrayImage, original res
 
-    // Invert light-on-dark → dark-on-light (the engine's strong suit).
     if is_dark_background(&gray) {
         for v in gray.iter_mut() {
             *v = 255 - *v;
         }
     }
-    // Stretch contrast so text/background separate crisply (skipped for flat regions).
-    if let Some(lut) = contrast_lut(&gray) {
-        for v in gray.iter_mut() {
-            *v = lut[*v as usize];
-        }
-    }
 
-    // Enlarge for accuracy, bounded by what the engine accepts. A smooth (low-ringing)
-    // filter keeps text edges clean; ringing would create new glyph confusions.
-    let max_dim = OcrEngine::MaxImageDimension().unwrap_or(10_000);
-    let (rw, rh) = ocr_target_dims(w, h, max_dim);
+    let (rw, rh) = ocr_target_dims(w, h, OCR_MAX_DIM);
     let gray = if (rw, rh) == (w, h) {
         gray
     } else {
         image::imageops::resize(&gray, rw, rh, FilterType::CatmullRom)
     };
 
-    // Expand grayscale to the BGRA8 buffer Windows OCR wants (v, v, v, 255).
-    let mut bgra = vec![0u8; (rw as usize) * (rh as usize) * 4];
-    for (dst, &v) in bgra.chunks_exact_mut(4).zip(gray.as_raw().iter()) {
-        dst[0] = v;
-        dst[1] = v;
-        dst[2] = v;
-        dst[3] = 255;
-    }
+    let mut png = Vec::new();
+    gray.write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
+        .map_err(|e| format!("encode: {e}"))?;
+    Ok(png)
+}
 
-    // Wrap the bytes in an IBuffer and build a SoftwareBitmap.
-    let writer = DataWriter::new().map_err(|e| e.to_string())?;
-    writer.WriteBytes(&bgra).map_err(|e| e.to_string())?;
-    let buffer = writer.DetachBuffer().map_err(|e| e.to_string())?;
-    let bitmap = SoftwareBitmap::CreateCopyFromBuffer(
-        &buffer,
-        BitmapPixelFormat::Bgra8,
-        rw as i32,
-        rh as i32,
-    )
-    .map_err(|e| e.to_string())?;
+/// Locate the `tesseract` executable: standard install dirs first, then PATH.
+fn resolve_tesseract() -> Option<std::path::PathBuf> {
+    use std::path::{Path, PathBuf};
 
-    // Engine from the user's installed languages; err => no OCR language pack.
-    let engine = OcrEngine::TryCreateFromUserProfileLanguages().map_err(|_| NO_LANG.to_string())?;
-
-    // windows-rs 0.62 dropped the blocking `.get()` on IAsyncOperation and keeps
-    // the `Async::join` helper private. Wait synchronously via a completion
-    // handler + channel, then pull the results.
-    let op = engine.RecognizeAsync(&bitmap).map_err(|e| e.to_string())?;
-    let (tx, rx) = std::sync::mpsc::channel::<()>();
-    op.SetCompleted(&AsyncOperationCompletedHandler::new(move |_op, _status| {
-        let _ = tx.send(());
-        Ok(())
-    }))
-    .map_err(|e| e.to_string())?;
-    let _ = rx.recv();
-    let result = op.GetResults().map_err(|e| e.to_string())?;
-
-    let lines_view = result.Lines().map_err(|e| e.to_string())?;
-    let mut lines: Vec<String> = Vec::new();
-    for line in lines_view {
-        if let Ok(t) = line.Text() {
-            lines.push(t.to_string());
+    const CANDIDATES: [&str; 2] = [
+        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
+        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
+    ];
+    for c in CANDIDATES {
+        if Path::new(c).exists() {
+            return Some(PathBuf::from(c));
         }
     }
+    // Fall back to PATH via `where` (console suppressed).
+    let out = no_window(std::process::Command::new("where").arg("tesseract"))
+        .output()
+        .ok()?;
+    if out.status.success() {
+        if let Some(line) = String::from_utf8_lossy(&out.stdout).lines().next() {
+            let p = PathBuf::from(line.trim());
+            if p.exists() {
+                return Some(p);
+            }
+        }
+    }
+    None
+}
 
-    // The engine ran but found nothing → an EMPTY result, not an error: callers
-    // publish it so the panel shows its empty state. `Err` is reserved for real
-    // failures (bad input / no engine, handled above), which surface as a toast.
-    let text = assemble_text(&lines).unwrap_or_default();
-    let line_count = text.lines().count();
-    let word_count = text.split_whitespace().count();
-    Ok(OcrOutput { text, line_count, word_count })
+/// Run Tesseract on a PNG (via a temp file) and return its stdout text. `--psm 6`
+/// treats the selection as one uniform block (keeps line structure for terminals /
+/// code); LSTM engine (`--oem 1`), English.
+fn run_tesseract(exe: &std::path::Path, png: &[u8]) -> Result<String, String> {
+    let path = std::env::temp_dir().join(format!(
+        "glint-ocr-{}-{}.png",
+        std::process::id(),
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .map(|d| d.as_nanos())
+            .unwrap_or(0)
+    ));
+    std::fs::write(&path, png).map_err(|e| format!("temp write: {e}"))?;
+
+    let result = no_window(
+        std::process::Command::new(exe)
+            .arg(&path)
+            .arg("stdout")
+            .args(["-l", "eng", "--oem", "1", "--psm", "6"]),
+    )
+    .output();
+    let _ = std::fs::remove_file(&path);
+
+    let out = result.map_err(|e| format!("Couldn't run Tesseract: {e}"))?;
+    if !out.status.success() {
+        let err = String::from_utf8_lossy(&out.stderr);
+        return Err(format!("Tesseract failed: {}", err.trim()));
+    }
+    Ok(String::from_utf8_lossy(&out.stdout).into_owned())
+}
+
+/// Suppress the console window a child process would otherwise flash on Windows.
+fn no_window(cmd: &mut std::process::Command) -> &mut std::process::Command {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW)
 }
 
 #[cfg(test)]
@@ -248,19 +228,16 @@ mod tests {
 
     #[test]
     fn upscales_small_regions_by_the_factor() {
-        // 3x, comfortably under the cap.
         assert_eq!(ocr_target_dims(800, 600, 10_000), (2400, 1800));
     }
 
     #[test]
     fn caps_the_longest_side_at_max_dim() {
-        // 6000 * 3 = 18000 > 10000 → factor 10000/6000 ≈ 1.667.
         assert_eq!(ocr_target_dims(6000, 400, 10_000), (10_000, 667));
     }
 
     #[test]
     fn downscales_sources_already_over_max_dim() {
-        // 12000 already exceeds 10000 → factor 0.833, downscale to fit.
         assert_eq!(ocr_target_dims(12_000, 400, 10_000), (10_000, 333));
     }
 
@@ -272,25 +249,8 @@ mod tests {
 
     #[test]
     fn detects_dark_vs_light_backgrounds() {
-        assert!(is_dark_background(&[0, 0, 0, 20])); // mostly dark → invert
-        assert!(!is_dark_background(&[255, 255, 255, 200])); // mostly light → keep
-        assert!(!is_dark_background(&[])); // nothing → don't invert
-    }
-
-    #[test]
-    fn contrast_lut_stretches_a_bimodal_region() {
-        // 50 dark + 50 light pixels → stretch the ends to 0 and 255.
-        let mut px = vec![30u8; 50];
-        px.extend(std::iter::repeat(210u8).take(50));
-        let lut = contrast_lut(&px).expect("bimodal region should stretch");
-        assert_eq!(lut[30], 0);
-        assert_eq!(lut[210], 255);
-        assert!(lut[120] > 100 && lut[120] < 160); // midtone lands mid-range
-    }
-
-    #[test]
-    fn contrast_lut_skips_flat_regions() {
-        assert!(contrast_lut(&[100u8; 64]).is_none()); // uniform → no stretch
-        assert!(contrast_lut(&[]).is_none());
+        assert!(is_dark_background(&[0, 0, 0, 20]));
+        assert!(!is_dark_background(&[255, 255, 255, 200]));
+        assert!(!is_dark_background(&[]));
     }
 }
