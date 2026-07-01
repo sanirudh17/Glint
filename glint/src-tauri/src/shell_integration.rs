@@ -10,10 +10,23 @@
 use winreg::enums::*;
 use winreg::RegKey;
 
-/// The image shell-verb key under HKEY_CURRENT_USER (real, production location).
+/// The image shell-verb key under HKEY_CURRENT_USER (real, production location). Images
+/// use a classic handler (`pngfile`, etc.), so the `image` perceived type enumerates fine.
 const IMAGE_SHELL_KEY: &str = r"Software\Classes\SystemFileAssociations\image\shell\Glint";
-/// The video shell-verb key — same verb, `video` perceived type (opens the trim window).
-const VIDEO_SHELL_KEY: &str = r"Software\Classes\SystemFileAssociations\video\shell\Glint";
+
+/// The OLD `video` PERCEIVED-TYPE verb (pre-fix). Windows does NOT reliably enumerate
+/// `SystemFileAssociations\video\shell` verbs in the classic menu when the default video
+/// handler is a packaged (UWP) app — which is the common case for `.mp4` (Media Player).
+/// We migrated to per-extension keys and delete this stale one so nothing is orphaned and
+/// no duplicate entry appears on systems where perceived-type *did* work.
+const OLD_VIDEO_PERCEIVED_KEY: &str = r"Software\Classes\SystemFileAssociations\video\shell\Glint";
+
+/// Per-extension video verb key: `SystemFileAssociations\.<ext>\shell\Glint`. Unlike the
+/// perceived type, this location always shows in the classic menu regardless of which app
+/// owns the extension. Registered for every entry in `recorder::trim::VIDEO_EXTS`.
+fn video_ext_key(ext: &str) -> String {
+    format!(r"Software\Classes\SystemFileAssociations\.{ext}\shell\Glint")
+}
 
 /// The launch command we store under `…\Glint\command` (default value).
 pub fn expected_command(exe: &str) -> String {
@@ -83,28 +96,41 @@ fn notify_assoc_changed() {
     unsafe { SHChangeNotify(SHCNE_ASSOCCHANGED, SHCNF_IDLIST_FLUSH, std::ptr::null(), std::ptr::null()) };
 }
 
-/// Register the verb at both production locations (image + video) for the current exe.
+/// Register the verb for images (perceived type) and for each video extension (per-ext),
+/// then delete the stale perceived-type video verb from earlier builds.
 pub fn register() -> Result<(), String> {
     let exe = current_exe_string()?;
     register_at(IMAGE_SHELL_KEY, &exe)?;
-    register_at(VIDEO_SHELL_KEY, &exe)?;
+    for ext in crate::recorder::trim::VIDEO_EXTS {
+        register_at(&video_ext_key(ext), &exe)?;
+    }
+    let _ = unregister_at(OLD_VIDEO_PERCEIVED_KEY); // migrate off the perceived-type verb
     notify_assoc_changed();
     Ok(())
 }
 
-/// Remove both production verbs.
+/// Remove the image verb + every per-extension video verb (and the stale perceived-type one).
 pub fn unregister() -> Result<(), String> {
     unregister_at(IMAGE_SHELL_KEY)?;
-    unregister_at(VIDEO_SHELL_KEY)?;
+    for ext in crate::recorder::trim::VIDEO_EXTS {
+        unregister_at(&video_ext_key(ext))?;
+    }
+    let _ = unregister_at(OLD_VIDEO_PERCEIVED_KEY);
     notify_assoc_changed();
     Ok(())
 }
 
-/// Both verbs present AND pointing at the current exe? (A partial/stale registration —
-/// e.g. only the image verb from a pre-video build — reads false and triggers a re-register.)
+/// Image verb AND every per-extension video verb present and pointing at THIS exe? A
+/// partial/stale registration (e.g. only the image verb, or the old perceived-type build)
+/// reads false and triggers a re-register on next launch.
 pub fn is_registered() -> bool {
     match current_exe_string() {
-        Ok(exe) => is_registered_at(IMAGE_SHELL_KEY, &exe) && is_registered_at(VIDEO_SHELL_KEY, &exe),
+        Ok(exe) => {
+            is_registered_at(IMAGE_SHELL_KEY, &exe)
+                && crate::recorder::trim::VIDEO_EXTS
+                    .iter()
+                    .all(|ext| is_registered_at(&video_ext_key(ext), &exe))
+        }
         Err(_) => false,
     }
 }
