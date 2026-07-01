@@ -96,7 +96,10 @@ pub fn recognize(rgba: &[u8], w: u32, h: u32) -> Result<OcrOutput, String> {
         }
     }
 
-    let text = assemble_text(&lines).ok_or("No text found")?;
+    // The engine ran but found nothing → an EMPTY result, not an error: callers
+    // publish it so the panel shows its empty state. `Err` is reserved for real
+    // failures (bad input / no engine, handled above), which surface as a toast.
+    let text = assemble_text(&lines).unwrap_or_default();
     let line_count = text.lines().count();
     let word_count = text.split_whitespace().count();
     Ok(OcrOutput { text, line_count, word_count })

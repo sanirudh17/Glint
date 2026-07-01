@@ -35,7 +35,11 @@ pub fn ocr_copy(text: String) -> Result<(), String> {
 /// Copy the text, stash the output for the panel, and open (or focus) the panel.
 /// Shared by every OCR flow. Runs off the main thread (callers are async/spawned).
 pub fn publish_and_open(app: &tauri::AppHandle, out: super::OcrOutput) {
-    let _ = crate::clipboard::copy_text(&out.text);
+    // Don't clobber the clipboard with an empty string when nothing was recognized;
+    // the panel still opens to show its empty state.
+    if !out.text.is_empty() {
+        let _ = crate::clipboard::copy_text(&out.text);
+    }
     *app.state::<OcrState>().0.lock().unwrap() = Some(out);
     let _ = super::window::build_ocr_window(app);
 }
@@ -58,16 +62,12 @@ pub async fn ocr_extract_last(app: tauri::AppHandle) -> Result<(), String> {
         let last = guard.as_ref().ok_or("No capture to read")?;
         (last.rgba.clone(), last.width, last.height)
     };
-    match super::recognize(&rgba, w, h) {
-        Ok(out) => {
-            publish_and_open(&app, out);
-            Ok(())
-        }
-        Err(e) => {
-            let _ = tauri::Emitter::emit(&app, "glint-toast", &e);
-            Err(e)
-        }
-    }
+    // Real failures (bad input / no engine) return Err for the frontend caller to
+    // surface — no separate backend toast (that would double-message). "No text"
+    // is not an error: recognize returns an empty result and the panel opens empty.
+    let out = super::recognize(&rgba, w, h)?;
+    publish_and_open(&app, out);
+    Ok(())
 }
 
 /// OCR an existing Library capture (image) by id: decode its PNG, recognize, copy,
@@ -86,14 +86,8 @@ pub async fn ocr_extract_capture(app: tauri::AppHandle, id: i64) -> Result<(), S
         .map_err(|_| "Couldn't open that capture".to_string())?
         .to_rgba8();
     let (w, h) = (img.width(), img.height());
-    match super::recognize(&img.into_raw(), w, h) {
-        Ok(out) => {
-            publish_and_open(&app, out);
-            Ok(())
-        }
-        Err(e) => {
-            let _ = tauri::Emitter::emit(&app, "glint-toast", &e);
-            Err(e)
-        }
-    }
+    // See ocr_extract_last: Err surfaces via the caller; empty text opens the panel.
+    let out = super::recognize(&img.into_raw(), w, h)?;
+    publish_and_open(&app, out);
+    Ok(())
 }
