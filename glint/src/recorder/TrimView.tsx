@@ -81,6 +81,14 @@ export function TrimView() {
   const seek = (t: number) => { const v = videoRef.current; if (v) { v.currentTime = Math.max(0, Math.min(t, duration)); setPlayhead(v.currentTime); } };
   const togglePlay = () => { const v = videoRef.current; if (!v) return; if (v.paused) { v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); } };
 
+  // Cancel/close: confirm first if there are unsaved cuts (each split/delete pushes
+  // history; undoing back to the start empties it). Never closes mid-export.
+  const requestClose = useCallback(() => {
+    if (exporting !== null) return;
+    if (history.length > 0 && !window.confirm("Discard your trim edits?")) return;
+    getCurrentWindow().close().catch(() => {});
+  }, [exporting, history.length]);
+
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (exporting !== null) return; // export is modal — ignore edit/transport keys
@@ -90,11 +98,11 @@ export function TrimView() {
       else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); doUndo(); }
       else if (e.key === "ArrowLeft") { e.preventDefault(); seek(playhead - 1 / fps); }
       else if (e.key === "ArrowRight") { e.preventDefault(); seek(playhead + 1 / fps); }
-      else if (e.key === "Escape") { getCurrentWindow().close().catch(() => {}); }
+      else if (e.key === "Escape") { requestClose(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doSplit, doDelete, doUndo, playhead, fps, exporting]);
+  }, [doSplit, doDelete, doUndo, playhead, fps, exporting, requestClose]);
 
   const save = (mode: "copy" | "overwrite") => {
     if (!target || !probe || !canSave) return;
@@ -143,7 +151,7 @@ export function TrimView() {
           <div className="trim-progress"><div className="trim-progress-fill" style={{ width: `${exporting}%` }} /><span>Exporting… {exporting}%</span></div>
         ) : (
           <>
-            <button className="trim-btn" onClick={() => getCurrentWindow().close()}>Cancel</button>
+            <button className="trim-btn" onClick={requestClose}>Cancel</button>
             <button className="trim-btn" disabled={!canSave} onClick={() => save("overwrite")}>Overwrite</button>
             <button className="trim-btn trim-btn--primary" disabled={!canSave} onClick={() => save("copy")}>Save copy</button>
           </>
