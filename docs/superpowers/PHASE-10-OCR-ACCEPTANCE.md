@@ -12,12 +12,16 @@ show it in a small review panel. No cloud, no upload, no bundled models.
   `IAsyncOperation::get()` and keeps `Async::join` private). `OcrState` stashes the
   last result for the panel; `commands.rs` is the thin Tauri surface; `window.rs`
   builds the decorated `#/ocr` panel off-thread.
-- **Accuracy: pre-OCR upscaling.** Native-res screenshot text (~10px) makes Windows
-  OCR drop/confuse glyphs (l↔1↔I, m↔rn). `recognize` enlarges the crop ~3×
-  (CatmullRom — smooth, low-ringing) before recognition, capped to the engine's
-  `MaxImageDimension` and downscaling oversized inputs to fit (which also prevents
-  silent truncation of very wide strips). Sizing logic is the pure, unit-tested
-  `ocr_target_dims`.
+- **Accuracy: pre-OCR preprocessing.** Native-res screen text is a hard case for
+  Windows OCR. `recognize` preprocesses before recognition: **grayscale** →
+  **invert dark backgrounds** to dark-on-light (terminals / dark-mode UIs are
+  light-on-dark, the engine's weak spot — `is_dark_background`) → **auto-contrast
+  stretch** (2nd–98th luma percentiles, skipped for flat regions — `contrast_lut`) →
+  **upscale** ~3× (CatmullRom, smooth/low-ringing) capped to the engine's
+  `MaxImageDimension`, downscaling oversized inputs to fit (also prevents silent
+  truncation of very wide strips — `ocr_target_dims`). All three sizing/threshold
+  pieces are pure and unit-tested. Terminal/dark-mode punctuation-heavy text (paths
+  with `\`) remains the hardest content and won't be perfect.
 - **Capture Text (live).** Reuses the existing frozen-overlay selector: the session
   carries a `CaptureIntent` (`Screenshot` default), `begin_ocr_capture` re-tags it to
   `Text` (and hides the main window first, like `capture_start`), and `capture_commit`

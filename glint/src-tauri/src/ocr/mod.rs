@@ -54,18 +54,68 @@ pub fn ocr_target_dims(w: u32, h: u32, max_dim: u32) -> (u32, u32) {
     (tw, th)
 }
 
+/// Is this a mostly-DARK-background region (light text on dark — a terminal or
+/// dark-mode UI)? Windows OCR is tuned for dark-on-light, so we invert these first.
+/// `gray` is one luma byte per pixel.
+fn is_dark_background(gray: &[u8]) -> bool {
+    if gray.is_empty() {
+        return false;
+    }
+    let sum: u64 = gray.iter().map(|&v| v as u64).sum();
+    (sum / gray.len() as u64) < 128
+}
+
+/// Build an auto-contrast lookup table stretching the 2nd–98th luma percentiles to
+/// the full 0–255 range, sharpening text/background separation. Returns `None` when
+/// the region has too little contrast to stretch safely (near-uniform regions —
+/// stretching would just amplify noise). `gray` is one luma byte per pixel.
+fn contrast_lut(gray: &[u8]) -> Option<[u8; 256]> {
+    if gray.is_empty() {
+        return None;
+    }
+    let mut hist = [0u32; 256];
+    for &v in gray {
+        hist[v as usize] += 1;
+    }
+    let total = gray.len() as f32;
+    let lo_count = (total * 0.02) as u32;
+    let hi_count = (total * 0.98) as u32;
+    let (mut lo, mut hi, mut lo_set, mut cum) = (0u8, 255u8, false, 0u32);
+    for (v, &count) in hist.iter().enumerate() {
+        cum += count;
+        if !lo_set && cum >= lo_count {
+            lo = v as u8;
+            lo_set = true;
+        }
+        if cum >= hi_count {
+            hi = v as u8;
+            break;
+        }
+    }
+    if (hi as i32) - (lo as i32) < 16 {
+        return None; // too flat to stretch
+    }
+    let span = (hi - lo) as f32;
+    let mut lut = [0u8; 256];
+    for (i, out) in lut.iter_mut().enumerate() {
+        let v = ((i as f32 - lo as f32) / span * 255.0).round().clamp(0.0, 255.0);
+        *out = v as u8;
+    }
+    Some(lut)
+}
+
 /// Run Windows.Media.Ocr on RGBA pixels. Fully local. Returns assembled text, or a
 /// user-facing error: no OCR language installed or bad input. "No text found" is NOT
 /// an error — it yields an empty result so callers can show an empty state.
 ///
-/// The crop is UPSCALED (CatmullRom, ~[`OCR_UPSCALE`]×, capped to the engine's
-/// `MaxImageDimension`) before recognition: native-res screenshot text is small and
-/// Windows OCR is markedly more accurate on larger glyphs. Windows OCR wants a BGRA8
-/// `SoftwareBitmap`; we swap R/B from the (resized) RGBA buffer. The async
-/// recognition blocks — callers MUST run this off the main thread.
+/// The crop is PREPROCESSED before recognition, since native-res screen text is a
+/// hard case for Windows OCR: grayscale → invert dark backgrounds to dark-on-light
+/// (terminals / dark-mode UIs read poorly otherwise) → auto-contrast stretch →
+/// upscale (CatmullRom, ~[`OCR_UPSCALE`]×, capped to the engine's `MaxImageDimension`).
+/// The result is fed as a BGRA8 `SoftwareBitmap`. The async recognition blocks —
+/// callers MUST run this off the main thread.
 pub fn recognize(rgba: &[u8], w: u32, h: u32) -> Result<OcrOutput, String> {
     use image::{imageops::FilterType, ImageBuffer, Rgba};
-    use std::borrow::Cow;
     use windows::Graphics::Imaging::{BitmapPixelFormat, SoftwareBitmap};
     use windows::Media::Ocr::OcrEngine;
     use windows::Storage::Streams::DataWriter;
@@ -74,30 +124,47 @@ pub fn recognize(rgba: &[u8], w: u32, h: u32) -> Result<OcrOutput, String> {
     const NO_LANG: &str =
         "OCR isn't available — install a language pack in Windows Settings → Time & Language.";
 
-    if w == 0 || h == 0 || rgba.len() < (w as usize * h as usize * 4) {
+    let need = w as usize * h as usize * 4;
+    if w == 0 || h == 0 || rgba.len() < need {
         return Err("Couldn't read text".into());
+    }
+
+    // Grayscale (Windows OCR grayscales internally anyway; doing it here lets us
+    // normalize polarity + contrast, which it does NOT do).
+    let rgba_img: ImageBuffer<Rgba<u8>, &[u8]> =
+        ImageBuffer::from_raw(w, h, &rgba[..need]).ok_or("Couldn't read text")?;
+    let mut gray = image::imageops::grayscale(&rgba_img); // GrayImage, original res
+
+    // Invert light-on-dark → dark-on-light (the engine's strong suit).
+    if is_dark_background(&gray) {
+        for v in gray.iter_mut() {
+            *v = 255 - *v;
+        }
+    }
+    // Stretch contrast so text/background separate crisply (skipped for flat regions).
+    if let Some(lut) = contrast_lut(&gray) {
+        for v in gray.iter_mut() {
+            *v = lut[*v as usize];
+        }
     }
 
     // Enlarge for accuracy, bounded by what the engine accepts. A smooth (low-ringing)
     // filter keeps text edges clean; ringing would create new glyph confusions.
     let max_dim = OcrEngine::MaxImageDimension().unwrap_or(10_000);
     let (rw, rh) = ocr_target_dims(w, h, max_dim);
-    let work: Cow<[u8]> = if (rw, rh) == (w, h) {
-        Cow::Borrowed(rgba)
+    let gray = if (rw, rh) == (w, h) {
+        gray
     } else {
-        let src: ImageBuffer<Rgba<u8>, &[u8]> =
-            ImageBuffer::from_raw(w, h, rgba).ok_or("Couldn't read text")?;
-        let dst = image::imageops::resize(&src, rw, rh, FilterType::CatmullRom);
-        Cow::Owned(dst.into_raw())
+        image::imageops::resize(&gray, rw, rh, FilterType::CatmullRom)
     };
 
-    // RGBA -> BGRA (Windows imaging expects BGRA8 for OCR).
-    let mut bgra = vec![0u8; work.len()];
-    for (dst, src) in bgra.chunks_exact_mut(4).zip(work.chunks_exact(4)) {
-        dst[0] = src[2]; // B
-        dst[1] = src[1]; // G
-        dst[2] = src[0]; // R
-        dst[3] = src[3]; // A
+    // Expand grayscale to the BGRA8 buffer Windows OCR wants (v, v, v, 255).
+    let mut bgra = vec![0u8; (rw as usize) * (rh as usize) * 4];
+    for (dst, &v) in bgra.chunks_exact_mut(4).zip(gray.as_raw().iter()) {
+        dst[0] = v;
+        dst[1] = v;
+        dst[2] = v;
+        dst[3] = 255;
     }
 
     // Wrap the bytes in an IBuffer and build a SoftwareBitmap.
@@ -201,5 +268,29 @@ mod tests {
     fn leaves_degenerate_inputs_unchanged() {
         assert_eq!(ocr_target_dims(0, 0, 10_000), (0, 0));
         assert_eq!(ocr_target_dims(100, 100, 0), (100, 100));
+    }
+
+    #[test]
+    fn detects_dark_vs_light_backgrounds() {
+        assert!(is_dark_background(&[0, 0, 0, 20])); // mostly dark → invert
+        assert!(!is_dark_background(&[255, 255, 255, 200])); // mostly light → keep
+        assert!(!is_dark_background(&[])); // nothing → don't invert
+    }
+
+    #[test]
+    fn contrast_lut_stretches_a_bimodal_region() {
+        // 50 dark + 50 light pixels → stretch the ends to 0 and 255.
+        let mut px = vec![30u8; 50];
+        px.extend(std::iter::repeat(210u8).take(50));
+        let lut = contrast_lut(&px).expect("bimodal region should stretch");
+        assert_eq!(lut[30], 0);
+        assert_eq!(lut[210], 255);
+        assert!(lut[120] > 100 && lut[120] < 160); // midtone lands mid-range
+    }
+
+    #[test]
+    fn contrast_lut_skips_flat_regions() {
+        assert!(contrast_lut(&[100u8; 64]).is_none()); // uniform → no stretch
+        assert!(contrast_lut(&[]).is_none());
     }
 }
