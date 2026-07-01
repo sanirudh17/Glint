@@ -3,3 +3,4 @@
 //! for free (webcam-bubble pattern); no ffmpeg-pipeline rewrite.
 
 pub mod keymap;
+pub mod window;

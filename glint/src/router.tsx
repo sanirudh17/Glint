@@ -13,6 +13,7 @@ import { Countdown } from "./recorder/Countdown";
 import { RegionSelect } from "./recorder/RegionSelect";
 import { RecHud } from "./recorder/RecHud";
 import { RecCam } from "./recorder/RecCam";
+import { FxOverlay } from "./recorder/FxOverlay";
 import { TrimView } from "./recorder/TrimView";
 import { OcrPanel } from "./ocr/OcrPanel";
 import "./components/shell.css";
@@ -116,6 +117,15 @@ export const router = createHashRouter([
      */
     path: "/rec-cam",
     element: <RecCam />,
+  },
+  {
+    /**
+     * Chrome-free FX overlay — transparent, click-through; gdigrab records whatever
+     * it draws (click ripples, keystroke chips, cursor spotlight). Sits outside
+     * AppShell so FxOverlay is the sole root. URL: tauri://localhost/#/rec-fx
+     */
+    path: "/rec-fx",
+    element: <FxOverlay />,
   },
   {
     /**

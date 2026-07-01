@@ -851,6 +851,14 @@ pub async fn recorder_open_region_selector(app: tauri::AppHandle) -> Result<(), 
     windows::build_region_selector(&app).map_err(|e| e.to_string())
 }
 
+/// SPIKE (temporary): open the FX overlay with its test pattern over the primary
+/// monitor so we can start a normal recording and confirm gdigrab captures it.
+/// Removed once Task 8 lands. Off the main thread — it builds a window.
+#[tauri::command(async)]
+pub async fn recorder_fx_overlay_check(app: tauri::AppHandle) -> Result<(), String> {
+    fx::window::build_fx_overlay(&app, RecordTarget::Fullscreen).map_err(|e| e.to_string())
+}
+
 /// Stash the trim target and grant the asset protocol read access to this exact file so
 /// the trim window's `<video>` can load it even when it lives outside `Videos\Glint`
 /// (external files opened via Explorer). For in-scope recordings the `allow_file` is a
