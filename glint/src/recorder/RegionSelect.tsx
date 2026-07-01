@@ -19,7 +19,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff } from "lucide-react";
+import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointerClick, Keyboard, Sun, EyeOff, MousePointer2 } from "lucide-react";
 import { recorderStartRegion, recorderStartFullscreen } from "../lib/recorder";
 import { useAppStore } from "../store/useAppStore";
 import "./recorder.css";
@@ -72,13 +72,25 @@ export function RegionSelect() {
   const [sys, setSys] = useState(true);
   const [mic, setMic] = useState(false);
   const [cam, setCam] = useState(false);
+  // Recording FX intent for THIS recording, seeded from saved settings.
+  const [clickViz, setClickViz] = useState(false);
+  const [keystrokes, setKeystrokes] = useState(false);
+  const [spotlight, setSpotlight] = useState(false);
+  const [cursorHide, setCursorHide] = useState(false);
+  const [cursorSize, setCursorSize] = useState<"off" | "large" | "xl">("off");
   useEffect(() => {
     if (settings) {
       setSys(settings.record_system_audio ?? true);
       setMic(settings.record_microphone ?? false);
       setCam(settings.record_webcam ?? false);
+      setClickViz(settings.record_click_viz ?? false);
+      setKeystrokes(settings.record_keystrokes ?? false);
+      setSpotlight(settings.record_cursor_spotlight ?? false);
+      setCursorHide(settings.record_cursor_hide ?? false);
+      setCursorSize(settings.record_cursor_size ?? "off");
     }
   }, [settings]);
+  const fxOpts = { click_viz: clickViz, keystrokes, spotlight, cursor_hide: cursorHide, cursor_size: cursorSize };
 
   useEffect(() => {
     const w = getCurrentWindow();
@@ -99,14 +111,14 @@ export function RegionSelect() {
       y: Math.round(env.oy + rect.y * env.scale),
       w: Math.round(rect.w * env.scale),
       h: Math.round(rect.h * env.scale),
-    }, { system: sys, mic, webcam: cam }).catch(() => { /* a toast already surfaces start failures */ });
-  }, [rect, env, sys, mic, cam]);
+    }, { system: sys, mic, webcam: cam }, fxOpts).catch(() => { /* a toast already surfaces start failures */ });
+  }, [rect, env, sys, mic, cam, clickViz, keystrokes, spotlight, cursorHide, cursorSize]);
 
   const confirmFullscreen = useCallback(() => {
     if (confirmed.current) return;
     confirmed.current = true;
-    recorderStartFullscreen({ system: sys, mic, webcam: cam }).catch(() => { /* toast surfaces failures */ });
-  }, [sys, mic, cam]);
+    recorderStartFullscreen({ system: sys, mic, webcam: cam }, fxOpts).catch(() => { /* toast surfaces failures */ });
+  }, [sys, mic, cam, clickViz, keystrokes, spotlight, cursorHide, cursorSize]);
 
   // Esc cancels (closing is safe — no follow-up IPC). Enter confirms the region.
   useEffect(() => {
@@ -227,6 +239,46 @@ export function RegionSelect() {
           title="Webcam"
         >
           {cam ? <Video size={14} /> : <VideoOff size={14} />} Cam
+        </button>
+        <button
+          className={`rec-sel-chip${clickViz ? "" : " rec-sel-chip--off"}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setClickViz((v) => !v)}
+          title="Visualize mouse clicks"
+        >
+          <MousePointerClick size={14} /> Clicks
+        </button>
+        <button
+          className={`rec-sel-chip${keystrokes ? "" : " rec-sel-chip--off"}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setKeystrokes((v) => !v)}
+          title="Show pressed keys"
+        >
+          <Keyboard size={14} /> Keys
+        </button>
+        <button
+          className={`rec-sel-chip${spotlight ? "" : " rec-sel-chip--off"}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setSpotlight((v) => !v)}
+          title="Cursor spotlight"
+        >
+          <Sun size={14} /> Spotlight
+        </button>
+        <button
+          className={`rec-sel-chip${cursorHide ? "" : " rec-sel-chip--off"}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setCursorHide((v) => !v)}
+          title="Hide the real cursor (draw our own)"
+        >
+          <EyeOff size={14} /> Hide cursor
+        </button>
+        <button
+          className={`rec-sel-chip${cursorSize === "off" ? " rec-sel-chip--off" : ""}`}
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={() => setCursorSize((s) => (s === "off" ? "large" : s === "large" ? "xl" : "off"))}
+          title="Recorded cursor size (off → large → XL)"
+        >
+          <MousePointer2 size={14} /> Size: {cursorSize === "off" ? "Off" : cursorSize === "large" ? "L" : "XL"}
         </button>
         <button className="rec-sel-fullbtn" onPointerDown={(e) => e.stopPropagation()} onClick={confirmFullscreen}>
           <Monitor size={15} strokeWidth={2} /> Record Full Screen

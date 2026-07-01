@@ -14,11 +14,18 @@ const CODEC_OPTIONS = [
   { value: "av1",  label: "AV1" },
 ];
 
+const CURSOR_SIZE_OPTIONS = [
+  { value: "off", label: "Normal" },
+  { value: "large", label: "Large" },
+  { value: "xl", label: "Extra large" },
+];
+
 export function Recording() {
   const settings = useAppStore((s) => s.settings);
   const setRecordSystemAudio = useAppStore((s) => s.setRecordSystemAudio);
   const setRecordMicrophone = useAppStore((s) => s.setRecordMicrophone);
   const setRecordWebcam = useAppStore((s) => s.setRecordWebcam);
+  const setRecordFx = useAppStore((s) => s.setRecordFx);
 
   return (
     <Section
@@ -59,6 +66,37 @@ export function Recording() {
         <Switch
           checked={settings?.record_webcam ?? false}
           onChange={(v) => setRecordWebcam(v)}
+        />
+      </Field>
+      <Field label="Visualize clicks" hint="Show a ripple at each mouse click during recording.">
+        <Switch
+          checked={settings?.record_click_viz ?? false}
+          onChange={(v) => setRecordFx("record_click_viz", v)}
+        />
+      </Field>
+      <Field label="Show keystrokes" hint="Overlay pressed keys at the bottom of the recording.">
+        <Switch
+          checked={settings?.record_keystrokes ?? false}
+          onChange={(v) => setRecordFx("record_keystrokes", v)}
+        />
+      </Field>
+      <Field label="Cursor spotlight" hint="Draw a soft halo that follows the cursor.">
+        <Switch
+          checked={settings?.record_cursor_spotlight ?? false}
+          onChange={(v) => setRecordFx("record_cursor_spotlight", v)}
+        />
+      </Field>
+      <Field label="Hide real cursor" hint="Replace the OS cursor with our own pointer (set at recording start).">
+        <Switch
+          checked={settings?.record_cursor_hide ?? false}
+          onChange={(v) => setRecordFx("record_cursor_hide", v)}
+        />
+      </Field>
+      <Field label="Cursor size" hint="Enlarge the recorded cursor for visibility (set at recording start).">
+        <Select
+          value={settings?.record_cursor_size ?? "off"}
+          options={CURSOR_SIZE_OPTIONS}
+          onChange={(v) => setRecordFx("record_cursor_size", v as "off" | "large" | "xl")}
         />
       </Field>
     </Section>

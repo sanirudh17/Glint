@@ -16,13 +16,41 @@ export interface RecorderStatus {
   cursor_size: "off" | "large" | "xl";
 }
 
-export const recorderStartFullscreen = (audio?: { system: boolean; mic: boolean; webcam: boolean }): Promise<void> =>
-  invoke<void>("recorder_start", { mode: "fullscreen", system: audio?.system ?? true, mic: audio?.mic ?? false, webcam: audio?.webcam ?? false });
+export interface FxOpts {
+  click_viz?: boolean;
+  keystrokes?: boolean;
+  spotlight?: boolean;
+  cursor_hide?: boolean;
+  cursor_size?: "off" | "large" | "xl";
+}
+
+const fxPayload = (fx?: FxOpts) => ({
+  click_viz: fx?.click_viz ?? false,
+  keystrokes: fx?.keystrokes ?? false,
+  spotlight: fx?.spotlight ?? false,
+  cursor_hide: fx?.cursor_hide ?? false,
+  cursor_size: fx?.cursor_size ?? "off",
+});
+
+export const recorderStartFullscreen = (
+  audio?: { system: boolean; mic: boolean; webcam: boolean },
+  fx?: FxOpts,
+): Promise<void> =>
+  invoke<void>("recorder_start", {
+    mode: "fullscreen",
+    system: audio?.system ?? true, mic: audio?.mic ?? false, webcam: audio?.webcam ?? false,
+    ...fxPayload(fx),
+  });
 export const recorderStartRegion = (
   r: { x: number; y: number; w: number; h: number },
   audio?: { system: boolean; mic: boolean; webcam: boolean },
+  fx?: FxOpts,
 ): Promise<void> =>
-  invoke<void>("recorder_start", { mode: "region", x: r.x, y: r.y, w: r.w, h: r.h, system: audio?.system ?? true, mic: audio?.mic ?? false, webcam: audio?.webcam ?? false });
+  invoke<void>("recorder_start", {
+    mode: "region", x: r.x, y: r.y, w: r.w, h: r.h,
+    system: audio?.system ?? true, mic: audio?.mic ?? false, webcam: audio?.webcam ?? false,
+    ...fxPayload(fx),
+  });
 export const recorderPause = (): Promise<void> => invoke<void>("recorder_pause");
 export const recorderResume = (): Promise<void> => invoke<void>("recorder_resume");
 export const recorderStop = (): Promise<void> => invoke<void>("recorder_stop");
@@ -32,3 +60,5 @@ export const recorderStatus = (): Promise<RecorderStatus | null> =>
 export const recorderSetMute = (source: "system" | "mic", muted: boolean): Promise<void> =>
   invoke<void>("recorder_set_mute", { source, muted });
 export const recorderSetWebcam = (on: boolean): Promise<void> => invoke<void>("recorder_set_webcam", { on });
+export const recorderSetFx = (effect: "click_viz" | "keystrokes" | "spotlight", on: boolean): Promise<void> =>
+  invoke<void>("recorder_set_fx", { effect, on });
