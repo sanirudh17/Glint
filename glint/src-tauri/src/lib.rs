@@ -258,6 +258,7 @@ pub fn run() {
             recorder::rec_hud_data,
             recorder::rec_hud_dismiss,
             crate::recorder::trim::recorder_trim_probe,
+            crate::recorder::trim::recorder_trim_export,
             recorder::recorder_open_trim,
             recorder::recorder_trim_target,
         ])

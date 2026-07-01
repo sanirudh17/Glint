@@ -84,6 +84,29 @@ pub fn insert_capture(conn: &Connection, c: &NewCapture) -> rusqlite::Result<i64
     Ok(conn.last_insert_rowid())
 }
 
+/// Update a capture row's file-derived fields after an in-place edit (trim overwrite).
+/// `bytes` always overwrites; `thumb_path`/`width`/`height` use COALESCE so a `None`
+/// preserves the existing value (a trim keeps the same resolution, so dimensions must
+/// not be nulled out).
+pub fn update_capture_file(
+    conn: &Connection,
+    id: i64,
+    bytes: i64,
+    thumb_path: Option<&str>,
+    width: Option<i64>,
+    height: Option<i64>,
+) -> rusqlite::Result<()> {
+    conn.execute(
+        "UPDATE captures SET bytes = ?1,
+             thumb_path = COALESCE(?2, thumb_path),
+             width = COALESCE(?3, width),
+             height = COALESCE(?4, height)
+         WHERE id = ?5",
+        rusqlite::params![bytes, thumb_path, width, height, id],
+    )?;
+    Ok(())
+}
+
 pub fn list_captures(conn: &Connection) -> rusqlite::Result<Vec<CaptureRow>> {
     ensure_captures_table(conn)?;
     let mut stmt = conn.prepare(

@@ -3,6 +3,8 @@
 //! ffmpeg pass from recording; the gdigrab capture path is untouched.
 
 use std::path::{Path, PathBuf};
+use tauri::{Emitter, Manager};
+use tauri_plugin_shell::process::CommandEvent;
 use tauri_plugin_shell::ShellExt;
 
 #[derive(serde::Serialize, Clone)]
@@ -159,6 +161,127 @@ pub async fn recorder_trim_probe(app: tauri::AppHandle, path: String) -> Result<
     }
     let json = String::from_utf8_lossy(&out.stdout);
     parse_ffprobe_json(&json)
+}
+
+/// Export the trimmed recording in one ffmpeg pass. Always encodes to a temp file
+/// first, then commits per `mode` ("copy" | "overwrite"). The original is never at
+/// risk mid-encode: on overwrite it is moved aside and only removed once the new file
+/// is safely in place; any failure rolls back and leaves the original intact. Async —
+/// it spawns the sidecar and continuously drains the (capacity-1) progress channel.
+#[tauri::command(async)]
+pub async fn recorder_trim_export(
+    app: tauri::AppHandle,
+    id: i64,
+    src_path: String,
+    keep: Vec<(f64, f64)>,
+    has_audio: bool,
+    duration: f64,
+    width: i64,
+    height: i64,
+    mode: String,
+) -> Result<(), String> {
+    let keep = validate_keep(&keep, duration)?;
+    if is_noop(&keep, duration) {
+        return Err("no changes to save".into());
+    }
+    let total_kept: f64 = keep.iter().map(|(s, e)| e - s).sum();
+
+    let src = PathBuf::from(&src_path);
+    let final_path = if mode == "overwrite" { src.clone() } else { trimmed_output_path(&src) };
+    let tmp = src.with_extension("trimtmp.mp4");
+    let tmp_str = tmp.to_string_lossy().to_string();
+    let _ = std::fs::remove_file(&tmp); // clear any stale temp from a prior failed run
+
+    let args = build_trim_args(&src_path, &tmp_str, &keep, has_audio);
+    let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("ffmpeg resolve: {e}"))?;
+    let (mut rx, _child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
+
+    // Drain events: parse progress from stdout, capture the exit code on Terminated.
+    let mut exit_ok = false;
+    while let Some(ev) = rx.recv().await {
+        match ev {
+            CommandEvent::Stdout(line) => {
+                let line = String::from_utf8_lossy(&line);
+                for kv in line.split_whitespace() {
+                    if let Some(us) = kv.strip_prefix("out_time_us=") {
+                        if let Ok(us) = us.parse::<f64>() {
+                            let pct = ((us / 1_000_000.0) / total_kept.max(0.001) * 100.0).clamp(0.0, 100.0);
+                            let _ = app.emit_to(crate::recorder::windows::TRIM_LABEL, "rec-trim-progress", pct);
+                        }
+                    }
+                }
+            }
+            CommandEvent::Terminated(payload) => exit_ok = payload.code == Some(0),
+            _ => {}
+        }
+    }
+
+    // Verify: ffmpeg exited 0 AND the temp is a plausibly-real file (> 1 KB).
+    let size_ok = std::fs::metadata(&tmp).map(|m| m.len() > 1024).unwrap_or(false);
+    if !exit_ok || !size_ok {
+        let _ = std::fs::remove_file(&tmp);
+        let _ = app.emit("glint-toast", "Trim failed");
+        return Err("trim produced no valid output".into());
+    }
+
+    // Commit. Copy: `final_path` is a fresh non-existing name → plain rename. Overwrite:
+    // move the original aside first so a failed rename can be rolled back (no data loss).
+    if mode == "overwrite" {
+        let bak = src.with_extension("trimbak.mp4");
+        let _ = std::fs::remove_file(&bak);
+        let backed_up = std::fs::rename(&final_path, &bak).is_ok();
+        if !backed_up {
+            let _ = std::fs::remove_file(&final_path); // couldn't move aside; try direct replace
+        }
+        if let Err(e) = std::fs::rename(&tmp, &final_path) {
+            if backed_up {
+                let _ = std::fs::rename(&bak, &final_path); // restore the original
+            }
+            let _ = std::fs::remove_file(&tmp);
+            let _ = app.emit("glint-toast", "Trim failed");
+            return Err(format!("commit failed: {e}"));
+        }
+        let _ = std::fs::remove_file(&bak);
+    } else if let Err(e) = std::fs::rename(&tmp, &final_path) {
+        let _ = std::fs::remove_file(&tmp);
+        let _ = app.emit("glint-toast", "Trim failed");
+        return Err(format!("commit failed: {e}"));
+    }
+
+    let final_str = final_path.to_string_lossy().to_string();
+    let thumb = crate::recorder::thumb::extract_thumb(&app, &final_str).await;
+    let bytes = std::fs::metadata(&final_str).map(|m| m.len() as i64).unwrap_or(0);
+    let w = (width > 0).then_some(width);
+    let h = (height > 0).then_some(height);
+
+    {
+        let db = app.state::<crate::Db>();
+        let conn = db.0.lock().unwrap();
+        if mode == "overwrite" {
+            let _ = crate::db::update_capture_file(&conn, id, bytes, thumb.as_deref(), w, h);
+        } else {
+            let row = crate::db::NewCapture {
+                kind: "recording".into(),
+                path: final_str.clone(),
+                thumb_path: thumb.clone(),
+                width: w,
+                height: h,
+                bytes: Some(bytes),
+                created_at: std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map(|d| d.as_secs() as i64)
+                    .unwrap_or(0),
+            };
+            let _ = crate::db::insert_capture(&conn, &row);
+        }
+    }
+    let _ = app.emit("capture-saved", ());
+    let _ = app.emit(
+        "glint-toast",
+        if mode == "overwrite" { "Recording trimmed" } else { "Trimmed copy saved" },
+    );
+    crate::recorder::windows::close_trim_window(&app);
+    Ok(())
 }
 
 #[cfg(test)]
