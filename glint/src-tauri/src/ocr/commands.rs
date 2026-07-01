@@ -26,6 +26,12 @@ pub fn ocr_result(app: tauri::AppHandle) -> Option<OcrResultDto> {
         })
 }
 
+/// Re-copy text from the panel (after an edit or partial selection).
+#[tauri::command]
+pub fn ocr_copy(text: String) -> Result<(), String> {
+    crate::clipboard::copy_text(&text)
+}
+
 /// Copy the text, stash the output for the panel, and open (or focus) the panel.
 /// Shared by every OCR flow. Runs off the main thread (callers are async/spawned).
 pub fn publish_and_open(app: &tauri::AppHandle, out: super::OcrOutput) {

@@ -273,6 +273,7 @@ pub fn run() {
             crate::ocr::commands::ocr_result,
             crate::ocr::commands::ocr_extract_capture,
             crate::ocr::commands::ocr_capture_region,
+            crate::ocr::commands::ocr_copy,
         ])
         .on_menu_event(|app, event| {
             // Pin right-click menus pop up via WebviewWindow::popup_menu and route
