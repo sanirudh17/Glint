@@ -44,6 +44,9 @@ export function FxOverlay() {
     const ripples: Ripple[] = [];
     let cursor: { x: number; y: number } | null = null;
     let combo: ComboState = EMPTY_COMBO;
+    // Cursor hide/size: when active, gdigrab's own cursor is off (draw_mouse 0) and
+    // we render our own pointer. `size`: 0 off, 1 large, 2 xl.
+    let cursorMode = { hide: false, size: 0 };
 
     const unlisteners: Array<Promise<() => void>> = [
       listen<{ x: number; y: number; button: string }>("fx-click", (e) => {
@@ -58,6 +61,7 @@ export function FxOverlay() {
         cfg.keystrokes = e.payload.keystrokes;
         cfg.spotlight = e.payload.spotlight;
       }),
+      listen<{ hide: boolean; size: number }>("fx-cursor-mode", (e) => { cursorMode = e.payload; }),
     ];
 
     const draw = () => {
@@ -73,6 +77,14 @@ export function FxOverlay() {
         g.addColorStop(1, "rgba(255,255,255,0)");
         ctx.fillStyle = g;
         ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+      }
+
+      // Overlay-drawn pointer for cursor hide/size. gdigrab's own cursor is off
+      // (draw_mouse 0) in these modes, so we render one; the sprite scales with size.
+      if ((cursorMode.hide || cursorMode.size > 0) && cursor) {
+        const { x, y } = toCanvasXY(cursor.x, cursor.y, originX, originY, scale);
+        const mag = cursorMode.size === 2 ? 2.2 : cursorMode.size === 1 ? 1.6 : 1;
+        drawPointer(ctx, x, y, scale * mag);
       }
 
       // Click ripples — expanding, fading rings.
@@ -128,6 +140,28 @@ function drawChips(ctx: CanvasRenderingContext2D, chips: string[], w: number, h:
     ctx.fillText(c, x + padX, y + chipH / 2);
     x += cw + gap;
   });
+}
+
+/** A stylized arrow pointer (device px), tip at x,y. Shape-agnostic fallback for
+ * cursor hide/size when the OS cursor is turned off in the capture. */
+function drawPointer(ctx: CanvasRenderingContext2D, x: number, y: number, s: number) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.beginPath();
+  ctx.moveTo(0, 0);
+  ctx.lineTo(0, 16 * s);
+  ctx.lineTo(4 * s, 12 * s);
+  ctx.lineTo(7 * s, 18 * s);
+  ctx.lineTo(9 * s, 17 * s);
+  ctx.lineTo(6 * s, 11 * s);
+  ctx.lineTo(11 * s, 11 * s);
+  ctx.closePath();
+  ctx.fillStyle = "#fff";
+  ctx.strokeStyle = "#111";
+  ctx.lineWidth = 1.2 * s;
+  ctx.fill();
+  ctx.stroke();
+  ctx.restore();
 }
 
 function roundRect(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {

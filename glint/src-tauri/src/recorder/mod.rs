@@ -706,6 +706,15 @@ pub async fn recorder_start(
             }
         };
         if let Some(session) = stash { session.stop(&app); }
+        // Tell the overlay the cursor mode (hide/size) so it draws our own pointer.
+        // The overlay may cold-load after this fires, so re-emit once shortly after.
+        let mode = serde_json::json!({ "hide": fx_cfg.cursor_hide, "size": fx_cfg.cursor_size });
+        let _ = app.emit_to(fx::window::FX_LABEL, "fx-cursor-mode", mode.clone());
+        let app2 = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+            let _ = app2.emit_to(fx::window::FX_LABEL, "fx-cursor-mode", mode);
+        });
     }
     let _ = app.emit("recorder-started", ());
     Ok(())
