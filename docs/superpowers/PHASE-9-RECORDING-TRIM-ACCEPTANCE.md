@@ -38,6 +38,9 @@ Open:
 - [ ] Single-instance: opening Trim while one is open **focuses** it + toasts "Close the current trim first".
 
 Edit:
+- [ ] **Drag the timeline** — press and drag anywhere on the track; the red playhead
+      follows the cursor instantly (even dragging past the track edges), and the video
+      keeps up without freezing on a fast drag.
 - [ ] Space play/pause; click the track to seek; `←/→` frame-step (1/fps).
 - [ ] **S** splits the block under the playhead; splitting on a boundary is a no-op (no zero-width block).
 - [ ] Select a block + **Del** removes it (hatched gap); **can't** remove the last remaining block.
@@ -55,6 +58,16 @@ Save:
 - [ ] Failure safety: if export fails, the **original is intact** and a "Trim failed" toast shows;
       the window stays open to retry. (Overwrite moves the original to `.trimbak` and only removes
       it once the new file is safely in place — verified rollback-safe.)
+
+Open in Glint (video files):
+- [ ] Settings → General toggle is ON; right-click a **video** in Explorer (mp4/mov/mkv/
+      webm/avi/m4v/wmv) → **Open in Glint** → the trim window opens and the video plays
+      (asset access granted for that specific file even outside `Videos\Glint`).
+- [ ] Works both **warm** (Glint already open) and **cold** (Glint closed → launches).
+- [ ] **Save copy** writes `… (trimmed).mp4` next to the source and adds a Library row;
+      **Overwrite** replaces the original video in place (rollback-safe). Opening a known
+      Glint recording this way still updates its existing Library row on Overwrite.
+- [ ] A right-clicked **image** still opens the editor (unchanged).
 
 ## Deferred (out of V1, unchanged from spec)
 
