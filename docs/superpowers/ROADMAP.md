@@ -94,10 +94,28 @@ capture/library/editor path.
   copy/Overwrite, video "Open in Glint" via per-extension shell verb).*
   (See PHASE-9-RECORDING-TRIM-ACCEPTANCE.md.)
 
-## Planned
+- **Phase 10 — OCR / Capture Text** (extract selectable text, CleanShot "Capture Text"). A new
+  **isolated** `ocr/` module runs **local Tesseract 5** (LSTM): preprocess (grayscale → invert
+  dark backgrounds → ~3× upscale) → PNG → shell out to the `tesseract` CLI (`-l eng --oem 1
+  --psm 6`, console suppressed) → parse, assembled through a pure `assemble_text` core. The
+  binary is resolved from the standard install dir / PATH (missing → a clear "winget install
+  UB-Mannheim.TesseractOCR" message). **Engine note:** originally `Windows.Media.Ocr`, but it
+  proved far less accurate than Snipping Tool on small / dark-mode / terminal text (dropped
+  backslash paths, `0.1.0`→`e.l.e`); a probe confirmed the ceiling was the engine, not
+  preprocessing, so we switched to Tesseract. Fully local, no cloud. **Capture Text (live)** reuses
+  the frozen-overlay selector — the session carries a `CaptureIntent` (`Screenshot` default),
+  `begin_ocr_capture` re-tags it to `Text` (hiding the main window first), and `capture_commit`
+  branches to `finish_ocr_commit` (crop stays in `capture/`, recognition in `ocr/`); no PNG, no
+  Library row. **Extract text** OCRs an existing Library image (`ocr_extract_capture`) or the
+  in-memory last capture (`ocr_extract_last`, the HUD path — no fabricated id). A small decorated
+  `#/ocr` **review panel** shows editable text, Copy (whole/selection), line+char counts, and an
+  empty state; every flow funnels through `publish_and_open` (copy + stash + open). Entry points:
+  Home button, tray **Capture** submenu, post-capture **HUD**, and **Library** image cards. New
+  Cargo features: `Graphics_Imaging`/`Media_Ocr`/`Storage_Streams` + `windows-future`. **Recorder
+  isolation honored** (`ocr/`↔`recorder/` import nothing from each other). *Built — awaiting
+  at-screen.* (See PHASE-10-OCR-ACCEPTANCE.md.)
 
-- **Phase 10 — OCR / Capture Text** (next up). Extract selectable text from a screenshot region
-  (CleanShot "Capture Text"). Local-only — no cloud OCR. Design TBD (brainstorm).
+## Planned
 
 - **Deferred CleanShot video-polish** (in-scope, not yet scheduled — parked for a later phase):
   - **Click & keystroke highlighting** during recording (visualise clicks / show pressed keys).

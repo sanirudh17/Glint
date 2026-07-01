@@ -10,3 +10,7 @@
 # Required at runtime; see PHASE-8/9 acceptance docs for the install step.
 /binaries/ffmpeg-*
 /binaries/ffprobe-*
+# Bundled Tesseract OCR runtime (~160MB) — copied per machine, never committed.
+# Glint auto-detects a winget-installed Tesseract if this folder is absent; see
+# PHASE-10-OCR-ACCEPTANCE.md / scripts/fetch-tesseract.ps1.
+/binaries/tesseract/

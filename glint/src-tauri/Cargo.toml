@@ -46,6 +46,9 @@ wasapi = "0.15"
 # bar is excluded from gdigrab's screen capture (visible on screen, absent from
 # the video). HWND is fetched via raw-window-handle to stay version-independent
 # of whichever `windows` version Tauri resolves.
-windows = { version = "0.62", features = ["Win32_Foundation", "Win32_UI_WindowsAndMessaging"] }
+windows = { version = "0.62", features = [
+    "Win32_Foundation",
+    "Win32_UI_WindowsAndMessaging",
+] }
 raw-window-handle = "0.6"
 

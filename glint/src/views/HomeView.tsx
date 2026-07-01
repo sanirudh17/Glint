@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, FileText } from "lucide-react";
+import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, FileText, ScanText } from "lucide-react";
 import { Button, Card, EmptyState } from "../components/ui";
 import { useAppStore } from "../store/useAppStore";
 import { startCapture } from "../lib/captureIpc";
+import { captureText } from "../lib/ocr";
 import { listCaptures, type CaptureItem } from "../lib/captures";
 import { getRecentProjects, openProject, pickOpenPath, pushRecentProject, type RecentProject } from "../lib/editor";
 import { CaptureCard } from "./library/CaptureCard";
@@ -139,6 +140,14 @@ export default function HomeView() {
             onClick={() => startCapture("fullscreen")}
           >
             Capture Fullscreen
+          </Button>
+          <Button
+            variant="subtle"
+            size="md"
+            icon={ScanText}
+            onClick={() => captureText()}
+          >
+            Capture Text
           </Button>
           <Button
             variant="subtle"

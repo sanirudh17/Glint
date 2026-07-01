@@ -1,0 +1,10 @@
+.ocr-root { display: flex; flex-direction: column; height: 100vh; background: #0c0c10; color: #e8e8ee; font: 13px system-ui, sans-serif; }
+.ocr-header, .ocr-actions { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.ocr-spacer { flex: 1; }
+.ocr-ok { color: #7ee0a2; }
+.ocr-muted { opacity: 0.7; }
+.ocr-counts { opacity: 0.75; font-variant-numeric: tabular-nums; }
+.ocr-text { flex: 1; min-height: 0; width: 100%; box-sizing: border-box; resize: none; border: none; padding: 14px 16px; background: #0c0c10; color: #e8e8ee; font: 13px ui-monospace, monospace; line-height: 1.6; outline: none; }
+.ocr-empty { flex: 1; padding: 16px; opacity: 0.8; }
+.ocr-btn { background: #1b1d27; color: #e8e8ee; border: 1px solid rgba(255,255,255,0.12); border-radius: 7px; padding: 6px 12px; cursor: pointer; }
+.ocr-btn--primary { background: #5b7cfa; border-color: #5b7cfa; }

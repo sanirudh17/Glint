@@ -1,0 +1,11 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "ocr",
+  "description": "Capability for the OCR review panel window.",
+  "windows": ["ocr"],
+  "permissions": [
+    "core:default",
+    "core:window:allow-close",
+    "core:window:allow-set-focus"
+  ]
+}
