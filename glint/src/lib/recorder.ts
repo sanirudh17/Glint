@@ -9,6 +9,11 @@ export interface RecorderStatus {
   system_muted: boolean;
   mic_muted: boolean;
   webcam: boolean;
+  click_viz: boolean;
+  keystrokes: boolean;
+  spotlight: boolean;
+  cursor_hide: boolean;
+  cursor_size: "off" | "large" | "xl";
 }
 
 export const recorderStartFullscreen = (audio?: { system: boolean; mic: boolean; webcam: boolean }): Promise<void> =>
