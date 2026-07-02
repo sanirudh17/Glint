@@ -114,6 +114,7 @@ interface EditorState {
   setCrop: (c: Crop) => void;
   resetCrop: () => void;
   setFrame: (patch: Partial<FrameConfig>) => void;
+  setChrome: (patch: Partial<WindowChrome>) => void;
   toggleFrame: (on?: boolean) => void;
   resetFrame: () => void;
   undo: () => void;
@@ -266,6 +267,22 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   // Frame styling is live tweak state (like the style bar) — never in history.
   setFrame: (patch) => set((s) => ({ frame: { ...s.frame, ...patch }, dirty: true })),
+  // Chrome is live tweak state too (never in history). Selecting a real chrome
+  // style auto-enables the frame (chrome is part of the card, so a no-op would
+  // confuse). Switching to Window with an empty title prefills the project name
+  // as a convenience (still editable/clearable).
+  setChrome: (patch) =>
+    set((s) => {
+      const chrome = { ...s.frame.chrome, ...patch };
+      const enabling = chrome.style === "window" || chrome.style === "browser";
+      if (chrome.style === "window" && !chrome.title.trim()) {
+        chrome.title = s.projectName ?? "";
+      }
+      return {
+        frame: { ...s.frame, chrome, enabled: enabling ? true : s.frame.enabled },
+        dirty: true,
+      };
+    }),
   toggleFrame: (on) => set((s) => ({ frame: { ...s.frame, enabled: on ?? !s.frame.enabled }, dirty: true })),
   resetFrame: () => set({ frame: freshFrame(), dirty: true }),
 

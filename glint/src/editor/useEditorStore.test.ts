@@ -273,3 +273,47 @@ describe("window chrome — model & persistence", () => {
     expect(useEditorStore.getState().frame.chrome).toEqual(DEFAULT_FRAME.chrome);
   });
 });
+
+describe("window chrome — setChrome action", () => {
+  beforeEach(() => useEditorStore.getState().reset());
+
+  it("selecting Window auto-enables the frame", () => {
+    const s = useEditorStore.getState();
+    expect(useEditorStore.getState().frame.enabled).toBe(false);
+    s.setChrome({ style: "window" });
+    expect(useEditorStore.getState().frame.enabled).toBe(true);
+    expect(useEditorStore.getState().frame.chrome.style).toBe("window");
+  });
+
+  it("selecting Browser auto-enables the frame", () => {
+    useEditorStore.getState().setChrome({ style: "browser" });
+    expect(useEditorStore.getState().frame.enabled).toBe(true);
+  });
+
+  it("selecting None does NOT disable an enabled frame", () => {
+    const s = useEditorStore.getState();
+    s.toggleFrame(true);
+    s.setChrome({ style: "none" });
+    expect(useEditorStore.getState().frame.enabled).toBe(true);
+    expect(useEditorStore.getState().frame.chrome.style).toBe("none");
+  });
+
+  it("switching to Window prefills the title from the project name when empty", () => {
+    useEditorStore.getState().loadDoc(fakeBase(), null, { path: "C:/x/Report.glint", name: "Report.glint" });
+    useEditorStore.getState().setChrome({ style: "window" });
+    expect(useEditorStore.getState().frame.chrome.title).toBe("Report.glint");
+  });
+
+  it("does not overwrite a title the user already set", () => {
+    const s = useEditorStore.getState();
+    s.loadDoc(fakeBase(), null, { path: "C:/x/Report.glint", name: "Report.glint" });
+    s.setChrome({ style: "window", title: "Mine" });
+    s.setChrome({ theme: "dark" }); // unrelated change must keep the title
+    expect(useEditorStore.getState().frame.chrome.title).toBe("Mine");
+  });
+
+  it("setChrome does not push undo history", () => {
+    useEditorStore.getState().setChrome({ style: "browser" });
+    expect(useEditorStore.getState().past).toEqual([]);
+  });
+});
