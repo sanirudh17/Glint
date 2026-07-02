@@ -67,6 +67,20 @@ pub async fn ocr_extract_last(app: tauri::AppHandle) -> Result<(), String> {
     Ok(())
 }
 
+/// Decode a PNG at `path`, OCR it, and open the panel. Shared by the from-Library
+/// and tray extract-text paths. Not async itself (callers are async/spawned).
+pub fn ocr_recognize_path(app: &tauri::AppHandle, path: &str) -> Result<(), String> {
+    let bytes = std::fs::read(path).map_err(|_| "Couldn't open that capture".to_string())?;
+    let img = image::load_from_memory(&bytes)
+        .map_err(|_| "Couldn't open that capture".to_string())?
+        .to_rgba8();
+    let (w, h) = (img.width(), img.height());
+    // See ocr_extract_last: Err surfaces via the caller; empty text opens the panel.
+    let out = super::recognize(&img.into_raw(), w, h)?;
+    publish_and_open(app, out);
+    Ok(())
+}
+
 /// OCR an existing Library capture (image) by id: decode its PNG, recognize, copy,
 /// and open the panel. Async because it builds the panel window.
 #[tauri::command(async)]
@@ -78,13 +92,5 @@ pub async fn ocr_extract_capture(app: tauri::AppHandle, id: i64) -> Result<(), S
             .map_err(|e| e.to_string())?
             .ok_or("Couldn't open that capture")?
     };
-    let bytes = std::fs::read(&path).map_err(|_| "Couldn't open that capture".to_string())?;
-    let img = image::load_from_memory(&bytes)
-        .map_err(|_| "Couldn't open that capture".to_string())?
-        .to_rgba8();
-    let (w, h) = (img.width(), img.height());
-    // See ocr_extract_last: Err surfaces via the caller; empty text opens the panel.
-    let out = super::recognize(&img.into_raw(), w, h)?;
-    publish_and_open(&app, out);
-    Ok(())
+    ocr_recognize_path(&app, &path)
 }

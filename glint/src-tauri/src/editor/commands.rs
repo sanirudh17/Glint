@@ -51,6 +51,29 @@ pub(crate) fn open_editor_window(app: &AppHandle) {
     let _ = app.emit_to("main", "editor-open", ());
 }
 
+/// Set the editor source to a PNG and open/raise the editor window. Shared by the
+/// from-last, from-Library, and tray-annotate paths.
+pub fn set_source_and_open(
+    app: &AppHandle,
+    ed: &EditorState,
+    png: Vec<u8>,
+    width: u32,
+    height: u32,
+    origin: &str,
+    capture_id: Option<i64>,
+) {
+    *ed.0.lock().unwrap() = Some(EditorSource {
+        png,
+        width,
+        height,
+        origin: origin.into(),
+        capture_id,
+        doc: None,
+        project_path: None,
+    });
+    open_editor_window(app);
+}
+
 /// Open the most recent capture (from the HUD) into the editor.
 #[tauri::command]
 pub fn editor_open_from_last(
@@ -69,17 +92,8 @@ pub fn editor_open_from_last(
         let png = crate::capture::frozen::encode_png(&img).map_err(|e| e.to_string())?;
         (png, l.width, l.height)
     };
-    *ed.0.lock().unwrap() = Some(EditorSource {
-        png,
-        width,
-        height,
-        origin: "hud".into(),
-        capture_id: None,
-        doc: None,
-        project_path: None,
-    });
     crate::hud::teardown(&app);
-    open_editor_window(&app);
+    set_source_and_open(&app, &ed, png, width, height, "hud", None);
     Ok(())
 }
 
@@ -103,16 +117,7 @@ pub fn editor_open_capture(
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
     let decoded = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
     let (width, height) = (decoded.width(), decoded.height());
-    *ed.0.lock().unwrap() = Some(EditorSource {
-        png: bytes,
-        width,
-        height,
-        origin: "library".into(),
-        capture_id: Some(id),
-        doc: None,
-        project_path: None,
-    });
-    open_editor_window(&app);
+    set_source_and_open(&app, &ed, bytes, width, height, "library", Some(id));
     Ok(())
 }
 
