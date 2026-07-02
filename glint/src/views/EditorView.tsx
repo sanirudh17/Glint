@@ -64,6 +64,32 @@ export default function EditorView() {
         remove(selectedId);
         return;
       }
+      const st = useEditorStore.getState();
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "d") {
+        e.preventDefault();
+        if (selectedId) st.duplicate(selectedId);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "]") {
+        e.preventDefault();
+        if (selectedId) st.bringForward(selectedId);
+        return;
+      }
+      if ((e.ctrlKey || e.metaKey) && e.key === "[") {
+        e.preventDefault();
+        if (selectedId) st.sendBackward(selectedId);
+        return;
+      }
+      if (selectedId && e.key.startsWith("Arrow") && !e.ctrlKey && !e.metaKey && !e.altKey) {
+        e.preventDefault();
+        const d = e.shiftKey ? 10 : 1;
+        const delta: Record<string, [number, number]> = {
+          ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d],
+        };
+        const mv = delta[e.key];
+        if (mv) st.nudge(selectedId, mv[0], mv[1]);
+        return;
+      }
       // Single-key tool shortcuts must not fire on modifier combos, or e.g.
       // Ctrl+Shift+S would select Step and Ctrl+C would select Crop.
       if (e.ctrlKey || e.metaKey || e.altKey) return;

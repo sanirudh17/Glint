@@ -68,6 +68,8 @@
   color: var(--text-dim); cursor: pointer; font-size: var(--fz-xs);
 }
 .editor-width--active { border-color: var(--accent); color: var(--text); }
+.editor-fillgroup { display: inline-flex; align-items: center; gap: 6px; }
+.editor-opacity { width: 72px; accent-color: var(--accent); }
 .editor-fontsize {
   width: 56px; height: 26px; padding: 0 var(--s2);
   border: 1px solid var(--border); border-radius: var(--r1);

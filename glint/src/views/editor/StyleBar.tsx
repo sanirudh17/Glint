@@ -43,6 +43,13 @@ export function StyleBar() {
     setStyle({ strokeWidth });
     patchSelected({ strokeWidth });
   };
+  const applyFill = (fill: string | null) => { setStyle({ fill }); patchSelected({ fill }); };
+  const applyFillOpacity = (fillOpacity: number) => { setStyle({ fillOpacity }); patchSelected({ fillOpacity }); };
+  const applyDashed = (dashed: boolean) => { setStyle({ dashed }); patchSelected({ dashed }); };
+  const applyArrowStart = (arrowStart: boolean) => { setStyle({ arrowStart }); patchSelected({ arrowStart }); };
+
+  const isShape = tool === "rect" || tool === "ellipse";
+  const isStroke = tool === "rect" || tool === "ellipse" || tool === "line" || tool === "arrow";
 
   const current = style.color.toLowerCase();
   const isPreset = COLORS.some((c) => c.toLowerCase() === current);
@@ -112,6 +119,57 @@ export function StyleBar() {
           </button>
         ))}
       </div>
+      {isShape && (
+        <div className="editor-fillgroup">
+          <button
+            className={`editor-width${!style.fill ? " editor-width--active" : ""}`}
+            title="No fill"
+            aria-label="No fill"
+            onClick={() => applyFill(null)}
+          >
+            ⦸
+          </button>
+          <label className="editor-swatch editor-swatch--custom" title="Fill color" style={{ background: style.fill ?? undefined }}>
+            <input
+              type="color"
+              value={style.fill ?? "#ffffff"}
+              onChange={(e) => applyFill(e.currentTarget.value)}
+              aria-label="Fill color"
+            />
+          </label>
+          {style.fill && (
+            <input
+              className="editor-opacity"
+              type="range"
+              min={0} max={100}
+              value={Math.round((style.fillOpacity ?? 1) * 100)}
+              onChange={(e) => applyFillOpacity(Number(e.currentTarget.value) / 100)}
+              aria-label="Fill opacity"
+              title="Fill opacity"
+            />
+          )}
+        </div>
+      )}
+      {isStroke && (
+        <button
+          className={`editor-width${style.dashed ? " editor-width--active" : ""}`}
+          title="Dashed stroke"
+          aria-label="Toggle dashed stroke"
+          onClick={() => applyDashed(!style.dashed)}
+        >
+          ┄
+        </button>
+      )}
+      {tool === "arrow" && (
+        <button
+          className={`editor-width${style.arrowStart ? " editor-width--active" : ""}`}
+          title="Head at start too"
+          aria-label="Toggle start arrowhead"
+          onClick={() => applyArrowStart(!style.arrowStart)}
+        >
+          ⇄
+        </button>
+      )}
       {tool === "text" && (
         <input
           className="editor-fontsize"

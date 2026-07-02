@@ -11,6 +11,8 @@ import {
   nudgeAnnotation,
   reorder,
   type Annotation,
+  type BoxAnno,
+  type TwoPointAnno,
   type FreehandAnno,
   type StepAnno,
 } from "./model";
@@ -121,20 +123,20 @@ const arrowA = (id: string): Annotation =>
 
 describe("duplicateAnnotation", () => {
   it("gives the clone a new id and offsets a box by +12,+12", () => {
-    const d = duplicateAnnotation(rect("a")) as Extract<Annotation, { type: "rect" }>;
+    const d = duplicateAnnotation(rect("a")) as BoxAnno;
     expect(d.id).not.toBe("a");
     expect([d.x, d.y]).toEqual([12, 12]);
     expect([d.w, d.h]).toEqual([10, 10]);
   });
   it("offsets both points of an arrow", () => {
-    const d = duplicateAnnotation(arrowA("a")) as Extract<Annotation, { type: "arrow" }>;
+    const d = duplicateAnnotation(arrowA("a")) as TwoPointAnno;
     expect([d.x1, d.y1, d.x2, d.y2]).toEqual([12, 12, 17, 17]);
   });
 });
 
 describe("nudgeAnnotation", () => {
   it("shifts a box", () => {
-    const n = nudgeAnnotation(rect("a"), -1, 5) as Extract<Annotation, { type: "rect" }>;
+    const n = nudgeAnnotation(rect("a"), -1, 5) as BoxAnno;
     expect([n.x, n.y]).toEqual([-1, 5]);
   });
   it("shifts every freehand vertex", () => {
