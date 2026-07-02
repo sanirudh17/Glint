@@ -236,6 +236,47 @@
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
+/* Label + an inline info affordance on the same line. */
+.frame-labelrow { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Hover-reveal info icon (replaces always-on hint paragraphs). */
+.frame-info {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  color: var(--text-faint);
+  cursor: help;
+  text-transform: none;
+}
+.frame-info:hover, .frame-info:focus-visible { color: var(--text-dim); outline: none; }
+/* Anchored via JS (fixed, left/top set inline) so it escapes the scroll panel's
+   overflow clip. translate(-100%, -50%) places it fully to the LEFT of the icon,
+   vertically centered. */
+.frame-tip {
+  position: fixed;
+  transform: translate(-100%, -50%);
+  width: 220px;
+  max-width: 60vw;
+  padding: var(--s2) var(--s3);
+  border-radius: var(--r1);
+  background: var(--bg-elev2);
+  border: 1px solid var(--border);
+  color: var(--text-dim);
+  font-size: var(--fz-xs);
+  line-height: 1.45;
+  font-weight: 400;
+  text-transform: none;
+  letter-spacing: normal;
+  white-space: normal;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  z-index: 100;
+  animation: frame-tip-in var(--dur) var(--ease);
+}
+@keyframes frame-tip-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
 /* Segmented control (background type + aspect) */
 .frame-seg {
   display: flex;
@@ -268,6 +309,11 @@
   color: var(--text-faint);
 }
 .frame-swatches { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+.frame-input {
+  width: 100%; height: 28px; padding: 0 var(--s2);
+  border: 1px solid var(--border); border-radius: var(--r1);
+  background: var(--bg); color: var(--text); font-size: var(--fz-sm);
+}
 .frame-gradients { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .frame-grad {
   width: 28px;

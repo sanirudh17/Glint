@@ -16,6 +16,9 @@ export interface FrameLayoutInput {
   radius: number;
   shadow: number;
   aspect: AspectId;
+  /** Only the layout-relevant chrome field; theme/title/url are visual-only. Optional so
+      existing callers and legacy layouts default to no chrome. */
+  chrome?: { style: "none" | "window" | "browser" };
 }
 
 export interface Layout {
@@ -24,6 +27,7 @@ export interface Layout {
   compositionW: number; compositionH: number; // full framed output size (native px)
   paddingPx: number;                          // resolved padding, per side
   cropX: number; cropY: number;               // crop origin in image space (0,0 when uncropped)
+  chromeH: number;                            // height of the chrome band above the image (0 when none)
 }
 
 const ASPECT_RATIO: Record<AspectId, number | null> = {
@@ -32,6 +36,12 @@ const ASPECT_RATIO: Record<AspectId, number | null> = {
   "16:9": 16 / 9,
   "4:3": 4 / 3,
 };
+
+// Chrome bar height scales with the screenshot's width so it reads consistently
+// across capture sizes, then clamps (tuned at-screen, like the shadow ramp).
+const BAR_RATIO = 0.045;
+const BAR_MIN = 28;
+const BAR_MAX = 120;
 
 /** Fold a possibly-negative drag rect into a normalized {x,y,w,h} with positive size. */
 export function normalizeRect(r: { x: number; y: number; w: number; h: number }): Crop {
@@ -58,13 +68,17 @@ export function computeLayout(
     return {
       contentW, contentH, contentX: 0, contentY: 0,
       compositionW: contentW, compositionH: contentH,
-      paddingPx: 0, cropX, cropY,
+      paddingPx: 0, cropX, cropY, chromeH: 0,
     };
   }
 
+  const chromeStyle = frame.chrome?.style ?? "none";
+  const barH = Math.min(BAR_MAX, Math.max(BAR_MIN, Math.round(contentW * BAR_RATIO)));
+  const chromeH = chromeStyle === "none" ? 0 : barH;
+
   const paddingPx = Math.round((frame.padding / 100) * 0.25 * Math.max(contentW, contentH));
   let compW = contentW + paddingPx * 2;
-  let compH = contentH + paddingPx * 2;
+  let compH = contentH + chromeH + paddingPx * 2;
 
   const ratio = ASPECT_RATIO[frame.aspect];
   if (ratio) {
@@ -73,12 +87,16 @@ export function computeLayout(
     else compH = Math.round(compW / ratio);
   }
 
+  // The card (chrome bar + image) is centered vertically; the image sits chromeH
+  // below the card's top. With chromeH 0 this reduces to the pre-chrome math.
+  const cardTop = Math.round((compH - (chromeH + contentH)) / 2);
+
   return {
     contentW, contentH,
     contentX: Math.round((compW - contentW) / 2),
-    contentY: Math.round((compH - contentH) / 2),
+    contentY: cardTop + chromeH,
     compositionW: compW, compositionH: compH,
-    paddingPx, cropX, cropY,
+    paddingPx, cropX, cropY, chromeH,
   };
 }
 

@@ -44,6 +44,39 @@ describe("composition", () => {
     expect(l.compositionW).toBe(Math.round(200 * (16 / 9)));
   });
 
+  it("chrome none → chromeH 0 and layout unchanged", () => {
+    const l = computeLayout(400, 200, null, on({ padding: 100, chrome: { style: "none" } }));
+    expect(l.chromeH).toBe(0);
+    expect(l.compositionH).toBe(400); // same as the padding-only case
+    expect(l.contentY).toBe(100);
+  });
+
+  it("chrome window adds a bar above the image", () => {
+    // content 400 wide → barH = clamp(round(400*0.045)=18, 28, 120) = 28
+    const l = computeLayout(400, 200, null, on({ padding: 100, chrome: { style: "window" } }));
+    expect(l.chromeH).toBe(28);
+    expect(l.compositionH).toBe(428); // 400 + chromeH
+    expect(l.compositionW).toBe(600); // unchanged
+    expect(l.contentY).toBe(128);     // image pushed down by chromeH
+  });
+
+  it("chrome browser has the same single-row bar height as window", () => {
+    const w = computeLayout(400, 200, null, on({ padding: 100, chrome: { style: "window" } }));
+    const b = computeLayout(400, 200, null, on({ padding: 100, chrome: { style: "browser" } }));
+    expect(b.chromeH).toBe(w.chromeH);
+  });
+
+  it("bar height respects the clamp on a large capture", () => {
+    // content 4000 wide → round(4000*0.045)=180 → clamped to 120
+    const l = computeLayout(4000, 2000, null, on({ padding: 0, chrome: { style: "window" } }));
+    expect(l.chromeH).toBe(120);
+  });
+
+  it("frame disabled → chromeH 0 even with a chrome style set", () => {
+    const l = computeLayout(400, 200, null, { enabled: false, padding: 0, radius: 0, shadow: 0, aspect: "auto", chrome: { style: "window" } });
+    expect(l.chromeH).toBe(0);
+  });
+
   it("exportPixelRatio maps stage width back to native composition", () => {
     const l = computeLayout(600, 400, null, off);
     expect(exportPixelRatio(l, 300)).toBe(2);

@@ -243,3 +243,77 @@ describe("duplicate / z-order / nudge actions", () => {
     expect((useEditorStore.getState().annotations[0] as { x: number }).x).toBe(0);
   });
 });
+
+describe("window chrome — model & persistence", () => {
+  beforeEach(() => useEditorStore.getState().reset());
+
+  it("defaults to no chrome", () => {
+    expect(DEFAULT_FRAME.chrome).toEqual({ style: "none", theme: "light", buttons: "mac", title: "", url: "" });
+    useEditorStore.getState().loadDoc(fakeBase(), null, null);
+    expect(useEditorStore.getState().frame.chrome.style).toBe("none");
+  });
+
+  it("mergeFrame defaults chrome for a legacy doc that lacks it", () => {
+    // A legacy frame object with no `chrome` key still hydrates with the default chrome.
+    const legacy = { ...DEFAULT_FRAME } as Record<string, unknown>;
+    delete legacy.chrome;
+    useEditorStore.getState().loadDoc(
+      fakeBase(),
+      { annotations: [], crop: null, frame: legacy as never },
+      null,
+    );
+    expect(useEditorStore.getState().frame.chrome).toEqual(DEFAULT_FRAME.chrome);
+  });
+
+  it("resetFrame clears chrome back to none", () => {
+    const s = useEditorStore.getState();
+    s.setFrame({ chrome: { style: "window", theme: "dark", buttons: "mac", title: "X", url: "" } });
+    expect(useEditorStore.getState().frame.chrome.style).toBe("window");
+    s.resetFrame();
+    expect(useEditorStore.getState().frame.chrome).toEqual(DEFAULT_FRAME.chrome);
+  });
+});
+
+describe("window chrome — setChrome action", () => {
+  beforeEach(() => useEditorStore.getState().reset());
+
+  it("selecting Window auto-enables the frame", () => {
+    const s = useEditorStore.getState();
+    expect(useEditorStore.getState().frame.enabled).toBe(false);
+    s.setChrome({ style: "window" });
+    expect(useEditorStore.getState().frame.enabled).toBe(true);
+    expect(useEditorStore.getState().frame.chrome.style).toBe("window");
+  });
+
+  it("selecting Browser auto-enables the frame", () => {
+    useEditorStore.getState().setChrome({ style: "browser" });
+    expect(useEditorStore.getState().frame.enabled).toBe(true);
+  });
+
+  it("selecting None does NOT disable an enabled frame", () => {
+    const s = useEditorStore.getState();
+    s.toggleFrame(true);
+    s.setChrome({ style: "none" });
+    expect(useEditorStore.getState().frame.enabled).toBe(true);
+    expect(useEditorStore.getState().frame.chrome.style).toBe("none");
+  });
+
+  it("switching to Window prefills the title from the project name when empty", () => {
+    useEditorStore.getState().loadDoc(fakeBase(), null, { path: "C:/x/Report.glint", name: "Report.glint" });
+    useEditorStore.getState().setChrome({ style: "window" });
+    expect(useEditorStore.getState().frame.chrome.title).toBe("Report.glint");
+  });
+
+  it("does not overwrite a title the user already set", () => {
+    const s = useEditorStore.getState();
+    s.loadDoc(fakeBase(), null, { path: "C:/x/Report.glint", name: "Report.glint" });
+    s.setChrome({ style: "window", title: "Mine" });
+    s.setChrome({ theme: "dark" }); // unrelated change must keep the title
+    expect(useEditorStore.getState().frame.chrome.title).toBe("Mine");
+  });
+
+  it("setChrome does not push undo history", () => {
+    useEditorStore.getState().setChrome({ style: "browser" });
+    expect(useEditorStore.getState().past).toEqual([]);
+  });
+});

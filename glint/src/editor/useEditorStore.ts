@@ -28,6 +28,18 @@ export type FrameBackground =
   | { type: "gradient"; gradientId: string }
   | { type: "transparent" };
 
+export interface WindowChrome {
+  style: "none" | "window" | "browser";
+  theme: "light" | "dark";
+  /** Decorative window-control buttons: macOS traffic lights (left) or Windows
+      caption buttons (right). Applies to both Window and Browser styles. */
+  buttons: "none" | "mac" | "windows";
+  /** Centered title text (Window style). Empty → no title drawn. */
+  title: string;
+  /** Address-bar text (Browser style). Empty → empty pill. */
+  url: string;
+}
+
 export interface FrameConfig {
   enabled: boolean;
   background: FrameBackground;
@@ -35,6 +47,7 @@ export interface FrameConfig {
   radius: number;
   shadow: number;
   aspect: "auto" | "1:1" | "16:9" | "4:3";
+  chrome: WindowChrome;
 }
 
 /** One step of undo/redo history: annotations + the structural crop together. */
@@ -54,6 +67,7 @@ export const DEFAULT_FRAME: FrameConfig = {
   radius: 12,
   shadow: 35,
   aspect: "auto",
+  chrome: { style: "none", theme: "light", buttons: "mac", title: "", url: "" },
 };
 
 interface EditorState {
@@ -103,19 +117,29 @@ interface EditorState {
   setCrop: (c: Crop) => void;
   resetCrop: () => void;
   setFrame: (patch: Partial<FrameConfig>) => void;
+  setChrome: (patch: Partial<WindowChrome>) => void;
   toggleFrame: (on?: boolean) => void;
   resetFrame: () => void;
   undo: () => void;
   redo: () => void;
 }
 
-/** Fresh frame config with its nested background cloned (so resets/inits never share refs). */
-const freshFrame = (): FrameConfig => ({ ...DEFAULT_FRAME, background: { ...DEFAULT_FRAME.background } });
+/** Fresh frame config with nested background + chrome cloned (so resets never share refs). */
+const freshFrame = (): FrameConfig => ({
+  ...DEFAULT_FRAME,
+  background: { ...DEFAULT_FRAME.background },
+  chrome: { ...DEFAULT_FRAME.chrome },
+});
 
 /** Merge a loaded frame over defaults so a partial/legacy doc still hydrates safely. */
 const mergeFrame = (f: FrameConfig | undefined): FrameConfig =>
   f
-    ? { ...DEFAULT_FRAME, ...f, background: f.background ? { ...f.background } : { ...DEFAULT_FRAME.background } }
+    ? {
+        ...DEFAULT_FRAME,
+        ...f,
+        background: f.background ? { ...f.background } : { ...DEFAULT_FRAME.background },
+        chrome: { ...DEFAULT_FRAME.chrome, ...(f.chrome ?? {}) },
+      }
     : freshFrame();
 
 const INITIAL = {
@@ -246,6 +270,22 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   // Frame styling is live tweak state (like the style bar) — never in history.
   setFrame: (patch) => set((s) => ({ frame: { ...s.frame, ...patch }, dirty: true })),
+  // Chrome is live tweak state too (never in history). Selecting a real chrome
+  // style auto-enables the frame (chrome is part of the card, so a no-op would
+  // confuse). Switching to Window with an empty title prefills the project name
+  // as a convenience (still editable/clearable).
+  setChrome: (patch) =>
+    set((s) => {
+      const chrome = { ...s.frame.chrome, ...patch };
+      const enabling = chrome.style === "window" || chrome.style === "browser";
+      if (chrome.style === "window" && !chrome.title.trim()) {
+        chrome.title = s.projectName ?? "";
+      }
+      return {
+        frame: { ...s.frame, chrome, enabled: enabling ? true : s.frame.enabled },
+        dirty: true,
+      };
+    }),
   toggleFrame: (on) => set((s) => ({ frame: { ...s.frame, enabled: on ?? !s.frame.enabled }, dirty: true })),
   resetFrame: () => set({ frame: freshFrame(), dirty: true }),
 
