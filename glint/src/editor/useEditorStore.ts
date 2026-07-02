@@ -28,6 +28,15 @@ export type FrameBackground =
   | { type: "gradient"; gradientId: string }
   | { type: "transparent" };
 
+export interface WindowChrome {
+  style: "none" | "window" | "browser";
+  theme: "light" | "dark";
+  /** Centered title text (Window style). Empty → no title drawn. */
+  title: string;
+  /** Address-bar text (Browser style). Empty → empty pill. */
+  url: string;
+}
+
 export interface FrameConfig {
   enabled: boolean;
   background: FrameBackground;
@@ -35,6 +44,7 @@ export interface FrameConfig {
   radius: number;
   shadow: number;
   aspect: "auto" | "1:1" | "16:9" | "4:3";
+  chrome: WindowChrome;
 }
 
 /** One step of undo/redo history: annotations + the structural crop together. */
@@ -54,6 +64,7 @@ export const DEFAULT_FRAME: FrameConfig = {
   radius: 12,
   shadow: 35,
   aspect: "auto",
+  chrome: { style: "none", theme: "light", title: "", url: "" },
 };
 
 interface EditorState {
@@ -109,13 +120,22 @@ interface EditorState {
   redo: () => void;
 }
 
-/** Fresh frame config with its nested background cloned (so resets/inits never share refs). */
-const freshFrame = (): FrameConfig => ({ ...DEFAULT_FRAME, background: { ...DEFAULT_FRAME.background } });
+/** Fresh frame config with nested background + chrome cloned (so resets never share refs). */
+const freshFrame = (): FrameConfig => ({
+  ...DEFAULT_FRAME,
+  background: { ...DEFAULT_FRAME.background },
+  chrome: { ...DEFAULT_FRAME.chrome },
+});
 
 /** Merge a loaded frame over defaults so a partial/legacy doc still hydrates safely. */
 const mergeFrame = (f: FrameConfig | undefined): FrameConfig =>
   f
-    ? { ...DEFAULT_FRAME, ...f, background: f.background ? { ...f.background } : { ...DEFAULT_FRAME.background } }
+    ? {
+        ...DEFAULT_FRAME,
+        ...f,
+        background: f.background ? { ...f.background } : { ...DEFAULT_FRAME.background },
+        chrome: { ...DEFAULT_FRAME.chrome, ...(f.chrome ?? {}) },
+      }
     : freshFrame();
 
 const INITIAL = {

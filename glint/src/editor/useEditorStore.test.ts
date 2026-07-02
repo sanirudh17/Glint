@@ -243,3 +243,33 @@ describe("duplicate / z-order / nudge actions", () => {
     expect((useEditorStore.getState().annotations[0] as { x: number }).x).toBe(0);
   });
 });
+
+describe("window chrome — model & persistence", () => {
+  beforeEach(() => useEditorStore.getState().reset());
+
+  it("defaults to no chrome", () => {
+    expect(DEFAULT_FRAME.chrome).toEqual({ style: "none", theme: "light", title: "", url: "" });
+    useEditorStore.getState().loadDoc(fakeBase(), null, null);
+    expect(useEditorStore.getState().frame.chrome.style).toBe("none");
+  });
+
+  it("mergeFrame defaults chrome for a legacy doc that lacks it", () => {
+    // A legacy frame object with no `chrome` key still hydrates with the default chrome.
+    const legacy = { ...DEFAULT_FRAME } as Record<string, unknown>;
+    delete legacy.chrome;
+    useEditorStore.getState().loadDoc(
+      fakeBase(),
+      { annotations: [], crop: null, frame: legacy as never },
+      null,
+    );
+    expect(useEditorStore.getState().frame.chrome).toEqual(DEFAULT_FRAME.chrome);
+  });
+
+  it("resetFrame clears chrome back to none", () => {
+    const s = useEditorStore.getState();
+    s.setFrame({ chrome: { style: "window", theme: "dark", title: "X", url: "" } });
+    expect(useEditorStore.getState().frame.chrome.style).toBe("window");
+    s.resetFrame();
+    expect(useEditorStore.getState().frame.chrome).toEqual(DEFAULT_FRAME.chrome);
+  });
+});
