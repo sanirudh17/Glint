@@ -31,6 +31,9 @@ export type FrameBackground =
 export interface WindowChrome {
   style: "none" | "window" | "browser";
   theme: "light" | "dark";
+  /** Decorative window-control buttons: macOS traffic lights (left) or Windows
+      caption buttons (right). Applies to both Window and Browser styles. */
+  buttons: "none" | "mac" | "windows";
   /** Centered title text (Window style). Empty → no title drawn. */
   title: string;
   /** Address-bar text (Browser style). Empty → empty pill. */
@@ -64,7 +67,7 @@ export const DEFAULT_FRAME: FrameConfig = {
   radius: 12,
   shadow: 35,
   aspect: "auto",
-  chrome: { style: "none", theme: "light", title: "", url: "" },
+  chrome: { style: "none", theme: "light", buttons: "mac", title: "", url: "" },
 };
 
 interface EditorState {

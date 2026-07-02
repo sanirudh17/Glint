@@ -1,6 +1,15 @@
+import { Info } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { GRADIENTS } from "../../editor/gradients";
 import { BG_SOLIDS } from "../../editor/palette";
+
+const TRANSPARENT_HINT =
+  "No backdrop — the padding & rounded corners export as a see-through (alpha) PNG, so the framed " +
+  "screenshot drops cleanly onto any color, slide, or doc. The checkerboard just marks the transparent " +
+  "areas; it isn't part of the image.";
+const ASPECT_HINT =
+  "Aspect pads the backdrop out to a fixed shape (1:1 for social, 16:9 for slides). The screenshot never " +
+  "shrinks — it stays centered while the frame grows. Most visible with a solid/gradient backdrop.";
 
 const ASPECTS = ["auto", "1:1", "16:9", "4:3"] as const;
 
@@ -23,7 +32,10 @@ export function FramePanel() {
   return (
     <aside className="frame-panel" aria-label="Frame">
       <div className="frame-row">
-        <span className="frame-label">Background</span>
+        <span className="frame-labelrow">
+          <span className="frame-label">Background</span>
+          {bg.type === "transparent" && <Hint text={TRANSPARENT_HINT} />}
+        </span>
         <div className="frame-seg">
           {(["solid", "gradient", "transparent"] as const).map((t) => (
             <button
@@ -84,14 +96,6 @@ export function FramePanel() {
         </div>
       )}
 
-      {bg.type === "transparent" && (
-        <p className="frame-hint">
-          No backdrop — the padding &amp; rounded corners export as a see-through (alpha) PNG, so the
-          framed screenshot drops cleanly onto any color, slide, or doc. The checkerboard just marks
-          the transparent areas; it isn&apos;t part of the image.
-        </p>
-      )}
-
       <div className="frame-row">
         <span className="frame-label">Window</span>
         <div className="frame-seg">
@@ -119,6 +123,22 @@ export function FramePanel() {
                   onClick={() => setChrome({ theme: th })}
                 >
                   {th}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          <div className="frame-row">
+            <span className="frame-label">Buttons</span>
+            <div className="frame-seg">
+              {([["none", "None"], ["mac", "macOS"], ["windows", "Windows"]] as const).map(([val, label]) => (
+                <button
+                  key={val}
+                  className={`frame-seg-btn${chrome.buttons === val ? " is-active" : ""}`}
+                  style={{ textTransform: "none" }}
+                  onClick={() => setChrome({ buttons: val })}
+                >
+                  {label}
                 </button>
               ))}
             </div>
@@ -159,7 +179,10 @@ export function FramePanel() {
       <Slider label="Shadow" value={frame.shadow} onChange={(v) => setFrame({ shadow: v })} />
 
       <div className="frame-row">
-        <span className="frame-label">Aspect</span>
+        <span className="frame-labelrow">
+          <span className="frame-label">Aspect</span>
+          <Hint text={ASPECT_HINT} />
+        </span>
         <div className="frame-seg">
           {ASPECTS.map((a) => (
             <button
@@ -172,11 +195,6 @@ export function FramePanel() {
           ))}
         </div>
       </div>
-      <p className="frame-hint">
-        Aspect pads the backdrop out to a fixed shape (1:1 for social, 16:9 for slides). The
-        screenshot never shrinks — it stays centered while the frame grows. Most visible with a
-        solid/gradient backdrop.
-      </p>
 
       <div className="frame-actions">
         {crop && (
@@ -189,6 +207,17 @@ export function FramePanel() {
         </button>
       </div>
     </aside>
+  );
+}
+
+/** A small info affordance: an ⓘ icon that reveals explanatory text on hover/focus
+    (keeps the panel clean instead of showing a permanent paragraph). */
+function Hint({ text }: { text: string }) {
+  return (
+    <span className="frame-info" tabIndex={0} role="note" aria-label={text}>
+      <Info size={13} strokeWidth={2} aria-hidden />
+      <span className="frame-tip">{text}</span>
+    </span>
   );
 }
 

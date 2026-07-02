@@ -450,6 +450,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
               radius={r}
               style={frame.chrome.style as "window" | "browser"}
               theme={frame.chrome.theme}
+              buttons={frame.chrome.buttons}
               title={frame.chrome.title}
               url={frame.chrome.url}
             />

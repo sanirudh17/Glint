@@ -248,7 +248,7 @@ describe("window chrome — model & persistence", () => {
   beforeEach(() => useEditorStore.getState().reset());
 
   it("defaults to no chrome", () => {
-    expect(DEFAULT_FRAME.chrome).toEqual({ style: "none", theme: "light", title: "", url: "" });
+    expect(DEFAULT_FRAME.chrome).toEqual({ style: "none", theme: "light", buttons: "mac", title: "", url: "" });
     useEditorStore.getState().loadDoc(fakeBase(), null, null);
     expect(useEditorStore.getState().frame.chrome.style).toBe("none");
   });
@@ -267,7 +267,7 @@ describe("window chrome — model & persistence", () => {
 
   it("resetFrame clears chrome back to none", () => {
     const s = useEditorStore.getState();
-    s.setFrame({ chrome: { style: "window", theme: "dark", title: "X", url: "" } });
+    s.setFrame({ chrome: { style: "window", theme: "dark", buttons: "mac", title: "X", url: "" } });
     expect(useEditorStore.getState().frame.chrome.style).toBe("window");
     s.resetFrame();
     expect(useEditorStore.getState().frame.chrome).toEqual(DEFAULT_FRAME.chrome);
