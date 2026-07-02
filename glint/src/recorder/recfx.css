@@ -1,0 +1,11 @@
+/* rec-fx overlay — a full-bleed transparent canvas on a click-through window that
+   gdigrab records. Transparency is scoped to the canvas (like .pin-root / .hud-*),
+   never html/body, so it can't leak into the shared-bundle main window. */
+.fx-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  pointer-events: none;
+  background: transparent;
+}

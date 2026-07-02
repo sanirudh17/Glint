@@ -4,6 +4,7 @@
 
 pub mod audio;
 pub mod ffmpeg;
+pub mod fx;
 pub mod pipes;
 pub mod thumb;
 pub mod trim;
@@ -89,6 +90,9 @@ pub struct ActiveRecording {
     /// Whether the webcam bubble is currently open (sibling window — not encoded
     /// by ffmpeg, gdigrab records it as part of the screen).
     pub webcam_on: bool,
+    /// Active recording FX (click/keystroke/cursor). The overlay + hooks live here.
+    pub fx_cfg: fx::FxConfig,
+    pub fx: Option<fx::FxSession>,
 }
 
 /// `{out_dir}/{stem}.part{idx}.mp4` — per-segment temp file beside the final output.
@@ -116,6 +120,7 @@ async fn spawn_segment(
     seg_index: usize,
     cfg: AudioConfig,
     controls: &AudioControls,
+    draw_mouse: bool,
 ) -> Result<Segment, String> {
     use tokio::io::AsyncWriteExt;
 
@@ -180,7 +185,7 @@ async fn spawn_segment(
     // `want_audio` is the recording's intent (system or mic enabled), not how many
     // sources actually connected this segment — so a segment whose sources all failed
     // still gets a silent aac track and stays concat-copy compatible with audio segments.
-    let args = ffmpeg::build_ffmpeg_args(&target, fps, path, &inputs, cfg.system || cfg.mic);
+    let args = ffmpeg::build_ffmpeg_args(&target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse);
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("sidecar resolve: {e}"))?;
     let (rx_ev, child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
 
@@ -375,6 +380,11 @@ pub struct RecorderStatusDto {
     pub system_muted: bool,
     pub mic_muted: bool,
     pub webcam: bool,
+    pub click_viz: bool,
+    pub keystrokes: bool,
+    pub spotlight: bool,
+    pub cursor_hide: bool,
+    pub cursor_size: String,
 }
 
 /// What to record. Region coords/size are PHYSICAL pixels on the primary monitor.
@@ -519,6 +529,11 @@ pub async fn recorder_start(
     system: Option<bool>,
     mic: Option<bool>,
     webcam: Option<bool>,
+    click_viz: Option<bool>,
+    keystrokes: Option<bool>,
+    spotlight: Option<bool>,
+    cursor_hide: Option<bool>,
+    cursor_size: Option<String>,
 ) -> Result<(), String> {
     // Already recording? Ignore (single recording in R1).
     if app.state::<RecorderState>().0.lock().unwrap().is_some() {
@@ -600,6 +615,16 @@ pub async fn recorder_start(
     let controls = AudioControls::new(!audio_cfg.system, !audio_cfg.mic);
     let any_audio = audio_cfg.system || audio_cfg.mic;
 
+    // Recording FX config, resolved once at start (like audio). Cursor hide/size are
+    // start-time only because they change gdigrab's -draw_mouse.
+    let fx_cfg = fx::FxConfig {
+        click_viz: click_viz.unwrap_or(false),
+        keystrokes: keystrokes.unwrap_or(false),
+        spotlight: spotlight.unwrap_or(false),
+        cursor_hide: cursor_hide.unwrap_or(false),
+        cursor_size: match cursor_size.as_deref() { Some("large") => 1, Some("xl") => 2, _ => 0 },
+    };
+
     // Show the control bar IMMEDIATELY (no dead gap while ffmpeg's gdigrab input
     // initializes, which takes ~1s+). A preliminary state with `current: None`
     // backs the bar and gives Stop a target until segment 0 is up; availability is
@@ -619,13 +644,15 @@ pub async fn recorder_start(
         mic_avail: any_audio,
         controls: controls.clone(),
         webcam_on: want_cam,
+        fx_cfg,
+        fx: None,
     });
     let _ = windows::build_control_bar(&app);
 
     // Bring segment 0 up behind the visible bar. Pause/resume appends further
     // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual
     // delivered rate still depends on the machine/screen resolution).
-    let seg0 = match spawn_segment(&app, target, FPS, &segment_path(&out_str, 0), 0, audio_cfg, &controls).await {
+    let seg0 = match spawn_segment(&app, target, FPS, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
         Ok(s) => s,
         Err(e) => {
             windows::close_control_bar(&app);
@@ -663,6 +690,31 @@ pub async fn recorder_start(
         finish_segment(seg0).await;
         let _ = std::fs::remove_file(segment_path(&out_str, 0));
         return Ok(());
+    }
+    // Start FX (overlay + input hooks) if any effect is enabled. Built here (not
+    // earlier) so the overlay never lands in the countdown frames. Stored on the
+    // active recording so stop/cancel can tear it down. If the recording was
+    // stopped/canceled during ffmpeg init, the slot is gone — stop the session.
+    if fx_cfg.needs_overlay() {
+        let session = fx::start(&app, target, fx_cfg);
+        let stash = {
+            let state = app.state::<RecorderState>();
+            let mut guard = state.0.lock().unwrap();
+            match guard.as_mut() {
+                Some(rec) => { rec.fx = Some(session); None }
+                None => Some(session),
+            }
+        };
+        if let Some(session) = stash { session.stop(&app); }
+        // Tell the overlay the cursor mode (hide/size) so it draws our own pointer.
+        // The overlay may cold-load after this fires, so re-emit once shortly after.
+        let mode = serde_json::json!({ "hide": fx_cfg.cursor_hide, "size": fx_cfg.cursor_size });
+        let _ = app.emit_to(fx::window::FX_LABEL, "fx-cursor-mode", mode.clone());
+        let app2 = app.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(400)).await;
+            let _ = app2.emit_to(fx::window::FX_LABEL, "fx-cursor-mode", mode);
+        });
     }
     let _ = app.emit("recorder-started", ());
     Ok(())
@@ -710,7 +762,7 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
     };
     let (target, fps, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
     let path = segment_path(&out_path, idx);
-    let seg = spawn_segment(&app, target, fps, &path, idx, cfg, &controls).await
+    let seg = spawn_segment(&app, target, fps, &path, idx, cfg, &controls, true).await
         .map_err(|e| {
             let _ = app.emit("glint-toast", "Couldn't resume recording");
             e
@@ -744,7 +796,9 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     windows::close_control_bar(&app);
     windows::close_cam_bubble(&app);
     let rec = rec.ok_or("not recording")?;
-    let ActiveRecording { out_path, width, height, mut done, current, .. } = rec;
+    let ActiveRecording { out_path, width, height, mut done, current, fx, .. } = rec;
+    // Tear down FX (unhook input, destroy overlay) now that the recording is ending.
+    if let Some(session) = fx { session.stop(&app); }
 
     // Finish the running span (None if we stopped while paused), then stitch all
     // recorded spans into the final file. Each span exits cleanly (q + wait) so
@@ -821,7 +875,9 @@ pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     windows::close_control_bar(&app);
     windows::close_cam_bubble(&app);
     windows::close_countdown(&app); // in case cancel races the countdown
-    if let Some(ActiveRecording { mut done, current, out_path, .. }) = rec {
+    if let Some(ActiveRecording { mut done, current, out_path, fx, .. }) = rec {
+        // Tear down FX (unhook input, destroy overlay) on discard.
+        if let Some(session) = fx { session.stop(&app); }
         // Discarding everything, so finalization doesn't matter — quit the running
         // span fast, then delete every segment file (and any assembled output).
         if let Some(Segment { mut child, path, audio, .. }) = current {
@@ -847,6 +903,76 @@ pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
 #[tauri::command(async)]
 pub async fn recorder_open_region_selector(app: tauri::AppHandle) -> Result<(), String> {
     windows::build_region_selector(&app).map_err(|e| e.to_string())
+}
+
+/// Take the FX session out of the active recording (if any), dropping the lock.
+fn take_fx_session(app: &tauri::AppHandle) -> Option<fx::FxSession> {
+    app.state::<RecorderState>().0.lock().unwrap().as_mut().and_then(|r| r.fx.take())
+}
+
+/// Store the session back on the active recording, or — if the recording vanished
+/// meanwhile (stop/cancel raced) — stop it so a global hook can't leak. The lock is
+/// always dropped before `stop` (which builds/destroys a window).
+fn stash_fx_session(app: &tauri::AppHandle, session: fx::FxSession) {
+    let orphan = {
+        let state = app.state::<RecorderState>();
+        let mut guard = state.0.lock().unwrap();
+        match guard.as_mut() {
+            Some(rec) => { rec.fx = Some(session); None }
+            None => Some(session),
+        }
+    };
+    if let Some(o) = orphan {
+        o.stop(app);
+    }
+}
+
+/// Live-toggle an overlay-drawn effect (click_viz | keystrokes | spotlight). Cursor
+/// hide/size are start-time only (they change gdigrab args) and are rejected here.
+/// Async: it may build/close the rec-fx window + (re)install hooks, which must run
+/// off the main thread (window-build rule). Notifies the overlay renderers and the
+/// control bar so both reflect the change.
+#[tauri::command(async)]
+pub async fn recorder_set_fx(app: tauri::AppHandle, effect: String, on: bool) -> Result<(), String> {
+    // Mutate the config under the lock; drop the lock before any window/hook work.
+    let (cfg_after, had_overlay, target) = {
+        let state = app.state::<RecorderState>();
+        let mut guard = state.0.lock().unwrap();
+        let rec = guard.as_mut().ok_or("not recording")?;
+        let had_overlay = rec.fx_cfg.needs_overlay();
+        match effect.as_str() {
+            "click_viz" => rec.fx_cfg.click_viz = on,
+            "keystrokes" => rec.fx_cfg.keystrokes = on,
+            "spotlight" => rec.fx_cfg.spotlight = on,
+            "cursor_hide" | "cursor_size" => return Err("cursor options are set at start".into()),
+            other => return Err(format!("unknown effect: {other}")),
+        }
+        (rec.fx_cfg, had_overlay, rec.target)
+    };
+    let now_needs = cfg_after.needs_overlay();
+
+    if now_needs && !had_overlay {
+        // From all-off → create the session (overlay + hooks).
+        stash_fx_session(&app, fx::start(&app, target, cfg_after));
+    } else if !now_needs && had_overlay {
+        // Last effect turned off → tear the session down.
+        if let Some(session) = take_fx_session(&app) {
+            session.stop(&app);
+        }
+    } else if now_needs {
+        // Overlay stays; restart hooks to refresh flags / (re)install the keyboard hook.
+        if let Some(mut session) = take_fx_session(&app) {
+            session.restart_hooks(&app, cfg_after);
+            stash_fx_session(&app, session);
+        }
+    }
+
+    // Renderers update instantly; the control bar toggle reflects the new state.
+    let _ = app.emit_to(fx::window::FX_LABEL, "fx-config", serde_json::json!({
+        "click_viz": cfg_after.click_viz, "keystrokes": cfg_after.keystrokes, "spotlight": cfg_after.spotlight,
+    }));
+    let _ = app.emit_to(windows::BAR_LABEL, "recorder-fx", serde_json::json!({ "effect": effect, "on": on }));
+    Ok(())
 }
 
 /// Stash the trim target and grant the asset protocol read access to this exact file so
@@ -916,6 +1042,11 @@ pub fn recorder_status(app: tauri::AppHandle) -> Option<RecorderStatusDto> {
         system_muted: r.controls.system_muted.load(std::sync::atomic::Ordering::Relaxed),
         mic_muted: r.controls.mic_muted.load(std::sync::atomic::Ordering::Relaxed),
         webcam: r.webcam_on,
+        click_viz: r.fx_cfg.click_viz,
+        keystrokes: r.fx_cfg.keystrokes,
+        spotlight: r.fx_cfg.spotlight,
+        cursor_hide: r.fx_cfg.cursor_hide,
+        cursor_size: match r.fx_cfg.cursor_size { 1 => "large".into(), 2 => "xl".into(), _ => "off".into() },
     })
 }
 

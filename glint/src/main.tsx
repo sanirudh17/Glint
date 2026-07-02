@@ -19,7 +19,8 @@ import App from "./App";
     hash.startsWith("#/rec-countdown") ||
     hash.startsWith("#/rec-select") ||
     hash.startsWith("#/rec-hud") ||
-    hash.startsWith("#/rec-cam")
+    hash.startsWith("#/rec-cam") ||
+    hash.startsWith("#/rec-fx")
   ) {
     document.documentElement.style.background = "transparent";
     document.body.style.background = "transparent";

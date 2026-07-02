@@ -1,8 +1,9 @@
 /** ControlBar.tsx — the floating REC indicator (route #/rec-bar). */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { recorderStop, recorderPause, recorderResume, recorderStatus, recorderSetMute, recorderSetWebcam } from "../lib/recorder";
-import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX, Video, VideoOff } from "lucide-react";
+import { getCurrentWindow, PhysicalSize, PhysicalPosition } from "@tauri-apps/api/window";
+import { recorderStop, recorderPause, recorderResume, recorderStatus, recorderSetMute, recorderSetWebcam, recorderSetFx } from "../lib/recorder";
+import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointerClick, Keyboard, Sun } from "lucide-react";
 import "./recorder.css";
 
 export function mmss(total: number): string {
@@ -11,6 +12,7 @@ export function mmss(total: number): string {
 }
 
 export function ControlBar() {
+  const barRef = useRef<HTMLDivElement>(null);
   const [secs, setSecs] = useState(0);
   const [paused, setPaused] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -20,6 +22,15 @@ export function ControlBar() {
   const [audio, setAudio] = useState<{ system: boolean; mic: boolean; sysMuted: boolean; micMuted: boolean } | null>(null);
   // Webcam toggle — always shown so it can be enabled live even if off at start.
   const [camOn, setCamOn] = useState(false);
+  // Live-togglable FX (click/keystroke/spotlight). null until status loads.
+  const [fx, setFx] = useState<{ clickViz: boolean; keystrokes: boolean; spotlight: boolean } | null>(null);
+  // Hover hint shown above the pill. An in-DOM tooltip (not a native `title`) so it
+  // stays inside this capture-excluded window and never bleeds into the recording.
+  const [hint, setHint] = useState<string | null>(null);
+  const tip = (label: string) => ({
+    onMouseEnter: () => setHint(label),
+    onMouseLeave: () => setHint((h) => (h === label ? null : h)),
+  });
 
   useEffect(() => {
     const load = () =>
@@ -27,6 +38,7 @@ export function ControlBar() {
         if (s) {
           setAudio({ system: s.system, mic: s.mic, sysMuted: s.system_muted, micMuted: s.mic_muted });
           setCamOn(s.webcam);
+          setFx({ clickViz: s.click_viz, keystrokes: s.keystrokes, spotlight: s.spotlight });
         }
       }).catch(() => {});
     // The bar appears the instant the countdown ends (before ffmpeg is fully up),
@@ -39,12 +51,60 @@ export function ControlBar() {
     // The bubble's ✕ turns the webcam off through the backend, which emits this so
     // the toggle here reflects the change (otherwise it would still read "on").
     const unCam = listen<boolean>("recorder-webcam", (e) => setCamOn(e.payload));
+    // FX toggled elsewhere (e.g. by another path) → reflect it here.
+    const unFx = listen<{ effect: string; on: boolean }>("recorder-fx", (e) => {
+      setFx((f) => f && {
+        clickViz: e.payload.effect === "click_viz" ? e.payload.on : f.clickViz,
+        keystrokes: e.payload.effect === "keystrokes" ? e.payload.on : f.keystrokes,
+        spotlight: e.payload.effect === "spotlight" ? e.payload.on : f.spotlight,
+      });
+    });
     const t = window.setTimeout(load, 2000);
     return () => {
       window.clearTimeout(t);
       un.then((f) => f()).catch(() => {});
       unCam.then((f) => f()).catch(() => {});
+      unFx.then((f) => f()).catch(() => {});
     };
+  }, []);
+
+  // Fit the OS window to the pill's actual width. The pill grows as toggles appear
+  // (audio sources, webcam, the FX buttons once status loads), and a fixed-width
+  // window clipped it on both edges — cutting off the left icons AND the Stop button.
+  // A ResizeObserver measures the pill and resizes+recenters the window (keeping its
+  // bottom edge fixed), so every control always fits no matter how many are shown.
+  useEffect(() => {
+    const el = barRef.current;
+    if (!el || typeof ResizeObserver === "undefined") return;
+    const win = getCurrentWindow();
+    let raf = 0;
+    const refit = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(async () => {
+        const r = el.getBoundingClientRect();
+        // Extra height above the pill reserves room for the hover tooltip (the pill
+        // is anchored to the window's bottom edge; see .rec-bar / .rec-tip in CSS).
+        const TIP_PAD = 34;
+        const cssW = Math.ceil(r.width) + 2, cssH = Math.ceil(r.height) + TIP_PAD;
+        if (cssW <= 2 || cssH <= 2) return;
+        try {
+          const scale = await win.scaleFactor();
+          const pos = await win.outerPosition();
+          const size = await win.outerSize();
+          const newW = Math.round(cssW * scale), newH = Math.round(cssH * scale);
+          if (newW === size.width && newH === size.height) return;
+          // Keep centered horizontally + keep the bottom edge where it was.
+          const newX = Math.round(pos.x + (size.width - newW) / 2);
+          const newY = Math.round(pos.y + (size.height - newH));
+          await win.setSize(new PhysicalSize(newW, newH));
+          await win.setPosition(new PhysicalPosition(newX, newY));
+        } catch { /* not a real Tauri window (e.g. plain-Vite preview) */ }
+      });
+    };
+    const ro = new ResizeObserver(refit);
+    ro.observe(el);
+    refit();
+    return () => { ro.disconnect(); cancelAnimationFrame(raf); };
   }, []);
 
   // Flip local state only on a successful set — backend errors leave it as-is.
@@ -56,6 +116,16 @@ export function ControlBar() {
   async function toggleWebcam(next: boolean) {
     try { await recorderSetWebcam(next); } catch { return; }
     setCamOn(next);
+  }
+
+  // Flip local FX state only on a successful set.
+  async function toggleFx(effect: "click_viz" | "keystrokes" | "spotlight", next: boolean) {
+    try { await recorderSetFx(effect, next); } catch { return; }
+    setFx((f) => f && {
+      clickViz: effect === "click_viz" ? next : f.clickViz,
+      keystrokes: effect === "keystrokes" ? next : f.keystrokes,
+      spotlight: effect === "spotlight" ? next : f.spotlight,
+    });
   }
 
   // The timer counts only while running — paused time is excised from the video,
@@ -78,14 +148,15 @@ export function ControlBar() {
   }
 
   return (
-    <div className="rec-bar">
+    <div className="rec-bar" ref={barRef}>
+      {hint && <div className="rec-tip">{hint}</div>}
       <span className={`rec-dot${paused ? " rec-dot--paused" : ""}`} aria-hidden />
       <span className="rec-time">{mmss(secs)}</span>
       {audio?.system && (
         <button
           className={`rec-atog${audio.sysMuted ? " rec-atog--off" : ""}`}
           onClick={() => toggleMute("system", !audio.sysMuted)}
-          title={audio.sysMuted ? "Unmute system audio" : "Mute system audio"}
+          {...tip(audio.sysMuted ? "Unmute system audio" : "Mute system audio")}
           aria-label="Toggle system audio"
         >
           {audio.sysMuted ? <VolumeX size={13} /> : <Volume2 size={13} />}
@@ -95,7 +166,7 @@ export function ControlBar() {
         <button
           className={`rec-atog${audio.micMuted ? " rec-atog--off" : ""}`}
           onClick={() => toggleMute("mic", !audio.micMuted)}
-          title={audio.micMuted ? "Unmute microphone" : "Mute microphone"}
+          {...tip(audio.micMuted ? "Unmute microphone" : "Mute microphone")}
           aria-label="Toggle microphone"
         >
           {audio.micMuted ? <MicOff size={13} /> : <Mic size={13} />}
@@ -104,23 +175,51 @@ export function ControlBar() {
       <button
         className={`rec-atog${camOn ? "" : " rec-atog--off"}`}
         onClick={() => toggleWebcam(!camOn)}
-        title={camOn ? "Turn off webcam" : "Turn on webcam"}
+        {...tip(camOn ? "Turn off webcam" : "Turn on webcam")}
         aria-label="Toggle webcam"
       >
         {camOn ? <Video size={13} /> : <VideoOff size={13} />}
       </button>
+      {fx && (
+        <>
+          <button
+            className={`rec-atog${fx.clickViz ? "" : " rec-atog--off"}`}
+            onClick={() => toggleFx("click_viz", !fx.clickViz)}
+            {...tip(fx.clickViz ? "Hide click effects" : "Show click effects")}
+            aria-label="Toggle click visualization"
+          >
+            <MousePointerClick size={13} />
+          </button>
+          <button
+            className={`rec-atog${fx.keystrokes ? "" : " rec-atog--off"}`}
+            onClick={() => toggleFx("keystrokes", !fx.keystrokes)}
+            {...tip(fx.keystrokes ? "Hide keystrokes" : "Show keystrokes")}
+            aria-label="Toggle keystroke overlay"
+          >
+            <Keyboard size={13} />
+          </button>
+          <button
+            className={`rec-atog${fx.spotlight ? "" : " rec-atog--off"}`}
+            onClick={() => toggleFx("spotlight", !fx.spotlight)}
+            {...tip(fx.spotlight ? "Hide cursor spotlight" : "Show cursor spotlight")}
+            aria-label="Toggle cursor spotlight"
+          >
+            <Sun size={13} />
+          </button>
+        </>
+      )}
       <button
         className="rec-pause"
         onClick={togglePause}
         disabled={busy}
-        title={paused ? "Resume recording" : "Pause recording"}
+        {...tip(paused ? "Resume recording" : "Pause recording")}
         aria-label={paused ? "Resume recording" : "Pause recording"}
       >
         {paused
           ? <Play size={13} strokeWidth={2.5} fill="currentColor" />
           : <Pause size={13} strokeWidth={2.5} fill="currentColor" />}
       </button>
-      <button className="rec-stop" onClick={() => recorderStop()} title="Stop recording" aria-label="Stop">
+      <button className="rec-stop" onClick={() => recorderStop()} {...tip("Stop recording")} aria-label="Stop">
         <Square size={13} strokeWidth={2.5} fill="currentColor" />
       </button>
     </div>

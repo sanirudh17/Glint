@@ -28,9 +28,11 @@
   gap: var(--s4);
 }
 
-/* The grid region expands to fill available space */
+/* The grid region grows with its content (never shrinks below it) so thumbnails
+   keep their full size and the whole view scrolls, rather than the grid squeezing
+   cards to fit a fixed height. */
 .library-section--grow {
-  flex: 1;
+  flex: 1 0 auto;
   min-height: 0;
 }
 
@@ -123,10 +125,11 @@
  */
 .library-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  /* A comfortable minimum so thumbnails stay large and legible no matter how many
+     items pile up; the parent `.library-view` provides the vertical scroll. */
+  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
   gap: var(--s4);
-  /* Allow the grid to scroll if it overflows — normal for a library */
-  overflow-y: auto;
+  align-content: start;
 }
 
 /* ── Capture card (Phase 4) ───────────────────────────────────────────────── */

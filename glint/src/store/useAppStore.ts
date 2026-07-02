@@ -4,6 +4,13 @@ import { persistSetting, readSetting, saveSetting } from "../lib/ipc";
 import { registerExplorerMenu, unregisterExplorerMenu } from "../lib/shell";
 
 export type Theme = "dark" | "light" | "system";
+export type CursorSize = "off" | "large" | "xl";
+export type RecordFxKey =
+  | "record_click_viz"
+  | "record_keystrokes"
+  | "record_cursor_spotlight"
+  | "record_cursor_hide"
+  | "record_cursor_size";
 
 export interface Settings {
   theme: Theme;
@@ -16,6 +23,11 @@ export interface Settings {
   record_system_audio: boolean;
   record_microphone: boolean;
   record_webcam: boolean;
+  record_click_viz: boolean;
+  record_keystrokes: boolean;
+  record_cursor_spotlight: boolean;
+  record_cursor_hide: boolean;
+  record_cursor_size: "off" | "large" | "xl";
 }
 
 export interface Toast {
@@ -36,6 +48,7 @@ interface AppState {
   setRecordSystemAudio: (on: boolean) => Promise<void>;
   setRecordMicrophone: (on: boolean) => Promise<void>;
   setRecordWebcam: (on: boolean) => Promise<void>;
+  setRecordFx: (key: RecordFxKey, value: boolean | CursorSize) => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -79,6 +92,13 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (dbRecordMic !== null) record_microphone = dbRecordMic;
       const dbRecordWebcam = await readSetting<boolean>("record_webcam");
       if (dbRecordWebcam !== null) record_webcam = dbRecordWebcam;
+      // Recording FX defaults — override the Rust defaults with persisted values.
+      for (const k of ["record_click_viz", "record_keystrokes", "record_cursor_spotlight", "record_cursor_hide"] as const) {
+        const v = await readSetting<boolean>(k);
+        if (v !== null) rustSettings[k] = v;
+      }
+      const dbCursorSize = await readSetting<CursorSize>("record_cursor_size");
+      if (dbCursorSize !== null) rustSettings.record_cursor_size = dbCursorSize;
     } catch {
       // plugin-sql unavailable (e.g. plain Vite dev server) — use Rust defaults.
     }
@@ -153,6 +173,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setRecordWebcam: async (on: boolean) => {
     const updated = await saveSetting("record_webcam", on);
     await persistSetting("record_webcam", on);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setRecordFx: async (key: RecordFxKey, value: boolean | CursorSize) => {
+    const updated = await saveSetting(key, value);
+    await persistSetting(key, value);
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 

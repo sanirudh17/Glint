@@ -41,6 +41,12 @@ pub struct Settings {
     pub record_system_audio: bool,
     pub record_microphone: bool,
     pub record_webcam: bool,
+    pub record_click_viz: bool,
+    pub record_keystrokes: bool,
+    pub record_cursor_spotlight: bool,
+    pub record_cursor_hide: bool,
+    /// "off" | "large" | "xl" — recorded-cursor magnification.
+    pub record_cursor_size: String,
 }
 
 impl Default for Settings {
@@ -56,6 +62,11 @@ impl Default for Settings {
             record_system_audio: true,
             record_microphone: false,
             record_webcam: false,
+            record_click_viz: false,
+            record_keystrokes: false,
+            record_cursor_spotlight: false,
+            record_cursor_hide: false,
+            record_cursor_size: "off".into(),
         }
     }
 }
@@ -94,6 +105,26 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         }
         "record_webcam" => {
             s.record_webcam = value.as_bool().ok_or("record_webcam must be boolean")?;
+        }
+        "record_click_viz" => {
+            s.record_click_viz = value.as_bool().ok_or("record_click_viz must be boolean")?;
+        }
+        "record_keystrokes" => {
+            s.record_keystrokes = value.as_bool().ok_or("record_keystrokes must be boolean")?;
+        }
+        "record_cursor_spotlight" => {
+            s.record_cursor_spotlight =
+                value.as_bool().ok_or("record_cursor_spotlight must be boolean")?;
+        }
+        "record_cursor_hide" => {
+            s.record_cursor_hide = value.as_bool().ok_or("record_cursor_hide must be boolean")?;
+        }
+        "record_cursor_size" => {
+            let v = value.as_str().ok_or("record_cursor_size must be string")?;
+            if !matches!(v, "off" | "large" | "xl") {
+                return Err("record_cursor_size must be off|large|xl".into());
+            }
+            s.record_cursor_size = v.to_string();
         }
         other => return Err(format!("unknown settings key: {other}")),
     }
@@ -214,5 +245,39 @@ mod tests {
         let mut s = Settings::default();
         apply_update(&mut s, "record_webcam", serde_json::json!(true)).unwrap();
         assert!(s.record_webcam);
+    }
+
+    #[test]
+    fn defaults_fx_off() {
+        let s = Settings::default();
+        assert!(!s.record_click_viz);
+        assert!(!s.record_keystrokes);
+        assert!(!s.record_cursor_spotlight);
+        assert!(!s.record_cursor_hide);
+        assert_eq!(s.record_cursor_size, "off");
+    }
+
+    #[test]
+    fn apply_update_sets_fx_bools() {
+        let mut s = Settings::default();
+        apply_update(&mut s, "record_click_viz", json!(true)).unwrap();
+        apply_update(&mut s, "record_keystrokes", json!(true)).unwrap();
+        apply_update(&mut s, "record_cursor_spotlight", json!(true)).unwrap();
+        apply_update(&mut s, "record_cursor_hide", json!(true)).unwrap();
+        assert!(s.record_click_viz && s.record_keystrokes && s.record_cursor_spotlight && s.record_cursor_hide);
+    }
+
+    #[test]
+    fn apply_update_sets_cursor_size_enum() {
+        let mut s = Settings::default();
+        apply_update(&mut s, "record_cursor_size", json!("xl")).unwrap();
+        assert_eq!(s.record_cursor_size, "xl");
+    }
+
+    #[test]
+    fn apply_update_rejects_bad_cursor_size() {
+        let mut s = Settings::default();
+        assert!(apply_update(&mut s, "record_cursor_size", json!("huge")).is_err());
+        assert!(apply_update(&mut s, "record_cursor_size", json!(3)).is_err());
     }
 }
