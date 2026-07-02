@@ -26,16 +26,18 @@ pub fn build_control_bar(app: &AppHandle) -> tauri::Result<()> {
     .resizable(false)
     .shadow(false)
     .focused(false)
-    .inner_size(280.0, 44.0)
+    .inner_size(280.0, 80.0)
     .visible(false)
     .build()?;
 
+    // Height leaves room above the pill for its hover tooltip; the frontend then
+    // resizes the width to fit the pill exactly (ControlBar's ResizeObserver).
     if let Some(m) = win.primary_monitor()? {
         let s = m.scale_factor();
         let pos = m.position();
         let size = m.size();
         let bar_w = (280.0 * s) as i32;
-        let bar_h = (44.0 * s) as i32;
+        let bar_h = (80.0 * s) as i32;
         let x = pos.x + (size.width as i32 - bar_w) / 2;
         let y = pos.y + size.height as i32 - bar_h - (60.0 * s) as i32;
         win.set_position(tauri::PhysicalPosition { x, y })?;

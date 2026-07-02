@@ -2,10 +2,11 @@ import { describe, it, expect } from "vitest";
 import { toCanvasXY, rippleRadius, rippleAlpha } from "./fxRender";
 
 describe("fxRender", () => {
-  it("maps physical screen coords to canvas-local device px", () => {
-    // Overlay origin at (100,50) physical, DPR 2 → a point at (300,250) physical is
-    // (200,200) physical-from-origin = (400,400) device px on the canvas.
-    expect(toCanvasXY(300, 250, 100, 50, 2)).toEqual({ x: 400, y: 400 });
+  it("maps physical screen coords to canvas-local device px (physical is already device px)", () => {
+    // Overlay origin at (100,50) physical; a point at (300,250) physical is
+    // (200,200) device px on the canvas. No ×scale — physical == device px, and the
+    // canvas is already sized in device px, so subtracting the origin is the mapping.
+    expect(toCanvasXY(300, 250, 100, 50)).toEqual({ x: 200, y: 200 });
   });
 
   it("ripple grows with age and clamps at maxR", () => {

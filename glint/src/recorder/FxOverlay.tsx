@@ -37,16 +37,21 @@ export function FxOverlay() {
     // Seed the active effects from the live recording (the overlay is built fresh
     // when the session starts, so this is the source of truth on mount).
     const cfg = { click_viz: true, keystrokes: true, spotlight: true };
+    // Cursor hide/size: when active, gdigrab's own cursor is off (draw_mouse 0) and
+    // we render our own pointer. `size`: 0 off, 1 large, 2 xl. Seeded from status too
+    // (not only the fx-cursor-mode event) so it's correct even if the overlay cold-
+    // loads after both emits — this is why an enlarged/hidden cursor reliably shows.
+    let cursorMode = { hide: false, size: 0 };
     recorderStatus().then((s) => {
-      if (s) { cfg.click_viz = s.click_viz; cfg.keystrokes = s.keystrokes; cfg.spotlight = s.spotlight; }
+      if (s) {
+        cfg.click_viz = s.click_viz; cfg.keystrokes = s.keystrokes; cfg.spotlight = s.spotlight;
+        cursorMode = { hide: s.cursor_hide, size: s.cursor_size === "xl" ? 2 : s.cursor_size === "large" ? 1 : 0 };
+      }
     }).catch(() => {});
 
     const ripples: Ripple[] = [];
     let cursor: { x: number; y: number } | null = null;
     let combo: ComboState = EMPTY_COMBO;
-    // Cursor hide/size: when active, gdigrab's own cursor is off (draw_mouse 0) and
-    // we render our own pointer. `size`: 0 off, 1 large, 2 xl.
-    let cursorMode = { hide: false, size: 0 };
 
     const unlisteners: Array<Promise<() => void>> = [
       listen<{ x: number; y: number; button: string }>("fx-click", (e) => {
@@ -68,22 +73,30 @@ export function FxOverlay() {
       const now = performance.now();
       ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-      // Cursor spotlight — a soft radial halo under the pointer.
+      // The mouse hook reports the cursor HOTSPOT (the arrow's tip), so effects
+      // centered there sit up-and-left of the cursor's visible body. Nudge them
+      // toward the pointer's centroid so the halo/ripple wrap the cursor evenly.
+      const offX = 8 * scale, offY = 11 * scale;
+
+      // Cursor spotlight — a compact warm halo hugging the pointer.
       if (cfg.spotlight && cursor) {
-        const { x, y } = toCanvasXY(cursor.x, cursor.y, originX, originY, scale);
-        const r = 60 * scale;
-        const g = ctx.createRadialGradient(x, y, 0, x, y, r);
-        g.addColorStop(0, "rgba(255,255,255,0.28)");
-        g.addColorStop(1, "rgba(255,255,255,0)");
+        const { x, y } = toCanvasXY(cursor.x, cursor.y, originX, originY);
+        const cx = x + offX, cy = y + offY;
+        const r = 48 * scale;
+        const g = ctx.createRadialGradient(cx, cy, 0, cx, cy, r);
+        g.addColorStop(0, "rgba(255,246,214,0.40)");
+        g.addColorStop(0.5, "rgba(255,238,176,0.18)");
+        g.addColorStop(1, "rgba(255,238,176,0)");
         ctx.fillStyle = g;
-        ctx.beginPath(); ctx.arc(x, y, r, 0, Math.PI * 2); ctx.fill();
+        ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.fill();
       }
 
       // Overlay-drawn pointer for cursor hide/size. gdigrab's own cursor is off
-      // (draw_mouse 0) in these modes, so we render one; the sprite scales with size.
-      if ((cursorMode.hide || cursorMode.size > 0) && cursor) {
-        const { x, y } = toCanvasXY(cursor.x, cursor.y, originX, originY, scale);
-        const mag = cursorMode.size === 2 ? 2.2 : cursorMode.size === 1 ? 1.6 : 1;
+      // (draw_mouse 0) in these modes; `hide` draws nothing, a size draws an enlarged
+      // one. (hide implies size 0 in our config, so this stays a clean either/or.)
+      if (cursorMode.size > 0 && cursor) {
+        const { x, y } = toCanvasXY(cursor.x, cursor.y, originX, originY);
+        const mag = cursorMode.size === 2 ? 2.4 : 1.7;
         drawPointer(ctx, x, y, scale * mag);
       }
 
@@ -92,12 +105,12 @@ export function FxOverlay() {
         const rp = ripples[i];
         const age = now - rp.born;
         if (age > RIPPLE_MS) { ripples.splice(i, 1); continue; }
-        const { x, y } = toCanvasXY(rp.x, rp.y, originX, originY, scale);
-        const rad = rippleRadius(age, RIPPLE_MS, 42 * scale);
+        const { x, y } = toCanvasXY(rp.x, rp.y, originX, originY);
+        const rad = rippleRadius(age, RIPPLE_MS, 36 * scale);
         ctx.globalAlpha = rippleAlpha(age, RIPPLE_MS);
         ctx.strokeStyle = rp.button === "right" ? "#ffb454" : "#5b7cfa";
         ctx.lineWidth = 3 * scale;
-        ctx.beginPath(); ctx.arc(x, y, rad, 0, Math.PI * 2); ctx.stroke();
+        ctx.beginPath(); ctx.arc(x + offX, y + offY, rad, 0, Math.PI * 2); ctx.stroke();
         ctx.globalAlpha = 1;
       }
 
@@ -129,7 +142,9 @@ function drawChips(ctx: CanvasRenderingContext2D, chips: string[], w: number, h:
   const widths = chips.map((c) => ctx.measureText(c).width + padX * 2);
   const total = widths.reduce((a, b) => a + b, 0) + gap * (chips.length - 1);
   let x = (w - total) / 2;
-  const y = h - 70 * scale;
+  // Sit the strip well above the floating control pill (which hugs ~60px from the
+  // bottom, ~44px tall) so the two never overlap on screen. Clamp for short regions.
+  const y = Math.max(20 * scale, h - 168 * scale);
   chips.forEach((c, i) => {
     const cw = widths[i];
     ctx.fillStyle = "rgba(18,20,28,0.86)";

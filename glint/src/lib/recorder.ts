@@ -24,12 +24,15 @@ export interface FxOpts {
   cursor_size?: "off" | "large" | "xl";
 }
 
+// Tauri maps camelCase JS arg keys → snake_case Rust params (clickViz → click_viz).
+// These MUST be camelCase or the multi-word args silently arrive as None (false) —
+// which is exactly why click/hide/size effects didn't apply at recording start.
 const fxPayload = (fx?: FxOpts) => ({
-  click_viz: fx?.click_viz ?? false,
+  clickViz: fx?.click_viz ?? false,
   keystrokes: fx?.keystrokes ?? false,
   spotlight: fx?.spotlight ?? false,
-  cursor_hide: fx?.cursor_hide ?? false,
-  cursor_size: fx?.cursor_size ?? "off",
+  cursorHide: fx?.cursor_hide ?? false,
+  cursorSize: fx?.cursor_size ?? "off",
 });
 
 export const recorderStartFullscreen = (

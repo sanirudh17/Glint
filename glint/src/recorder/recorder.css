@@ -1,12 +1,22 @@
 .rec-bar {
-  /* Center the pill inside its (wider, transparent) window so the icons sit in
-     the middle with equal space on both sides, instead of hugging the left. */
-  position: fixed; left: 50%; top: 50%; transform: translate(-50%, -50%);
+  /* Anchor the pill to the bottom-center of its (transparent) window; the strip of
+     window ABOVE it holds the hover tooltip (a real DOM element inside this
+     capture-excluded window, so — unlike a native OS `title` tooltip, which is its
+     own un-excluded window — it never leaks into the recording). */
+  position: fixed; left: 50%; bottom: 4px; transform: translateX(-50%);
   display: inline-flex; align-items: center; gap: 10px;
   background: rgba(20,20,24,0.92); color: #fff;
   padding: 6px 12px; border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.12);
   font-size: 13px; user-select: none; -webkit-user-select: none;
+}
+/* Single hover tooltip, centered above the pill (so it can't overflow/clip against
+   the width-fitted window edges the way a per-button tooltip would). */
+.rec-tip {
+  position: absolute; bottom: calc(100% + 8px); left: 50%; transform: translateX(-50%);
+  padding: 4px 10px; border-radius: 6px; white-space: nowrap;
+  background: rgba(20,20,24,0.98); color: #fff; font-size: 11px; font-weight: 500;
+  border: 1px solid rgba(255,255,255,0.16); pointer-events: none;
 }
 .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff3b30; animation: rec-pulse 1.2s infinite; }
 .rec-dot--paused { background: #f5a623; animation: none; }
@@ -63,19 +73,26 @@
   position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
   display: flex; align-items: center; gap: 12px; z-index: 5; pointer-events: none;
 }
-.rec-sel-hint { background: rgba(0,0,0,0.6); color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 13px; }
+.rec-sel-hint { background: rgba(0,0,0,0.6); color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 13px; white-space: nowrap; flex: none; }
 .rec-sel-fullbtn {
-  pointer-events: auto; display: inline-flex; align-items: center; gap: 6px;
-  background: #5b7cfa; color: #fff; border: none; padding: 7px 14px; border-radius: 8px;
+  pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  height: 34px; padding: 0 18px; box-sizing: border-box; white-space: nowrap;
+  background: #5b7cfa; color: #fff; border: none; border-radius: 8px;
   font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .rec-sel-fullbtn:hover { background: #6d8bff; }
+.rec-sel-chipgroup { pointer-events: none; display: inline-flex; align-items: center; gap: 8px; }
+/* Fixed width + height so every chip is identical and NOTHING resizes as the cursor
+   chip cycles through its states (Normal → Large → XL → Hidden). */
 .rec-sel-chip {
-  pointer-events: auto; display: inline-flex; align-items: center; gap: 5px;
-  background: rgba(20,22,30,0.7); color: #fff; border: 1px solid rgba(255,255,255,0.16);
-  padding: 6px 10px; border-radius: 8px; font-size: 12px; cursor: pointer;
+  pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+  width: 140px; height: 34px; padding: 0 12px; box-sizing: border-box; white-space: nowrap;
+  background: rgba(20,22,30,0.72); color: #fff; border: 1px solid rgba(255,255,255,0.16);
+  border-radius: 8px; font-size: 12px; font-weight: 500;
+  cursor: pointer; transition: background 120ms var(--ease, ease), border-color 120ms var(--ease, ease);
 }
-.rec-sel-chip--off { color: rgba(255,255,255,0.45); border-color: rgba(255,255,255,0.08); }
+.rec-sel-chip:hover { background: rgba(44,48,60,0.82); }
+.rec-sel-chip--off { color: rgba(255,255,255,0.5); border-color: rgba(255,255,255,0.08); background: rgba(20,22,30,0.5); }
 
 /* ── Post-recording HUD (#/rec-hud) ─────────────────────────────────────────
    Reuses the screenshot HUD's card/toolbar styles (hud.css); only the centered

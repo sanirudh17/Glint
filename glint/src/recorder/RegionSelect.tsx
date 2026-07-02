@@ -19,7 +19,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointerClick, Keyboard, Sun, EyeOff, MousePointer2 } from "lucide-react";
+import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointer2 } from "lucide-react";
 import { recorderStartRegion, recorderStartFullscreen } from "../lib/recorder";
 import { useAppStore } from "../store/useAppStore";
 import "./recorder.css";
@@ -78,8 +78,13 @@ export function RegionSelect() {
   const [spotlight, setSpotlight] = useState(false);
   const [cursorHide, setCursorHide] = useState(false);
   const [cursorSize, setCursorSize] = useState<"off" | "large" | "xl">("off");
+  // Seed the chips from saved settings exactly ONCE (on first settings arrival).
+  // Re-seeding on every `settings` change would wipe a choice the user just made in
+  // the overlay if the store happened to update mid-selection.
+  const seeded = useRef(false);
   useEffect(() => {
-    if (settings) {
+    if (settings && !seeded.current) {
+      seeded.current = true;
       setSys(settings.record_system_audio ?? true);
       setMic(settings.record_microphone ?? false);
       setCam(settings.record_webcam ?? false);
@@ -90,7 +95,23 @@ export function RegionSelect() {
       setCursorSize(settings.record_cursor_size ?? "off");
     }
   }, [settings]);
+  // Click/keystroke/spotlight are no longer chips here (they're live in the pill +
+  // defaulted in Settings) but still flow through from the saved defaults so a user
+  // who turned them on in Settings starts recording with them on.
   const fxOpts = { click_viz: clickViz, keystrokes, spotlight, cursor_hide: cursorHide, cursor_size: cursorSize };
+
+  // Cursor is one control with four mutually-exclusive states (a capture-time choice —
+  // it sets how gdigrab draws the pointer, so it can't change mid-recording). Hide and
+  // Size fold into this single cycle: Normal → Large → XL → Hidden → Normal.
+  type CursorStyle = "normal" | "large" | "xl" | "hidden";
+  const cursorStyle: CursorStyle = cursorHide ? "hidden" : cursorSize === "xl" ? "xl" : cursorSize === "large" ? "large" : "normal";
+  const cursorLabel = { normal: "Cursor", large: "Cursor L", xl: "Cursor XL", hidden: "Cursor Hidden" }[cursorStyle];
+  const cycleCursor = () => {
+    const next: Record<CursorStyle, CursorStyle> = { normal: "large", large: "xl", xl: "hidden", hidden: "normal" };
+    const n = next[cursorStyle];
+    setCursorHide(n === "hidden");
+    setCursorSize(n === "large" ? "large" : n === "xl" ? "xl" : "off");
+  };
 
   useEffect(() => {
     const w = getCurrentWindow();
@@ -210,76 +231,49 @@ export function RegionSelect() {
 
       {rect && rect.w > 1 && rect.h > 1 && <DimensionsBadge rect={rect} scale={env.scale} />}
 
-      {/* Toolbar: hint + the full-screen affordance (pointer-events only on the button). */}
+      {/* Toolbar: hint + capture-input chips + the full-screen affordance. Kept lean
+          on purpose — clicks/keys/spotlight are toggled live in the control pill, and
+          cursor style is the one visual choice that must be made before recording. */}
       <div className="rec-sel-toolbar">
         <span className="rec-sel-hint">
           {rect ? "↵ Enter to record · drag handles to adjust · Esc to cancel"
                 : "Drag to select a region · Esc to cancel"}
         </span>
-        <button
-          className={`rec-sel-chip${sys ? "" : " rec-sel-chip--off"}`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setSys((v) => !v)}
-          title="System audio"
-        >
-          {sys ? <Volume2 size={14} /> : <VolumeX size={14} />} System
-        </button>
-        <button
-          className={`rec-sel-chip${mic ? "" : " rec-sel-chip--off"}`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setMic((v) => !v)}
-          title="Microphone"
-        >
-          {mic ? <Mic size={14} /> : <MicOff size={14} />} Mic
-        </button>
-        <button
-          className={`rec-sel-chip${cam ? "" : " rec-sel-chip--off"}`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setCam((v) => !v)}
-          title="Webcam"
-        >
-          {cam ? <Video size={14} /> : <VideoOff size={14} />} Cam
-        </button>
-        <button
-          className={`rec-sel-chip${clickViz ? "" : " rec-sel-chip--off"}`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setClickViz((v) => !v)}
-          title="Visualize mouse clicks"
-        >
-          <MousePointerClick size={14} /> Clicks
-        </button>
-        <button
-          className={`rec-sel-chip${keystrokes ? "" : " rec-sel-chip--off"}`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setKeystrokes((v) => !v)}
-          title="Show pressed keys"
-        >
-          <Keyboard size={14} /> Keys
-        </button>
-        <button
-          className={`rec-sel-chip${spotlight ? "" : " rec-sel-chip--off"}`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setSpotlight((v) => !v)}
-          title="Cursor spotlight"
-        >
-          <Sun size={14} /> Spotlight
-        </button>
-        <button
-          className={`rec-sel-chip${cursorHide ? "" : " rec-sel-chip--off"}`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setCursorHide((v) => !v)}
-          title="Hide the real cursor (draw our own)"
-        >
-          <EyeOff size={14} /> Hide cursor
-        </button>
-        <button
-          className={`rec-sel-chip${cursorSize === "off" ? " rec-sel-chip--off" : ""}`}
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => setCursorSize((s) => (s === "off" ? "large" : s === "large" ? "xl" : "off"))}
-          title="Recorded cursor size (off → large → XL)"
-        >
-          <MousePointer2 size={14} /> Size: {cursorSize === "off" ? "Off" : cursorSize === "large" ? "L" : "XL"}
-        </button>
+        <div className="rec-sel-chipgroup">
+          <button
+            className={`rec-sel-chip${sys ? "" : " rec-sel-chip--off"}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => setSys((v) => !v)}
+            title="System audio"
+          >
+            {sys ? <Volume2 size={14} /> : <VolumeX size={14} />} System
+          </button>
+          <button
+            className={`rec-sel-chip${mic ? "" : " rec-sel-chip--off"}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => setMic((v) => !v)}
+            title="Microphone"
+          >
+            {mic ? <Mic size={14} /> : <MicOff size={14} />} Mic
+          </button>
+          <button
+            className={`rec-sel-chip${cam ? "" : " rec-sel-chip--off"}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={() => setCam((v) => !v)}
+            title="Webcam"
+          >
+            {cam ? <Video size={14} /> : <VideoOff size={14} />} Cam
+          </button>
+          <button
+            className={`rec-sel-chip${cursorStyle === "normal" ? " rec-sel-chip--off" : ""}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            onClick={cycleCursor}
+            title="Recorded cursor: Normal → Large → XL → Hidden"
+          >
+            {/* Icon stays constant so the chip never changes shape as it cycles. */}
+            <MousePointer2 size={14} /> {cursorLabel}
+          </button>
+        </div>
         <button className="rec-sel-fullbtn" onPointerDown={(e) => e.stopPropagation()} onClick={confirmFullscreen}>
           <Monitor size={15} strokeWidth={2} /> Record Full Screen
         </button>

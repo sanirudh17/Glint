@@ -115,11 +115,21 @@ capture/library/editor path.
   isolation honored** (`ocr/`↔`recorder/` import nothing from each other). *Built — awaiting
   at-screen.* (See PHASE-10-OCR-ACCEPTANCE.md.)
 
+- **Phase 11 — Recording FX** (CleanShot-style capture-time polish). A new **isolated**
+  `recorder/fx/` module: global low-level **mouse + keyboard hooks** (WH_MOUSE_LL / WH_KEYBOARD_LL
+  on a dedicated message-pump thread; keyboard hook installed *only* when keystroke display is on
+  — privacy) feed a transparent, click-through **`rec-fx` overlay** window that gdigrab records for
+  free (the webcam-bubble trick — no ffmpeg-pipeline rewrite). Canvas renderers draw **click
+  ripples** (blue left / amber right), a **cursor spotlight** halo, and a bottom-center
+  **keystroke** chip strip. **Cursor style** (Normal / Large / XL / Hidden) is a capture-time
+  choice — Hidden/enlarged flip gdigrab's `-draw_mouse` and draw our own pointer, so they're set
+  before recording (no mid-capture skip); clicks/keys/spotlight are live-togglable in the control
+  pill. Effects are baked in at capture time. **Recorder isolation honored** (`recorder/fx/`
+  imports nothing from capture/editor/overlay/ocr). *Shipped — at-screen accepted.*
+
 ## Planned
 
 - **Deferred CleanShot video-polish** (in-scope, not yet scheduled — parked for a later phase):
-  - **Click & keystroke highlighting** during recording (visualise clicks / show pressed keys).
-  - **Cursor highlight / spotlight**, cursor hide, and cursor-size options while recording.
   - **Independent webcam layer** — reposition/resize/remove the webcam *after* recording (today
     the bubble is baked into the video at capture time; a post-hoc layer would need a separate
     webcam track, a bigger architectural change).

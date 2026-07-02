@@ -529,12 +529,20 @@ fn path_for_existing(db: &State<crate::Db>, id: i64) -> Result<String, String> {
 /// API would make Rust quote the whole `/select,…` token, which Explorer can't
 /// parse — it then silently opens the default folder (Documents) instead of
 /// selecting the file.
+/// Spawn a child process without the fleeting black console window Windows pops for
+/// `cmd`/`explorer` children (CREATE_NO_WINDOW = 0x0800_0000). Same flag the OCR path
+/// uses. Without it, Open/Reveal flash a console for a split second.
+fn no_window(cmd: &mut std::process::Command) -> &mut std::process::Command {
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    cmd.creation_flags(CREATE_NO_WINDOW)
+}
+
 fn reveal_in_explorer(path: &str) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
-    std::process::Command::new("explorer")
-        .raw_arg(format!("/select,\"{path}\""))
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let mut cmd = std::process::Command::new("explorer");
+    cmd.raw_arg(format!("/select,\"{path}\""));
+    no_window(&mut cmd).spawn().map_err(|e| e.to_string())?;
     Ok(())
 }
 
@@ -542,10 +550,9 @@ fn reveal_in_explorer(path: &str) -> Result<(), String> {
 #[tauri::command]
 pub fn capture_open(db: State<crate::Db>, id: i64) -> Result<(), String> {
     let path = path_for_existing(&db, id)?;
-    std::process::Command::new("cmd")
-        .args(["/C", "start", "", &path])
-        .spawn()
-        .map_err(|e| e.to_string())?;
+    let mut cmd = std::process::Command::new("cmd");
+    cmd.args(["/C", "start", "", &path]);
+    no_window(&mut cmd).spawn().map_err(|e| e.to_string())?;
     Ok(())
 }
 

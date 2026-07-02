@@ -14,10 +14,14 @@ const CODEC_OPTIONS = [
   { value: "av1",  label: "AV1" },
 ];
 
-const CURSOR_SIZE_OPTIONS = [
-  { value: "off", label: "Normal" },
+// One control for the recorded cursor. Hide + size are folded into a single choice
+// because they're mutually exclusive capture-time states (the pointer either shows
+// at some size, or it's hidden). Maps to the two backend flags on change.
+const CURSOR_STYLE_OPTIONS = [
+  { value: "normal", label: "Normal" },
   { value: "large", label: "Large" },
   { value: "xl", label: "Extra large" },
+  { value: "hidden", label: "Hidden" },
 ];
 
 export function Recording() {
@@ -26,6 +30,23 @@ export function Recording() {
   const setRecordMicrophone = useAppStore((s) => s.setRecordMicrophone);
   const setRecordWebcam = useAppStore((s) => s.setRecordWebcam);
   const setRecordFx = useAppStore((s) => s.setRecordFx);
+
+  const cursorStyle = settings?.record_cursor_hide
+    ? "hidden"
+    : settings?.record_cursor_size === "xl"
+      ? "xl"
+      : settings?.record_cursor_size === "large"
+        ? "large"
+        : "normal";
+  const setCursorStyle = async (v: string) => {
+    if (v === "hidden") {
+      await setRecordFx("record_cursor_hide", true);
+      await setRecordFx("record_cursor_size", "off");
+    } else {
+      await setRecordFx("record_cursor_hide", false);
+      await setRecordFx("record_cursor_size", v === "large" ? "large" : v === "xl" ? "xl" : "off");
+    }
+  };
 
   return (
     <Section
@@ -86,17 +107,11 @@ export function Recording() {
           onChange={(v) => setRecordFx("record_cursor_spotlight", v)}
         />
       </Field>
-      <Field label="Hide real cursor" hint="Replace the OS cursor with our own pointer (set at recording start).">
-        <Switch
-          checked={settings?.record_cursor_hide ?? false}
-          onChange={(v) => setRecordFx("record_cursor_hide", v)}
-        />
-      </Field>
-      <Field label="Cursor size" hint="Enlarge the recorded cursor for visibility (set at recording start).">
+      <Field label="Recorded cursor" hint="Enlarge or hide the mouse cursor in recordings. Chosen before recording starts (it changes how the screen is captured), so it isn't a live toggle.">
         <Select
-          value={settings?.record_cursor_size ?? "off"}
-          options={CURSOR_SIZE_OPTIONS}
-          onChange={(v) => setRecordFx("record_cursor_size", v as "off" | "large" | "xl")}
+          value={cursorStyle}
+          options={CURSOR_STYLE_OPTIONS}
+          onChange={setCursorStyle}
         />
       </Field>
     </Section>
