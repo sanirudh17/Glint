@@ -144,9 +144,10 @@ export function StyleBar() {
               aria-label="Fill color"
             />
           </label>
-          {/* Opacity only appears once a shape is actually SELECTED (via the cursor),
-              not while merely drawing — it edits the picked shape's transparency. */}
-          {selectedAnno && eff.fill && (
+          {/* Opacity only appears when a shape is picked with the CURSOR (select
+              tool) — not while a draw tool is active (where the just-drawn shape is
+              still technically selected). It edits the picked shape's transparency. */}
+          {tool === "select" && selectedAnno && eff.fill && (
             <input
               className="editor-opacity"
               type="range"
