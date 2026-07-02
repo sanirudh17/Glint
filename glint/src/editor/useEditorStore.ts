@@ -3,6 +3,9 @@ import {
   addAnnotation,
   updateAnnotation,
   deleteAnnotation,
+  duplicateAnnotation,
+  nudgeAnnotation,
+  reorder,
   DEFAULT_STYLE,
   type Annotation,
   type Style,
@@ -59,6 +62,8 @@ interface EditorState {
   selectedId: string | null;
   tool: ToolId;
   style: Style;
+  /** Per-tool remembered style so picking a red arrow doesn't recolor the next rect. */
+  toolStyles: Partial<Record<ToolId, Style>>;
   crop: Crop | null;
   frame: FrameConfig;
   past: DocSnapshot[];
@@ -80,6 +85,10 @@ interface EditorState {
   setTool: (t: ToolId) => void;
   setStyle: (patch: Partial<Style>) => void;
   select: (id: string | null) => void;
+  duplicate: (id: string) => void;
+  bringForward: (id: string) => void;
+  sendBackward: (id: string) => void;
+  nudge: (id: string, dx: number, dy: number) => void;
   pushHistory: () => void;
   add: (a: Annotation) => void;
   update: (id: string, patch: Partial<Annotation>) => void;
@@ -113,6 +122,7 @@ const INITIAL = {
   selectedId: null as string | null,
   tool: "select" as ToolId,
   style: { ...DEFAULT_STYLE },
+  toolStyles: {} as Partial<Record<ToolId, Style>>,
   crop: null as Crop | null,
   frame: freshFrame(),
   past: [] as DocSnapshot[],
@@ -135,6 +145,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       annotations: doc?.annotations ?? [],
       crop: doc?.crop ?? null,
       frame: mergeFrame(doc?.frame),
+      toolStyles: {},
       past: [],
       future: [],
       selectedId: null,
@@ -145,10 +156,50 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   markSaved: (path, name) => set({ projectPath: path, projectName: name, dirty: false }),
 
-  reset: () => set({ ...INITIAL, style: { ...DEFAULT_STYLE }, frame: freshFrame() }),
-  setTool: (t) => set({ tool: t, selectedId: null }),
-  setStyle: (patch) => set((s) => ({ style: { ...s.style, ...patch } })),
+  reset: () => set({ ...INITIAL, style: { ...DEFAULT_STYLE }, toolStyles: {}, frame: freshFrame() }),
+  setTool: (t) =>
+    set((s) => ({ tool: t, selectedId: null, style: s.toolStyles[t] ?? { ...DEFAULT_STYLE } })),
+  setStyle: (patch) =>
+    set((s) => {
+      const style = { ...s.style, ...patch };
+      return { style, toolStyles: { ...s.toolStyles, [s.tool]: style } };
+    }),
   select: (id) => set({ selectedId: id }),
+  duplicate: (id) =>
+    set((s) => {
+      const a = s.annotations.find((x) => x.id === id);
+      if (!a) return s;
+      const copy = duplicateAnnotation(a);
+      return {
+        past: [...s.past, { annotations: s.annotations, crop: s.crop }],
+        future: [],
+        annotations: [...s.annotations, copy],
+        selectedId: copy.id,
+        dirty: true,
+      };
+    }),
+  bringForward: (id) =>
+    set((s) => {
+      const next = reorder(s.annotations, id, "forward");
+      return next === s.annotations
+        ? s
+        : { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: next, dirty: true };
+    }),
+  sendBackward: (id) =>
+    set((s) => {
+      const next = reorder(s.annotations, id, "backward");
+      return next === s.annotations
+        ? s
+        : { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: next, dirty: true };
+    }),
+  nudge: (id, dx, dy) =>
+    set((s) => {
+      const idx = s.annotations.findIndex((x) => x.id === id);
+      if (idx < 0) return s;
+      const next = [...s.annotations];
+      next[idx] = nudgeAnnotation(next[idx], dx, dy);
+      return { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: next, dirty: true };
+    }),
 
   // Snapshot the current doc (annotations + crop) so the next gesture can be
   // undone. Clears redo.
