@@ -112,10 +112,10 @@ pub fn begin(app: &AppHandle, mode: CaptureMode) {
 /// failure. Must run off the main thread (see [`begin_spawned`]).
 pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
     log::info!("capture begin: mode={}", mode.as_str());
-    // Guard against double-begin: tear down any existing overlay first, and
-    // close the previous capture's HUD so a new capture clears the old result.
+    // Guard against double-begin: tear down any existing overlay first. The tray
+    // (Quick Access Overlay) is NOT torn down here — a new capture is appended to
+    // it (see finish_commit), so an in-progress stack survives across captures.
     overlay::teardown_all(app);
-    crate::hud::teardown(app);
 
     let _perf = std::time::Instant::now();
     let capturer = XcapCapturer;

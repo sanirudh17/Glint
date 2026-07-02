@@ -221,9 +221,10 @@ pub fn editor_done(
     let bytes = decode_png_arg(&png_base64)?;
     let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
     let (width, height) = (img.width(), img.height());
+    let rgba = img.into_raw();
 
-    // Temp PNG so the HUD's drag-out / copy-path / reveal have a real file. Not yet in
-    // the Library (saved=false) → the HUD shows Save, not Reveal.
+    // Temp PNG so the tray's drag-out / copy-path / reveal have a real file. Not yet
+    // in the Library (saved=false) → the card shows Save, not Reveal.
     let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let ts = std::time::SystemTime::now()
@@ -234,19 +235,41 @@ pub fn editor_done(
     std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
     let path = dest.to_string_lossy().to_string();
 
+    // Push the flattened result into the tray (build the card thumb first), then
+    // mirror to LastCapture so "…_from_last" hotkeys still target it.
+    {
+        let thumb = crate::capture::thumb::make_thumb(&rgba, width, height, 240)
+            .ok()
+            .map(|png| {
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+                format!("data:image/png;base64,{b64}")
+            })
+            .unwrap_or_default();
+        let evicted = {
+            let tray = app.state::<crate::capture::tray::TrayState>();
+            let mut store = tray.0.lock().unwrap();
+            store.push(path.clone(), width, height, false, thumb).1
+        };
+        if let Some(ev) = evicted {
+            if !ev.saved {
+                let _ = std::fs::remove_file(&ev.path);
+            }
+        }
+    }
+
     *last.0.lock().unwrap() = Some(crate::capture::LastCapture {
         path,
         width,
         height,
-        rgba: img.into_raw(),
+        rgba,
         saved: false,
     });
 
-    // Building the HUD webview must run OFF the main thread (window-build rule). Only
-    // hide the editor if the HUD actually came up, so a build failure never strands
+    // Building the tray webview must run OFF the main thread (window-build rule). Only
+    // hide the editor if the tray actually came up, so a build failure never strands
     // the user with no window.
     let app2 = app.clone();
-    std::thread::spawn(move || match crate::hud::open(&app2) {
+    std::thread::spawn(move || match crate::hud::ensure_open(&app2) {
         Ok(()) => {
             if let Some(win) = app2.get_webview_window("main") {
                 let _ = win.hide();

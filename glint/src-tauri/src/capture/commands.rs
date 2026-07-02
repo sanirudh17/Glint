@@ -226,6 +226,30 @@ fn finish_commit(
             saved,
         });
 
+    // Also push into the accumulating tray. Build the small card thumbnail once
+    // (full pixels are re-read from disk when an action needs them). Evicting the
+    // oldest past the cap deletes its temp file (never a saved Library file).
+    {
+        let thumb = crate::capture::thumb::make_thumb(&cropped, clamped.w, clamped.h, 240)
+            .ok()
+            .map(|png| {
+                let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+                format!("data:image/png;base64,{b64}")
+            })
+            .unwrap_or_default();
+        let evicted = {
+            let tray = app.state::<crate::capture::tray::TrayState>();
+            let mut store = tray.0.lock().unwrap();
+            let (_id, evicted) = store.push(path_str.clone(), clamped.w, clamped.h, saved, thumb);
+            evicted
+        };
+        if let Some(ev) = evicted {
+            if !ev.saved {
+                let _ = std::fs::remove_file(&ev.path);
+            }
+        }
+    }
+
     // Open the HUD (or editor) NOW. The latest.png mirror and the Library
     // thumbnail+row are bookkeeping the HUD doesn't depend on, so they run AFTER on
     // a background thread (concurrent with the HUD's webview build) and never delay
@@ -247,9 +271,9 @@ fn finish_commit(
     } else {
         log::info!("[perf] commit work before HUD: {}ms", _perf.elapsed().as_millis());
         let _hud = std::time::Instant::now();
-        let hud_result = crate::hud::open(app);
+        let hud_result = crate::hud::ensure_open(app);
         log::info!(
-            "[perf] hud::open (webview build+show): {}ms (commit total: {}ms)",
+            "[perf] hud::ensure_open (webview build/notify): {}ms (commit total: {}ms)",
             _hud.elapsed().as_millis(),
             _perf.elapsed().as_millis()
         );
