@@ -2,6 +2,7 @@ pub mod commands;
 pub mod frozen;
 pub mod geometry;
 pub mod thumb;
+pub mod tray;
 pub mod windows_enum;
 
 use crate::overlay;

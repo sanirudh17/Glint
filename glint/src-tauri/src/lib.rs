@@ -106,6 +106,7 @@ pub fn run() {
         .manage(SettingsState(Default::default()))
         .manage(crate::capture::CaptureState::default())
         .manage(crate::capture::LastCaptureState::default())
+        .manage(crate::capture::tray::TrayState::default())
         .manage(crate::editor::EditorState::default())
         .manage(crate::editor::PendingOpen::default())
         .manage(crate::pin::PinState::default())
