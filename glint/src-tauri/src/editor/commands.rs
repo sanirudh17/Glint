@@ -204,6 +204,57 @@ pub fn editor_flatten_temp(app: AppHandle, png_base64: String) -> Result<String,
     Ok(dest.to_string_lossy().to_string())
 }
 
+/// "Done": flatten result → make it the current capture result + open the bottom-left
+/// HUD, then hide the editor. Reuses the post-capture HUD (crate::hud) and
+/// LastCaptureState — the same surfaces `editor_open_from_last` already uses.
+#[tauri::command]
+pub fn editor_done(
+    app: AppHandle,
+    last: State<crate::capture::LastCaptureState>,
+    png_base64: String,
+) -> Result<(), String> {
+    let bytes = decode_png_arg(&png_base64)?;
+    let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
+    let (width, height) = (img.width(), img.height());
+
+    // Temp PNG so the HUD's drag-out / copy-path / reveal have a real file. Not yet in
+    // the Library (saved=false) → the HUD shows Save, not Reveal.
+    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
+    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
+    let ts = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis();
+    let dest = dir.join(format!("glint-edit-{ts}.png"));
+    std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
+    let path = dest.to_string_lossy().to_string();
+
+    *last.0.lock().unwrap() = Some(crate::capture::LastCapture {
+        path,
+        width,
+        height,
+        rgba: img.into_raw(),
+        saved: false,
+    });
+
+    // Building the HUD webview must run OFF the main thread (window-build rule). Only
+    // hide the editor if the HUD actually came up, so a build failure never strands
+    // the user with no window.
+    let app2 = app.clone();
+    std::thread::spawn(move || match crate::hud::open(&app2) {
+        Ok(()) => {
+            if let Some(win) = app2.get_webview_window("main") {
+                let _ = win.hide();
+            }
+        }
+        Err(e) => {
+            log::error!("editor_done: hud open failed: {e}");
+            let _ = app2.emit("glint-toast", "Couldn't open the result");
+        }
+    });
+    Ok(())
+}
+
 // ─── Project (.glint) save/load ──────────────────────────────────────────────
 
 /// Save the current editor document to a `.glint` file. The frontend supplies
@@ -355,6 +406,15 @@ pub fn projects_resolve(paths: Vec<String>) -> Vec<RecentProjectDto> {
 #[cfg(test)]
 mod tests {
     use super::first_image_arg;
+
+    #[test]
+    fn decode_png_arg_strips_data_url_prefix() {
+        use base64::Engine;
+        let raw = base64::engine::general_purpose::STANDARD.encode(b"hello");
+        let with_prefix = format!("data:image/png;base64,{raw}");
+        assert_eq!(super::decode_png_arg(&with_prefix).unwrap(), b"hello");
+        assert_eq!(super::decode_png_arg(&raw).unwrap(), b"hello");
+    }
 
     #[test]
     fn ignores_when_no_image_arg() {

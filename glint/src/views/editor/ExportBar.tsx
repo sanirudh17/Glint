@@ -1,10 +1,10 @@
 import type { RefObject } from "react";
 import type Konva from "konva";
-import { Copy, Download, Share2 } from "lucide-react";
+import { Copy, Download, Share2, Check } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { useAppStore } from "../../store/useAppStore";
 import { computeLayout, exportPixelRatio } from "../../editor/composition";
-import { editorCopy, editorSave, editorFlattenTemp, dragOut } from "../../lib/editor";
+import { editorCopy, editorSave, editorFlattenTemp, editorDone, dragOut } from "../../lib/editor";
 
 /**
  * Flatten the stage to base64 PNG (no data-url prefix) at the native composition
@@ -70,6 +70,9 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
       dragOut(path);
     } catch { pushToast("Couldn't prepare drag"); }
   };
+  const onDone = withPng(async (png) => {
+    await editorDone(png);
+  });
 
   return (
     <div className="editor-exportbar">
@@ -87,8 +90,11 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
       <button className="editor-export-btn" onClick={onCopy} title="Copy to clipboard">
         <Copy size={16} strokeWidth={1.75} /> Copy
       </button>
-      <button className="editor-export-btn editor-export-btn--primary" onClick={onSave} title="Export a PNG to the Library">
+      <button className="editor-export-btn" onClick={onSave} title="Export a PNG to the Library">
         <Download size={16} strokeWidth={1.75} /> Export
+      </button>
+      <button className="editor-export-btn editor-export-btn--primary" onClick={onDone} title="Finish — send to the corner HUD">
+        <Check size={16} strokeWidth={1.75} /> Done
       </button>
     </div>
   );
