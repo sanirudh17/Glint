@@ -1,3 +1,4 @@
+import { ArrowLeftRight } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { PALETTE as COLORS } from "../../editor/palette";
 
@@ -19,8 +20,6 @@ export function StyleBar() {
   const setStyle = useEditorStore((s) => s.setStyle);
   const selectedId = useEditorStore((s) => s.selectedId);
   const annotations = useEditorStore((s) => s.annotations);
-  const update = useEditorStore((s) => s.update);
-  const pushHistory = useEditorStore((s) => s.pushHistory);
   const tool = useEditorStore((s) => s.tool);
   const eraserSize = useEditorStore((s) => s.eraserSize);
   const setEraserSize = useEditorStore((s) => s.setEraserSize);
@@ -33,10 +32,16 @@ export function StyleBar() {
   const effType = selectedAnno?.type ?? tool;
   const eff = selectedAnno?.style ?? style;
 
+  // Reads FRESH store state (not a render-time closure) so a style change always
+  // lands on whatever is currently selected — this is what makes the opacity/fill
+  // edits reliably update the shape.
   const patchSelected = (patch: Partial<typeof style>, hist = true) => {
-    if (!selectedAnno) return;
-    if (hist) pushHistory();
-    update(selectedAnno.id, { style: { ...selectedAnno.style, ...patch } } as never);
+    const st = useEditorStore.getState();
+    if (!st.selectedId) return;
+    const anno = st.annotations.find((a) => a.id === st.selectedId);
+    if (!anno) return;
+    if (hist) st.pushHistory();
+    st.update(st.selectedId, { style: { ...anno.style, ...patch } } as never);
   };
   const applyColor = (color: string) => { setStyle({ color }); patchSelected({ color }); };
   const applyWidth = (strokeWidth: number) => { setStyle({ strokeWidth }); patchSelected({ strokeWidth }); };
@@ -145,7 +150,7 @@ export function StyleBar() {
               type="range"
               min={0} max={100}
               value={Math.round((eff.fillOpacity ?? 1) * 100)}
-              onPointerDown={() => { if (selectedAnno) pushHistory(); }}
+              onPointerDown={() => { const st = useEditorStore.getState(); if (st.selectedId) st.pushHistory(); }}
               onChange={(e) => applyFillOpacity(Number(e.currentTarget.value) / 100)}
               aria-label="Fill opacity"
               title="Fill opacity"
@@ -160,7 +165,9 @@ export function StyleBar() {
           aria-label="Toggle dashed stroke"
           onClick={() => applyDashed(!eff.dashed)}
         >
-          ┄
+          <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
+            <line x1="1" y1="8" x2="15" y2="8" stroke="currentColor" strokeWidth="2" strokeDasharray="3 2" strokeLinecap="round" />
+          </svg>
         </button>
       )}
       {isArrow && (
@@ -170,7 +177,7 @@ export function StyleBar() {
           aria-label="Toggle start arrowhead"
           onClick={() => applyArrowStart(!eff.arrowStart)}
         >
-          ⇄
+          <ArrowLeftRight size={15} strokeWidth={1.75} />
         </button>
       )}
       {isText && (
