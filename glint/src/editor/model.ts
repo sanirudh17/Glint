@@ -24,6 +24,14 @@ export interface Style {
   color: string;
   strokeWidth: number;
   fontSize: number;
+  /** rect/ellipse interior fill; null/undefined = no fill (unchanged look). */
+  fill?: string | null;
+  /** 0..1 opacity applied to the fill only; default 1. */
+  fillOpacity?: number;
+  /** dashed stroke for line/arrow/rect/ellipse; default false. */
+  dashed?: boolean;
+  /** arrow tool: also draw a head at the start point; default false. */
+  arrowStart?: boolean;
 }
 
 interface Base {
@@ -60,7 +68,10 @@ export type Annotation =
   | FreehandAnno
   | StepAnno;
 
-export const DEFAULT_STYLE: Style = { color: "#E5484D", strokeWidth: 3, fontSize: 24 };
+export const DEFAULT_STYLE: Style = {
+  color: "#E5484D", strokeWidth: 3, fontSize: 24,
+  fill: null, fillOpacity: 1, dashed: false, arrowStart: false,
+};
 
 let _seq = 0;
 /** Monotonic-ish id, unique within a session. */
@@ -150,4 +161,67 @@ export function eraseAt(
     }
   }
   return changed ? out : list;
+}
+
+/** Snap the (x1,y1)→(x2,y2) vector to the nearest 45°, preserving its length.
+ * Used while drawing a line/arrow with Shift held. Pure. */
+export function snapAngle(x1: number, y1: number, x2: number, y2: number): { x2: number; y2: number } {
+  const dx = x2 - x1, dy = y2 - y1;
+  const len = Math.hypot(dx, dy);
+  if (len === 0) return { x2, y2 };
+  const step = Math.PI / 4;
+  const ang = Math.round(Math.atan2(dy, dx) / step) * step;
+  return { x2: x1 + Math.cos(ang) * len, y2: y1 + Math.sin(ang) * len };
+}
+
+/** Clone an annotation with a fresh id, offset +12,+12 px. Pure. */
+export function duplicateAnnotation(a: Annotation): Annotation {
+  const OFF = 12;
+  const base = { ...a, id: newId(), style: { ...a.style } };
+  switch (a.type) {
+    case "arrow":
+    case "line":
+      return { ...(base as TwoPointAnno), x1: a.x1 + OFF, y1: a.y1 + OFF, x2: a.x2 + OFF, y2: a.y2 + OFF };
+    case "rect":
+    case "ellipse":
+    case "blur":
+      return { ...(base as BoxAnno), x: a.x + OFF, y: a.y + OFF };
+    case "text":
+      return { ...(base as TextAnno), x: a.x + OFF, y: a.y + OFF };
+    case "step":
+      return { ...(base as StepAnno), x: a.x + OFF, y: a.y + OFF };
+    case "pen":
+    case "highlight":
+      return { ...(base as FreehandAnno), points: a.points.map((p) => p + OFF) };
+  }
+}
+
+/** Shift an annotation by (dx,dy) in image px. Pure. */
+export function nudgeAnnotation(a: Annotation, dx: number, dy: number): Annotation {
+  switch (a.type) {
+    case "arrow":
+    case "line":
+      return { ...a, x1: a.x1 + dx, y1: a.y1 + dy, x2: a.x2 + dx, y2: a.y2 + dy };
+    case "rect":
+    case "ellipse":
+    case "blur":
+    case "text":
+    case "step":
+      return { ...a, x: a.x + dx, y: a.y + dy };
+    case "pen":
+    case "highlight":
+      return { ...a, points: a.points.map((p, i) => (i % 2 === 0 ? p + dx : p + dy)) };
+  }
+}
+
+/** Move `id` one step in paint order (array order). `forward` = toward the top
+ * (end of array). Returns the SAME reference when the move is a no-op. Pure. */
+export function reorder(list: Annotation[], id: string, dir: "forward" | "backward"): Annotation[] {
+  const i = list.findIndex((a) => a.id === id);
+  if (i < 0) return list;
+  const j = dir === "forward" ? i + 1 : i - 1;
+  if (j < 0 || j >= list.length) return list;
+  const out = [...list];
+  [out[i], out[j]] = [out[j], out[i]];
+  return out;
 }
