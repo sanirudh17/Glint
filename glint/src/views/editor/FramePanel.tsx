@@ -13,10 +13,12 @@ const ASPECTS = ["auto", "1:1", "16:9", "4:3"] as const;
 export function FramePanel() {
   const frame = useEditorStore((s) => s.frame);
   const setFrame = useEditorStore((s) => s.setFrame);
+  const setChrome = useEditorStore((s) => s.setChrome);
   const resetFrame = useEditorStore((s) => s.resetFrame);
   const crop = useEditorStore((s) => s.crop);
   const resetCrop = useEditorStore((s) => s.resetCrop);
   const bg = frame.background;
+  const chrome = frame.chrome;
 
   return (
     <aside className="frame-panel" aria-label="Frame">
@@ -88,6 +90,68 @@ export function FramePanel() {
           framed screenshot drops cleanly onto any color, slide, or doc. The checkerboard just marks
           the transparent areas; it isn&apos;t part of the image.
         </p>
+      )}
+
+      <div className="frame-row">
+        <span className="frame-label">Window</span>
+        <div className="frame-seg">
+          {(["none", "window", "browser"] as const).map((st) => (
+            <button
+              key={st}
+              className={`frame-seg-btn${chrome.style === st ? " is-active" : ""}`}
+              onClick={() => setChrome({ style: st })}
+            >
+              {st}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {chrome.style !== "none" && (
+        <>
+          <div className="frame-row">
+            <span className="frame-label">Theme</span>
+            <div className="frame-seg">
+              {(["light", "dark"] as const).map((th) => (
+                <button
+                  key={th}
+                  className={`frame-seg-btn${chrome.theme === th ? " is-active" : ""}`}
+                  onClick={() => setChrome({ theme: th })}
+                >
+                  {th}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {chrome.style === "window" && (
+            <label className="frame-row">
+              <span className="frame-label">Title</span>
+              <input
+                className="frame-input"
+                type="text"
+                value={chrome.title}
+                placeholder="Window title"
+                onChange={(e) => setChrome({ title: e.currentTarget.value })}
+                aria-label="Window title"
+              />
+            </label>
+          )}
+
+          {chrome.style === "browser" && (
+            <label className="frame-row">
+              <span className="frame-label">URL</span>
+              <input
+                className="frame-input"
+                type="text"
+                value={chrome.url}
+                placeholder="example.com"
+                onChange={(e) => setChrome({ url: e.currentTarget.value })}
+                aria-label="Address bar URL"
+              />
+            </label>
+          )}
+        </>
       )}
 
       <Slider label="Padding" value={frame.padding} onChange={(v) => setFrame({ padding: v })} />
