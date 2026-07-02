@@ -3,6 +3,17 @@ import { Arrow, Line, Rect, Ellipse, Text, Group, Image as KonvaImage, Circle } 
 import Konva from "konva";
 import type { Annotation, BoxAnno, FreehandAnno, StepAnno, TextAnno, TwoPointAnno } from "../../editor/model";
 
+/** "#RRGGBB" + alpha → "rgba(r,g,b,a)". Returns the input untouched if it isn't a
+ * 6-digit hex (e.g. already rgba), so custom colours still work. */
+function hexToRgba(hex: string, alpha: number): string {
+  const m = /^#([0-9a-f]{6})$/i.exec(hex);
+  if (!m) return hex;
+  const n = parseInt(m[1], 16);
+  return `rgba(${(n >> 16) & 255}, ${(n >> 8) & 255}, ${n & 255}, ${alpha})`;
+}
+
+const DASH = [12, 8];
+
 interface Props {
   anno: Annotation;
   draggable: boolean;
@@ -43,6 +54,8 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
           stroke={a.style.color}
           fill={a.style.color}
           strokeWidth={a.style.strokeWidth}
+          dash={a.style.dashed ? DASH : undefined}
+          pointerAtBeginning={a.style.arrowStart ?? false}
           pointerLength={10 + a.style.strokeWidth}
           pointerWidth={10 + a.style.strokeWidth}
           hitStrokeWidth={Math.max(12, a.style.strokeWidth)}
@@ -58,6 +71,7 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
           points={[a.x1, a.y1, a.x2, a.y2]}
           stroke={a.style.color}
           strokeWidth={a.style.strokeWidth}
+          dash={a.style.dashed ? DASH : undefined}
           lineCap="round"
           hitStrokeWidth={Math.max(12, a.style.strokeWidth)}
         />
@@ -70,6 +84,8 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
           {...common}
           x={a.x} y={a.y} width={a.w} height={a.h}
           stroke={a.style.color} strokeWidth={a.style.strokeWidth}
+          dash={a.style.dashed ? DASH : undefined}
+          fill={a.style.fill ? hexToRgba(a.style.fill, a.style.fillOpacity ?? 1) : undefined}
         />
       );
     }
@@ -81,6 +97,8 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
           x={a.x + a.w / 2} y={a.y + a.h / 2}
           radiusX={Math.abs(a.w / 2)} radiusY={Math.abs(a.h / 2)}
           stroke={a.style.color} strokeWidth={a.style.strokeWidth}
+          dash={a.style.dashed ? DASH : undefined}
+          fill={a.style.fill ? hexToRgba(a.style.fill, a.style.fillOpacity ?? 1) : undefined}
           onDragEnd={(e) => {
             const node = e.target;
             onChange({ x: node.x() - a.w / 2, y: node.y() - a.h / 2 } as Partial<Annotation>);

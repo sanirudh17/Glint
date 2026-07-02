@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useRef, useState, forwardRef } from "react"
 import { Stage, Layer, Group, Rect, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useEditorStore } from "../../editor/useEditorStore";
-import { newId, nextStepNumber, eraseAt, type Annotation, type TextAnno } from "../../editor/model";
+import { newId, nextStepNumber, eraseAt, snapAngle, type Annotation, type TextAnno } from "../../editor/model";
 import { computeLayout } from "../../editor/composition";
 import { getGradient, konvaGradient } from "../../editor/gradients";
 import { AnnotationNode } from "./AnnotationNode";
@@ -304,7 +304,12 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     const a = useEditorStore.getState().annotations.find((n) => n.id === id);
     if (!a) return;
     if (a.type === "arrow" || a.type === "line") {
-      update(id, { x2: x, y2: y } as Partial<Annotation>);
+      let nx = x, ny = y;
+      if (e.evt.shiftKey) {
+        const s = snapAngle(a.x1, a.y1, x, y);
+        nx = s.x2; ny = s.y2;
+      }
+      update(id, { x2: nx, y2: ny } as Partial<Annotation>);
     } else if (a.type === "rect" || a.type === "ellipse" || a.type === "blur") {
       update(id, { w: x - a.x, h: y - a.y } as Partial<Annotation>);
     } else if (a.type === "pen" || a.type === "highlight") {

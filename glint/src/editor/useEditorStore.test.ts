@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { useEditorStore, DEFAULT_FRAME } from "./useEditorStore";
 import type { EditorBase } from "./useEditorStore";
-import type { Annotation } from "./model";
+import { DEFAULT_STYLE, type Annotation } from "./model";
 import type { Crop } from "./composition";
 
 const fakeBase = (): EditorBase => ({
@@ -197,5 +197,49 @@ describe("dirty tracking", () => {
     expect(after.dirty).toBe(false);
     expect(after.projectPath).toBe("C:/x/Saved.glint");
     expect(after.projectName).toBe("Saved.glint");
+  });
+});
+
+describe("per-tool style memory", () => {
+  beforeEach(() => useEditorStore.getState().reset());
+  it("remembers each tool's last style independently", () => {
+    const s = useEditorStore.getState();
+    s.setTool("arrow");
+    s.setStyle({ color: "#0000ff" });
+    s.setTool("rect");
+    expect(useEditorStore.getState().style.color).toBe(DEFAULT_STYLE.color); // rect uncustomized
+    s.setTool("arrow");
+    expect(useEditorStore.getState().style.color).toBe("#0000ff"); // arrow remembered
+  });
+});
+
+describe("duplicate / z-order / nudge actions", () => {
+  beforeEach(() => useEditorStore.getState().reset());
+  it("duplicate adds a clone, selects it, and is undoable", () => {
+    const s = useEditorStore.getState();
+    s.add(rect("a"));
+    s.duplicate("a");
+    const st = useEditorStore.getState();
+    expect(st.annotations.length).toBe(2);
+    expect(st.selectedId).not.toBe("a");
+    expect(st.selectedId).toBe(st.annotations[1].id);
+    st.undo();
+    expect(useEditorStore.getState().annotations.length).toBe(1);
+  });
+  it("bringForward / sendBackward reorder paint order", () => {
+    const s = useEditorStore.getState();
+    s.add(rect("a")); s.add(rect("b"));
+    s.bringForward("a");
+    expect(useEditorStore.getState().annotations.map((x) => x.id)).toEqual(["b", "a"]);
+    s.sendBackward("a");
+    expect(useEditorStore.getState().annotations.map((x) => x.id)).toEqual(["a", "b"]);
+  });
+  it("nudge shifts the annotation and is undoable", () => {
+    const s = useEditorStore.getState();
+    s.add(rect("a"));
+    s.nudge("a", 10, 0);
+    expect((useEditorStore.getState().annotations[0] as { x: number }).x).toBe(10);
+    useEditorStore.getState().undo();
+    expect((useEditorStore.getState().annotations[0] as { x: number }).x).toBe(0);
   });
 });

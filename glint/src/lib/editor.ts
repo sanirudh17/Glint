@@ -58,6 +58,8 @@ export const editorSave = (pngBase64: string): Promise<string> =>
   invoke<string>("editor_save", { pngBase64 });
 export const editorFlattenTemp = (pngBase64: string): Promise<string> =>
   invoke<string>("editor_flatten_temp", { pngBase64 });
+export const editorDone = (pngBase64: string): Promise<void> =>
+  invoke<void>("editor_done", { pngBase64 });
 
 // ─── Project (.glint) save/load ──────────────────────────────────────────────
 

@@ -20,9 +20,9 @@ use capture::commands::{
     hud_data, hud_dismiss, hud_reveal, hud_save,
 };
 use editor::commands::{
-    consume_pending_external_open, editor_copy, editor_flatten_temp, editor_open_capture,
-    editor_open_from_last, editor_save, editor_source, project_open, project_save,
-    projects_resolve,
+    consume_pending_external_open, editor_copy, editor_done, editor_flatten_temp,
+    editor_open_capture, editor_open_from_last, editor_save, editor_source, project_open,
+    project_save, projects_resolve,
 };
 use settings::commands::{settings_get_all, settings_set, SettingsState};
 use pin::{
@@ -240,6 +240,7 @@ pub fn run() {
             editor_copy,
             editor_save,
             editor_flatten_temp,
+            editor_done,
             project_save,
             project_open,
             projects_resolve,

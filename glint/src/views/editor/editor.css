@@ -63,11 +63,15 @@
   opacity: 0; cursor: pointer;
 }
 .editor-width {
+  display: inline-flex; align-items: center; justify-content: center;
+  box-sizing: border-box; flex: none; padding: 0;
   width: 28px; height: 24px; border-radius: var(--r1);
   border: 1px solid var(--border); background: transparent;
   color: var(--text-dim); cursor: pointer; font-size: var(--fz-xs);
 }
 .editor-width--active { border-color: var(--accent); color: var(--text); }
+.editor-fillgroup { display: inline-flex; align-items: center; gap: 6px; }
+.editor-opacity { width: 72px; accent-color: var(--accent); }
 .editor-fontsize {
   width: 56px; height: 26px; padding: 0 var(--s2);
   border: 1px solid var(--border); border-radius: var(--r1);
@@ -120,7 +124,10 @@
   border-bottom: 1px solid var(--border);
   background: var(--bg-elev);
 }
-.editor-topbar .editor-stylebar { border-bottom: none; flex: 1; }
+/* The style bar is the flexible middle: it shrinks and scrolls horizontally so the
+   fixed Export/Done buttons on the right are never pushed off-screen. */
+.editor-topbar .editor-stylebar { border-bottom: none; flex: 1 1 0; min-width: 0; overflow-x: auto; }
+.editor-exportbar, .editor-frame-slot { flex: none; }
 .editor-exportbar {
   display: flex; align-items: center; gap: var(--s2);
   padding: var(--s2) var(--s4);
