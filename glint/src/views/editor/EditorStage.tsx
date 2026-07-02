@@ -7,6 +7,7 @@ import { computeLayout } from "../../editor/composition";
 import { getGradient, konvaGradient } from "../../editor/gradients";
 import { AnnotationNode } from "./AnnotationNode";
 import { CropOverlay } from "./CropOverlay";
+import { WindowChrome } from "./WindowChrome";
 
 function fitScale(boxW: number, boxH: number, imgW: number, imgH: number): number {
   if (!imgW || !imgH) return 1;
@@ -22,6 +23,21 @@ function roundedRectPath(ctx: Konva.Context, x: number, y: number, w: number, h:
   ctx.arcTo(x + w, y + h, x, y + h, rr);
   ctx.arcTo(x, y + h, x, y, rr);
   ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+/** Trace a rect whose BOTTOM two corners are rounded and top edge is square
+    (the chrome bar covers the top). Used to clip the image under a chrome bar. */
+function bottomRoundedRectPath(ctx: Konva.Context, x: number, y: number, w: number, h: number, r: number) {
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x, y);
+  ctx.lineTo(x + w, y);
+  ctx.lineTo(x + w, y + h - rr);
+  ctx.arcTo(x + w, y + h, x + w - rr, y + h, rr);
+  ctx.lineTo(x + rr, y + h);
+  ctx.arcTo(x, y + h, x, y + h - rr, rr);
+  ctx.lineTo(x, y);
   ctx.closePath();
 }
 
@@ -162,6 +178,12 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
 
   // Frame visuals (no-op when the frame is off: r=0, no shadow → plain image).
   const r = frame.enabled ? frame.radius : 0;
+  // Window-chrome card geometry: the shadow-casting card spans the chrome bar +
+  // image; the bar sits chromeH above the image. chromeH is 0 when chrome is off.
+  const chromeH = layout.chromeH;
+  const cardY = layout.contentY - chromeH;      // card top (bar top) — image top when chromeH 0
+  const cardH = chromeH + layout.contentH;       // full card height (bar + image)
+  const chromeOn = frame.enabled && chromeH > 0 && frame.chrome.style !== "none";
   // Shadow scales with the screenshot's long edge (so it reads the same on any
   // capture size) and ramps clearly across the slider — even a low setting is
   // plainly visible and the max is bold. (Tuned up after at-screen feedback that
@@ -382,8 +404,10 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
           </Layer>
         )}
 
-        {/* Screenshot card: a shadow-casting rounded rect behind, then the image
-            clipped to the same rounded rect. Frame off → no shadow, r=0, plain image.
+        {/* Screenshot card: a shadow-casting rounded rect spanning the chrome bar +
+            image, the image clipped to the card (bottom-only corners when a chrome
+            bar covers the top), then the chrome bar painted on top. Frame off →
+            chromeH 0, r 0, no shadow → plain image, byte-identical to before.
             The shadow renders for every background type INCLUDING transparent — a
             framed screenshot dropped onto a slide keeps its drop shadow against the
             alpha (matches CleanShot); only the background fill is omitted when transparent. */}
@@ -391,9 +415,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
           {frame.enabled && (
             <Rect
               x={layout.contentX}
-              y={layout.contentY}
+              y={cardY}
               width={layout.contentW}
-              height={layout.contentH}
+              height={cardH}
               cornerRadius={r}
               fill="#000"
               {...shadowProps}
@@ -402,7 +426,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
           <Group
             clipFunc={
               r > 0
-                ? (ctx) => roundedRectPath(ctx, layout.contentX, layout.contentY, layout.contentW, layout.contentH, r)
+                ? chromeOn
+                  ? (ctx) => bottomRoundedRectPath(ctx, layout.contentX, layout.contentY, layout.contentW, layout.contentH, r)
+                  : (ctx) => roundedRectPath(ctx, layout.contentX, layout.contentY, layout.contentW, layout.contentH, r)
                 : undefined
             }
           >
@@ -415,6 +441,19 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
               crop={{ x: layout.cropX, y: layout.cropY, width: layout.contentW, height: layout.contentH }}
             />
           </Group>
+          {chromeOn && (
+            <WindowChrome
+              x={layout.contentX}
+              y={cardY}
+              width={layout.contentW}
+              height={chromeH}
+              radius={r}
+              style={frame.chrome.style as "window" | "browser"}
+              theme={frame.chrome.theme}
+              title={frame.chrome.title}
+              url={frame.chrome.url}
+            />
+          )}
         </Layer>
         {/* Annotations are offset onto the screenshot. Only the strokes are
             clipped (a Group) so they can't spill onto the frame backdrop; the
