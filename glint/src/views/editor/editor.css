@@ -249,11 +249,14 @@
   text-transform: none;
 }
 .frame-info:hover, .frame-info:focus-visible { color: var(--text-dim); outline: none; }
+/* Anchored via JS (fixed, left/top set inline) so it escapes the scroll panel's
+   overflow clip. translate(-100%, -50%) places it fully to the LEFT of the icon,
+   vertically centered. */
 .frame-tip {
-  position: absolute;
-  right: 0;
-  bottom: calc(100% + 6px);
-  width: 210px;
+  position: fixed;
+  transform: translate(-100%, -50%);
+  width: 220px;
+  max-width: 60vw;
   padding: var(--s2) var(--s3);
   border-radius: var(--r1);
   background: var(--bg-elev2);
@@ -266,15 +269,13 @@
   letter-spacing: normal;
   white-space: normal;
   box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
-  opacity: 0;
-  transform: translateY(4px);
   pointer-events: none;
-  transition: opacity var(--dur) var(--ease), transform var(--dur) var(--ease);
-  z-index: 30;
+  z-index: 100;
+  animation: frame-tip-in var(--dur) var(--ease);
 }
-.frame-info:hover .frame-tip, .frame-info:focus-visible .frame-tip {
-  opacity: 1;
-  transform: translateY(0);
+@keyframes frame-tip-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
 }
 /* Segmented control (background type + aspect) */
 .frame-seg {

@@ -1,3 +1,4 @@
+import { useRef, useState } from "react";
 import { Info } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { GRADIENTS } from "../../editor/gradients";
@@ -210,13 +211,41 @@ export function FramePanel() {
   );
 }
 
-/** A small info affordance: an ⓘ icon that reveals explanatory text on hover/focus
-    (keeps the panel clean instead of showing a permanent paragraph). */
+/** A small info affordance: an ⓘ icon that reveals explanatory text on hover/focus.
+    The tooltip is `position: fixed`, anchored to the icon via its bounding rect, so
+    it escapes the frame panel's `overflow` clip (the panel scrolls, which would
+    otherwise slice a tooltip drawn outside its box). It appears to the LEFT of the
+    icon (the panel is right-docked, so there's always room over the canvas). */
 function Hint({ text }: { text: string }) {
+  const ref = useRef<HTMLSpanElement>(null);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const show = () => {
+    const el = ref.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    // Clamp vertically so a tall tooltip never clips off the top/bottom edge.
+    const top = Math.min(Math.max(r.top + r.height / 2, 80), window.innerHeight - 80);
+    setPos({ left: r.left - 8, top });
+  };
+  const hide = () => setPos(null);
   return (
-    <span className="frame-info" tabIndex={0} role="note" aria-label={text}>
+    <span
+      ref={ref}
+      className="frame-info"
+      tabIndex={0}
+      role="note"
+      aria-label={text}
+      onMouseEnter={show}
+      onMouseLeave={hide}
+      onFocus={show}
+      onBlur={hide}
+    >
       <Info size={13} strokeWidth={2} aria-hidden />
-      <span className="frame-tip">{text}</span>
+      {pos && (
+        <span className="frame-tip" style={{ left: pos.left, top: pos.top }}>
+          {text}
+        </span>
+      )}
     </span>
   );
 }
