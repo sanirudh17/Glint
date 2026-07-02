@@ -1,7 +1,12 @@
 {
   "$schema": "../gen/schemas/desktop-schema.json",
   "identifier": "hud",
-  "description": "Capability for the transient post-capture HUD window",
+  "description": "Capability for the persistent post-capture tray window",
   "windows": ["hud"],
-  "permissions": ["core:default", "drag:default"]
+  "permissions": [
+    "core:default",
+    "drag:default",
+    "core:window:allow-set-size",
+    "core:window:allow-set-position"
+  ]
 }

@@ -16,13 +16,13 @@ pub const HUD_LABEL: &str = "hud";
 
 // Logical (CSS px) size of the HUD window. It holds a corner thumbnail card with
 // transparent breathing room around it for the seat shadow.
-const HUD_W: f64 = 244.0;
-const HUD_H: f64 = 172.0;
+pub const HUD_W: f64 = 244.0;
+pub const HUD_H: f64 = 172.0;
 // Gap from the monitor's left edge.
-const MARGIN_X: f64 = 20.0;
+pub const MARGIN_X: f64 = 20.0;
 // Gap from the monitor's bottom edge — generous so the card clears the Windows
 // taskbar (precise work-area insetting is a later polish pass).
-const MARGIN_Y: f64 = 48.0;
+pub const MARGIN_Y: f64 = 48.0;
 
 /// Open a fresh HUD window for the current capture result. Tears down any prior
 /// HUD first (only one result is ever current). Must run off the main thread —
