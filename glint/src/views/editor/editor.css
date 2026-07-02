@@ -122,7 +122,10 @@
   border-bottom: 1px solid var(--border);
   background: var(--bg-elev);
 }
-.editor-topbar .editor-stylebar { border-bottom: none; flex: 1; }
+/* The style bar is the flexible middle: it shrinks and scrolls horizontally so the
+   fixed Export/Done buttons on the right are never pushed off-screen. */
+.editor-topbar .editor-stylebar { border-bottom: none; flex: 1 1 0; min-width: 0; overflow-x: auto; }
+.editor-exportbar, .editor-frame-slot { flex: none; }
 .editor-exportbar {
   display: flex; align-items: center; gap: var(--s2);
   padding: var(--s2) var(--s4);

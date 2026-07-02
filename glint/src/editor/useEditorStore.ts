@@ -88,7 +88,9 @@ interface EditorState {
   duplicate: (id: string) => void;
   bringForward: (id: string) => void;
   sendBackward: (id: string) => void;
-  nudge: (id: string, dx: number, dy: number) => void;
+  /** Shift the annotation by (dx,dy). `pushHist` (default true) coalesces a burst
+      of rapid nudges into a single undo step when the caller passes false. */
+  nudge: (id: string, dx: number, dy: number, pushHist?: boolean) => void;
   pushHistory: () => void;
   add: (a: Annotation) => void;
   update: (id: string, patch: Partial<Annotation>) => void;
@@ -192,13 +194,15 @@ export const useEditorStore = create<EditorState>((set) => ({
         ? s
         : { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: next, dirty: true };
     }),
-  nudge: (id, dx, dy) =>
+  nudge: (id, dx, dy, pushHist = true) =>
     set((s) => {
       const idx = s.annotations.findIndex((x) => x.id === id);
       if (idx < 0) return s;
       const next = [...s.annotations];
       next[idx] = nudgeAnnotation(next[idx], dx, dy);
-      return { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: next, dirty: true };
+      return pushHist
+        ? { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: next, dirty: true }
+        : { annotations: next, dirty: true };
     }),
 
   // Snapshot the current doc (annotations + crop) so the next gesture can be

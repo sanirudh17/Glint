@@ -20,6 +20,8 @@ export default function EditorView() {
   const loadDoc = useEditorStore((s) => s.loadDoc);
   const reset = useEditorStore((s) => s.reset);
   const stageRef = useRef<Konva.Stage>(null);
+  // Timestamp of the last arrow-key nudge, for history coalescing.
+  const lastNudge = useRef(0);
 
   const setTool = useEditorStore((s) => s.setTool);
   const undo = useEditorStore((s) => s.undo);
@@ -70,16 +72,6 @@ export default function EditorView() {
         if (selectedId) st.duplicate(selectedId);
         return;
       }
-      if ((e.ctrlKey || e.metaKey) && e.key === "]") {
-        e.preventDefault();
-        if (selectedId) st.bringForward(selectedId);
-        return;
-      }
-      if ((e.ctrlKey || e.metaKey) && e.key === "[") {
-        e.preventDefault();
-        if (selectedId) st.sendBackward(selectedId);
-        return;
-      }
       if (selectedId && e.key.startsWith("Arrow") && !e.ctrlKey && !e.metaKey && !e.altKey) {
         e.preventDefault();
         const d = e.shiftKey ? 10 : 1;
@@ -87,7 +79,14 @@ export default function EditorView() {
           ArrowLeft: [-d, 0], ArrowRight: [d, 0], ArrowUp: [0, -d], ArrowDown: [0, d],
         };
         const mv = delta[e.key];
-        if (mv) st.nudge(selectedId, mv[0], mv[1]);
+        if (mv) {
+          // Coalesce a burst of rapid nudges into ONE undo step (only the first
+          // nudge after a ~400ms gap records history).
+          const now = Date.now();
+          const fresh = now - lastNudge.current > 400;
+          lastNudge.current = now;
+          st.nudge(selectedId, mv[0], mv[1], fresh);
+        }
         return;
       }
       // Single-key tool shortcuts must not fire on modifier combos, or e.g.
