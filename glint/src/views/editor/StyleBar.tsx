@@ -144,7 +144,9 @@ export function StyleBar() {
               aria-label="Fill color"
             />
           </label>
-          {eff.fill && (
+          {/* Opacity only appears once a shape is actually SELECTED (via the cursor),
+              not while merely drawing — it edits the picked shape's transparency. */}
+          {selectedAnno && eff.fill && (
             <input
               className="editor-opacity"
               type="range"
@@ -166,7 +168,7 @@ export function StyleBar() {
           onClick={() => applyDashed(!eff.dashed)}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-            <line x1="1" y1="8" x2="15" y2="8" stroke="currentColor" strokeWidth="2" strokeDasharray="3 2" strokeLinecap="round" />
+            <line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 3" strokeLinecap="round" />
           </svg>
         </button>
       )}

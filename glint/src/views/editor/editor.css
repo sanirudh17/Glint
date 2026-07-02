@@ -64,6 +64,7 @@
 }
 .editor-width {
   display: inline-flex; align-items: center; justify-content: center;
+  box-sizing: border-box; flex: none; padding: 0;
   width: 28px; height: 24px; border-radius: var(--r1);
   border: 1px solid var(--border); background: transparent;
   color: var(--text-dim); cursor: pointer; font-size: var(--fz-xs);
