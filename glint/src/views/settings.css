@@ -281,6 +281,9 @@
 }
 
 /* ── Rebindable hotkeys ─────────────────────────────────────────────────────── */
+/* Wider than the default 560px section so each instruction sentence fits on one line. */
+.settings-panel .g-section.settings-section--wide { max-width: 880px; }
+
 .settings-hotkey-help {
   margin-bottom: 14px;
   padding: 12px 14px;

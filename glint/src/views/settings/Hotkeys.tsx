@@ -95,7 +95,11 @@ export function Hotkeys() {
   if (!settings) return null;
 
   return (
-    <Section title="Keyboard shortcuts" description="Global shortcuts that work anywhere in Windows.">
+    <Section
+      title="Keyboard shortcuts"
+      description="Global shortcuts that work anywhere in Windows."
+      className="settings-section--wide"
+    >
       <Card>
         <div className="settings-hotkey-help" role="note">
           <strong>How to change a shortcut</strong>
