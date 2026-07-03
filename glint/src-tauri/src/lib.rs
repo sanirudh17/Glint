@@ -29,7 +29,7 @@ use editor::commands::{
 use settings::commands::{
     hotkeys_resume, hotkeys_suspend, settings_get_all, settings_reset_hotkeys, settings_set,
     autostart_get, autostart_set, settings_set_hotkey, settings_set_save_dir, storage_paths,
-    SettingsState,
+    window_set_taskbar, SettingsState,
 };
 use pin::{
     pin_close, pin_context_menu, pin_copy, pin_create_from_capture, pin_create_from_last, pin_data,
@@ -145,6 +145,14 @@ pub fn run() {
             }
             app.manage(Db(std::sync::Mutex::new(conn)));
 
+            // Apply the persisted taskbar preference to the main window.
+            {
+                let show = app.state::<SettingsState>().0.lock().unwrap().show_in_taskbar;
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.set_skip_taskbar(!show);
+                }
+            }
+
             // Self-heal the Explorer "Open in Glint" verb: if enabled (default true)
             // and not already registered for THIS exe path, (re)register. HKCU-only,
             // no admin. Startup never removes — the Settings toggle drives removal.
@@ -232,6 +240,7 @@ pub fn run() {
             settings_set_save_dir,
             autostart_get,
             autostart_set,
+            window_set_taskbar,
             capture_overlay_data,
             capture_commit,
             capture_cancel,

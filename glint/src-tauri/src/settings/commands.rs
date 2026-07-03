@@ -176,3 +176,14 @@ pub fn autostart_get() -> bool {
 pub fn autostart_set(on: bool) -> Result<(), String> {
     crate::autostart::set_enabled(on)
 }
+
+// ─── Show in taskbar ──────────────────────────────────────────────────────────
+
+/// Show/hide the main window's taskbar button (the tray icon is unaffected).
+#[tauri::command]
+pub fn window_set_taskbar(app: AppHandle, on: bool) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window("main") {
+        win.set_skip_taskbar(!on).map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
