@@ -47,6 +47,15 @@ pub struct Settings {
     pub record_cursor_hide: bool,
     /// "off" | "large" | "xl" — recorded-cursor magnification.
     pub record_cursor_size: String,
+    /// Custom folder for new captures (screenshots + recordings). Empty = platform defaults
+    /// (`Pictures\Glint` / `Videos\Glint`).
+    pub save_dir: String,
+    /// Play a shutter click on screenshot capture.
+    pub sound_effects: bool,
+    /// Keep the main window's button in the Windows taskbar.
+    pub show_in_taskbar: bool,
+    /// Bake the mouse cursor into screenshots.
+    pub include_cursor: bool,
 }
 
 impl Default for Settings {
@@ -67,6 +76,10 @@ impl Default for Settings {
             record_cursor_spotlight: false,
             record_cursor_hide: false,
             record_cursor_size: "off".into(),
+            save_dir: String::new(),
+            sound_effects: false,
+            show_in_taskbar: true,
+            include_cursor: false,
         }
     }
 }
@@ -126,6 +139,18 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
             }
             s.record_cursor_size = v.to_string();
         }
+        "save_dir" => {
+            s.save_dir = value.as_str().ok_or("save_dir must be string")?.to_string();
+        }
+        "sound_effects" => {
+            s.sound_effects = value.as_bool().ok_or("sound_effects must be boolean")?;
+        }
+        "show_in_taskbar" => {
+            s.show_in_taskbar = value.as_bool().ok_or("show_in_taskbar must be boolean")?;
+        }
+        "include_cursor" => {
+            s.include_cursor = value.as_bool().ok_or("include_cursor must be boolean")?;
+        }
         other => return Err(format!("unknown settings key: {other}")),
     }
     Ok(())
@@ -134,6 +159,8 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
 pub mod commands;
 pub mod hotkeys;
 pub mod hydrate;
+pub mod locations;
+pub mod sound;
 
 #[cfg(test)]
 mod tests {

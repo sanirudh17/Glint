@@ -183,8 +183,7 @@ fn finish_commit(
 
     // Decide where the durable file lives: auto-save → Pictures\Glint; otherwise a temp file.
     let (path, saved) = if auto_save {
-        let pictures = app.path().picture_dir().map_err(|e| e.to_string())?;
-        let dir = crate::paths::glint_save_dir(&pictures);
+        let dir = crate::settings::locations::save_dir(app, crate::settings::locations::SaveKind::Screenshot);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
         let filename = crate::paths::capture_filename(chrono::Local::now());
         let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
@@ -202,6 +201,11 @@ fn finish_commit(
         (dest, false)
     };
     let path_str = path.to_string_lossy().to_string();
+
+    // Shutter click (opt-in). Non-fatal, async — never blocks the HUD.
+    if app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().sound_effects {
+        crate::settings::sound::play_shutter();
+    }
 
     // Copy to clipboard (gated by auto_copy) — non-fatal: log a warning but carry on.
     let _cb = std::time::Instant::now();
@@ -399,8 +403,7 @@ pub fn tray_save(app: AppHandle, state: State<TrayState>, id: u64) -> Result<Str
     if it.saved {
         return Ok(it.path);
     }
-    let pictures = app.path().picture_dir().map_err(|e| e.to_string())?;
-    let dir = crate::paths::glint_save_dir(&pictures);
+    let dir = crate::settings::locations::save_dir(&app, crate::settings::locations::SaveKind::Screenshot);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let filename = crate::paths::capture_filename(chrono::Local::now());
     let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
@@ -621,6 +624,12 @@ pub fn capture_open(db: State<crate::Db>, id: i64) -> Result<(), String> {
 #[tauri::command]
 pub fn capture_reveal(db: State<crate::Db>, id: i64) -> Result<(), String> {
     let path = path_for_existing(&db, id)?;
+    reveal_in_explorer(&path)
+}
+
+/// Reveal an arbitrary file/folder path in Explorer (used by the Storage folder controls).
+#[tauri::command]
+pub fn reveal_path(path: String) -> Result<(), String> {
     reveal_in_explorer(&path)
 }
 

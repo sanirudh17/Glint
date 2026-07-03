@@ -313,3 +313,12 @@
 .settings-hotkey-btn--ghost { border-color: transparent; opacity: 0.75; }
 .settings-hotkey-error { flex-basis: 100%; color: #e5534b; font-size: 11.5px; }
 .settings-hotkey-footer { margin-top: 12px; }
+
+/* ── Custom capture folder ──────────────────────────────────────────────────── */
+.settings-folder-control { display: flex; flex-direction: column; gap: 8px; }
+.settings-folder-path {
+  font-size: 12px; opacity: 0.85; word-break: break-all;
+  padding: 6px 8px; border-radius: 6px; background: rgba(128,128,128,0.1);
+}
+.settings-folder-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.settings-folder-actions .settings-hotkey-btn { display: inline-flex; align-items: center; gap: 5px; }

@@ -1,3 +1,4 @@
+mod autostart;
 mod capture;
 mod clipboard;
 mod db;
@@ -16,9 +17,9 @@ mod window;
 
 use capture::commands::{
     capture_cancel, capture_commit, capture_copy, capture_copy_path, capture_delete, capture_open,
-    capture_overlay_data, capture_reveal, captures_list, drag_blank_icon, tray_annotate, tray_clear,
-    tray_copy, tray_copy_path, tray_dismiss, tray_extract_text, tray_list, tray_pin, tray_resize,
-    tray_reveal, tray_save,
+    capture_overlay_data, capture_reveal, captures_list, drag_blank_icon, reveal_path,
+    tray_annotate, tray_clear, tray_copy, tray_copy_path, tray_dismiss, tray_extract_text,
+    tray_list, tray_pin, tray_resize, tray_reveal, tray_save,
 };
 use editor::commands::{
     consume_pending_external_open, editor_copy, editor_done, editor_flatten_temp,
@@ -27,7 +28,8 @@ use editor::commands::{
 };
 use settings::commands::{
     hotkeys_resume, hotkeys_suspend, settings_get_all, settings_reset_hotkeys, settings_set,
-    settings_set_hotkey, SettingsState,
+    autostart_get, autostart_set, settings_set_hotkey, settings_set_save_dir, storage_paths,
+    window_set_taskbar, SettingsState,
 };
 use pin::{
     pin_close, pin_context_menu, pin_copy, pin_create_from_capture, pin_create_from_last, pin_data,
@@ -143,6 +145,14 @@ pub fn run() {
             }
             app.manage(Db(std::sync::Mutex::new(conn)));
 
+            // Apply the persisted taskbar preference to the main window.
+            {
+                let show = app.state::<SettingsState>().0.lock().unwrap().show_in_taskbar;
+                if let Some(win) = app.get_webview_window("main") {
+                    let _ = win.set_skip_taskbar(!show);
+                }
+            }
+
             // Self-heal the Explorer "Open in Glint" verb: if enabled (default true)
             // and not already registered for THIS exe path, (re)register. HKCU-only,
             // no admin. Startup never removes — the Settings toggle drives removal.
@@ -226,6 +236,11 @@ pub fn run() {
             settings_reset_hotkeys,
             hotkeys_suspend,
             hotkeys_resume,
+            storage_paths,
+            settings_set_save_dir,
+            autostart_get,
+            autostart_set,
+            window_set_taskbar,
             capture_overlay_data,
             capture_commit,
             capture_cancel,
@@ -244,6 +259,7 @@ pub fn run() {
             captures_list,
             capture_open,
             capture_reveal,
+            reveal_path,
             capture_copy,
             capture_copy_path,
             capture_delete,
