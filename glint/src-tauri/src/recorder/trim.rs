@@ -392,7 +392,7 @@ mod tests {
         let p = parse_ffprobe_json(json).unwrap();
         assert_eq!(p.width, 1920);
         assert_eq!(p.height, 1080);
-        assert_eq!(p.has_audio, true);
+        assert!(p.has_audio);
         assert!((p.duration_secs - 12.5).abs() < 1e-6);
         assert!((p.fps - 30.0).abs() < 1e-6);
     }
@@ -401,7 +401,7 @@ mod tests {
     fn parses_video_only_no_audio() {
         let json = r#"{"streams":[{"codec_type":"video","width":1280,"height":720,"avg_frame_rate":"60/1"}],"format":{"duration":"3.0"}}"#;
         let p = parse_ffprobe_json(json).unwrap();
-        assert_eq!(p.has_audio, false);
+        assert!(!p.has_audio);
         assert!((p.fps - 60.0).abs() < 1e-6);
     }
 

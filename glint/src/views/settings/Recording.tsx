@@ -1,17 +1,9 @@
-import { Info } from "lucide-react";
 import { Section, Field, Select, Switch } from "../../components/ui";
 import { useAppStore } from "../../store/useAppStore";
 
 const FPS_OPTIONS = [
   { value: "60", label: "60 fps" },
   { value: "30", label: "30 fps" },
-  { value: "24", label: "24 fps" },
-];
-
-const CODEC_OPTIONS = [
-  { value: "h264", label: "H.264" },
-  { value: "h265", label: "H.265 / HEVC" },
-  { value: "av1",  label: "AV1" },
 ];
 
 // One control for the recorded cursor. Hide + size are folded into a single choice
@@ -30,6 +22,7 @@ export function Recording() {
   const setRecordMicrophone = useAppStore((s) => s.setRecordMicrophone);
   const setRecordWebcam = useAppStore((s) => s.setRecordWebcam);
   const setRecordFx = useAppStore((s) => s.setRecordFx);
+  const setRecordFps = useAppStore((s) => s.setRecordFps);
 
   const cursorStyle = settings?.record_cursor_hide
     ? "hidden"
@@ -54,22 +47,14 @@ export function Recording() {
       description="Video recording quality and codec settings."
     >
       <Field label="Frame rate" hint="Frames per second for screen recordings.">
-        <div className="settings-inert-control">
-          <Select value="60" options={FPS_OPTIONS} onChange={() => {}} disabled />
-          <span className="settings-phase-note">
-            <Info size={12} strokeWidth={1.75} />
-            Available in a later phase
-          </span>
-        </div>
+        <Select
+          value={String(settings?.record_fps ?? 60)}
+          options={FPS_OPTIONS}
+          onChange={(v) => void setRecordFps(Number(v) as 30 | 60)}
+        />
       </Field>
       <Field label="Video codec" hint="Encoding format for recorded video.">
-        <div className="settings-inert-control">
-          <Select value="h264" options={CODEC_OPTIONS} onChange={() => {}} disabled />
-          <span className="settings-phase-note">
-            <Info size={12} strokeWidth={1.75} />
-            Available in a later phase
-          </span>
-        </div>
+        <span className="settings-static-value">H.264 · MP4 (maximum compatibility)</span>
       </Field>
       <Field label="Record system audio" hint="Include speaker/app audio in recordings by default.">
         <Switch

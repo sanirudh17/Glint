@@ -208,13 +208,21 @@ pub fn save_pin(app: &AppHandle, label: &str) -> Result<String, String> {
     let d = pins.get(label).ok_or("no pin data for this window")?;
     let dir = crate::settings::locations::save_dir(app, crate::settings::locations::SaveKind::Screenshot);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let filename = crate::paths::capture_filename(chrono::Local::now());
-    let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
-    std::fs::write(&dest, &d.png).map_err(|e| e.to_string())?;
-    let dest_str = dest.to_string_lossy().to_string();
-
+    let (image_format, jpeg_quality) = {
+        let s = app.state::<crate::settings::commands::SettingsState>();
+        let g = s.0.lock().unwrap();
+        (g.image_format.clone(), g.jpeg_quality.clone())
+    };
+    // Decode the stored PNG once; re-encode into the chosen save format.
     let rgba = image::load_from_memory(&d.png).map_err(|e| e.to_string())?.to_rgba8();
     let (w, h) = (rgba.width(), rgba.height());
+    let (save_bytes, ext) =
+        crate::settings::image::encode_save(&rgba, w, h, &image_format, &jpeg_quality)?;
+    let filename = crate::paths::capture_filename(chrono::Local::now(), ext);
+    let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
+    std::fs::write(&dest, &save_bytes).map_err(|e| e.to_string())?;
+    let dest_str = dest.to_string_lossy().to_string();
+
     let thumb_path = crate::capture::commands::write_thumb(app, &rgba.into_raw(), w, h, &dest_str);
     let row = crate::db::NewCapture {
         kind: "screenshot".into(),
@@ -222,7 +230,7 @@ pub fn save_pin(app: &AppHandle, label: &str) -> Result<String, String> {
         thumb_path,
         width: Some(w as i64),
         height: Some(h as i64),
-        bytes: Some(d.png.len() as i64),
+        bytes: Some(save_bytes.len() as i64),
         created_at: std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
             .map(|x| x.as_secs() as i64)

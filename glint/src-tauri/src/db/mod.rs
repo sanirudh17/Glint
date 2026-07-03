@@ -25,6 +25,11 @@ pub fn migrations() -> Vec<Migration> {
         ",
         kind: MigrationKind::Up,
     }]
+    // NOTE: the `captures.title` column (Phase 18) is intentionally NOT a plugin-sql
+    // migration. It is added idempotently by `ensure_captures_table` (rusqlite) below,
+    // which owns the captures schema. A migration here raced that ALTER and failed with
+    // "duplicate column name: title", which rejected the whole sql-plugin DB load and
+    // broke every settings persist. Keep schema changes to `captures` in one place.
 }
 
 // ─── rusqlite captures layer (tray-core owns the captures table) ───────────────
@@ -52,6 +57,7 @@ pub struct CaptureRow {
     pub height: Option<i64>,
     pub bytes: Option<i64>,
     pub created_at: i64,
+    pub title: Option<String>,
 }
 
 /// Idempotent — matches the plugin-sql migration shape. Safe to call repeatedly and
@@ -68,10 +74,14 @@ pub fn ensure_captures_table(conn: &Connection) -> rusqlite::Result<()> {
             bytes INTEGER,
             app_name TEXT, window_title TEXT,
             created_at INTEGER NOT NULL,
-            deleted_at INTEGER
+            deleted_at INTEGER,
+            title TEXT
         );
         CREATE INDEX IF NOT EXISTS idx_captures_created ON captures(created_at);",
-    )
+    )?;
+    // Older DBs created before the title column: add it, ignoring "duplicate column".
+    let _ = conn.execute("ALTER TABLE captures ADD COLUMN title TEXT", []);
+    Ok(())
 }
 
 pub fn insert_capture(conn: &Connection, c: &NewCapture) -> rusqlite::Result<i64> {
@@ -122,7 +132,7 @@ pub fn find_capture_id_by_path(conn: &Connection, path: &str) -> Option<i64> {
 pub fn list_captures(conn: &Connection) -> rusqlite::Result<Vec<CaptureRow>> {
     ensure_captures_table(conn)?;
     let mut stmt = conn.prepare(
-        "SELECT id, kind, path, thumb_path, width, height, bytes, created_at
+        "SELECT id, kind, path, thumb_path, width, height, bytes, created_at, title
          FROM captures WHERE deleted_at IS NULL ORDER BY created_at DESC, id DESC",
     )?;
     let rows = stmt
@@ -136,10 +146,18 @@ pub fn list_captures(conn: &Connection) -> rusqlite::Result<Vec<CaptureRow>> {
                 height: r.get(5)?,
                 bytes: r.get(6)?,
                 created_at: r.get(7)?,
+                title: r.get(8)?,
             })
         })?
         .collect::<rusqlite::Result<Vec<_>>>()?;
     Ok(rows)
+}
+
+/// Set (or clear, with `None`) a capture's custom title.
+pub fn set_title(conn: &Connection, id: i64, title: Option<&str>) -> rusqlite::Result<()> {
+    ensure_captures_table(conn)?;
+    conn.execute("UPDATE captures SET title = ?1 WHERE id = ?2", rusqlite::params![title, id])?;
+    Ok(())
 }
 
 pub fn soft_delete(conn: &Connection, id: i64) -> rusqlite::Result<()> {
@@ -216,5 +234,16 @@ mod tests {
         let c = mem();
         let id = insert_capture(&c, &sample("/y.png", 100)).unwrap();
         assert_eq!(capture_path(&c, id).unwrap(), Some("/y.png".to_string()));
+    }
+
+    #[test]
+    fn set_title_round_trips_and_clears() {
+        let c = mem();
+        let id = insert_capture(&c, &sample("/t.png", 100)).unwrap();
+        set_title(&c, id, Some("Invoice")).unwrap();
+        let rows = list_captures(&c).unwrap();
+        assert_eq!(rows[0].title.as_deref(), Some("Invoice"));
+        set_title(&c, id, None).unwrap();
+        assert_eq!(list_captures(&c).unwrap()[0].title, None);
     }
 }

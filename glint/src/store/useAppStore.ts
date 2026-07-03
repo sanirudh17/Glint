@@ -32,6 +32,9 @@ export interface Settings {
   sound_effects: boolean;
   show_in_taskbar: boolean;
   include_cursor: boolean;
+  image_format: "png" | "jpeg" | "webp";
+  jpeg_quality: "high" | "medium" | "low";
+  record_fps: 30 | 60;
 }
 
 export interface Toast {
@@ -59,6 +62,9 @@ interface AppState {
   setSoundEffects: (on: boolean) => Promise<void>;
   setShowInTaskbar: (on: boolean) => Promise<void>;
   setIncludeCursor: (on: boolean) => Promise<void>;
+  setImageFormat: (v: "png" | "jpeg" | "webp") => Promise<void>;
+  setJpegQuality: (v: "high" | "medium" | "low") => Promise<void>;
+  setRecordFps: (v: 30 | 60) => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -227,6 +233,24 @@ export const useAppStore = create<AppState>((set, get) => ({
   setIncludeCursor: async (on: boolean) => {
     const updated = await saveSetting("include_cursor", on);
     await persistSetting("include_cursor", on);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setImageFormat: async (v: "png" | "jpeg" | "webp") => {
+    const updated = await saveSetting("image_format", v);
+    await persistSetting("image_format", v);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setJpegQuality: async (v: "high" | "medium" | "low") => {
+    const updated = await saveSetting("jpeg_quality", v);
+    await persistSetting("jpeg_quality", v);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setRecordFps: async (v: 30 | 60) => {
+    const updated = await saveSetting("record_fps", v);
+    await persistSetting("record_fps", v);
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 

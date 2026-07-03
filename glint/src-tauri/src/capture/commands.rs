@@ -175,19 +175,23 @@ fn finish_commit(
     );
 
     // Read the live settings (hydrated at startup).
-    let (auto_save, auto_copy, open_in_editor) = {
+    let (auto_save, auto_copy, open_in_editor, image_format, jpeg_quality) = {
         let state = app.state::<crate::settings::commands::SettingsState>();
         let s = state.0.lock().unwrap();
-        (s.auto_save, s.auto_copy, s.open_in_editor)
+        (s.auto_save, s.auto_copy, s.open_in_editor, s.image_format.clone(), s.jpeg_quality.clone())
     };
 
     // Decide where the durable file lives: auto-save → Pictures\Glint; otherwise a temp file.
+    // `png` stays PNG for the thumbnail data-URL + latest.png mirror; only the durable auto-saved
+    // file honors the chosen image format.
     let (path, saved) = if auto_save {
         let dir = crate::settings::locations::save_dir(app, crate::settings::locations::SaveKind::Screenshot);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let filename = crate::paths::capture_filename(chrono::Local::now());
+        let (save_bytes, ext) =
+            crate::settings::image::encode_save(&cropped, clamped.w, clamped.h, &image_format, &jpeg_quality)?;
+        let filename = crate::paths::capture_filename(chrono::Local::now(), ext);
         let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
-        std::fs::write(&dest, &png).map_err(|e| e.to_string())?;
+        std::fs::write(&dest, &save_bytes).map_err(|e| e.to_string())?;
         (dest, true)
     } else {
         let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
@@ -403,13 +407,21 @@ pub fn tray_save(app: AppHandle, state: State<TrayState>, id: u64) -> Result<Str
     }
     let dir = crate::settings::locations::save_dir(&app, crate::settings::locations::SaveKind::Screenshot);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let filename = crate::paths::capture_filename(chrono::Local::now());
+    let (image_format, jpeg_quality) = {
+        let s = app.state::<crate::settings::commands::SettingsState>();
+        let g = s.0.lock().unwrap();
+        (g.image_format.clone(), g.jpeg_quality.clone())
+    };
+    // Re-encode from the temp file's pixels so the saved file honors the chosen format.
+    let (rgba, w, h) = read_rgba(&it.path)?;
+    let (save_bytes, ext) =
+        crate::settings::image::encode_save(&rgba, w, h, &image_format, &jpeg_quality)?;
+    let filename = crate::paths::capture_filename(chrono::Local::now(), ext);
     let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
-    std::fs::copy(&it.path, &dest).map_err(|e| e.to_string())?;
+    std::fs::write(&dest, &save_bytes).map_err(|e| e.to_string())?;
     let dest_str = dest.to_string_lossy().to_string();
 
     // Curate into the Library: thumbnail + DB row + event (mirrors the old hud_save).
-    let (rgba, w, h) = read_rgba(&dest_str)?;
     let thumb_path = write_thumb(&app, &rgba, w, h, &dest_str);
     let bytes = std::fs::metadata(&dest).map(|m| m.len() as i64).ok();
     let row = crate::db::NewCapture {
@@ -532,6 +544,8 @@ pub struct CaptureListItem {
     pub height: Option<i64>,
     pub bytes: Option<i64>,
     pub created_at: i64,
+    /// User-assigned custom name, when set (drives Library display + search).
+    pub title: Option<String>,
     /// base64 data URL of the thumbnail PNG, when one exists on disk.
     pub thumb_data_url: Option<String>,
 }
@@ -558,6 +572,7 @@ pub fn captures_list(db: State<crate::Db>) -> Result<Vec<CaptureListItem>, Strin
                 height: r.height,
                 bytes: r.bytes,
                 created_at: r.created_at,
+                title: r.title,
                 thumb_data_url,
             }
         })
@@ -680,6 +695,15 @@ pub fn capture_delete(db: State<crate::Db>, id: i64) -> Result<(), String> {
         let _ = std::fs::remove_file(&p);
     }
     Ok(())
+}
+
+/// Rename a Library capture. An empty/whitespace title clears it (back to NULL).
+#[tauri::command]
+pub fn capture_rename(db: State<crate::Db>, id: i64, title: String) -> Result<(), String> {
+    let trimmed = title.trim();
+    let value = if trimmed.is_empty() { None } else { Some(trimmed) };
+    let conn = db.0.lock().unwrap();
+    crate::db::set_title(&conn, id, value).map_err(|e| e.to_string())
 }
 
 /// Cancel an in-progress capture: discard session, tear down overlays, and restore

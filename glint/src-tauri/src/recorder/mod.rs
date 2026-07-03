@@ -19,9 +19,6 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
-/// Capture/encode frame rate. 60 for smooth motion; gdigrab's actually-delivered
-/// rate still depends on the machine and screen resolution.
-const FPS: u32 = 60;
 
 /// One running ffmpeg span — a contiguous stretch of recording between pauses.
 /// Holds the child (to send `q` on stdin) and its event receiver (to wait for a
@@ -549,6 +546,15 @@ pub async fn recorder_start(
         return Err("already recording".into());
     }
 
+    // Capture/encode frame rate from settings (30 or 60). gdigrab's actually-delivered
+    // rate still depends on the machine and screen resolution.
+    let fps = app
+        .state::<crate::settings::commands::SettingsState>()
+        .0
+        .lock()
+        .unwrap()
+        .record_fps;
+
     // The selector (if this start came from it) closes itself, so the frontend's
     // IPC survives (closing destroys its JS context) and a full-screen capture
     // never includes the transparent overlay. No-op for a tray/hotkey fullscreen.
@@ -638,7 +644,7 @@ pub async fn recorder_start(
     // optimistic (both toggles when any audio) and refined once ffmpeg is running.
     *app.state::<RecorderState>().0.lock().unwrap() = Some(ActiveRecording {
         target,
-        fps: FPS,
+        fps,
         out_path: out_str.clone(),
         width,
         height,
@@ -659,7 +665,7 @@ pub async fn recorder_start(
     // Bring segment 0 up behind the visible bar. Pause/resume appends further
     // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual
     // delivered rate still depends on the machine/screen resolution).
-    let seg0 = match spawn_segment(&app, target, FPS, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
+    let seg0 = match spawn_segment(&app, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
         Ok(s) => s,
         Err(e) => {
             windows::close_control_bar(&app);
