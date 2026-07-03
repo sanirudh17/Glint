@@ -1,4 +1,3 @@
-import { Info } from "lucide-react";
 import { Section, Field, Select, Switch } from "../../components/ui";
 import { useAppStore } from "../../store/useAppStore";
 
@@ -16,39 +15,29 @@ const QUALITY_OPTIONS = [
 
 export function Capture() {
   const settings = useAppStore((s) => s.settings);
+  const setImageFormat = useAppStore((s) => s.setImageFormat);
+  const setJpegQuality = useAppStore((s) => s.setJpegQuality);
   const setIncludeCursor = useAppStore((s) => s.setIncludeCursor);
+  const isJpeg = (settings?.image_format ?? "png") === "jpeg";
   return (
     <Section
       title="Capture"
       description="Format and quality settings for screenshots."
     >
       <Field label="Image format" hint="File format for saved screenshots.">
-        <div className="settings-inert-control">
-          <Select
-            value="png"
-            options={FORMAT_OPTIONS}
-            onChange={() => {}}
-            disabled
-          />
-          <span className="settings-phase-note">
-            <Info size={12} strokeWidth={1.75} />
-            Available in a later phase
-          </span>
-        </div>
+        <Select
+          value={settings?.image_format ?? "png"}
+          options={FORMAT_OPTIONS}
+          onChange={(v) => void setImageFormat(v as "png" | "jpeg" | "webp")}
+        />
       </Field>
       <Field label="JPEG quality" hint="Compression level when saving as JPEG.">
-        <div className="settings-inert-control">
-          <Select
-            value="high"
-            options={QUALITY_OPTIONS}
-            onChange={() => {}}
-            disabled
-          />
-          <span className="settings-phase-note">
-            <Info size={12} strokeWidth={1.75} />
-            Available in a later phase
-          </span>
-        </div>
+        <Select
+          value={settings?.jpeg_quality ?? "high"}
+          options={QUALITY_OPTIONS}
+          onChange={(v) => void setJpegQuality(v as "high" | "medium" | "low")}
+          disabled={!isJpeg}
+        />
       </Field>
       <Field label="Include cursor" hint="Bake the mouse pointer into screenshots.">
         <Switch
