@@ -93,13 +93,14 @@ pub fn build_ffmpeg_args(target: &RecordTarget, fps: u32, out: &str, audio: &[Au
     // sources connected — the invariant concat `-c copy` relies on.
     const AFMT: &str = "aformat=sample_rates=48000:channel_layouts=stereo";
     // Voice cleanup applied to the MIC only (system audio passes through clean):
-    //  • pan=stereo|c0=c0|c1=c0 — collapse to dual-mono from the left channel, so a
-    //    mono mic that Windows presents as fake-stereo can't sound hollow/phasey and
-    //    the result is mono-compatible.
+    //  • pan=stereo|c0=c0|c1=c0 — mono-safe dual-mono from c0 (works for mono OR
+    //    stereo-presented mics; referencing c1 would error on a truly-mono input,
+    //    and keeping both channels would one-side a mono-on-left mic).
     //  • highpass 80 Hz — de-rumble.
-    //  • -2 dB bell @ 400 Hz — reduce boxiness ("hollow").
-    //  • +3 dB bell @ 3.5 kHz — presence/clarity.
-    const MIC_FX: &str = "pan=stereo|c0=c0|c1=c0,highpass=f=80,equalizer=f=400:width_type=o:width=1.4:g=-2,equalizer=f=3500:width_type=o:width=1.4:g=3";
+    //  • +1.5 dB shelf ~200 Hz — restore body/warmth ("fuller").
+    //  • +3 dB high shelf @ 7.5 kHz — air/clarity (fixes "muffled") without a fixed
+    //    presence bell that sounded processed.
+    const MIC_FX: &str = "pan=stereo|c0=c0|c1=c0,highpass=f=80,equalizer=f=200:width_type=o:width=1.2:g=1.5,treble=g=3:f=7500:width_type=q:width=0.7";
     let audio_tail = |a: &mut Vec<String>, fc: String| {
         a.extend([
             "-filter_complex".into(), fc,
@@ -247,13 +248,22 @@ mod tests {
 
     #[test]
     fn mic_gets_voice_eq_system_does_not() {
-        const FX: &str = "pan=stereo|c0=c0|c1=c0,highpass=f=80,equalizer=f=400:width_type=o:width=1.4:g=-2,equalizer=f=3500:width_type=o:width=1.4:g=3";
+        const FX: &str = "pan=stereo|c0=c0|c1=c0,highpass=f=80,equalizer=f=200:width_type=o:width=1.2:g=1.5,treble=g=3:f=7500:width_type=q:width=0.7";
         // Single mic source: cleanup inline before the format normalize.
         let m = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai_mic(48000)], true, true);
         assert!(m.iter().any(|s| *s == format!("[1:a]aresample=async=1,{FX},aformat=sample_rates=48000:channel_layouts=stereo[aout]")));
         // System (input 1) passes through; mic (input 2) is pre-filtered then mixed.
         let both = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000), ai_mic(48000)], true, true);
         assert!(both.iter().any(|s| *s == format!("[2:a]{FX}[m2];[1:a][m2]amix=inputs=2:duration=longest:normalize=0,aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[aout]")));
+    }
+
+    #[test]
+    fn mic_fx_has_no_body_cut() {
+        // Regression guard: the -2 dB @ 400 Hz cut (which thinned the voice) is gone,
+        // and the air shelf (which fixes "muffled") is present.
+        let m = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai_mic(48000)], true, true);
+        assert!(!m.iter().any(|s| s.contains("f=400") && s.contains("g=-2")));
+        assert!(m.iter().any(|s| s.contains("treble=g=3:f=7500")));
     }
 
     #[test]
