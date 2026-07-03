@@ -19,9 +19,6 @@ pub struct AudioInput {
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum CaptureEngine {
     Gdigrab,
-    // Constructed by the ddagrab probe in Task 6 (recorder_start); until then only the
-    // builder/tests reference it, so silence dead-code for this intermediate commit.
-    #[allow(dead_code)]
     Ddagrab,
 }
 
