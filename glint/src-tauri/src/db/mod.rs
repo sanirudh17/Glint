@@ -24,13 +24,12 @@ pub fn migrations() -> Vec<Migration> {
             );
         ",
         kind: MigrationKind::Up,
-    },
-    Migration {
-        version: 2,
-        description: "add capture title",
-        sql: "ALTER TABLE captures ADD COLUMN title TEXT;",
-        kind: MigrationKind::Up,
     }]
+    // NOTE: the `captures.title` column (Phase 18) is intentionally NOT a plugin-sql
+    // migration. It is added idempotently by `ensure_captures_table` (rusqlite) below,
+    // which owns the captures schema. A migration here raced that ALTER and failed with
+    // "duplicate column name: title", which rejected the whole sql-plugin DB load and
+    // broke every settings persist. Keep schema changes to `captures` in one place.
 }
 
 // ─── rusqlite captures layer (tray-core owns the captures table) ───────────────

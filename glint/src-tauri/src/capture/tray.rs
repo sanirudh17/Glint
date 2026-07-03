@@ -117,7 +117,7 @@ mod tests {
     fn remove_returns_the_item_or_none() {
         let mut s = TrayStore::default();
         let a = push(&mut s, "a", true);
-        assert_eq!(s.remove(a).unwrap().saved, true);
+        assert!(s.remove(a).unwrap().saved);
         assert!(s.remove(a).is_none());
         assert!(s.remove(999).is_none());
     }
