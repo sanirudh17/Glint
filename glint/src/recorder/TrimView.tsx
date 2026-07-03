@@ -5,7 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { Scissors, Trash2, Undo2, Redo2, Play, Pause } from "lucide-react";
 import { trimTarget, trimProbe, trimExport, type ProbeResult } from "../lib/trim";
-import { initClips, splitClips, setKept, keepRanges, keptCount, keptSegments, outputDuration, type Clip } from "./trimModel";
+import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
 import "./trim.css";
 
@@ -97,7 +97,10 @@ export function TrimView() {
     if (phase === "start") {
       draggingRef.current = true;
       const v = videoRef.current;
-      if (v && !v.paused) { v.pause(); setPlaying(false); }
+      if (v) {
+        if (!v.paused) { v.pause(); setPlaying(false); }
+        v.playbackRate = 1; // a paused seek previews at normal speed
+      }
     }
     setPlayhead(clamped);
     applyVideoSeek(clamped);
@@ -120,6 +123,13 @@ export function TrimView() {
   const doDelete = useCallback(() => {
     if (selectedId == null || keptCount(clips) <= 1) return; // can't delete the last block
     commit({ ...edit, clips: setKept(clips, selectedId, false) });
+  }, [commit, edit, clips, selectedId]);
+  const SPEEDS = [0.5, 1, 1.5, 2];
+  const selSpeed = selected?.speed ?? 1;
+  const canSpeed = selectedId != null && exporting === null;
+  const setSel = useCallback((k: number) => {
+    if (selectedId == null) return;
+    commit({ ...edit, clips: setSpeed(clips, selectedId, k) });
   }, [commit, edit, clips, selectedId]);
   const undo = useCallback(() => {
     setUndoStack((s) => {
@@ -151,6 +161,10 @@ export function TrimView() {
         else { v.pause(); }
       }
     }
+    // Preview per-segment speed: play the kept clip under the playhead at its speed.
+    const cur = clips.find((c) => c.kept && t >= c.start - 0.02 && t < c.end);
+    const rate = cur?.speed ?? 1;
+    if (v.playbackRate !== rate) v.playbackRate = rate;
     setPlayhead(t);
   };
 
@@ -216,6 +230,18 @@ export function TrimView() {
         <button className="trim-iconbtn" onClick={doDelete} disabled={!canDelete} title="Remove the section at the playhead (Del)"><Trash2 size={16} /></button>
         <button className="trim-iconbtn" onClick={undo} disabled={!undoStack.length} title="Undo (Ctrl+Z)"><Undo2 size={16} /></button>
         <button className="trim-iconbtn" onClick={redo} disabled={!redoStack.length} title="Redo (Ctrl+Shift+Z)"><Redo2 size={16} /></button>
+        <span className="trim-spacer" />
+        <div className="trim-speedctl" role="group" aria-label="Segment speed">
+          {SPEEDS.map((k) => (
+            <button
+              key={k}
+              className={`trim-speedbtn${selSpeed === k ? " trim-speedbtn--on" : ""}`}
+              disabled={!canSpeed}
+              onClick={() => setSel(k)}
+              title={`Play the selected section at ${k}×`}
+            >{k}×</button>
+          ))}
+        </div>
       </div>
 
       {probe && (

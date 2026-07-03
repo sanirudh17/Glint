@@ -55,7 +55,9 @@ export function TrimTimeline({
           key={c.id}
           className={`trim-clip${c.kept ? "" : " trim-clip--gap"}${c.id === selectedId ? " trim-clip--sel" : ""}`}
           style={{ left: pct(c.start), width: pct(c.end - c.start) }}
-        />
+        >
+          {c.kept && c.speed !== 1 && <span className="trim-speed-badge">{c.speed}×</span>}
+        </div>
       ))}
       <div className="trim-playhead" style={{ left: pct(playhead) }} />
     </div>
