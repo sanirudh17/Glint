@@ -3,9 +3,9 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { Scissors, Trash2, Undo2, Play, Pause } from "lucide-react";
+import { Scissors, Trash2, Undo2, Redo2, Play, Pause } from "lucide-react";
 import { trimTarget, trimProbe, trimExport, type ProbeResult } from "../lib/trim";
-import { initClips, splitClips, setKept, keepRanges, keptCount, type Clip } from "./trimModel";
+import { initClips, splitClips, setKept, keepRanges, keptCount, keptSegments, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
 import "./trim.css";
 
@@ -22,8 +22,11 @@ export function TrimView() {
   const [src, setSrc] = useState<string | null>(null);
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
-  const [clips, setClips] = useState<Clip[]>([]);
-  const [history, setHistory] = useState<Clip[][]>([]);
+  type EditState = { clips: Clip[]; fadeIn: number; fadeOut: number };
+  const [edit, setEdit] = useState<EditState>({ clips: [], fadeIn: 0, fadeOut: 0 });
+  const [undoStack, setUndoStack] = useState<EditState[]>([]);
+  const [redoStack, setRedoStack] = useState<EditState[]>([]);
+  const { clips, fadeIn, fadeOut } = edit;
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [exporting, setExporting] = useState<number | null>(null); // percent or null
@@ -40,8 +43,9 @@ export function TrimView() {
   const duration = probe?.duration_secs ?? 0;
   const fps = probe?.fps && probe.fps > 0 ? probe.fps : 30;
   const ranges = keepRanges(clips);
-  const outDur = ranges.reduce((a, [s, e]) => a + (e - s), 0);
-  const noop = ranges.length === 1 && ranges[0][0] <= 0.001 && ranges[0][1] >= duration - 0.05;
+  const outDur = outputDuration(clips);
+  const noop = ranges.length === 1 && ranges[0][0] <= 0.001 && ranges[0][1] >= duration - 0.05
+    && clips.filter((c) => c.kept).every((c) => c.speed === 1) && fadeIn === 0 && fadeOut === 0;
   const canSave = clips.length > 0 && keptCount(clips) > 0 && !noop && exporting === null;
 
   // The "selected" block is simply the kept clip under the playhead — position the line
@@ -60,7 +64,7 @@ export function TrimView() {
       try {
         const p = await trimProbe(t.path);
         setProbe(p);
-        setClips(initClips(p.duration_secs));
+        setEdit({ clips: initClips(p.duration_secs), fadeIn: 0, fadeOut: 0 });
       } catch { setErr("Couldn't read the recording."); }
     }).catch(() => setErr("Couldn't open the recording."));
   }, []);
@@ -107,15 +111,32 @@ export function TrimView() {
     applyVideoSeek(clamped);
   }, [duration, applyVideoSeek]);
 
-  const pushHistory = useCallback(() => setHistory((h) => [...h, clips]), [clips]);
-  const doSplit = useCallback(() => { pushHistory(); setClips((c) => splitClips(c, playhead)); }, [pushHistory, playhead]);
+  const commit = useCallback((next: EditState) => {
+    setUndoStack((s) => [...s, edit]);
+    setRedoStack([]);
+    setEdit(next);
+  }, [edit]);
+  const doSplit = useCallback(() => { commit({ ...edit, clips: splitClips(clips, playhead) }); }, [commit, edit, clips, playhead]);
   const doDelete = useCallback(() => {
     if (selectedId == null || keptCount(clips) <= 1) return; // can't delete the last block
-    pushHistory(); setClips((c) => setKept(c, selectedId, false));
-  }, [selectedId, clips, pushHistory]);
-  const doUndo = useCallback(() => {
-    setHistory((h) => { if (!h.length) return h; setClips(h[h.length - 1]); return h.slice(0, -1); });
-  }, []);
+    commit({ ...edit, clips: setKept(clips, selectedId, false) });
+  }, [commit, edit, clips, selectedId]);
+  const undo = useCallback(() => {
+    setUndoStack((s) => {
+      if (!s.length) return s;
+      setRedoStack((r) => [...r, edit]);
+      setEdit(s[s.length - 1]);
+      return s.slice(0, -1);
+    });
+  }, [edit]);
+  const redo = useCallback(() => {
+    setRedoStack((r) => {
+      if (!r.length) return r;
+      setUndoStack((u) => [...u, edit]);
+      setEdit(r[r.length - 1]);
+      return r.slice(0, -1);
+    });
+  }, [edit]);
 
   // Gap-skipping playback: while playing, jump the playhead past removed regions.
   const onTimeUpdate = () => {
@@ -139,9 +160,9 @@ export function TrimView() {
   // history; undoing back to the start empties it). Never closes mid-export.
   const requestClose = useCallback(() => {
     if (exporting !== null) return;
-    if (history.length > 0 && !window.confirm("Discard your trim edits?")) return;
+    if (undoStack.length > 0 && !window.confirm("Discard your trim edits?")) return;
     getCurrentWindow().close().catch(() => {});
-  }, [exporting, history.length]);
+  }, [exporting, undoStack.length]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -149,19 +170,22 @@ export function TrimView() {
       if (e.key === " ") { e.preventDefault(); togglePlay(); }
       else if (e.key.toLowerCase() === "s") { e.preventDefault(); doSplit(); }
       else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); doDelete(); }
-      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") { e.preventDefault(); doUndo(); }
+      else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === "z") {
+        e.preventDefault();
+        if (e.shiftKey) redo(); else undo();
+      }
       else if (e.key === "ArrowLeft") { e.preventDefault(); seek(playhead - 1 / fps); }
       else if (e.key === "ArrowRight") { e.preventDefault(); seek(playhead + 1 / fps); }
       else if (e.key === "Escape") { requestClose(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doSplit, doDelete, doUndo, seek, playhead, fps, exporting, requestClose]);
+  }, [doSplit, doDelete, undo, redo, seek, playhead, fps, exporting, requestClose]);
 
   const save = (mode: "copy" | "overwrite") => {
     if (!target || !probe || !canSave) return;
     setExporting(0);
-    trimExport(target.id, target.path, ranges, probe.has_audio, duration, probe.width, probe.height, mode)
+    trimExport(target.id, target.path, keptSegments(clips), probe.has_audio, duration, probe.width, probe.height, fadeIn, fadeOut, mode)
       .catch(() => setExporting(null)); // a toast already surfaced; window stays open
   };
 
@@ -190,7 +214,8 @@ export function TrimView() {
         <span className="trim-spacer" />
         <button className="trim-iconbtn" onClick={doSplit} title="Split at playhead (S)"><Scissors size={16} /></button>
         <button className="trim-iconbtn" onClick={doDelete} disabled={!canDelete} title="Remove the section at the playhead (Del)"><Trash2 size={16} /></button>
-        <button className="trim-iconbtn" onClick={doUndo} disabled={!history.length} title="Undo (Ctrl+Z)"><Undo2 size={16} /></button>
+        <button className="trim-iconbtn" onClick={undo} disabled={!undoStack.length} title="Undo (Ctrl+Z)"><Undo2 size={16} /></button>
+        <button className="trim-iconbtn" onClick={redo} disabled={!redoStack.length} title="Redo (Ctrl+Shift+Z)"><Redo2 size={16} /></button>
       </div>
 
       {probe && (
