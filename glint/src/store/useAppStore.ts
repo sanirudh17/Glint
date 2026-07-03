@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { persistSetting, readSetting, saveSetting } from "../lib/ipc";
+import { persistSetting, readSetting, saveSetting, setHotkey as setHotkeyIpc, resetHotkeys as resetHotkeysIpc } from "../lib/ipc";
 import { registerExplorerMenu, unregisterExplorerMenu } from "../lib/shell";
 
 export type Theme = "dark" | "light" | "system";
@@ -49,6 +49,8 @@ interface AppState {
   setRecordMicrophone: (on: boolean) => Promise<void>;
   setRecordWebcam: (on: boolean) => Promise<void>;
   setRecordFx: (key: RecordFxKey, value: boolean | CursorSize) => Promise<void>;
+  setHotkey: (action: string, accelerator: string) => Promise<void>;
+  resetHotkeys: () => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -179,6 +181,19 @@ export const useAppStore = create<AppState>((set, get) => ({
   setRecordFx: async (key: RecordFxKey, value: boolean | CursorSize) => {
     const updated = await saveSetting(key, value);
     await persistSetting(key, value);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setHotkey: async (action: string, accelerator: string) => {
+    // Throws (rejected invoke) on invalid/conflict — the panel catches + shows it.
+    const updated = await setHotkeyIpc(action, accelerator);
+    await persistSetting("hotkeys", updated.hotkeys);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  resetHotkeys: async () => {
+    const updated = await resetHotkeysIpc();
+    await persistSetting("hotkeys", updated.hotkeys);
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 

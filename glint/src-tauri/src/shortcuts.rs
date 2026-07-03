@@ -4,18 +4,29 @@ use tauri_plugin_global_shortcut::{GlobalShortcutExt, ShortcutState};
 use crate::settings::commands::SettingsState;
 use crate::window;
 
-/// Register global shortcuts from the current settings.
-///
-/// Each of the five configured hotkeys is registered with an individual
-/// handler that closes over the action name string.  On `Pressed` state
-/// the handler focuses the main window and emits `"shortcut-fired"` with
-/// the action name as payload.
-///
-/// Registration errors (parse failure, OS conflict) are logged with
-/// `log::warn` and skipped — a bad or conflicting hotkey must never crash
-/// startup.
+/// Register global shortcuts from settings at startup. Tolerant: a bad/conflicting
+/// accelerator is logged and skipped, never fatal.
 pub fn register(app: &AppHandle) -> tauri::Result<()> {
-    // Snapshot the hotkey strings from managed state.
+    let _ = apply(app, false);
+    Ok(())
+}
+
+/// Clear every registered global shortcut. Safe to call when none are registered.
+pub fn unregister_all(app: &AppHandle) {
+    let _ = app.global_shortcut().unregister_all();
+}
+
+/// Re-apply shortcuts from the CURRENT settings (used after a rebind). Clears first so it
+/// is idempotent. `strict` = return Err on the first accelerator the OS rejects (so the
+/// caller can roll back); otherwise log + skip (startup / rollback re-arm).
+pub fn reapply(app: &AppHandle, strict: bool) -> Result<(), String> {
+    apply(app, strict)
+}
+
+fn apply(app: &AppHandle, strict: bool) -> Result<(), String> {
+    // Idempotent: drop everything, then re-add from settings.
+    let _ = app.global_shortcut().unregister_all();
+
     let hotkeys = {
         let state = app.state::<SettingsState>();
         let settings = state.0.lock().unwrap();
@@ -30,7 +41,12 @@ pub fn register(app: &AppHandle) -> tauri::Result<()> {
     };
 
     for (accel, action) in hotkeys {
-        let action_name = action; // &'static str — no allocation needed
+        // An empty accelerator means the user cleared/disabled this shortcut.
+        if accel.trim().is_empty() {
+            log::info!("Shortcut '{action}' is cleared — skipping registration");
+            continue;
+        }
+        let action_name = action; // &'static str
         let result = app.global_shortcut().on_shortcut(
             accel.as_str(),
             move |handle, _shortcut, event| {
@@ -92,16 +108,12 @@ pub fn register(app: &AppHandle) -> tauri::Result<()> {
         );
 
         match result {
-            Ok(()) => {
-                log::info!("Registered global shortcut: {} -> {}", accel, action_name);
-            }
+            Ok(()) => log::info!("Registered global shortcut: {accel} -> {action_name}"),
             Err(e) => {
-                log::warn!(
-                    "Failed to register global shortcut '{}' for action '{}': {}",
-                    accel,
-                    action_name,
-                    e
-                );
+                log::warn!("Failed to register '{accel}' for '{action_name}': {e}");
+                if strict {
+                    return Err("That shortcut is in use by another app.".to_string());
+                }
             }
         }
     }

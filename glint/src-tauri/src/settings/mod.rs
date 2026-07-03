@@ -132,6 +132,7 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
 }
 
 pub mod commands;
+pub mod hotkeys;
 pub mod hydrate;
 
 #[cfg(test)]
