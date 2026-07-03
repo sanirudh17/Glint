@@ -4,7 +4,7 @@ import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { Scissors, Trash2, Undo2, Redo2, Play, Pause } from "lucide-react";
-import { trimTarget, trimProbe, trimExport, type ProbeResult } from "../lib/trim";
+import { trimTarget, trimProbe, trimExport, trimWaveform, type ProbeResult } from "../lib/trim";
 import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
 import "./trim.css";
@@ -30,6 +30,7 @@ export function TrimView() {
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [exporting, setExporting] = useState<number | null>(null); // percent or null
+  const [waveform, setWaveform] = useState<number[] | null>(null);
 
   // Scrub plumbing: the pointer drives the playhead instantly (so the red line is
   // always glued to the cursor), while the <video> catches up via *coalesced* seeks —
@@ -65,6 +66,9 @@ export function TrimView() {
         const p = await trimProbe(t.path);
         setProbe(p);
         setEdit({ clips: initClips(p.duration_secs), fadeIn: 0, fadeOut: 0 });
+        if (p.has_audio) {
+          trimWaveform(t.path, 800).then(setWaveform).catch(() => setWaveform(null));
+        }
       } catch { setErr("Couldn't read the recording."); }
     }).catch(() => setErr("Couldn't open the recording."));
   }, []);
@@ -254,7 +258,7 @@ export function TrimView() {
       {probe && (
         <TrimTimeline
           clips={clips} duration={duration} playhead={playhead}
-          selectedId={selectedId} onScrub={scrub}
+          selectedId={selectedId} onScrub={scrub} waveform={waveform}
         />
       )}
 
