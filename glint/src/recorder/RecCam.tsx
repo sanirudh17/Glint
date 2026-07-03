@@ -19,20 +19,55 @@ export function RecCam() {
     // for this transparent/focus-less bubble — it left the window lingering after
     // stop and broke re-enabling (build_cam_bubble early-returns while the label
     // still exists). The recorder tears this window down with destroy() instead.
-    navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-      .then((s) => {
-        // Resolves only AFTER the user grants the WebView2 camera prompt, so this
-        // is the signal recorder_start waits on before starting the countdown.
-        streamRef.current = s;
-        if (videoRef.current) videoRef.current.srcObject = s;
-        emit("rec-cam-ready").catch(() => {});
-      })
-      .catch(() => {
+    let cancelled = false;
+
+    const attach = (s: MediaStream) => {
+      if (cancelled) {
+        s.getTracks().forEach((t) => t.stop());
+        return;
+      }
+      // Resolves only AFTER the user grants the WebView2 camera prompt, so this
+      // is the signal recorder_start waits on before starting the countdown.
+      streamRef.current = s;
+      if (videoRef.current) videoRef.current.srcObject = s;
+      emit("rec-cam-ready").catch(() => {});
+    };
+
+    const openDefault = () =>
+      navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(attach);
+
+    (async () => {
+      // RecCam is its own window (no Zustand hydration) — read the chosen camera
+      // straight from the backend settings.
+      let deviceId = "";
+      try {
+        const s = await invoke<{ webcam_device_id?: string }>("settings_get_all");
+        deviceId = s?.webcam_device_id ?? "";
+      } catch {
+        deviceId = "";
+      }
+      try {
+        if (deviceId) {
+          await navigator.mediaDevices
+            .getUserMedia({ video: { deviceId: { exact: deviceId } }, audio: false })
+            .then(attach)
+            .catch(async () => {
+              // Saved camera unplugged/unavailable — fall back to the default.
+              emit("glint-toast", "Saved camera unavailable — using default").catch(() => {});
+              await openDefault();
+            });
+        } else {
+          await openDefault();
+        }
+      } catch {
         emit("rec-cam-failed").catch(() => {}); // unblock recorder_start's wait
         emit("glint-toast", "Camera unavailable").catch(() => {});
         getCurrentWindow().destroy().catch(() => {});
-      });
+      }
+    })();
+
     return () => {
+      cancelled = true;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
