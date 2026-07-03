@@ -407,13 +407,21 @@ pub fn tray_save(app: AppHandle, state: State<TrayState>, id: u64) -> Result<Str
     }
     let dir = crate::settings::locations::save_dir(&app, crate::settings::locations::SaveKind::Screenshot);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let filename = crate::paths::capture_filename(chrono::Local::now(), "png");
+    let (image_format, jpeg_quality) = {
+        let s = app.state::<crate::settings::commands::SettingsState>();
+        let g = s.0.lock().unwrap();
+        (g.image_format.clone(), g.jpeg_quality.clone())
+    };
+    // Re-encode from the temp file's pixels so the saved file honors the chosen format.
+    let (rgba, w, h) = read_rgba(&it.path)?;
+    let (save_bytes, ext) =
+        crate::settings::image::encode_save(&rgba, w, h, &image_format, &jpeg_quality)?;
+    let filename = crate::paths::capture_filename(chrono::Local::now(), ext);
     let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
-    std::fs::copy(&it.path, &dest).map_err(|e| e.to_string())?;
+    std::fs::write(&dest, &save_bytes).map_err(|e| e.to_string())?;
     let dest_str = dest.to_string_lossy().to_string();
 
     // Curate into the Library: thumbnail + DB row + event (mirrors the old hud_save).
-    let (rgba, w, h) = read_rgba(&dest_str)?;
     let thumb_path = write_thumb(&app, &rgba, w, h, &dest_str);
     let bytes = std::fs::metadata(&dest).map(|m| m.len() as i64).ok();
     let row = crate::db::NewCapture {
