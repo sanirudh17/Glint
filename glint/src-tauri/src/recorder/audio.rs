@@ -31,6 +31,10 @@ pub struct CaptureFormat {
 /// raw f32le byte buffers, and the capture thread handle. While `muted`, the thread
 /// emits equal-length silence (keeps A/V timeline + sync). On `stop`, it exits and
 /// drops its sender (closing the channel, which ends the pipe pump → ffmpeg EOF).
+// Retained: the tuple is this fn's whole reason to exist — it hands back the
+// negotiated format, the PCM receiver, and the thread handle in one move. A named
+// struct would just relabel three fields the two callers destructure immediately.
+#[allow(clippy::type_complexity)]
 pub fn start_capture(
     source: Source,
     muted: Arc<AtomicBool>,

@@ -112,6 +112,10 @@ fn segment_path(out_path: &str, idx: usize) -> String {
 /// Spawn one ffmpeg span writing to `path`, capturing the configured audio sources
 /// into per-source named pipes that ffmpeg mixes + muxes. Async: it awaits each
 /// pipe's connect after ffmpeg opens it.
+// Retained: this is the ffmpeg-span constructor; every arg is a genuine capture
+// parameter (target, fps, path, index, config, controls, resume-flag). Grouping
+// them into a struct would only relocate the same fields.
+#[allow(clippy::too_many_arguments)]
 async fn spawn_segment(
     app: &AppHandle,
     target: RecordTarget,
@@ -519,6 +523,10 @@ async fn wait_for_cam_ready(app: &AppHandle) {
 /// Start recording. `mode` is "fullscreen" or "region"; region passes x/y/w/h
 /// (physical px). Spawns ffmpeg (capture+encode) and stores the child. Off the
 /// main thread so the spawn never blocks the event loop.
+// Retained: arity is intrinsic to a Tauri command — mode + region geometry
+// (x/y/w/h) + the per-source audio/webcam flags are each a distinct IPC field
+// the selector passes; a params struct would only add a (de)serialization hop.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub async fn recorder_start(
     app: tauri::AppHandle,
