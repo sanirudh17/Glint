@@ -81,9 +81,6 @@ pub struct LastCapture {
     pub width: u32,
     pub height: u32,
     pub rgba: Vec<u8>,
-    /// True when this capture was auto-saved to the Library save folder (vs. a temp
-    /// file). Drives the HUD's Save↔Reveal toggle.
-    pub saved: bool,
 }
 
 #[derive(Default)]

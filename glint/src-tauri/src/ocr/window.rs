@@ -23,11 +23,3 @@ pub fn build_ocr_window(app: &AppHandle) -> tauri::Result<()> {
     let _ = win.set_focus();
     Ok(())
 }
-
-/// Close the OCR panel if open.
-#[allow(dead_code)]
-pub fn close_ocr_window(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window(OCR_LABEL) {
-        let _ = w.close();
-    }
-}

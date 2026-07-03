@@ -227,7 +227,6 @@ fn finish_commit(
             width: clamped.w,
             height: clamped.h,
             rgba: cropped.clone(),
-            saved,
         });
 
     // Also push into the accumulating tray. Use the full-resolution capture PNG for
