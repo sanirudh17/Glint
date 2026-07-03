@@ -56,6 +56,12 @@ pub struct Settings {
     pub show_in_taskbar: bool,
     /// Bake the mouse cursor into screenshots.
     pub include_cursor: bool,
+    /// Saved-screenshot encoding: "png" | "jpeg" | "webp".
+    pub image_format: String,
+    /// JPEG quality bucket: "high" | "medium" | "low" (→ 92/80/65). JPEG only.
+    pub jpeg_quality: String,
+    /// Screen-recording frame rate: 30 or 60.
+    pub record_fps: u32,
 }
 
 impl Default for Settings {
@@ -80,6 +86,9 @@ impl Default for Settings {
             sound_effects: false,
             show_in_taskbar: true,
             include_cursor: false,
+            image_format: "png".into(),
+            jpeg_quality: "high".into(),
+            record_fps: 60,
         }
     }
 }
@@ -150,6 +159,27 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         }
         "include_cursor" => {
             s.include_cursor = value.as_bool().ok_or("include_cursor must be boolean")?;
+        }
+        "image_format" => {
+            let v = value.as_str().ok_or("image_format must be string")?;
+            if !matches!(v, "png" | "jpeg" | "webp") {
+                return Err("image_format must be png|jpeg|webp".into());
+            }
+            s.image_format = v.to_string();
+        }
+        "jpeg_quality" => {
+            let v = value.as_str().ok_or("jpeg_quality must be string")?;
+            if !matches!(v, "high" | "medium" | "low") {
+                return Err("jpeg_quality must be high|medium|low".into());
+            }
+            s.jpeg_quality = v.to_string();
+        }
+        "record_fps" => {
+            let v = value.as_u64().ok_or("record_fps must be a number")?;
+            if v != 30 && v != 60 {
+                return Err("record_fps must be 30 or 60".into());
+            }
+            s.record_fps = v as u32;
         }
         other => return Err(format!("unknown settings key: {other}")),
     }
@@ -307,5 +337,32 @@ mod tests {
         let mut s = Settings::default();
         assert!(apply_update(&mut s, "record_cursor_size", json!("huge")).is_err());
         assert!(apply_update(&mut s, "record_cursor_size", json!(3)).is_err());
+    }
+
+    #[test]
+    fn defaults_image_and_fps() {
+        let s = Settings::default();
+        assert_eq!(s.image_format, "png");
+        assert_eq!(s.jpeg_quality, "high");
+        assert_eq!(s.record_fps, 60);
+    }
+
+    #[test]
+    fn apply_update_sets_image_and_fps() {
+        let mut s = Settings::default();
+        apply_update(&mut s, "image_format", json!("jpeg")).unwrap();
+        apply_update(&mut s, "jpeg_quality", json!("low")).unwrap();
+        apply_update(&mut s, "record_fps", json!(30)).unwrap();
+        assert_eq!(s.image_format, "jpeg");
+        assert_eq!(s.jpeg_quality, "low");
+        assert_eq!(s.record_fps, 30);
+    }
+
+    #[test]
+    fn apply_update_rejects_bad_image_and_fps() {
+        let mut s = Settings::default();
+        assert!(apply_update(&mut s, "image_format", json!("tiff")).is_err());
+        assert!(apply_update(&mut s, "jpeg_quality", json!("ultra")).is_err());
+        assert!(apply_update(&mut s, "record_fps", json!(45)).is_err());
     }
 }
