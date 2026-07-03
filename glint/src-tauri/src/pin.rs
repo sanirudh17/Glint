@@ -206,8 +206,7 @@ pub fn pin_data(pins: State<PinState>, window: WebviewWindow) -> Result<PinDataD
 pub fn save_pin(app: &AppHandle, label: &str) -> Result<String, String> {
     let pins = app.state::<PinState>();
     let d = pins.get(label).ok_or("no pin data for this window")?;
-    let pictures = app.path().picture_dir().map_err(|e| e.to_string())?;
-    let dir = crate::paths::glint_save_dir(&pictures);
+    let dir = crate::settings::locations::save_dir(app, crate::settings::locations::SaveKind::Screenshot);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let filename = crate::paths::capture_filename(chrono::Local::now());
     let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());

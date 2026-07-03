@@ -161,8 +161,7 @@ pub fn editor_copy(png_base64: String) -> Result<(), String> {
 #[tauri::command]
 pub fn editor_save(app: AppHandle, db: State<crate::Db>, png_base64: String) -> Result<String, String> {
     let bytes = decode_png_arg(&png_base64)?;
-    let pictures = app.path().picture_dir().map_err(|e| e.to_string())?;
-    let dir = crate::paths::glint_save_dir(&pictures);
+    let dir = crate::settings::locations::save_dir(&app, crate::settings::locations::SaveKind::Screenshot);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let filename = crate::paths::capture_filename(chrono::Local::now());
     let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());

@@ -30,7 +30,7 @@ pub fn save_dir(app: &AppHandle, kind: SaveKind) -> PathBuf {
         SaveKind::Screenshot => app
             .path()
             .picture_dir()
-            .map(|p| p.join("Glint"))
+            .map(|p| crate::paths::glint_save_dir(&p))
             .unwrap_or_else(|_| PathBuf::from("Glint")),
         SaveKind::Recording => app
             .path()

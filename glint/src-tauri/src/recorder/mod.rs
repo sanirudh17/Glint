@@ -564,11 +564,9 @@ pub async fn recorder_start(
 
     // Output path in Videos\Glint. Toast on failure — callers spawn-and-forget the
     // Result, so a bare Err would leave the user with nothing happening.
-    let videos = app.path().video_dir().map_err(|e| {
-        let _ = app.emit("glint-toast", "Couldn't start the recorder");
-        e.to_string()
-    })?;
-    let dir = videos.join("Glint");
+    // Honor the custom capture folder (falls back to Videos\Glint). Reading `settings` is
+    // isolation-safe — the sacred rule only forbids capture/editor/overlay/ocr imports.
+    let dir = crate::settings::locations::save_dir(&app, crate::settings::locations::SaveKind::Recording);
     std::fs::create_dir_all(&dir).map_err(|e| {
         let _ = app.emit("glint-toast", "Couldn't start the recorder");
         e.to_string()
