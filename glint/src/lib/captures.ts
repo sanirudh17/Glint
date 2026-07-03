@@ -13,6 +13,7 @@ export interface CaptureItem {
   height: number | null;
   bytes: number | null;
   created_at: number; // unix seconds
+  title: string | null; // user-assigned custom name
   thumb_data_url: string | null;
 }
 
@@ -22,3 +23,5 @@ export const revealCapture = (id: number): Promise<void> => invoke<void>("captur
 export const copyCapture = (id: number): Promise<void> => invoke<void>("capture_copy", { id });
 export const copyCapturePath = (id: number): Promise<void> => invoke<void>("capture_copy_path", { id });
 export const deleteCapture = (id: number): Promise<void> => invoke<void>("capture_delete", { id });
+export const renameCapture = (id: number, title: string): Promise<void> =>
+  invoke<void>("capture_rename", { id, title });

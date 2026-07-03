@@ -4,6 +4,7 @@ import { listen } from "@tauri-apps/api/event";
 import { EmptyState, Select } from "../components/ui";
 import { listCaptures, type CaptureItem } from "../lib/captures";
 import { CaptureCard } from "./library/CaptureCard";
+import { matchesCapture } from "./library/search";
 import "./library.css";
 
 const KIND_OPTIONS = [
@@ -30,10 +31,8 @@ export default function LibraryView() {
   }, [reload]);
 
   const visible = captures.filter((c) => {
-    const matchesKind   = kind === "all" || c.kind === kind;
-    const matchesSearch =
-      search.trim() === "" || c.path.toLowerCase().includes(search.toLowerCase());
-    return matchesKind && matchesSearch;
+    const matchesKind = kind === "all" || c.kind === kind;
+    return matchesKind && matchesCapture(c, search);
   });
 
   const isEmpty = visible.length === 0;
@@ -46,10 +45,10 @@ export default function LibraryView() {
           <input
             className="library-search"
             type="search"
-            placeholder="Search captures…"
+            placeholder="Search by name or date…"
             value={search}
             onChange={(e) => setSearch(e.currentTarget.value)}
-            aria-label="Search captures by name"
+            aria-label="Search captures by name or date"
           />
           <Select value={kind} options={KIND_OPTIONS} onChange={setKind} />
         </div>

@@ -1,6 +1,7 @@
-import { ExternalLink, FolderOpen, Copy, Pencil, Pin, Trash2, Play, Scissors, ScanText } from "lucide-react";
+import { useRef, useState } from "react";
+import { ExternalLink, FolderOpen, Copy, Pencil, Pin, Trash2, Play, Scissors, ScanText, Tag } from "lucide-react";
 import type { CaptureItem } from "../../lib/captures";
-import { openCapture, revealCapture, copyCapture, copyCapturePath, deleteCapture, dragOut } from "../../lib/captures";
+import { openCapture, revealCapture, copyCapture, copyCapturePath, deleteCapture, renameCapture, dragOut } from "../../lib/captures";
 import { openTrim } from "../../lib/trim";
 import { openEditorCapture } from "../../lib/editor";
 import { pinCreateFromCapture } from "../../lib/pin";
@@ -20,6 +21,11 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
   const pushToast = useAppStore((s) => s.pushToast);
   const isRecording = item.kind === "recording";
 
+  const [renaming, setRenaming] = useState(false);
+  const [draft, setDraft] = useState("");
+  // Set on Escape so the blur that follows cancels instead of committing.
+  const cancelRef = useRef(false);
+
   // Surface command failures (e.g. the file was deleted in Explorer) instead of
   // failing silently — the Rust side returns a human-readable message.
   async function act(fn: () => Promise<void>) {
@@ -29,6 +35,24 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
       pushToast(typeof e === "string" ? e : "Something went wrong");
     }
   }
+
+  const startRename = () => {
+    setDraft(item.title ?? "");
+    cancelRef.current = false;
+    setRenaming(true);
+  };
+  // Enter and click-away both blur → commit; Escape blurs with cancelRef set → skip.
+  const finishRename = async () => {
+    setRenaming(false);
+    if (cancelRef.current) {
+      cancelRef.current = false;
+      return;
+    }
+    const next = draft.trim();
+    if (next !== (item.title ?? "")) {
+      await act(async () => { await renameCapture(item.id, next); onChanged(); });
+    }
+  };
 
   return (
     <div
@@ -51,9 +75,25 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
       </div>
 
       <div className="cap-meta">
-        <span className="cap-dims">
-          {item.width && item.height ? `${item.width}×${item.height}` : "—"}
-        </span>
+        {renaming ? (
+          <input
+            className="cap-rename-input"
+            autoFocus
+            value={draft}
+            placeholder="Name this capture…"
+            onChange={(e) => setDraft(e.currentTarget.value)}
+            onPointerDown={(e) => e.stopPropagation()}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") e.currentTarget.blur();
+              else if (e.key === "Escape") { cancelRef.current = true; e.currentTarget.blur(); }
+            }}
+            onBlur={() => void finishRename()}
+          />
+        ) : (
+          <span className="cap-dims" title={item.title ?? undefined}>
+            {item.title ? item.title : item.width && item.height ? `${item.width}×${item.height}` : "—"}
+          </span>
+        )}
         <span className="cap-when">{when(item.created_at)}</span>
       </div>
 
@@ -68,6 +108,9 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
             </button>
             <button className="cap-btn" aria-label="Trim" title="Trim" onClick={() => act(() => openTrim(item.id, item.path))}>
               <Scissors size={15} strokeWidth={1.75} />
+            </button>
+            <button className="cap-btn" aria-label="Rename" title="Rename" onClick={startRename}>
+              <Tag size={15} strokeWidth={1.75} />
             </button>
             <button
               className="cap-btn"
@@ -96,6 +139,9 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
             </button>
             <button className="cap-btn" aria-label="Edit" title="Edit" onClick={() => act(() => openEditorCapture(item.id))}>
               <Pencil size={15} strokeWidth={1.75} />
+            </button>
+            <button className="cap-btn" aria-label="Rename" title="Rename" onClick={startRename}>
+              <Tag size={15} strokeWidth={1.75} />
             </button>
             <button className="cap-btn" aria-label="Extract text" title="Extract text" onClick={() => act(() => extractCapture(item.id))}>
               <ScanText size={15} strokeWidth={1.75} />

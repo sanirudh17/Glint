@@ -185,8 +185,26 @@
   font-size: var(--fz-xs);
   font-variant-numeric: tabular-nums;
   color: var(--text-dim);
+  /* A custom title can be long — keep it on one line and clip. */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
-.cap-when { font-size: var(--fz-xs); color: var(--text-faint); }
+.cap-when { font-size: var(--fz-xs); color: var(--text-faint); flex-shrink: 0; }
+
+/* Inline rename field — matches the meta row's footprint. */
+.cap-rename-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  font-size: var(--fz-xs);
+  color: var(--text);
+  background: var(--bg-elev2, rgba(128, 128, 128, 0.12));
+  border: 1px solid var(--accent, #5b7cfa);
+  border-radius: var(--r1, 4px);
+  padding: 1px 6px;
+  outline: none;
+}
 
 .cap-actions {
   position: absolute;
