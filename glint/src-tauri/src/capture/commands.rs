@@ -226,6 +226,27 @@ fn finish_commit(
             saved,
         });
 
+    // Also push into the accumulating tray. Use the full-resolution capture PNG for
+    // the card preview (already encoded above) so it stays crisp when the card scales
+    // it — a downscaled thumb blurs under the card's object-fit: cover. Full pixels
+    // are re-read from disk when an action needs them. Evicting the oldest past the
+    // cap deletes its temp file (never a saved Library file).
+    {
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+        let thumb = format!("data:image/png;base64,{b64}");
+        let evicted = {
+            let tray = app.state::<crate::capture::tray::TrayState>();
+            let mut store = tray.0.lock().unwrap();
+            let (_id, evicted) = store.push(path_str.clone(), clamped.w, clamped.h, saved, thumb);
+            evicted
+        };
+        if let Some(ev) = evicted {
+            if !ev.saved {
+                let _ = std::fs::remove_file(&ev.path);
+            }
+        }
+    }
+
     // Open the HUD (or editor) NOW. The latest.png mirror and the Library
     // thumbnail+row are bookkeeping the HUD doesn't depend on, so they run AFTER on
     // a background thread (concurrent with the HUD's webview build) and never delay
@@ -247,9 +268,9 @@ fn finish_commit(
     } else {
         log::info!("[perf] commit work before HUD: {}ms", _perf.elapsed().as_millis());
         let _hud = std::time::Instant::now();
-        let hud_result = crate::hud::open(app);
+        let hud_result = crate::hud::ensure_open(app);
         log::info!(
-            "[perf] hud::open (webview build+show): {}ms (commit total: {}ms)",
+            "[perf] hud::ensure_open (webview build/notify): {}ms (commit total: {}ms)",
             _hud.elapsed().as_millis(),
             _perf.elapsed().as_millis()
         );
@@ -332,91 +353,62 @@ pub(crate) fn write_thumb(app: &AppHandle, rgba: &[u8], w: u32, h: u32, src_path
     Some(dest.to_string_lossy().to_string())
 }
 
-// ─── HUD commands ─────────────────────────────────────────────────────────────
+// ─── Tray (Quick Access Overlay) commands ─────────────────────────────────────
+use crate::capture::tray::{TrayItem, TrayState};
 
-#[derive(Serialize)]
-pub struct HudData {
-    pub path: String,
-    pub width: u32,
-    pub height: u32,
-    pub image_data_url: String,
-    /// True when the capture was auto-saved to the Library (drives Save↔Reveal).
-    pub saved: bool,
+/// Decode a PNG file to RGBA (for clipboard/OCR/pin actions on a tray item).
+fn read_rgba(path: &str) -> Result<(Vec<u8>, u32, u32), String> {
+    let bytes = std::fs::read(path).map_err(|e| e.to_string())?;
+    let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
+    let (w, h) = (img.width(), img.height());
+    Ok((img.into_raw(), w, h))
 }
 
-/// The HUD's thumbnail + metadata for the current capture result.
-#[tauri::command]
-pub fn hud_data(state: State<crate::capture::LastCaptureState>) -> Result<HudData, String> {
-    let guard = state.0.lock().unwrap();
-    let last = guard.as_ref().ok_or("no capture result")?;
-    let img = crate::capture::frozen::CapturedImage {
-        width: last.width,
-        height: last.height,
-        rgba: last.rgba.clone(),
-    };
-    let png = crate::capture::frozen::encode_png(&img).map_err(|e| e.to_string())?;
-    let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
-    Ok(HudData {
-        path: last.path.clone(),
-        width: last.width,
-        height: last.height,
-        image_data_url: format!("data:image/png;base64,{b64}"),
-        saved: last.saved,
-    })
+fn tray_item(state: &TrayState, id: u64) -> Result<TrayItem, String> {
+    state.0.lock().unwrap().get(id).ok_or_else(|| "no such capture".to_string())
 }
 
-/// Reveal the (already auto-saved) capture in Explorer.
 #[tauri::command]
-pub fn hud_reveal(state: State<crate::capture::LastCaptureState>) -> Result<(), String> {
-    let path = {
-        let guard = state.0.lock().unwrap();
-        guard.as_ref().ok_or("no capture result")?.path.clone()
-    };
-    reveal_in_explorer(&path)
+pub fn tray_list(state: State<TrayState>) -> Vec<TrayItem> {
+    state.0.lock().unwrap().list()
 }
 
-/// Re-copy the current capture image to the clipboard. The HUD shows its own
-/// confirmation, so this stays silent (no toast to the possibly-hidden main window).
 #[tauri::command]
-pub fn hud_copy(state: State<crate::capture::LastCaptureState>) -> Result<(), String> {
-    let (rgba, w, h) = {
-        let guard = state.0.lock().unwrap();
-        let last = guard.as_ref().ok_or("no capture result")?;
-        (last.rgba.clone(), last.width, last.height)
-    };
+pub fn tray_copy(state: State<TrayState>, id: u64) -> Result<(), String> {
+    let it = tray_item(&state, id)?;
+    let (rgba, w, h) = read_rgba(&it.path)?;
     clipboard::copy_image(&rgba, w, h)
 }
 
-/// Copy the current capture's temp-file path to the clipboard as text.
 #[tauri::command]
-pub fn hud_copy_path(state: State<crate::capture::LastCaptureState>) -> Result<(), String> {
-    let path = {
-        let guard = state.0.lock().unwrap();
-        guard.as_ref().ok_or("no capture result")?.path.clone()
-    };
-    clipboard::copy_text(&path)
+pub fn tray_copy_path(state: State<TrayState>, id: u64) -> Result<(), String> {
+    let it = tray_item(&state, id)?;
+    clipboard::copy_text(&it.path)
 }
 
-/// Save a copy of the current capture into the default save folder
-/// (`<Pictures>/Glint`) with a timestamped, collision-free filename. Returns the
-/// destination path so the HUD can confirm where it landed.
 #[tauri::command]
-pub fn hud_save(app: AppHandle, state: State<crate::capture::LastCaptureState>) -> Result<String, String> {
-    let (src, rgba, w, h) = {
-        let guard = state.0.lock().unwrap();
-        let last = guard.as_ref().ok_or("no capture result")?;
-        (last.path.clone(), last.rgba.clone(), last.width, last.height)
-    };
+pub fn tray_reveal(state: State<TrayState>, id: u64) -> Result<(), String> {
+    let it = tray_item(&state, id)?;
+    reveal_in_explorer(&it.path)
+}
+
+/// Save a tray item into the Library (no-op returning its path if already saved).
+#[tauri::command]
+pub fn tray_save(app: AppHandle, state: State<TrayState>, id: u64) -> Result<String, String> {
+    let it = tray_item(&state, id)?;
+    if it.saved {
+        return Ok(it.path);
+    }
     let pictures = app.path().picture_dir().map_err(|e| e.to_string())?;
     let dir = crate::paths::glint_save_dir(&pictures);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let filename = crate::paths::capture_filename(chrono::Local::now());
     let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
-    std::fs::copy(&src, &dest).map_err(|e| e.to_string())?;
+    std::fs::copy(&it.path, &dest).map_err(|e| e.to_string())?;
     let dest_str = dest.to_string_lossy().to_string();
 
-    // Manual Save curates this capture into the Library — mirror the auto-save path
-    // (thumbnail + DB row + capture-saved event) so an explicit Save means "keep it".
+    // Curate into the Library: thumbnail + DB row + event (mirrors the old hud_save).
+    let (rgba, w, h) = read_rgba(&dest_str)?;
     let thumb_path = write_thumb(&app, &rgba, w, h, &dest_str);
     let bytes = std::fs::metadata(&dest).map(|m| m.len() as i64).ok();
     let row = crate::db::NewCapture {
@@ -435,27 +427,96 @@ pub fn hud_save(app: AppHandle, state: State<crate::capture::LastCaptureState>) 
         let conn = app.state::<crate::Db>();
         let guard = conn.0.lock().unwrap();
         if let Err(e) = crate::db::insert_capture(&guard, &row) {
-            log::error!("hud_save insert_capture failed: {e}");
+            log::error!("tray_save insert_capture failed: {e}");
         }
     }
     let _ = app.emit("capture-saved", ());
-
-    // Update the stash so the HUD flips Save→Reveal and later actions target the saved file.
-    {
-        let mut guard = state.0.lock().unwrap();
-        if let Some(last) = guard.as_mut() {
-            last.path = dest_str.clone();
-            last.saved = true;
-        }
-    }
-
+    state.0.lock().unwrap().mark_saved(id, dest_str.clone());
     Ok(dest_str)
 }
 
-/// Dismiss (close) the HUD window.
+#[tauri::command(async)]
+pub fn tray_annotate(
+    app: AppHandle,
+    state: State<TrayState>,
+    ed: State<crate::editor::EditorState>,
+    id: u64,
+) -> Result<(), String> {
+    let it = tray_item(&state, id)?;
+    let png = std::fs::read(&it.path).map_err(|e| e.to_string())?;
+    crate::editor::commands::set_source_and_open(&app, &ed, png, it.width, it.height, "hud", None);
+    Ok(())
+}
+
+#[tauri::command(async)]
+pub fn tray_pin(
+    app: AppHandle,
+    state: State<TrayState>,
+    pins: State<crate::pin::PinState>,
+    id: u64,
+) -> Result<(), String> {
+    let it = tray_item(&state, id)?;
+    let png = std::fs::read(&it.path).map_err(|e| e.to_string())?;
+    crate::pin::pin_from_png_bytes(&app, &pins, png, it.width, it.height)
+}
+
+#[tauri::command(async)]
+pub fn tray_extract_text(app: AppHandle, state: State<TrayState>, id: u64) -> Result<(), String> {
+    let it = tray_item(&state, id)?;
+    crate::ocr::commands::ocr_recognize_path(&app, &it.path)
+}
+
+/// Remove one card; delete its temp file (never a saved Library file); close the
+/// window when the tray goes empty.
 #[tauri::command]
-pub fn hud_dismiss(app: AppHandle) -> Result<(), String> {
+pub fn tray_dismiss(app: AppHandle, state: State<TrayState>, id: u64) -> Result<(), String> {
+    let (removed, empty) = {
+        let mut store = state.0.lock().unwrap();
+        let removed = store.remove(id);
+        (removed, store.is_empty())
+    };
+    if let Some(it) = removed {
+        if !it.saved {
+            let _ = std::fs::remove_file(&it.path);
+        }
+    }
+    if empty {
+        crate::hud::teardown(&app);
+    }
+    Ok(())
+}
+
+/// Empty the whole tray, delete every temp file, close the window.
+#[tauri::command]
+pub fn tray_clear(app: AppHandle, state: State<TrayState>) -> Result<(), String> {
+    let removed = state.0.lock().unwrap().clear();
+    for it in removed {
+        if !it.saved {
+            let _ = std::fs::remove_file(&it.path);
+        }
+    }
     crate::hud::teardown(&app);
+    Ok(())
+}
+
+/// Resize + reposition the tray window to a new logical height, bottom-left-anchored
+/// (fixed width). Called by the frontend as the stack grows/shrinks.
+#[tauri::command]
+pub fn tray_resize(app: AppHandle, height: f64) -> Result<(), String> {
+    if let Some(win) = app.get_webview_window(crate::hud::HUD_LABEL) {
+        let _ = win.set_size(tauri::LogicalSize::new(crate::hud::HUD_W, height));
+        if let Ok(Some(monitor)) = win.primary_monitor() {
+            let scale = monitor.scale_factor();
+            let pos = monitor.position();
+            let size = monitor.size();
+            let h_phys = (height * scale) as i32;
+            let margin_x = (crate::hud::MARGIN_X * scale) as i32;
+            let margin_y = (crate::hud::MARGIN_Y * scale) as i32;
+            let x = pos.x + margin_x;
+            let y = pos.y + size.height as i32 - h_phys - margin_y;
+            let _ = win.set_position(tauri::PhysicalPosition { x, y });
+        }
+    }
     Ok(())
 }
 

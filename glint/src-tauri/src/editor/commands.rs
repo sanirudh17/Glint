@@ -51,6 +51,29 @@ pub(crate) fn open_editor_window(app: &AppHandle) {
     let _ = app.emit_to("main", "editor-open", ());
 }
 
+/// Set the editor source to a PNG and open/raise the editor window. Shared by the
+/// from-last, from-Library, and tray-annotate paths.
+pub fn set_source_and_open(
+    app: &AppHandle,
+    ed: &EditorState,
+    png: Vec<u8>,
+    width: u32,
+    height: u32,
+    origin: &str,
+    capture_id: Option<i64>,
+) {
+    *ed.0.lock().unwrap() = Some(EditorSource {
+        png,
+        width,
+        height,
+        origin: origin.into(),
+        capture_id,
+        doc: None,
+        project_path: None,
+    });
+    open_editor_window(app);
+}
+
 /// Open the most recent capture (from the HUD) into the editor.
 #[tauri::command]
 pub fn editor_open_from_last(
@@ -69,17 +92,8 @@ pub fn editor_open_from_last(
         let png = crate::capture::frozen::encode_png(&img).map_err(|e| e.to_string())?;
         (png, l.width, l.height)
     };
-    *ed.0.lock().unwrap() = Some(EditorSource {
-        png,
-        width,
-        height,
-        origin: "hud".into(),
-        capture_id: None,
-        doc: None,
-        project_path: None,
-    });
     crate::hud::teardown(&app);
-    open_editor_window(&app);
+    set_source_and_open(&app, &ed, png, width, height, "hud", None);
     Ok(())
 }
 
@@ -103,16 +117,7 @@ pub fn editor_open_capture(
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
     let decoded = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
     let (width, height) = (decoded.width(), decoded.height());
-    *ed.0.lock().unwrap() = Some(EditorSource {
-        png: bytes,
-        width,
-        height,
-        origin: "library".into(),
-        capture_id: Some(id),
-        doc: None,
-        project_path: None,
-    });
-    open_editor_window(&app);
+    set_source_and_open(&app, &ed, bytes, width, height, "library", Some(id));
     Ok(())
 }
 
@@ -216,9 +221,10 @@ pub fn editor_done(
     let bytes = decode_png_arg(&png_base64)?;
     let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
     let (width, height) = (img.width(), img.height());
+    let rgba = img.into_raw();
 
-    // Temp PNG so the HUD's drag-out / copy-path / reveal have a real file. Not yet in
-    // the Library (saved=false) → the HUD shows Save, not Reveal.
+    // Temp PNG so the tray's drag-out / copy-path / reveal have a real file. Not yet
+    // in the Library (saved=false) → the card shows Save, not Reveal.
     let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
     let ts = std::time::SystemTime::now()
@@ -229,19 +235,38 @@ pub fn editor_done(
     std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
     let path = dest.to_string_lossy().to_string();
 
+    // Push the flattened result into the tray, then mirror to LastCapture so
+    // "…_from_last" hotkeys still target it. Use the full-resolution PNG for the card
+    // preview so it stays crisp under the card's object-fit: cover (a downscaled thumb
+    // blurs).
+    {
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        let thumb = format!("data:image/png;base64,{b64}");
+        let evicted = {
+            let tray = app.state::<crate::capture::tray::TrayState>();
+            let mut store = tray.0.lock().unwrap();
+            store.push(path.clone(), width, height, false, thumb).1
+        };
+        if let Some(ev) = evicted {
+            if !ev.saved {
+                let _ = std::fs::remove_file(&ev.path);
+            }
+        }
+    }
+
     *last.0.lock().unwrap() = Some(crate::capture::LastCapture {
         path,
         width,
         height,
-        rgba: img.into_raw(),
+        rgba,
         saved: false,
     });
 
-    // Building the HUD webview must run OFF the main thread (window-build rule). Only
-    // hide the editor if the HUD actually came up, so a build failure never strands
+    // Building the tray webview must run OFF the main thread (window-build rule). Only
+    // hide the editor if the tray actually came up, so a build failure never strands
     // the user with no window.
     let app2 = app.clone();
-    std::thread::spawn(move || match crate::hud::open(&app2) {
+    std::thread::spawn(move || match crate::hud::ensure_open(&app2) {
         Ok(()) => {
             if let Some(win) = app2.get_webview_window("main") {
                 let _ = win.hide();

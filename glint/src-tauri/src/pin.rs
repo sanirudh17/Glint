@@ -138,9 +138,21 @@ pub fn pin_create_from_last(
         let png = crate::capture::frozen::encode_png(&img).map_err(|e| e.to_string())?;
         (png, l.width, l.height)
     };
+    pin_from_png_bytes(&app, &pins, png, width, height)
+}
+
+/// Insert a pin from PNG bytes and build its window. Shared by from-last,
+/// from-Library, and tray-pin. `(async)` callers keep this off the main thread.
+pub fn pin_from_png_bytes(
+    app: &AppHandle,
+    pins: &PinState,
+    png: Vec<u8>,
+    width: u32,
+    height: u32,
+) -> Result<(), String> {
     let label = pins.next_label();
     pins.insert(label.clone(), PinData { png, width, height });
-    build_pin_window(&app, &label, width, height).map_err(|e| e.to_string())
+    build_pin_window(app, &label, width, height).map_err(|e| e.to_string())
 }
 
 /// Pin a saved Library capture by id.
@@ -166,11 +178,7 @@ pub fn pin_create_from_capture(
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
     let decoded = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
     let (width, height) = (decoded.width(), decoded.height());
-    let img = crate::capture::frozen::CapturedImage { width, height, rgba: decoded.into_raw() };
-    let png = crate::capture::frozen::encode_png(&img).map_err(|e| e.to_string())?;
-    let label = pins.next_label();
-    pins.insert(label.clone(), PinData { png, width, height });
-    build_pin_window(&app, &label, width, height).map_err(|e| e.to_string())
+    pin_from_png_bytes(&app, &pins, bytes, width, height)
 }
 
 /// The image a pin webview loads on mount, keyed by the CALLING window's label.

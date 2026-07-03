@@ -1,36 +1,41 @@
-//! The post-capture HUD window — a single transient, borderless, transparent,
-//! always-on-top bar at the bottom-centre of the capture monitor. Owned by
-//! tray-core exactly like the capture overlay: always torn down on the next
-//! capture and on dismiss so no orphan window is ever left behind.
+//! The post-capture tray window (Quick Access Overlay) — a persistent, borderless,
+//! transparent, always-on-top card stack at the bottom-left of the capture monitor.
+//! It accumulates recent captures (see `capture::tray`) and is built once, then
+//! stays open, refetching on `tray-updated` and self-resizing via `tray_resize`.
+//! It is closed only when the tray empties (dismiss / clear) or on app exit.
 //!
-//! NOTE: unlike the capture overlay, the HUD is built fresh each capture and
-//! CLOSED (not hidden) on teardown. A reuse/pre-warm attempt regressed it: the
-//! HUD intentionally never takes focus, and a focus-less transparent WebView2
-//! window that is hidden and re-shown repeatedly gets its renderer suspended by
-//! Windows' occlusion handling and stops repainting after a few cycles. Building
-//! fresh keeps it reliable. (The overlay can be reused because it takes focus.)
+//! NOTE: it stays CONTINUOUSLY VISIBLE — never hidden/re-shown. The window
+//! intentionally never takes focus, and a focus-less transparent WebView2 window
+//! that is hidden and re-shown repeatedly gets its renderer suspended by Windows'
+//! occlusion handling and stops repainting after a few cycles. Building once and
+//! updating content in place keeps it reliable.
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder};
 
 pub const HUD_LABEL: &str = "hud";
 
 // Logical (CSS px) size of the HUD window. It holds a corner thumbnail card with
 // transparent breathing room around it for the seat shadow.
-const HUD_W: f64 = 244.0;
-const HUD_H: f64 = 172.0;
+pub const HUD_W: f64 = 244.0;
+pub const HUD_H: f64 = 172.0;
 // Gap from the monitor's left edge.
-const MARGIN_X: f64 = 20.0;
+pub const MARGIN_X: f64 = 20.0;
 // Gap from the monitor's bottom edge — generous so the card clears the Windows
 // taskbar (precise work-area insetting is a later polish pass).
-const MARGIN_Y: f64 = 48.0;
+pub const MARGIN_Y: f64 = 48.0;
 
-/// Open a fresh HUD window for the current capture result. Tears down any prior
-/// HUD first (only one result is ever current). Must run off the main thread —
-/// building a webview synchronously on the main thread deadlocks the event loop
-/// (see `capture::begin_spawned`). It's called from `finish_commit`, which already
-/// runs on a background thread.
-pub fn open(app: &AppHandle) -> tauri::Result<()> {
-    teardown(app);
+/// Ensure the persistent tray window exists. If it's already open, notify it to
+/// refetch (a new capture just landed). Otherwise build it (off the main thread —
+/// building a webview synchronously on the main thread deadlocks the event loop;
+/// see `capture::begin_spawned`; callers already run on a background thread). It is
+/// NOT torn down per capture; it persists and stays continuously visible (a
+/// hidden/re-shown focus-less transparent WebView2 gets its renderer suspended —
+/// see the module note), sizing itself to its content via `tray_resize`.
+pub fn ensure_open(app: &AppHandle) -> tauri::Result<()> {
+    if app.get_webview_window(HUD_LABEL).is_some() {
+        let _ = app.emit_to(HUD_LABEL, "tray-updated", ());
+        return Ok(());
+    }
 
     let url = WebviewUrl::App("index.html#/hud".into());
     let win = WebviewWindowBuilder::new(app, HUD_LABEL, url)
@@ -43,7 +48,7 @@ pub fn open(app: &AppHandle) -> tauri::Result<()> {
         .shadow(false)
         // Do NOT steal focus from the app the user is about to drag into.
         .focused(false)
-        .inner_size(HUD_W, HUD_H)
+        .inner_size(HUD_W, HUD_H) // initial; the frontend resizes to its content
         .visible(false) // shown after it positions to the monitor
         .build()?;
 
