@@ -3,10 +3,11 @@
 
 use std::sync::OnceLock;
 
-/// Little-endian PCM16 mono WAV of a two-click shutter (~120 ms). Deterministic.
+/// Little-endian PCM16 mono WAV of a refined two-stage camera snap (~140 ms): a mirror-up
+/// click, a shutter click ~45 ms later, over a short low-frequency body. Deterministic.
 pub fn shutter_wav() -> Vec<u8> {
     let sample_rate: u32 = 44_100;
-    let n = (sample_rate as f32 * 0.12) as usize;
+    let n = (sample_rate as f32 * 0.14) as usize;
     let mut samples: Vec<i16> = Vec::with_capacity(n);
     // xorshift so we need no rng dependency and stay deterministic.
     let mut seed: u64 = 0x2545_F491_4F6C_DD1D;
@@ -18,9 +19,11 @@ pub fn shutter_wav() -> Vec<u8> {
     };
     for i in 0..n {
         let t = i as f32 / sample_rate as f32;
-        // Two decaying clicks (shutter open + close).
-        let env = (-t * 60.0).exp() + 0.7 * (-((t - 0.05).max(0.0)) * 55.0).exp();
-        let s = (noise() * env * 0.5).clamp(-1.0, 1.0);
+        let click1 = (-t * 130.0).exp(); // mirror up
+        let click2 = 0.9 * (-((t - 0.045).max(0.0)) * 150.0).exp(); // shutter
+        let body =
+            (-t * 45.0).exp() * (2.0 * std::f32::consts::PI * 180.0 * t).sin() * 0.25;
+        let s = ((noise() * (click1 + click2) * 0.6 + body) * 0.9).clamp(-1.0, 1.0);
         samples.push((s * i16::MAX as f32) as i16);
     }
     encode_wav_mono(&samples, sample_rate)
