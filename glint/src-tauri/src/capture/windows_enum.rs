@@ -92,10 +92,8 @@ mod tests {
     }
 
     #[test]
-    #[ignore]
+    #[ignore = "requires a real Windows desktop; run manually with --ignored"]
     fn list_windows_does_not_panic() {
-        // Integration test — requires a real Windows desktop.
-        // Run with: cargo test -- --ignored
         let wins = list_windows();
         println!("Enumerated {} windows", wins.len());
         for w in &wins {
