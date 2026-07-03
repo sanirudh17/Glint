@@ -160,6 +160,7 @@ pub mod commands;
 pub mod hotkeys;
 pub mod hydrate;
 pub mod locations;
+pub mod sound;
 
 #[cfg(test)]
 mod tests {

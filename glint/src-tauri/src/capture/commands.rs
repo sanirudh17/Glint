@@ -202,6 +202,11 @@ fn finish_commit(
     };
     let path_str = path.to_string_lossy().to_string();
 
+    // Shutter click (opt-in). Non-fatal, async — never blocks the HUD.
+    if app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().sound_effects {
+        crate::settings::sound::play_shutter();
+    }
+
     // Copy to clipboard (gated by auto_copy) — non-fatal: log a warning but carry on.
     let _cb = std::time::Instant::now();
     let clip = if auto_copy {
