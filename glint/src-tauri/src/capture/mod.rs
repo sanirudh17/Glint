@@ -1,4 +1,5 @@
 pub mod commands;
+pub mod cursor;
 pub mod frozen;
 pub mod geometry;
 pub mod thumb;
@@ -119,7 +120,7 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
 
     let _perf = std::time::Instant::now();
     let capturer = XcapCapturer;
-    let image = match capturer.capture_primary() {
+    let mut image = match capturer.capture_primary() {
         Ok(img) => img,
         Err(e) => {
             log::error!("capture failed: {e}");
@@ -127,6 +128,23 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
             return;
         }
     };
+
+    // Bake the cursor into the frozen frame when the user opted in.
+    let include_cursor = app
+        .state::<crate::settings::commands::SettingsState>()
+        .0
+        .lock()
+        .unwrap()
+        .include_cursor;
+    if include_cursor {
+        let (ox, oy) = app
+            .primary_monitor()
+            .ok()
+            .flatten()
+            .map(|m| (m.position().x, m.position().y))
+            .unwrap_or((0, 0));
+        cursor::composite_cursor(&mut image.rgba, image.width, image.height, ox, oy);
+    }
     log::info!(
         "captured frozen frame: {}x{} [perf] screen grab: {}ms",
         image.width,
