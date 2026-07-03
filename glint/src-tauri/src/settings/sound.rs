@@ -7,8 +7,14 @@ use std::sync::OnceLock;
 /// click, a shutter click ~45 ms later, over a short low-frequency body. Deterministic.
 pub fn shutter_wav() -> Vec<u8> {
     let sample_rate: u32 = 44_100;
+    // Lead-in silence: Windows fades the audio stream in over the first few tens of ms after
+    // the endpoint has been idle, so a transient at t=0 plays attenuated on the first (cold)
+    // capture. Opening with silence lets that ramp finish before the click, so every play —
+    // cold or warm — sounds at full volume. ~70 ms is imperceptible as capture feedback.
+    let lead = (sample_rate as f32 * 0.07) as usize;
     let n = (sample_rate as f32 * 0.14) as usize;
-    let mut samples: Vec<i16> = Vec::with_capacity(n);
+    let mut samples: Vec<i16> = Vec::with_capacity(lead + n);
+    samples.resize(lead, 0);
     // xorshift so we need no rng dependency and stay deterministic.
     let mut seed: u64 = 0x2545_F491_4F6C_DD1D;
     let mut noise = || {
@@ -74,5 +80,19 @@ mod tests {
         assert!(wav.len() > 44);
         assert_eq!(&wav[0..4], b"RIFF");
         assert_eq!(&wav[8..12], b"WAVE");
+    }
+
+    #[test]
+    fn starts_with_lead_in_silence() {
+        // The clip must open with silence so Windows' cold-endpoint fade-in ramps up during
+        // the silence, not over the shutter transient (otherwise the FIRST play per audio-
+        // idle period sounds attenuated). Assert the first 30 ms of PCM are zero.
+        let wav = shutter_wav();
+        let start = 44; // after the WAV header
+        let silent_samples = 44_100 * 30 / 1000; // 30 ms
+        for i in 0..silent_samples {
+            let s = i16::from_le_bytes([wav[start + i * 2], wav[start + i * 2 + 1]]);
+            assert_eq!(s, 0, "sample {i} within the lead-in should be silent");
+        }
     }
 }
