@@ -175,19 +175,23 @@ fn finish_commit(
     );
 
     // Read the live settings (hydrated at startup).
-    let (auto_save, auto_copy, open_in_editor) = {
+    let (auto_save, auto_copy, open_in_editor, image_format, jpeg_quality) = {
         let state = app.state::<crate::settings::commands::SettingsState>();
         let s = state.0.lock().unwrap();
-        (s.auto_save, s.auto_copy, s.open_in_editor)
+        (s.auto_save, s.auto_copy, s.open_in_editor, s.image_format.clone(), s.jpeg_quality.clone())
     };
 
     // Decide where the durable file lives: auto-save → Pictures\Glint; otherwise a temp file.
+    // `png` stays PNG for the thumbnail data-URL + latest.png mirror; only the durable auto-saved
+    // file honors the chosen image format.
     let (path, saved) = if auto_save {
         let dir = crate::settings::locations::save_dir(app, crate::settings::locations::SaveKind::Screenshot);
         std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let filename = crate::paths::capture_filename(chrono::Local::now());
+        let (save_bytes, ext) =
+            crate::settings::image::encode_save(&cropped, clamped.w, clamped.h, &image_format, &jpeg_quality)?;
+        let filename = crate::paths::capture_filename(chrono::Local::now(), ext);
         let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
-        std::fs::write(&dest, &png).map_err(|e| e.to_string())?;
+        std::fs::write(&dest, &save_bytes).map_err(|e| e.to_string())?;
         (dest, true)
     } else {
         let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
@@ -403,7 +407,7 @@ pub fn tray_save(app: AppHandle, state: State<TrayState>, id: u64) -> Result<Str
     }
     let dir = crate::settings::locations::save_dir(&app, crate::settings::locations::SaveKind::Screenshot);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let filename = crate::paths::capture_filename(chrono::Local::now());
+    let filename = crate::paths::capture_filename(chrono::Local::now(), "png");
     let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
     std::fs::copy(&it.path, &dest).map_err(|e| e.to_string())?;
     let dest_str = dest.to_string_lossy().to_string();

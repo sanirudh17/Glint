@@ -163,7 +163,7 @@ pub fn editor_save(app: AppHandle, db: State<crate::Db>, png_base64: String) -> 
     let bytes = decode_png_arg(&png_base64)?;
     let dir = crate::settings::locations::save_dir(&app, crate::settings::locations::SaveKind::Screenshot);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let filename = crate::paths::capture_filename(chrono::Local::now());
+    let filename = crate::paths::capture_filename(chrono::Local::now(), "png");
     let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
     std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
     let dest_str = dest.to_string_lossy().to_string();

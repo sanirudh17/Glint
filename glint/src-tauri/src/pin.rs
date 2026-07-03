@@ -208,7 +208,7 @@ pub fn save_pin(app: &AppHandle, label: &str) -> Result<String, String> {
     let d = pins.get(label).ok_or("no pin data for this window")?;
     let dir = crate::settings::locations::save_dir(app, crate::settings::locations::SaveKind::Screenshot);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let filename = crate::paths::capture_filename(chrono::Local::now());
+    let filename = crate::paths::capture_filename(chrono::Local::now(), "png");
     let dest = crate::paths::dedupe(&dir, &filename, |p| p.exists());
     std::fs::write(&dest, &d.png).map_err(|e| e.to_string())?;
     let dest_str = dest.to_string_lossy().to_string();

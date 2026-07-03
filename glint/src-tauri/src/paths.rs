@@ -8,9 +8,10 @@ use chrono::{DateTime, Local};
 use std::path::{Path, PathBuf};
 
 /// Filesystem-safe capture filename, e.g. `Glint 2026-06-21 at 14.30.05.png`.
-/// Colons are avoided (illegal on Windows) — time uses dots.
-pub fn capture_filename(dt: DateTime<Local>) -> String {
-    dt.format("Glint %Y-%m-%d at %H.%M.%S.png").to_string()
+/// Colons are avoided (illegal on Windows) — time uses dots. `ext` is the extension
+/// without a dot (e.g. "png", "jpg", "webp").
+pub fn capture_filename(dt: DateTime<Local>, ext: &str) -> String {
+    dt.format(&format!("Glint %Y-%m-%d at %H.%M.%S.{ext}")).to_string()
 }
 
 /// The default save directory: `<pictures>/Glint`.
@@ -60,9 +61,10 @@ mod tests {
     use std::collections::HashSet;
 
     #[test]
-    fn capture_filename_formats_without_colons() {
+    fn capture_filename_uses_ext() {
         let dt = Local.with_ymd_and_hms(2026, 6, 21, 14, 30, 5).unwrap();
-        assert_eq!(capture_filename(dt), "Glint 2026-06-21 at 14.30.05.png");
+        assert_eq!(capture_filename(dt, "png"), "Glint 2026-06-21 at 14.30.05.png");
+        assert_eq!(capture_filename(dt, "jpg"), "Glint 2026-06-21 at 14.30.05.jpg");
     }
 
     #[test]
