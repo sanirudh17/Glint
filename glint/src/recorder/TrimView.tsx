@@ -131,6 +131,13 @@ export function TrimView() {
     if (selectedId == null) return;
     commit({ ...edit, clips: setSpeed(clips, selectedId, k) });
   }, [commit, edit, clips, selectedId]);
+  const FADE_MAX = 2;
+  const bump = (which: "fadeIn" | "fadeOut", delta: number) => {
+    const cur = which === "fadeIn" ? fadeIn : fadeOut;
+    const next = Math.max(0, Math.min(FADE_MAX, Math.round((cur + delta) * 4) / 4)); // 0.25 steps
+    if (next === cur) return;
+    commit({ ...edit, [which]: next });
+  };
   const undo = useCallback(() => {
     setUndoStack((s) => {
       if (!s.length) return s;
@@ -253,6 +260,10 @@ export function TrimView() {
 
       <div className="trim-actions">
         <span className="trim-out">Output: {fmt(outDur)} / {fmt(duration)}</span>
+        <div className="trim-fades">
+          <FadeStepper label="Fade in" value={fadeIn} disabled={exporting !== null} onDelta={(d) => bump("fadeIn", d)} />
+          <FadeStepper label="Fade out" value={fadeOut} disabled={exporting !== null} onDelta={(d) => bump("fadeOut", d)} />
+        </div>
         <span className="trim-spacer" />
         {exporting !== null ? (
           <div className="trim-progress"><div className="trim-progress-fill" style={{ width: `${exporting}%` }} /><span>Exporting… {exporting}%</span></div>
@@ -264,6 +275,19 @@ export function TrimView() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+function FadeStepper({ label, value, disabled, onDelta }: {
+  label: string; value: number; disabled: boolean; onDelta: (d: number) => void;
+}) {
+  return (
+    <div className="trim-fade" title={`${label} (0–2s)`}>
+      <span className="trim-fade-label">{label}</span>
+      <button className="trim-fade-btn" disabled={disabled || value <= 0} onClick={() => onDelta(-0.25)}>−</button>
+      <span className="trim-fade-val">{value === 0 ? "off" : `${value}s`}</span>
+      <button className="trim-fade-btn" disabled={disabled || value >= 2} onClick={() => onDelta(0.25)}>+</button>
     </div>
   );
 }
