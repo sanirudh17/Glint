@@ -27,7 +27,7 @@ use editor::commands::{
 };
 use settings::commands::{
     hotkeys_resume, hotkeys_suspend, settings_get_all, settings_reset_hotkeys, settings_set,
-    settings_set_hotkey, SettingsState,
+    settings_set_hotkey, settings_set_save_dir, storage_paths, SettingsState,
 };
 use pin::{
     pin_close, pin_context_menu, pin_copy, pin_create_from_capture, pin_create_from_last, pin_data,
@@ -226,6 +226,8 @@ pub fn run() {
             settings_reset_hotkeys,
             hotkeys_suspend,
             hotkeys_resume,
+            storage_paths,
+            settings_set_save_dir,
             capture_overlay_data,
             capture_commit,
             capture_cancel,

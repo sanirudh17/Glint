@@ -1,7 +1,9 @@
 use std::sync::Mutex;
-use tauri::{AppHandle, State};
+use serde::Serialize;
+use tauri::{AppHandle, Manager, State};
 
 use super::hotkeys::{self, HotkeyError, HOTKEY_ACTIONS};
+use super::locations::{save_dir, SaveKind};
 use super::{apply_update, Hotkeys, Settings};
 
 pub struct SettingsState(pub Mutex<Settings>);
@@ -114,4 +116,51 @@ pub fn hotkeys_suspend(app: AppHandle) {
 #[tauri::command]
 pub fn hotkeys_resume(app: AppHandle) {
     let _ = crate::shortcuts::reapply(&app, false);
+}
+
+// ─── Storage / custom capture folder ──────────────────────────────────────────
+
+/// Real, effective on-disk locations for the Storage panel (replaces the old hardcoded text).
+#[derive(Serialize)]
+pub struct StoragePaths {
+    pub screenshots: String,
+    pub recordings: String,
+    pub database: String,
+    pub logs: String,
+}
+
+#[tauri::command]
+pub fn storage_paths(app: AppHandle) -> StoragePaths {
+    let s = |p: std::path::PathBuf| p.to_string_lossy().to_string();
+    let database = app
+        .path()
+        .app_config_dir()
+        .map(|d| d.join("glint.db"))
+        .map(s)
+        .unwrap_or_default();
+    let logs = app.path().app_log_dir().map(s).unwrap_or_default();
+    StoragePaths {
+        screenshots: s(save_dir(&app, SaveKind::Screenshot)),
+        recordings: s(save_dir(&app, SaveKind::Recording)),
+        database,
+        logs,
+    }
+}
+
+/// Set (or clear, when empty) the custom capture folder. A non-empty path must be creatable
+/// and writable. Persists in SettingsState; the frontend also mirrors it to the DB.
+#[tauri::command]
+pub fn settings_set_save_dir(app: AppHandle, path: String) -> Result<Settings, String> {
+    let trimmed = path.trim().to_string();
+    if !trimmed.is_empty() {
+        let p = std::path::Path::new(&trimmed);
+        std::fs::create_dir_all(p).map_err(|_| "That folder can't be created.".to_string())?;
+        let probe = p.join(".glint-write-test");
+        std::fs::write(&probe, b"").map_err(|_| "That folder isn't writable.".to_string())?;
+        let _ = std::fs::remove_file(&probe);
+    }
+    let state = app.state::<SettingsState>();
+    let mut s = state.0.lock().unwrap();
+    s.save_dir = trimmed;
+    Ok(s.clone())
 }
