@@ -62,6 +62,8 @@ pub struct Settings {
     pub jpeg_quality: String,
     /// Screen-recording frame rate: 30 or 60.
     pub record_fps: u32,
+    /// Preferred webcam deviceId (browser MediaDevices id). Empty = system default camera.
+    pub webcam_device_id: String,
 }
 
 impl Default for Settings {
@@ -89,6 +91,7 @@ impl Default for Settings {
             image_format: "png".into(),
             jpeg_quality: "high".into(),
             record_fps: 60,
+            webcam_device_id: String::new(),
         }
     }
 }
@@ -180,6 +183,10 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
                 return Err("record_fps must be 30 or 60".into());
             }
             s.record_fps = v as u32;
+        }
+        "webcam_device_id" => {
+            s.webcam_device_id =
+                value.as_str().ok_or("webcam_device_id must be string")?.to_string();
         }
         other => return Err(format!("unknown settings key: {other}")),
     }
@@ -365,5 +372,23 @@ mod tests {
         assert!(apply_update(&mut s, "image_format", json!("tiff")).is_err());
         assert!(apply_update(&mut s, "jpeg_quality", json!("ultra")).is_err());
         assert!(apply_update(&mut s, "record_fps", json!(45)).is_err());
+    }
+
+    #[test]
+    fn default_webcam_device_is_empty() {
+        assert_eq!(Settings::default().webcam_device_id, "");
+    }
+
+    #[test]
+    fn apply_update_sets_webcam_device_id() {
+        let mut s = Settings::default();
+        apply_update(&mut s, "webcam_device_id", json!("abc123")).unwrap();
+        assert_eq!(s.webcam_device_id, "abc123");
+    }
+
+    #[test]
+    fn apply_update_rejects_non_string_webcam_device_id() {
+        let mut s = Settings::default();
+        assert!(apply_update(&mut s, "webcam_device_id", json!(5)).is_err());
     }
 }
