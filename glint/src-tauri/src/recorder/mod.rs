@@ -478,9 +478,10 @@ pub async fn recorder_audio_check(app: tauri::AppHandle) -> Result<u64, String> 
     let pump = tokio::spawn(async move {
         let deadline = tokio::time::Instant::now() + std::time::Duration::from_millis(1500);
         while tokio::time::Instant::now() < deadline {
-            match tokio::time::timeout(std::time::Duration::from_millis(300), rx.recv()).await {
-                Ok(Some(buf)) => { let _ = server.write_all(&buf).await; }
-                _ => {}
+            if let Ok(Some(buf)) =
+                tokio::time::timeout(std::time::Duration::from_millis(300), rx.recv()).await
+            {
+                let _ = server.write_all(&buf).await;
             }
         }
     });
@@ -761,9 +762,8 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
     let (target, fps, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
     let path = segment_path(&out_path, idx);
     let seg = spawn_segment(&app, target, fps, &path, idx, cfg, &controls, true).await
-        .map_err(|e| {
+        .inspect_err(|_e| {
             let _ = app.emit("glint-toast", "Couldn't resume recording");
-            e
         })?;
 
     // Store it back. If the recording was stopped/canceled meanwhile (single-user,
