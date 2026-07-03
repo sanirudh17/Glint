@@ -186,7 +186,7 @@ async fn spawn_segment(
     // `want_audio` is the recording's intent (system or mic enabled), not how many
     // sources actually connected this segment — so a segment whose sources all failed
     // still gets a silent aac track and stays concat-copy compatible with audio segments.
-    let args = ffmpeg::build_ffmpeg_args(&target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse);
+    let args = ffmpeg::build_ffmpeg_args(ffmpeg::CaptureEngine::Gdigrab, &target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse);
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("sidecar resolve: {e}"))?;
     let (rx_ev, child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
 
