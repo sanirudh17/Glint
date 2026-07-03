@@ -64,6 +64,28 @@ export async function saveSetting<K extends keyof Settings>(
   return invoke<Settings>("settings_set", { key, value });
 }
 
+// ─── Rebindable hotkeys ──────────────────────────────────────────────────────
+
+/** Rebind one global shortcut. Rejects with a user-facing message on invalid/conflict. */
+export async function setHotkey(action: string, accelerator: string): Promise<Settings> {
+  return invoke<Settings>("settings_set_hotkey", { action, accelerator });
+}
+
+/** Restore all global shortcuts to their defaults. */
+export async function resetHotkeys(): Promise<Settings> {
+  return invoke<Settings>("settings_reset_hotkeys");
+}
+
+/** Disarm global shortcuts while the panel is capturing a key press. */
+export async function suspendHotkeys(): Promise<void> {
+  await invoke("hotkeys_suspend");
+}
+
+/** Re-arm global shortcuts after capture ends / on cancel. */
+export async function resumeHotkeys(): Promise<void> {
+  await invoke("hotkeys_resume");
+}
+
 // ─── SQLite-backed settings persistence ──────────────────────────────────────
 //
 // These two functions are the source-of-truth for settings that survive restart.
