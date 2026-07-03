@@ -1,5 +1,6 @@
 import { Info } from "lucide-react";
-import { Section, Field, Select } from "../../components/ui";
+import { Section, Field, Select, Switch } from "../../components/ui";
+import { useAppStore } from "../../store/useAppStore";
 
 const FORMAT_OPTIONS = [
   { value: "png",  label: "PNG" },
@@ -14,6 +15,8 @@ const QUALITY_OPTIONS = [
 ];
 
 export function Capture() {
+  const settings = useAppStore((s) => s.settings);
+  const setIncludeCursor = useAppStore((s) => s.setIncludeCursor);
   return (
     <Section
       title="Capture"
@@ -47,11 +50,11 @@ export function Capture() {
           </span>
         </div>
       </Field>
-      <Field label="Include cursor" hint="Capture the mouse pointer in screenshots.">
-        <span className="settings-phase-note" style={{ marginTop: 0 }}>
-          <Info size={12} strokeWidth={1.75} />
-          Available in a later phase
-        </span>
+      <Field label="Include cursor" hint="Bake the mouse pointer into screenshots.">
+        <Switch
+          checked={settings?.include_cursor ?? false}
+          onChange={(v) => void setIncludeCursor(v)}
+        />
       </Field>
     </Section>
   );
