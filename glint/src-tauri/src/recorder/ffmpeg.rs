@@ -179,6 +179,15 @@ mod tests {
     }
 
     #[test]
+    fn framerate_arg_follows_fps() {
+        let a30 = build_ffmpeg_args(&RecordTarget::Fullscreen, 30, "out.mp4", &[], false, true);
+        let a60 = build_ffmpeg_args(&RecordTarget::Fullscreen, 60, "out.mp4", &[], false, true);
+        let fr = |a: &[String]| a.windows(2).find(|w| w[0] == "-framerate").map(|w| w[1].clone());
+        assert_eq!(fr(&a30).as_deref(), Some("30"));
+        assert_eq!(fr(&a60).as_deref(), Some("60"));
+    }
+
+    #[test]
     fn region_args_carry_offset_and_size() {
         let t = RecordTarget::Region { x: 100, y: 50, w: 640, h: 480 };
         let a = build_ffmpeg_args(&t, 30, "C:/r.mp4", &[], false, true);
