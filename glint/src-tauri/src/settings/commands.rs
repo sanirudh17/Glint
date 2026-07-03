@@ -164,3 +164,15 @@ pub fn settings_set_save_dir(app: AppHandle, path: String) -> Result<Settings, S
     s.save_dir = trimmed;
     Ok(s.clone())
 }
+
+// ─── Launch at login ──────────────────────────────────────────────────────────
+
+#[tauri::command]
+pub fn autostart_get() -> bool {
+    crate::autostart::is_enabled()
+}
+
+#[tauri::command]
+pub fn autostart_set(on: bool) -> Result<(), String> {
+    crate::autostart::set_enabled(on)
+}

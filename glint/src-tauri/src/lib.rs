@@ -1,3 +1,4 @@
+mod autostart;
 mod capture;
 mod clipboard;
 mod db;
@@ -27,7 +28,8 @@ use editor::commands::{
 };
 use settings::commands::{
     hotkeys_resume, hotkeys_suspend, settings_get_all, settings_reset_hotkeys, settings_set,
-    settings_set_hotkey, settings_set_save_dir, storage_paths, SettingsState,
+    autostart_get, autostart_set, settings_set_hotkey, settings_set_save_dir, storage_paths,
+    SettingsState,
 };
 use pin::{
     pin_close, pin_context_menu, pin_copy, pin_create_from_capture, pin_create_from_last, pin_data,
@@ -228,6 +230,8 @@ pub fn run() {
             hotkeys_resume,
             storage_paths,
             settings_set_save_dir,
+            autostart_get,
+            autostart_set,
             capture_overlay_data,
             capture_commit,
             capture_cancel,
