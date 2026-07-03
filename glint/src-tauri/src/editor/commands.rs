@@ -235,16 +235,13 @@ pub fn editor_done(
     std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
     let path = dest.to_string_lossy().to_string();
 
-    // Push the flattened result into the tray (build the card thumb first), then
-    // mirror to LastCapture so "…_from_last" hotkeys still target it.
+    // Push the flattened result into the tray, then mirror to LastCapture so
+    // "…_from_last" hotkeys still target it. Use the full-resolution PNG for the card
+    // preview so it stays crisp under the card's object-fit: cover (a downscaled thumb
+    // blurs).
     {
-        let thumb = crate::capture::thumb::make_thumb(&rgba, width, height, 240)
-            .ok()
-            .map(|png| {
-                let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
-                format!("data:image/png;base64,{b64}")
-            })
-            .unwrap_or_default();
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
+        let thumb = format!("data:image/png;base64,{b64}");
         let evicted = {
             let tray = app.state::<crate::capture::tray::TrayState>();
             let mut store = tray.0.lock().unwrap();

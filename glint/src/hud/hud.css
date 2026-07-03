@@ -249,7 +249,7 @@
 .tray-stack {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: 18px;
 }
 .tray-clear {
   align-self: flex-start;

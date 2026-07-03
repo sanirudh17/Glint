@@ -226,17 +226,14 @@ fn finish_commit(
             saved,
         });
 
-    // Also push into the accumulating tray. Build the small card thumbnail once
-    // (full pixels are re-read from disk when an action needs them). Evicting the
-    // oldest past the cap deletes its temp file (never a saved Library file).
+    // Also push into the accumulating tray. Use the full-resolution capture PNG for
+    // the card preview (already encoded above) so it stays crisp when the card scales
+    // it — a downscaled thumb blurs under the card's object-fit: cover. Full pixels
+    // are re-read from disk when an action needs them. Evicting the oldest past the
+    // cap deletes its temp file (never a saved Library file).
     {
-        let thumb = crate::capture::thumb::make_thumb(&cropped, clamped.w, clamped.h, 240)
-            .ok()
-            .map(|png| {
-                let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
-                format!("data:image/png;base64,{b64}")
-            })
-            .unwrap_or_default();
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+        let thumb = format!("data:image/png;base64,{b64}");
         let evicted = {
             let tray = app.state::<crate::capture::tray::TrayState>();
             let mut store = tray.0.lock().unwrap();
