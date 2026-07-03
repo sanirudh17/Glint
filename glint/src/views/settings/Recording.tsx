@@ -1,3 +1,4 @@
+import { useEffect, useState } from "react";
 import { Section, Field, Select, Switch } from "../../components/ui";
 import { useAppStore } from "../../store/useAppStore";
 
@@ -23,6 +24,31 @@ export function Recording() {
   const setRecordWebcam = useAppStore((s) => s.setRecordWebcam);
   const setRecordFx = useAppStore((s) => s.setRecordFx);
   const setRecordFps = useAppStore((s) => s.setRecordFps);
+  const setWebcamDevice = useAppStore((s) => s.setWebcamDevice);
+
+  // Enumerate cameras. Browsers only reveal device LABELS after camera permission
+  // has been granted once; until then we show generic names + a hint.
+  const [cams, setCams] = useState<{ deviceId: string; label: string }[]>([]);
+  useEffect(() => {
+    let alive = true;
+    navigator.mediaDevices
+      ?.enumerateDevices()
+      .then((list) => {
+        if (!alive) return;
+        const vids = list.filter((d) => d.kind === "videoinput");
+        setCams(vids.map((d, i) => ({ deviceId: d.deviceId, label: d.label || `Camera ${i + 1}` })));
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  const cameraOptions = [
+    { value: "", label: "System default" },
+    ...cams.filter((c) => c.deviceId).map((c) => ({ value: c.deviceId, label: c.label })),
+  ];
+  const camsHaveLabels = cams.some((c) => c.label && !c.label.startsWith("Camera "));
 
   const cursorStyle = settings?.record_cursor_hide
     ? "hidden"
@@ -66,6 +92,20 @@ export function Recording() {
         <Switch
           checked={settings?.record_microphone ?? false}
           onChange={(v) => setRecordMicrophone(v)}
+        />
+      </Field>
+      <Field
+        label="Camera"
+        hint={
+          camsHaveLabels
+            ? "Which webcam the bubble uses."
+            : "Which webcam the bubble uses. Names appear after the camera is used once."
+        }
+      >
+        <Select
+          value={settings?.webcam_device_id ?? ""}
+          options={cameraOptions}
+          onChange={(v) => void setWebcamDevice(v)}
         />
       </Field>
       <Field label="Record webcam" hint="Include your webcam in recordings by default.">

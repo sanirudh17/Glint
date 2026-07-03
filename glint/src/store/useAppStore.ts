@@ -35,6 +35,7 @@ export interface Settings {
   image_format: "png" | "jpeg" | "webp";
   jpeg_quality: "high" | "medium" | "low";
   record_fps: 30 | 60;
+  webcam_device_id: string;
 }
 
 export interface Toast {
@@ -65,6 +66,7 @@ interface AppState {
   setImageFormat: (v: "png" | "jpeg" | "webp") => Promise<void>;
   setJpegQuality: (v: "high" | "medium" | "low") => Promise<void>;
   setRecordFps: (v: 30 | 60) => Promise<void>;
+  setWebcamDevice: (id: string) => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -251,6 +253,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setRecordFps: async (v: 30 | 60) => {
     const updated = await saveSetting("record_fps", v);
     await persistSetting("record_fps", v);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setWebcamDevice: async (id: string) => {
+    const updated = await saveSetting("webcam_device_id", id);
+    await persistSetting("webcam_device_id", id);
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 
