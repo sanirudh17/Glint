@@ -190,7 +190,25 @@ capture/library/editor path.
   ignores + 99 vitest); the bare `#[ignore]` given a reason. ROADMAP reconciled (this entry +
   phases 12–16). **This completes the Phase 0 "P8 — polish" capstone, delivered across P15
   (hotkeys), P16 (settings completeness), and P17 (DPI/refresh hardening, cleanup, tests, docs).**
-  *Built — awaiting at-screen sign-off.*
+  *Shipped — at-screen accepted.*
+
+- **Phase 18 — Settings truthfulness + Library rename/search** (make the settings UI tell the
+  truth, then make the Library searchable). Three previously-dishonest controls made real:
+  **image capture format** now actually encodes PNG / JPEG / WebP with a JPEG **quality** tier
+  (a shared `settings::image::encode_save` used by capture auto-save, tray-save and pin; JPEG drops
+  the alpha channel RGBA→RGB, WebP is lossless in the `image` crate so the quality slider is
+  JPEG-only; editor **Export stays PNG** by deliberate choice); **recording frame rate** is a live
+  30/60 selector read by `recorder_start`, and the **codec** — which is genuinely fixed — is shown
+  as honest static text (`H.264 · MP4`) instead of a dead dropdown. No control is labelled
+  "available in a later phase" any more. Library gains **rename** (inline title edit on each card,
+  persisted to a `captures.title` column) and a **working search** matching title, human-readable
+  date, or kind — replacing the previously inert search box (captures had been indistinguishable
+  "Glint <timestamp>" rows). A **settings-persistence regression** surfaced and was fixed: the new
+  `title` column had been added by *both* a plugin-sql migration and `ensure_captures_table`'s
+  rusqlite ALTER, so `duplicate column name: title` rejected the whole sql-plugin DB load and made
+  every `persistSetting` throw — silently freezing accent/theme/format/fps in the UI. The migration
+  was dropped; the column is owned solely by the idempotent rusqlite path, which self-heals existing
+  DBs. *Shipped — at-screen accepted.*
 
 ## Planned
 
