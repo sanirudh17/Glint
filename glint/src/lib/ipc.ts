@@ -86,6 +86,41 @@ export async function resumeHotkeys(): Promise<void> {
   await invoke("hotkeys_resume");
 }
 
+// ─── Storage / custom capture folder ─────────────────────────────────────────
+
+export type StoragePaths = {
+  screenshots: string;
+  recordings: string;
+  database: string;
+  logs: string;
+};
+
+export async function storagePaths(): Promise<StoragePaths> {
+  return invoke<StoragePaths>("storage_paths");
+}
+
+/** Set (or clear, with "") the custom capture folder. Rejects on unwritable path. */
+export async function setSaveDir(path: string): Promise<Settings> {
+  return invoke<Settings>("settings_set_save_dir", { path });
+}
+
+/** Reveal an arbitrary path in Windows Explorer. */
+export async function revealPath(path: string): Promise<void> {
+  await invoke("reveal_path", { path });
+}
+
+// ─── General toggles ─────────────────────────────────────────────────────────
+
+export async function autostartGet(): Promise<boolean> {
+  return invoke<boolean>("autostart_get");
+}
+export async function autostartSet(on: boolean): Promise<void> {
+  await invoke("autostart_set", { on });
+}
+export async function windowSetTaskbar(on: boolean): Promise<void> {
+  await invoke("window_set_taskbar", { on });
+}
+
 // ─── SQLite-backed settings persistence ──────────────────────────────────────
 //
 // These two functions are the source-of-truth for settings that survive restart.

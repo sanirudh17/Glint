@@ -17,9 +17,9 @@ mod window;
 
 use capture::commands::{
     capture_cancel, capture_commit, capture_copy, capture_copy_path, capture_delete, capture_open,
-    capture_overlay_data, capture_reveal, captures_list, drag_blank_icon, tray_annotate, tray_clear,
-    tray_copy, tray_copy_path, tray_dismiss, tray_extract_text, tray_list, tray_pin, tray_resize,
-    tray_reveal, tray_save,
+    capture_overlay_data, capture_reveal, captures_list, drag_blank_icon, reveal_path,
+    tray_annotate, tray_clear, tray_copy, tray_copy_path, tray_dismiss, tray_extract_text,
+    tray_list, tray_pin, tray_resize, tray_reveal, tray_save,
 };
 use editor::commands::{
     consume_pending_external_open, editor_copy, editor_done, editor_flatten_temp,
@@ -259,6 +259,7 @@ pub fn run() {
             captures_list,
             capture_open,
             capture_reveal,
+            reveal_path,
             capture_copy,
             capture_copy_path,
             capture_delete,

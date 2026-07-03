@@ -627,6 +627,12 @@ pub fn capture_reveal(db: State<crate::Db>, id: i64) -> Result<(), String> {
     reveal_in_explorer(&path)
 }
 
+/// Reveal an arbitrary file/folder path in Explorer (used by the Storage folder controls).
+#[tauri::command]
+pub fn reveal_path(path: String) -> Result<(), String> {
+    reveal_in_explorer(&path)
+}
+
 /// Copy a Library item's absolute file path to the clipboard as text. Unlike
 /// `capture_copy` (which decodes an image) this works for recordings too, and is
 /// the handy way to reference a video file elsewhere (e.g. paste it to a tool).

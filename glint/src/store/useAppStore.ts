@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
-import { persistSetting, readSetting, saveSetting, setHotkey as setHotkeyIpc, resetHotkeys as resetHotkeysIpc } from "../lib/ipc";
+import { persistSetting, readSetting, saveSetting, setHotkey as setHotkeyIpc, resetHotkeys as resetHotkeysIpc, setSaveDir as setSaveDirIpc, windowSetTaskbar } from "../lib/ipc";
 import { registerExplorerMenu, unregisterExplorerMenu } from "../lib/shell";
 
 export type Theme = "dark" | "light" | "system";
@@ -28,6 +28,10 @@ export interface Settings {
   record_cursor_spotlight: boolean;
   record_cursor_hide: boolean;
   record_cursor_size: "off" | "large" | "xl";
+  save_dir: string;
+  sound_effects: boolean;
+  show_in_taskbar: boolean;
+  include_cursor: boolean;
 }
 
 export interface Toast {
@@ -51,6 +55,10 @@ interface AppState {
   setRecordFx: (key: RecordFxKey, value: boolean | CursorSize) => Promise<void>;
   setHotkey: (action: string, accelerator: string) => Promise<void>;
   resetHotkeys: () => Promise<void>;
+  setSaveDir: (path: string) => Promise<void>;
+  setSoundEffects: (on: boolean) => Promise<void>;
+  setShowInTaskbar: (on: boolean) => Promise<void>;
+  setIncludeCursor: (on: boolean) => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -194,6 +202,31 @@ export const useAppStore = create<AppState>((set, get) => ({
   resetHotkeys: async () => {
     const updated = await resetHotkeysIpc();
     await persistSetting("hotkeys", updated.hotkeys);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setSaveDir: async (path: string) => {
+    const updated = await setSaveDirIpc(path); // throws on unwritable
+    await persistSetting("save_dir", path);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setSoundEffects: async (on: boolean) => {
+    const updated = await saveSetting("sound_effects", on);
+    await persistSetting("sound_effects", on);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setShowInTaskbar: async (on: boolean) => {
+    const updated = await saveSetting("show_in_taskbar", on);
+    await persistSetting("show_in_taskbar", on);
+    await windowSetTaskbar(on);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setIncludeCursor: async (on: boolean) => {
+    const updated = await saveSetting("include_cursor", on);
+    await persistSetting("include_cursor", on);
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 
