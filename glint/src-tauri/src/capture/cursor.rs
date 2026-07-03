@@ -52,7 +52,7 @@ pub fn composite_cursor(rgba: &mut [u8], width: u32, height: u32, origin_x: i32,
                 biHeight: -CURSOR_SIZE, // negative = top-down
                 biPlanes: 1,
                 biBitCount: 32,
-                biCompression: BI_RGB.0 as u32,
+                biCompression: BI_RGB.0,
                 ..Default::default()
             },
             ..Default::default()

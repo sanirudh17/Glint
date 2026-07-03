@@ -51,15 +51,11 @@ unsafe extern "system" fn mouse_proc(code: i32, wparam: WPARAM, lparam: LPARAM) 
         let info = &*(lparam.0 as *const MSLLHOOKSTRUCT);
         let (x, y) = (info.pt.x, info.pt.y);
         match wparam.0 as u32 {
-            WM_LBUTTONDOWN => {
-                if CFG.with(|c| c.get().click_viz) {
-                    emit("fx-click", serde_json::json!({ "x": x, "y": y, "button": "left" }));
-                }
+            WM_LBUTTONDOWN if CFG.with(|c| c.get().click_viz) => {
+                emit("fx-click", serde_json::json!({ "x": x, "y": y, "button": "left" }));
             }
-            WM_RBUTTONDOWN => {
-                if CFG.with(|c| c.get().click_viz) {
-                    emit("fx-click", serde_json::json!({ "x": x, "y": y, "button": "right" }));
-                }
+            WM_RBUTTONDOWN if CFG.with(|c| c.get().click_viz) => {
+                emit("fx-click", serde_json::json!({ "x": x, "y": y, "button": "right" }));
             }
             WM_MOUSEMOVE => {
                 let cfg = CFG.with(|c| c.get());

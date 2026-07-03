@@ -127,6 +127,71 @@ capture/library/editor path.
   pill. Effects are baked in at capture time. **Recorder isolation honored** (`recorder/fx/`
   imports nothing from capture/editor/overlay/ocr). *Shipped — at-screen accepted.*
 
+- **Phase 12 — Editor essentials + "Done" hand-off** (CleanShot-parity editing depth). A primary
+  **Done** button flattens the current composition to a native-res PNG, hands it to a new
+  `editor_done` command that makes it the current capture, hides the editor, and opens the
+  existing bottom-left post-capture HUD — the inverse of `editor_open_from_last`, reusing the
+  HUD wholesale (zero new HUD UI). Batched with it, a set of small high-value editing wins, all
+  as **additive, safe-default** model changes so existing `.glint` docs and tests keep working:
+  optional **fill + fill-opacity** for rect/ellipse, **dashed** strokes for line/arrow/rect/
+  ellipse, an arrow **start-head** toggle, **Shift-to-45°** angle snap while drawing
+  (`snapAngle`, unit-tested), **Duplicate** (Ctrl+D, `duplicateAnnotation` with a +12,+12
+  offset), **arrow-key nudge** (1px / 10px with Shift), and **z-order** bring-forward / send-back.
+  `model.ts` helpers stay pure and unit-tested. *Shipped — at-screen accepted.*
+
+- **Phase 13 — Window-frame chrome** (the CleanShot "designed mockup" look, OS-neutral). Wraps a
+  framed screenshot in a fake application window with **no** macOS traffic-lights or Windows
+  caption buttons (a picture-frame convention, not an OS claim). Two styles — **Window** (clean
+  title bar, optional centered title) and **Browser** (title bar as an address pill: lock glyph +
+  editable cosmetic URL, back/forward chevrons, reload) — each in **light** and **dark**. Built as
+  an extension of the existing frame system: pure layout math in `composition.ts`, Konva rendering
+  in `EditorStage.tsx`, controls in `FramePanel.tsx`, persisted in the `.glint` doc via
+  `SerializedDoc.frame`. The URL is cosmetic text only — nothing is fetched or validated
+  (local-first). *Shipped — at-screen accepted.*
+
+- **Phase 14 — Quick Access Overlay** (an accumulating bottom-left tray of recent captures). Each
+  capture pushes a card onto a persistent `TrayStore` (capacity-capped, oldest evicted with its
+  temp file cleaned up) rendered as a bottom-anchored stack. Per-card actions (Copy · Save↔Reveal ·
+  Copy path · drag-out · Annotate · Delete) mirror the HUD; a **Clear all** appears once two or
+  more cards stack, and Esc clears the tray. Cards use the **full-resolution** capture PNG so they
+  stay crisp under the card's `object-fit: cover` (a downscaled thumb blurred). The tray model
+  (`tray.rs`) is pure and unit-tested (push / eviction / remove / mark-saved / clear).
+  *Shipped — at-screen accepted.*
+
+- **Phase 15 — Rebindable hotkeys** (change any global shortcut from Settings). A capture-driven
+  panel: press **Change**, then the key combo — `keyEventToAccelerator` maps the browser event to
+  a Tauri accelerator, validated (`validate_accelerator` requires a Ctrl/Alt/Win modifier, rejects
+  Shift-only) and de-duplicated against the other bindings. On save, `settings_set_hotkey`
+  re-registers live via `shortcuts::reapply(strict)` and **rolls back** if the OS rejects the combo;
+  shortcuts are suspended while capturing so the combo isn't swallowed. In-app instructions, plus
+  Reset-to-defaults and Clear. Validation is unit-tested on both the Rust (`hotkeys.rs`) and TS
+  (`hotkeys.ts`) sides. *Shipped — at-screen accepted.*
+
+- **Phase 16 — Settings gaps** (settings completeness). Five previously-stubbed settings made real:
+  a **custom save folder** (folder picker + write-probe; all save sites — capture, tray-save,
+  editor, pin, recorder — routed through one `settings::locations` resolver, recorder-isolation
+  safe), **launch-at-login** (HKCU `…\Run` key, self-healing), an opt-in **synthesized shutter
+  sound** on capture (in-memory PCM WAV, no shipped asset; later refined to a camera-snap with a
+  lead-in silence so the first cold-endpoint play isn't attenuated), **show-in-taskbar** toggle
+  (`set_skip_taskbar`, applied at startup), and opt-in **cursor compositing** (Win32 GDI draws the
+  pointer into the frozen frame at capture time). Settings persist to SQLite and hydrate at startup.
+  *Shipped — at-screen accepted.*
+
+- **Phase 17 — P8 capstone: hardening, cleanup & docs** (close out the planned roadmap; no new
+  features). `cargo build` **and** `cargo clippy` made warning-clean: safe clippy autofixes applied,
+  a negated float compare rewritten via `partial_cmp` (explicit NaN handling), and the retained
+  `too_many_arguments` / `type_complexity` warnings each given a per-site rationale rather than left
+  silent. Dead code removed (`LastCapture.saved`, orphaned `close_ocr_window`); the documented,
+  test-covered `window_at` reservation kept. A **DPI audit** confirmed every scale-sensitive path
+  (overlay / HUD / pin / cursor-composite / capture) reads `monitor.position()` as origin and scales
+  by `scale_factor()` — correct, with one documented single-monitor limitation (all paths target the
+  **primary** monitor). Live-refresh wiring verified (hotkeys, taskbar, sound, save-dir, Library
+  add/delete all apply without restart). Test suite honestly green (121 Rust incl. 2 documented
+  ignores + 99 vitest); the bare `#[ignore]` given a reason. ROADMAP reconciled (this entry +
+  phases 12–16). **This completes the Phase 0 "P8 — polish" capstone, delivered across P15
+  (hotkeys), P16 (settings completeness), and P17 (DPI/refresh hardening, cleanup, tests, docs).**
+  *Built — awaiting at-screen sign-off.*
+
 ## Planned
 
 - **Deferred CleanShot video-polish** (in-scope, not yet scheduled — parked for a later phase):

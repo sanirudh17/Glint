@@ -227,7 +227,6 @@ fn finish_commit(
             width: clamped.w,
             height: clamped.h,
             rgba: cropped.clone(),
-            saved,
         });
 
     // Also push into the accumulating tray. Use the full-resolution capture PNG for
@@ -297,9 +296,8 @@ fn finish_commit(
     // Deferred Library/agent bookkeeping — runs off the HUD's critical path.
     {
         let app = app.clone();
-        let png = png; // saved-file bytes (already on disk); reused for mirror + size
-        let cropped = cropped; // full-res pixels for the thumbnail
-        let path_str = path_str;
+        // png (saved-file bytes, already on disk), cropped (full-res pixels for the
+        // thumbnail), and path_str are moved into the closure below.
         std::thread::spawn(move || {
             // Mirror to %USERPROFILE%\.glint\latest.png for coding agents — non-fatal.
             if let Ok(home) = app.path().home_dir() {

@@ -258,7 +258,6 @@ pub fn editor_done(
         width,
         height,
         rgba,
-        saved: false,
     });
 
     // Building the tray webview must run OFF the main thread (window-build rule). Only

@@ -59,7 +59,8 @@ pub fn validate_keep(keep: &[(f64, f64)], duration: f64) -> Result<Vec<(f64, f64
     v.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
     let mut prev_end = 0.0;
     for (i, (s, e)) in v.iter().enumerate() {
-        if !(e > s) {
+        // Reject empty/inverted regions AND NaN (partial_cmp is None for NaN → rejected).
+        if !matches!(e.partial_cmp(s), Some(std::cmp::Ordering::Greater)) {
             return Err("empty keep-region".into());
         }
         if *s < -1e-6 || *e > duration + 1e-3 {
@@ -187,6 +188,10 @@ pub fn first_video_arg(args: &[String]) -> Option<String> {
 /// risk mid-encode: on overwrite it is moved aside and only removed once the new file
 /// is safely in place; any failure rolls back and leaves the original intact. Async —
 /// it spawns the sidecar and continuously drains the (capacity-1) progress channel.
+// Retained: arity is intrinsic to a Tauri command — each arg is a distinct IPC
+// field the frontend passes; a params struct would only move the same fields
+// behind one more (de)serialization hop.
+#[allow(clippy::too_many_arguments)]
 #[tauri::command(async)]
 pub async fn recorder_trim_export(
     app: tauri::AppHandle,

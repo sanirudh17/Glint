@@ -83,7 +83,7 @@ fn notify_assoc_changed() {
     // SHCNF_IDLIST (0x0000) + SHCNF_FLUSH (0x1000): flush synchronously so the shell has
     // processed the association change before we return — improves first-time visibility
     // of a brand-new verb without waiting for an explorer restart / reboot.
-    const SHCNF_IDLIST_FLUSH: u32 = 0x0000 | 0x1000;
+    const SHCNF_IDLIST_FLUSH: u32 = 0x1000;
     #[link(name = "shell32")]
     extern "system" {
         fn SHChangeNotify(
