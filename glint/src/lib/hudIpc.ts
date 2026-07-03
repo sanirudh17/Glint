@@ -1,75 +1,42 @@
 /**
- * hudIpc.ts — typed wrappers for the post-capture HUD commands.
- *
- * The HUD webview (#/hud) reads the current capture result from Rust and fires
- * action commands. All invoke() arg keys are camelCase; the backend returns
- * snake_case (image_data_url), mapped here so callers see camelCase.
- *
+ * hudIpc.ts — typed wrappers for the Quick Access Overlay (the accumulating
+ * post-capture tray, route #/hud). All invoke() arg keys are camelCase.
  * Local-first: no network. Drag-out reuses the proven tauri-plugin-drag path.
  */
 import { invoke } from "@tauri-apps/api/core";
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
 
-export type HudData = {
-  /** Absolute path to the capture's file (drag-out / copy-path / save src). */
+export type TrayItem = {
+  id: number;
+  /** Absolute path to the capture file (drag / copy-path / reveal source). */
   path: string;
   width: number;
   height: number;
-  /** Mapped from backend `image_data_url`. Full data:image/png;base64,… URL. */
-  imageDataUrl: string;
-  /** True when the capture was auto-saved — the HUD shows Reveal instead of Save. */
+  /** True when saved to the Library — the card shows Reveal instead of Save. */
   saved: boolean;
+  /** Small base64 PNG data URL for the card thumbnail. */
+  thumb: string;
 };
 
-interface RawHudData {
-  path: string;
-  width: number;
-  height: number;
-  image_data_url: string;
-  saved: boolean;
-}
+export const trayList = (): Promise<TrayItem[]> => invoke<TrayItem[]>("tray_list");
+export const trayCopy = (id: number): Promise<void> => invoke<void>("tray_copy", { id });
+export const trayCopyPath = (id: number): Promise<void> => invoke<void>("tray_copy_path", { id });
+export const traySave = (id: number): Promise<string> => invoke<string>("tray_save", { id });
+export const trayReveal = (id: number): Promise<void> => invoke<void>("tray_reveal", { id });
+export const trayPin = (id: number): Promise<void> => invoke<void>("tray_pin", { id });
+export const trayAnnotate = (id: number): Promise<void> => invoke<void>("tray_annotate", { id });
+export const trayExtractText = (id: number): Promise<void> => invoke<void>("tray_extract_text", { id });
+export const trayDismiss = (id: number): Promise<void> => invoke<void>("tray_dismiss", { id });
+export const trayClear = (): Promise<void> => invoke<void>("tray_clear");
+export const trayResize = (height: number): Promise<void> => invoke<void>("tray_resize", { height });
 
-/** Fetch the current capture result (thumbnail + path + dimensions). */
-export async function getHudData(): Promise<HudData> {
-  const d = await invoke<RawHudData>("hud_data");
-  return {
-    path: d.path,
-    width: d.width,
-    height: d.height,
-    imageDataUrl: d.image_data_url,
-    saved: d.saved,
-  };
-}
-
-/** Re-copy the capture image to the clipboard. */
-export const hudCopy = (): Promise<void> => invoke<void>("hud_copy");
-
-/** Copy the capture's file path to the clipboard as text. */
-export const hudCopyPath = (): Promise<void> => invoke<void>("hud_copy_path");
-
-/** Save a copy into the default folder (<Pictures>/Glint) with a timestamped name.
- *  Resolves to the destination path. */
-export const hudSave = (): Promise<string> => invoke<string>("hud_save");
-
-/** Reveal the (already auto-saved) capture in Explorer. */
-export const hudReveal = (): Promise<void> => invoke<void>("hud_reveal");
-
-/** Close the HUD window. */
-export const hudDismiss = (): Promise<void> => invoke<void>("hud_dismiss");
-
-// A 1×1 transparent PNG used as the drag preview so dragging shows only the OS
-// drag cursor — not a big ghost of the image. Pre-fetched at module load because
-// the OS drag must start synchronously inside the pointerdown gesture (awaiting
-// inside dragOut would drop the gesture and the drag wouldn't begin).
+// A 1×1 transparent PNG drag icon so dragging shows only the OS cursor — not a big
+// image ghost. Pre-fetched at module load because the OS drag must start
+// synchronously inside the pointerdown gesture.
 let blankDragIcon: string | null = null;
 void invoke<string>("drag_blank_icon").then((p) => { blankDragIcon = p; }).catch(() => {});
 
-/**
- * Drag the real file out into any app (proven plugin path). Uses a blank 1×1
- * drag icon so there's no oversized image-preview ghost — just the cursor. Falls
- * back to the file itself as the icon if the blank one isn't ready yet (rare).
- */
+/** Drag the real file out into any app (blank drag icon → just the cursor). */
 export function dragOut(path: string): void {
-  // mode: "copy" — drops a copy, leaving Glint's temp file in place.
   void startDrag({ item: [path], icon: blankDragIcon ?? path, mode: "copy" });
 }

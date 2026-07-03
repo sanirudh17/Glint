@@ -237,3 +237,29 @@
     transition: none;
   }
 }
+
+/* ── Quick Access Overlay: vertical stack of cards ─────────────────────────── */
+.tray-root {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 6px;
+}
+.tray-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.tray-clear {
+  align-self: flex-start;
+  padding: 3px 10px;
+  border: none;
+  border-radius: 999px;
+  background: rgba(20, 20, 22, 0.82);
+  color: #f2f2f2;
+  font-size: 11px;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+}
+.tray-clear:hover { background: rgba(30, 30, 34, 0.92); }
