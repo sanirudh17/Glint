@@ -25,7 +25,10 @@ use editor::commands::{
     editor_open_capture, editor_open_from_last, editor_save, editor_source, project_open,
     project_save, projects_resolve,
 };
-use settings::commands::{settings_get_all, settings_set, SettingsState};
+use settings::commands::{
+    hotkeys_resume, hotkeys_suspend, settings_get_all, settings_reset_hotkeys, settings_set,
+    settings_set_hotkey, SettingsState,
+};
 use pin::{
     pin_close, pin_context_menu, pin_copy, pin_create_from_capture, pin_create_from_last, pin_data,
     pin_save,
@@ -219,6 +222,10 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             settings_get_all,
             settings_set,
+            settings_set_hotkey,
+            settings_reset_hotkeys,
+            hotkeys_suspend,
+            hotkeys_resume,
             capture_overlay_data,
             capture_commit,
             capture_cancel,
