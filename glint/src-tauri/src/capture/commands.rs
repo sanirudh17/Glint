@@ -544,6 +544,8 @@ pub struct CaptureListItem {
     pub height: Option<i64>,
     pub bytes: Option<i64>,
     pub created_at: i64,
+    /// User-assigned custom name, when set (drives Library display + search).
+    pub title: Option<String>,
     /// base64 data URL of the thumbnail PNG, when one exists on disk.
     pub thumb_data_url: Option<String>,
 }
@@ -570,6 +572,7 @@ pub fn captures_list(db: State<crate::Db>) -> Result<Vec<CaptureListItem>, Strin
                 height: r.height,
                 bytes: r.bytes,
                 created_at: r.created_at,
+                title: r.title,
                 thumb_data_url,
             }
         })
@@ -692,6 +695,15 @@ pub fn capture_delete(db: State<crate::Db>, id: i64) -> Result<(), String> {
         let _ = std::fs::remove_file(&p);
     }
     Ok(())
+}
+
+/// Rename a Library capture. An empty/whitespace title clears it (back to NULL).
+#[tauri::command]
+pub fn capture_rename(db: State<crate::Db>, id: i64, title: String) -> Result<(), String> {
+    let trimmed = title.trim();
+    let value = if trimmed.is_empty() { None } else { Some(trimmed) };
+    let conn = db.0.lock().unwrap();
+    crate::db::set_title(&conn, id, value).map_err(|e| e.to_string())
 }
 
 /// Cancel an in-progress capture: discard session, tear down overlays, and restore
