@@ -210,6 +210,27 @@ capture/library/editor path.
   was dropped; the column is owned solely by the idempotent rusqlite path, which self-heals existing
   DBs. *Shipped — at-screen accepted.*
 
+- **Phase 19 — Recorder fidelity pack** (three reliability-first recorder quality wins, each with a
+  fallback so recording never breaks). **Webcam device picker**: a persisted `webcam_device_id`
+  setting + a **Camera** dropdown in Settings (enumerates `videoinput` devices; browsers only reveal
+  labels after first camera use, handled with a hint); the `#/rec-cam` bubble requests the chosen
+  `deviceId` with `exact` and falls back to the default camera + toast if it's unplugged. **True 60
+  fps via `ddagrab`**: the video capture engine swaps GDI `gdigrab` for GPU `ddagrab` (Desktop
+  Duplication, `hwdownload,format=bgra` before the unchanged libx264/yuv420p encode). A cached
+  pre-flight probe (ddagrab → 1 frame → null muxer) picks the engine **once per session**; any
+  failure/timeout falls back to the proven gdigrab path, and the engine is locked for the whole
+  recording so pause/resume segments stay concat-copy compatible. Measured result on the dev machine:
+  the stream is a true 60-fps-timebase H.264 (`r_frame_rate 60/1`), averaging ~46 fps delivered — a
+  large jump over gdigrab's ~30, the remaining gap being libx264-`ultrafast` CPU-encode throughput at
+  full resolution, not capture (a hardware encoder would close it — see follow-up). **Fuller mic**:
+  the mic voice-EQ was re-voiced — kept the 80 Hz high-pass, added a +1.5 dB warmth shelf ~200 Hz and
+  a gentle +3 dB air shelf @ 7.5 kHz, dropped the −2 dB @ 400 Hz cut that thinned the voice; mono-safe
+  downmix retained (exclusive-mode native capture was deliberately rejected — it locks the device and
+  fails during the comms-app-in-use case common when screen recording, for marginal real-world gain).
+  The `build_ffmpeg_args` builder is engine-aware and fully unit-tested (both engines, region crop,
+  draw_mouse, hwdownload, audio-input index shift); gdigrab args are byte-identical to before.
+  *Shipped — at-screen accepted.*
+
 ## Planned
 
 - **Deferred CleanShot video-polish** (in-scope, not yet scheduled — parked for a later phase):
@@ -217,8 +238,10 @@ capture/library/editor path.
     the bubble is baked into the video at capture time; a post-hoc layer would need a separate
     webcam track, a bigger architectural change).
 
-- **Deferred recorder follow-ups** (accepted gaps): mic RAW capture for a fuller voice timbre,
-  true 60 fps via `ddagrab`, and a webcam device picker.
+- **Deferred recorder follow-up**: **hardware video encoder** (NVENC / QuickSync / AMF) to offload
+  H.264 encoding from the CPU and lock a true 60 fps at full resolution (Phase 19's ddagrab capture
+  already feeds 60 fps; libx264-`ultrafast` is the remaining throughput bottleneck). Vendor-specific
+  with a libx264 fallback; kept out of Phase 19 for universality + concat-copy simplicity.
 
 - **Deferred trim follow-ups**: clip reordering, redo, audio waveform, fades/speed changes.
 

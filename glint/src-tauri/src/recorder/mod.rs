@@ -19,6 +19,43 @@ use tauri::{AppHandle, Emitter, Manager};
 use tauri_plugin_shell::process::{CommandChild, CommandEvent};
 use tauri_plugin_shell::ShellExt;
 
+/// Cached, session-wide result of the ddagrab support probe.
+static DDAGRAB_OK: std::sync::OnceLock<bool> = std::sync::OnceLock::new();
+
+/// Decide the capture engine once per session. Runs ffmpeg with a ddagrab source
+/// producing a single frame to the null muxer; if that exits 0, DDA works on this
+/// machine/session (GPU present, not an RDP/headless surface) → use ddagrab (true 60
+/// fps). Any failure/timeout → gdigrab (the proven GDI path). Cached in a process-wide
+/// OnceLock so only the first recording of a session pays the ~1–2 s probe. (A race is
+/// impossible — recorder_start guards a single recording — so a plain get/set is safe.)
+async fn probe_capture_engine(app: &AppHandle) -> ffmpeg::CaptureEngine {
+    if let Some(&ok) = DDAGRAB_OK.get() {
+        return if ok { ffmpeg::CaptureEngine::Ddagrab } else { ffmpeg::CaptureEngine::Gdigrab };
+    }
+    let ok = match app.shell().sidecar("ffmpeg") {
+        Ok(cmd) => {
+            let args = [
+                "-nostats", "-loglevel", "error",
+                "-init_hw_device", "d3d11va",
+                "-filter_complex", "ddagrab=output_idx=0:framerate=30,hwdownload,format=bgra",
+                "-frames:v", "1", "-f", "null", "-",
+            ];
+            match tokio::time::timeout(
+                std::time::Duration::from_secs(4),
+                cmd.args(args).output(),
+            )
+            .await
+            {
+                Ok(Ok(out)) => out.status.success(),
+                _ => false, // spawn error, non-zero exit, or timeout → fall back
+            }
+        }
+        Err(_) => false,
+    };
+    let _ = DDAGRAB_OK.set(ok);
+    log::info!("capture engine probe: ddagrab_ok={ok}");
+    if ok { ffmpeg::CaptureEngine::Ddagrab } else { ffmpeg::CaptureEngine::Gdigrab }
+}
 
 /// One running ffmpeg span — a contiguous stretch of recording between pauses.
 /// Holds the child (to send `q` on stdin) and its event receiver (to wait for a
@@ -65,6 +102,10 @@ impl AudioControls {
 pub struct ActiveRecording {
     pub target: RecordTarget,
     pub fps: u32,
+    /// Capture engine chosen once at start (ddagrab or gdigrab). Reused for every
+    /// pause/resume segment so all segments share identical output stream params
+    /// (the concat `-c copy` invariant).
+    pub engine: ffmpeg::CaptureEngine,
     pub out_path: String,
     pub width: u32,
     pub height: u32,
@@ -115,6 +156,7 @@ fn segment_path(out_path: &str, idx: usize) -> String {
 #[allow(clippy::too_many_arguments)]
 async fn spawn_segment(
     app: &AppHandle,
+    engine: ffmpeg::CaptureEngine,
     target: RecordTarget,
     fps: u32,
     path: &str,
@@ -186,7 +228,7 @@ async fn spawn_segment(
     // `want_audio` is the recording's intent (system or mic enabled), not how many
     // sources actually connected this segment — so a segment whose sources all failed
     // still gets a silent aac track and stays concat-copy compatible with audio segments.
-    let args = ffmpeg::build_ffmpeg_args(&target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse);
+    let args = ffmpeg::build_ffmpeg_args(engine, &target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse);
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("sidecar resolve: {e}"))?;
     let (rx_ev, child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
 
@@ -555,6 +597,11 @@ pub async fn recorder_start(
         .unwrap()
         .record_fps;
 
+    // Choose the capture engine once (cached per session): ddagrab (GPU, true 60 fps)
+    // when the machine supports it, else the proven gdigrab path. Fixed for the whole
+    // recording so pause/resume segments stay concat-copy compatible.
+    let engine = probe_capture_engine(&app).await;
+
     // The selector (if this start came from it) closes itself, so the frontend's
     // IPC survives (closing destroys its JS context) and a full-screen capture
     // never includes the transparent overlay. No-op for a tray/hotkey fullscreen.
@@ -645,6 +692,7 @@ pub async fn recorder_start(
     *app.state::<RecorderState>().0.lock().unwrap() = Some(ActiveRecording {
         target,
         fps,
+        engine,
         out_path: out_str.clone(),
         width,
         height,
@@ -665,7 +713,7 @@ pub async fn recorder_start(
     // Bring segment 0 up behind the visible bar. Pause/resume appends further
     // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual
     // delivered rate still depends on the machine/screen resolution).
-    let seg0 = match spawn_segment(&app, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
+    let seg0 = match spawn_segment(&app, engine, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
         Ok(s) => s,
         Err(e) => {
             windows::close_control_bar(&app);
@@ -768,14 +816,14 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
             // `current.is_none()` also holds during the preliminary start state (seg0
             // not up yet); require a completed span so resume can't run mid-init.
             Some(rec) if rec.current.is_none() && !rec.done.is_empty() => {
-                Some((rec.target, rec.fps, rec.out_path.clone(), rec.seg_index, rec.audio_cfg, rec.controls.clone()))
+                Some((rec.engine, rec.target, rec.fps, rec.out_path.clone(), rec.seg_index, rec.audio_cfg, rec.controls.clone()))
             }
             _ => None,
         }
     };
-    let (target, fps, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
+    let (engine, target, fps, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
     let path = segment_path(&out_path, idx);
-    let seg = spawn_segment(&app, target, fps, &path, idx, cfg, &controls, true).await
+    let seg = spawn_segment(&app, engine, target, fps, &path, idx, cfg, &controls, true).await
         .inspect_err(|_e| {
             let _ = app.emit("glint-toast", "Couldn't resume recording");
         })?;
