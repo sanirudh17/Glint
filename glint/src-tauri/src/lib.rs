@@ -301,6 +301,7 @@ pub fn run() {
             recorder::rec_hud_dismiss,
             crate::recorder::trim::recorder_trim_probe,
             crate::recorder::trim::recorder_trim_export,
+            crate::recorder::trim::recorder_trim_waveform,
             recorder::recorder_open_trim,
             recorder::recorder_trim_target,
             crate::ocr::commands::ocr_result,

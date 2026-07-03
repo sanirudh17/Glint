@@ -29,6 +29,29 @@ pub fn output_duration(segments: &[KeepSegment]) -> f64 {
     segments.iter().map(|s| (s.end - s.start) / s.speed).sum()
 }
 
+/// Reduce interleaved mono `s16le` PCM into `buckets` normalized peak values in [0,1]
+/// (per-bucket max |sample| / i16::MAX). Pure + unit-tested; `recorder_trim_waveform`
+/// is the thin ffmpeg+IO wrapper. Returns all-zeros for empty input, empty for 0 buckets.
+pub fn peaks_from_pcm_s16le(bytes: &[u8], buckets: usize) -> Vec<f32> {
+    if buckets == 0 {
+        return Vec::new();
+    }
+    let n_samples = bytes.len() / 2;
+    if n_samples == 0 {
+        return vec![0.0; buckets];
+    }
+    let mut out = vec![0.0f32; buckets];
+    for i in 0..n_samples {
+        let s = i16::from_le_bytes([bytes[i * 2], bytes[i * 2 + 1]]);
+        let amp = (s as f32).abs() / i16::MAX as f32;
+        let b = (i * buckets / n_samples).min(buckets - 1);
+        if amp > out[b] {
+            out[b] = amp;
+        }
+    }
+    out
+}
+
 /// Parse `ffprobe -show_streams -show_format -of json` output.
 pub fn parse_ffprobe_json(json: &str) -> Result<ProbeResult, String> {
     let v: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
@@ -227,6 +250,35 @@ pub async fn recorder_trim_probe(app: tauri::AppHandle, path: String) -> Result<
     }
     let json = String::from_utf8_lossy(&out.stdout);
     parse_ffprobe_json(&json)
+}
+
+/// Extract a downsampled mono waveform for the timeline. Runs ffmpeg to decode audio to
+/// mono s16le @ 8 kHz, then buckets it. Any failure (no audio track, ffmpeg error) → Err;
+/// the frontend treats that as "no waveform" and renders the timeline without it.
+#[tauri::command(async)]
+pub async fn recorder_trim_waveform(
+    app: tauri::AppHandle,
+    path: String,
+    buckets: u32,
+) -> Result<Vec<f32>, String> {
+    let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("ffmpeg resolve: {e}"))?;
+    let out = sidecar
+        .args([
+            "-v", "error",
+            "-i", &path,
+            "-map", "0:a:0",
+            "-ac", "1",
+            "-ar", "8000",
+            "-f", "s16le",
+            "-",
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("ffmpeg run: {e}"))?;
+    if !out.status.success() {
+        return Err("no audio / ffmpeg failed".into());
+    }
+    Ok(peaks_from_pcm_s16le(&out.stdout, buckets as usize))
 }
 
 /// Video source extensions accepted for "Open in Glint" → trim. Matches the Windows
@@ -485,6 +537,27 @@ mod tests {
     fn output_duration_is_speed_weighted() {
         let d = output_duration(&[seg(0.0, 4.0, 2.0), seg(10.0, 16.0, 1.0)]);
         assert!((d - (2.0 + 6.0)).abs() < 1e-9, "got {d}");
+    }
+
+    #[test]
+    fn peaks_bucket_max_abs_normalized() {
+        // 4 samples (i16le): 0, 16384(=0.5), -32768(=1.0), 8192(=0.25) → 2 buckets.
+        let mut bytes = Vec::new();
+        for v in [0i16, 16384, -32768, 8192] { bytes.extend_from_slice(&v.to_le_bytes()); }
+        let p = peaks_from_pcm_s16le(&bytes, 2);
+        assert_eq!(p.len(), 2);
+        assert!((p[0] - 0.5).abs() < 1e-3, "bucket0 = {}", p[0]);  // max(|0|,|0.5|)
+        assert!((p[1] - 1.0).abs() < 1e-3, "bucket1 = {}", p[1]);  // max(|1.0|,|0.25|)
+    }
+
+    #[test]
+    fn peaks_empty_input_is_zeros() {
+        assert_eq!(peaks_from_pcm_s16le(&[], 3), vec![0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn peaks_zero_buckets_is_empty() {
+        assert!(peaks_from_pcm_s16le(&[0, 0, 0, 0], 0).is_empty());
     }
 
     #[test]
