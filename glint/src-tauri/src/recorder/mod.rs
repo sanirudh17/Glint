@@ -132,6 +132,8 @@ pub struct ActiveRecording {
     /// Movable mode: the bubble is capture-excluded and the camera is recorded to its
     /// own `.cam.webm` track for post-hoc compositing.
     pub webcam_movable: bool,
+    /// Sibling webcam-track path while a movable recording is in flight (`None` otherwise).
+    pub cam_path: Option<String>,
     /// Active recording FX (click/keystroke/cursor). The overlay + hooks live here.
     pub fx_cfg: fx::FxConfig,
     pub fx: Option<fx::FxSession>,
@@ -713,6 +715,7 @@ pub async fn recorder_start(
         controls: controls.clone(),
         webcam_on: want_cam,
         webcam_movable: want_cam_movable,
+        cam_path: None,
         fx_cfg,
         fx: None,
     });
@@ -786,7 +789,32 @@ pub async fn recorder_start(
         });
     }
     let _ = app.emit("recorder-started", ());
+
+    // Movable webcam: hand the bubble the sibling path and tell it to start MediaRecorder
+    // at the true capture t=0 (so the .cam.webm shares the screen's timeline).
+    if want_cam_movable {
+        let cam_path = crate::recorder::cam::cam_sidecar_path(&out_str).to_string_lossy().to_string();
+        if let Some(rec) = app.state::<RecorderState>().0.lock().unwrap().as_mut() {
+            rec.cam_path = Some(cam_path.clone());
+        }
+        let _ = app.emit_to(windows::CAM_LABEL, "rec-cam-record-start", serde_json::json!({ "path": cam_path }));
+    }
     Ok(())
+}
+
+/// Block until the webcam bubble finishes flushing its `.cam.webm` (`rec-cam-record-saved`),
+/// or 3s elapse. Called at stop before the bubble is destroyed, so the sidecar is complete
+/// on disk. Bounded so a gone/stuck webview can't wedge stop.
+async fn wait_for_cam_saved(app: &AppHandle) {
+    use tauri::Listener;
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+    let txr = tx.clone();
+    let saved = app.once("rec-cam-record-saved", move |_| {
+        if let Some(t) = txr.lock().unwrap().take() { let _ = t.send(()); }
+    });
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(3), rx).await;
+    app.unlisten(saved);
 }
 
 /// Pause: stop the running span (a clean, self-contained MP4) and keep it. The
@@ -809,6 +837,8 @@ pub async fn recorder_pause(app: tauri::AppHandle) -> Result<(), String> {
     };
     let seg = seg.ok_or("not recording, or already paused")?;
     finish_segment(seg).await;
+    // Mirror the pause to the webcam recorder so both timelines stay aligned.
+    let _ = app.emit_to(windows::CAM_LABEL, "rec-cam-record-pause", ());
     let _ = app.emit("recorder-paused", ());
     Ok(())
 }
@@ -852,6 +882,8 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
         let _ = std::fs::remove_file(&path);
         return Err("recording ended before resume".into());
     }
+    // Mirror the resume to the webcam recorder.
+    let _ = app.emit_to(windows::CAM_LABEL, "rec-cam-record-resume", ());
     let _ = app.emit("recorder-resumed", ());
     Ok(())
 }
@@ -862,6 +894,11 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
+    // Movable webcam: flush + finalize the .cam.webm BEFORE destroying the bubble webview.
+    if rec.as_ref().is_some_and(|r| r.cam_path.is_some()) {
+        let _ = app.emit_to(windows::CAM_LABEL, "rec-cam-record-stop", ());
+        wait_for_cam_saved(&app).await;
+    }
     windows::close_cam_bubble(&app);
     let rec = rec.ok_or("not recording")?;
     let ActiveRecording { out_path, width, height, mut done, current, fx, .. } = rec;
@@ -943,9 +980,11 @@ pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     windows::close_control_bar(&app);
     windows::close_cam_bubble(&app);
     windows::close_countdown(&app); // in case cancel races the countdown
-    if let Some(ActiveRecording { mut done, current, out_path, fx, .. }) = rec {
+    if let Some(ActiveRecording { mut done, current, out_path, fx, cam_path, .. }) = rec {
         // Tear down FX (unhook input, destroy overlay) on discard.
         if let Some(session) = fx { session.stop(&app); }
+        // Drop any partial webcam sidecar written before cancel.
+        if let Some(cp) = cam_path { let _ = std::fs::remove_file(cp); }
         // Discarding everything, so finalization doesn't matter — quit the running
         // span fast, then delete every segment file (and any assembled output).
         if let Some(Segment { mut child, path, audio, .. }) = current {

@@ -8,9 +8,6 @@ use std::io::Write;
 use std::path::{Path, PathBuf};
 
 /// `<dir>/<stem>.cam.webm` beside the screen recording — the sibling webcam track.
-// Consumed by `recorder_start` (A4) and `recorder_trim_probe` (B1); the allow is dropped
-// once those reference it.
-#[allow(dead_code)]
 pub fn cam_sidecar_path(screen_mp4: &str) -> PathBuf {
     let p = Path::new(screen_mp4);
     let dir = p.parent().unwrap_or_else(|| Path::new("."));
