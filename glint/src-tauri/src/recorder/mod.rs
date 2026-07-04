@@ -608,14 +608,14 @@ pub async fn recorder_start(
         return Err("already recording".into());
     }
 
-    // Capture/encode frame rate from settings (30 or 60). gdigrab's actually-delivered
-    // rate still depends on the machine and screen resolution.
-    let fps = app
-        .state::<crate::settings::commands::SettingsState>()
-        .0
-        .lock()
-        .unwrap()
-        .record_fps;
+    // Capture/encode frame rate + movable-webcam default from settings. Reading
+    // `record_webcam_movable` here (not only from the selector chip) makes the Settings
+    // toggle authoritative — a recording started from anywhere honours it.
+    let (fps, setting_movable) = {
+        let state = app.state::<crate::settings::commands::SettingsState>();
+        let s = state.0.lock().unwrap();
+        (s.record_fps, s.record_webcam_movable)
+    };
 
     // Choose the capture engine once (cached per session): ddagrab (GPU, true 60 fps)
     // when the machine supports it, else the proven gdigrab path. Fixed for the whole
@@ -679,8 +679,10 @@ pub async fn recorder_start(
     // bubble stays open through the countdown so the user can frame.
     let want_cam = webcam.unwrap_or(false);
     // Movable mode records the camera as its own track; the bubble is capture-excluded.
+    // Honoured from the per-recording selector chip OR the persisted Settings default.
     // `mut` so a pre-start fallback can demote it to baked-in when unsupported.
-    let mut want_cam_movable = want_cam && webcam_movable.unwrap_or(false);
+    let mut want_cam_movable = want_cam && (webcam_movable.unwrap_or(false) || setting_movable);
+    log::info!("recorder_start: want_cam={want_cam} want_cam_movable={want_cam_movable} (chip={webcam_movable:?} setting={setting_movable})");
     if want_cam {
         let _ = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable);
         let movable_ok = wait_for_cam_ready(&app).await;

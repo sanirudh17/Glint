@@ -43,8 +43,11 @@ export function RecCam() {
       emit("rec-cam-ready", { movableOk }).catch(() => {});
     };
 
+    // Cap at 720p: plenty for the bubble/overlay and keeps the streamed .cam.webm chunks
+    // small over IPC in movable mode.
+    const VIDEO_RES = { width: { ideal: 1280 }, height: { ideal: 720 } };
     const openDefault = () =>
-      navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(attach);
+      navigator.mediaDevices.getUserMedia({ video: VIDEO_RES, audio: false }).then(attach);
 
     (async () => {
       // RecCam is its own window (no Zustand hydration) — read the chosen camera
@@ -59,7 +62,7 @@ export function RecCam() {
       try {
         if (deviceId) {
           await navigator.mediaDevices
-            .getUserMedia({ video: { deviceId: { exact: deviceId } }, audio: false })
+            .getUserMedia({ video: { deviceId: { exact: deviceId }, ...VIDEO_RES }, audio: false })
             .then(attach)
             .catch(async () => {
               // Saved camera unplugged/unavailable — fall back to the default.
