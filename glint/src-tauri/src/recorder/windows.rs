@@ -212,9 +212,14 @@ pub const CAM_LABEL: &str = "rec-cam";
 /// gdigrab records it as part of the screen. In `movable` mode it IS excluded, so the
 /// screen video is clean and the camera is recorded separately (composited later).
 /// Positioned bottom-right of the recording area so it starts inside a region recording.
-pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, diameter: f64, movable: bool) -> tauri::Result<()> {
+///
+/// Returns the bubble's placement NORMALIZED to the recorded frame as `(x, y, diameter)` in
+/// 0..1 (top-left + diameter/frame-width), so a movable recording can persist it and the trim
+/// editor can start its overlay exactly where the webcam was. `None` if no monitor / the
+/// bubble already exists.
+pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, diameter: f64, movable: bool) -> tauri::Result<Option<(f64, f64, f64)>> {
     if app.get_webview_window(CAM_LABEL).is_some() {
-        return Ok(());
+        return Ok(None);
     }
     let win = WebviewWindowBuilder::new(app, CAM_LABEL, WebviewUrl::App("index.html#/rec-cam".into()))
         .title("Glint Camera")
@@ -229,6 +234,7 @@ pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, 
         .visible(false)
         .build()?;
 
+    let mut placement = None;
     if let Some(m) = win.primary_monitor()? {
         let s = m.scale_factor();
         // Recording area in PHYSICAL px (region coords are physical; fullscreen = monitor).
@@ -255,6 +261,14 @@ pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, 
             }
         }
         win.set_position(tauri::PhysicalPosition { x, y })?;
+        // Normalize to the recorded frame so the trim overlay starts here at the same size.
+        if rw > 0 && rh > 0 {
+            placement = Some((
+                (x - rx) as f64 / rw as f64,
+                (y - ry) as f64 / rh as f64,
+                d as f64 / rw as f64,
+            ));
+        }
     } else {
         log::warn!("rec-cam: no primary monitor; default position");
     }
@@ -266,7 +280,7 @@ pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, 
     }
 
     win.show()?;
-    Ok(())
+    Ok(placement)
 }
 
 /// Primary monitor work area (screen minus the taskbar) in physical pixels.

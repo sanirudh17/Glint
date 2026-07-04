@@ -18,6 +18,35 @@ pub fn cam_sidecar_path(screen_mp4: &str) -> PathBuf {
     dir.join(format!("{stem}.cam.webm"))
 }
 
+/// `<dir>/<stem>.cam.json` beside the recording — the webcam's on-screen placement at record
+/// time (normalized), so the trim editor starts its overlay where the bubble actually was.
+pub fn cam_placement_path(screen_mp4: &str) -> PathBuf {
+    let p = Path::new(screen_mp4);
+    let dir = p.parent().unwrap_or_else(|| Path::new("."));
+    let stem = p
+        .file_stem()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_else(|| "Glint".into());
+    dir.join(format!("{stem}.cam.json"))
+}
+
+/// Read `<stem>.cam.json` → `(x, y, diameter)` normalized. `None` if absent/malformed
+/// (the editor then falls back to its default placement).
+pub fn read_cam_placement(screen_mp4: &str) -> Option<(f64, f64, f64)> {
+    let raw = std::fs::read_to_string(cam_placement_path(screen_mp4)).ok()?;
+    let v: serde_json::Value = serde_json::from_str(&raw).ok()?;
+    let x = v.get("x")?.as_f64()?;
+    let y = v.get("y")?.as_f64()?;
+    let d = v.get("diameter")?.as_f64()?;
+    Some((x, y, d))
+}
+
+/// Write the webcam's normalized placement beside the recording.
+pub fn write_cam_placement(screen_mp4: &str, x: f64, y: f64, diameter: f64) {
+    let json = format!("{{\"x\":{x},\"y\":{y},\"diameter\":{diameter}}}");
+    let _ = std::fs::write(cam_placement_path(screen_mp4), json);
+}
+
 /// Append (or, when `first`, create/truncate) one MediaRecorder chunk to `path`. The
 /// webview calls this per `ondataavailable`, so the whole video is never held in memory.
 #[tauri::command(async)]

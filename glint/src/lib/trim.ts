@@ -8,6 +8,11 @@ export interface ProbeResult {
   width: number;
   height: number;
   has_cam: boolean;
+  /** Webcam overlay's initial placement (normalized), from the record-time .cam.json.
+   *  All zero when absent → the editor uses its default. */
+  cam_x: number;
+  cam_y: number;
+  cam_d: number;
 }
 export interface TrimTarget {
   id: number;

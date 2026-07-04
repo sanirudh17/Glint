@@ -8,7 +8,7 @@ import { trimTarget, trimProbe, trimExport, trimWaveform, type ProbeResult } fro
 import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
 import { TrimCamOverlay } from "./TrimCamOverlay";
-import { type CamPlacement, DEFAULT_PLACEMENT, toPixels } from "./camOverlay";
+import { type CamPlacement, DEFAULT_PLACEMENT, toPixels, clampPlacement } from "./camOverlay";
 import "./trim.css";
 
 /** `<stem>.cam.webm` sibling of the recording — matches Rust `cam_sidecar_path`. */
@@ -116,7 +116,12 @@ export function TrimView() {
         }
         if (p.has_cam) {
           setCamSrc(convertFileSrc(camSiblingPath(t.path)));
-          setCam(DEFAULT_PLACEMENT);
+          // Start the overlay where the webcam actually was during recording (same size +
+          // above-taskbar position); fall back to the default for older recordings.
+          const placed = p.cam_d > 0
+            ? clampPlacement({ x: p.cam_x, y: p.cam_y, diameter: p.cam_d, visible: true })
+            : DEFAULT_PLACEMENT;
+          setCam(placed);
         }
       } catch { setErr("Couldn't read the recording."); }
     }).catch(() => setErr("Couldn't open the recording."));

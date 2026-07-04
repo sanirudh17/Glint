@@ -685,8 +685,11 @@ pub async fn recorder_start(
     // `mut` so a pre-start fallback can demote it to baked-in when unsupported.
     let mut want_cam_movable = want_cam && want_movable_pref;
     log::info!("recorder_start: want_cam={want_cam} want_cam_movable={want_cam_movable} (webcam={webcam:?} chip_movable={webcam_movable:?} setting_movable={setting_movable})");
+    // Bubble's normalized on-screen placement — persisted for movable recordings so the trim
+    // overlay starts at the same spot/size.
+    let mut cam_placement: Option<(f64, f64, f64)> = None;
     if want_cam {
-        let _ = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable);
+        cam_placement = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable).ok().flatten();
         let movable_ok = wait_for_cam_ready(&app).await;
         if want_cam_movable && !movable_ok {
             // MediaRecorder/VP8 unsupported here — rebuild the bubble WITHOUT capture
@@ -820,6 +823,10 @@ pub async fn recorder_start(
     // at the true capture t=0 (so the .cam.webm shares the screen's timeline).
     if want_cam_movable {
         let cam_path = crate::recorder::cam::cam_sidecar_path(&out_str).to_string_lossy().to_string();
+        // Persist the bubble's placement so the trim editor's overlay starts where it was.
+        if let Some((nx, ny, nd)) = cam_placement {
+            crate::recorder::cam::write_cam_placement(&out_str, nx, ny, nd);
+        }
         if let Some(rec) = app.state::<RecorderState>().0.lock().unwrap().as_mut() {
             rec.cam_path = Some(cam_path.clone());
         }
@@ -1009,8 +1016,9 @@ pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     if let Some(ActiveRecording { mut done, current, out_path, fx, cam_path, .. }) = rec {
         // Tear down FX (unhook input, destroy overlay) on discard.
         if let Some(session) = fx { session.stop(&app); }
-        // Drop any partial webcam sidecar written before cancel.
+        // Drop any partial webcam sidecar + placement written before cancel.
         if let Some(cp) = cam_path { let _ = std::fs::remove_file(cp); }
+        let _ = std::fs::remove_file(crate::recorder::cam::cam_placement_path(&out_path));
         // Discarding everything, so finalization doesn't matter — quit the running
         // span fast, then delete every segment file (and any assembled output).
         if let Some(Segment { mut child, path, audio, .. }) = current {

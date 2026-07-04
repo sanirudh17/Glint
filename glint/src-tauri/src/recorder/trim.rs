@@ -17,6 +17,11 @@ pub struct ProbeResult {
     /// Whether a `<stem>.cam.webm` movable-webcam sidecar exists next to the recording
     /// (set by the probe command, not the pure parser — which always leaves it false).
     pub has_cam: bool,
+    /// The webcam overlay's initial placement (normalized top-left + diameter), read from the
+    /// `.cam.json` written at record time. All zero when absent → the editor uses its default.
+    pub cam_x: f64,
+    pub cam_y: f64,
+    pub cam_d: f64,
 }
 
 /// One kept segment of the source timeline, exported at `speed` (0.5–2×).
@@ -116,7 +121,7 @@ pub fn parse_ffprobe_json(json: &str) -> Result<ProbeResult, String> {
         .and_then(|d| d.as_str())
         .and_then(|d| d.parse::<f64>().ok())
         .unwrap_or(0.0);
-    Ok(ProbeResult { duration_secs, has_audio, fps, width, height, has_cam: false })
+    Ok(ProbeResult { duration_secs, has_audio, fps, width, height, has_cam: false, cam_x: 0.0, cam_y: 0.0, cam_d: 0.0 })
 }
 
 /// Validate + sort kept segments: non-empty, each (start < end), all within [0, duration],
@@ -335,8 +340,15 @@ pub async fn recorder_trim_probe(app: tauri::AppHandle, path: String) -> Result<
     let json = String::from_utf8_lossy(&out.stdout);
     let mut result = parse_ffprobe_json(&json)?;
     // A movable recording writes a sibling <stem>.cam.webm — its presence tells the trim
-    // editor to offer the webcam overlay.
+    // editor to offer the webcam overlay; the .cam.json carries where it was on screen.
     result.has_cam = crate::recorder::cam::cam_sidecar_path(&path).exists();
+    if result.has_cam {
+        if let Some((x, y, d)) = crate::recorder::cam::read_cam_placement(&path) {
+            result.cam_x = x;
+            result.cam_y = y;
+            result.cam_d = d;
+        }
+    }
     Ok(result)
 }
 
@@ -753,7 +765,7 @@ mod tests {
     #[test]
     fn probe_result_carries_has_cam() {
         // The parser always leaves has_cam false; the probe command sets it from the sibling.
-        let p = ProbeResult { duration_secs: 1.0, has_audio: false, fps: 30.0, width: 2, height: 2, has_cam: true };
+        let p = ProbeResult { duration_secs: 1.0, has_audio: false, fps: 30.0, width: 2, height: 2, has_cam: true, cam_x: 0.0, cam_y: 0.0, cam_d: 0.0 };
         assert!(p.has_cam);
         let parsed = parse_ffprobe_json(r#"{"streams":[{"codec_type":"video","width":2,"height":2,"avg_frame_rate":"30/1"}],"format":{"duration":"1.0"}}"#).unwrap();
         assert!(!parsed.has_cam);
