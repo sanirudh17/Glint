@@ -55,7 +55,7 @@ pub fn build_control_bar(app: &AppHandle) -> tauri::Result<()> {
 /// BitBlt-captures the desktop, and WDA_EXCLUDEFROMCAPTURE omits this window from
 /// that capture while leaving it on screen. Best-effort: logs and moves on if the
 /// handle or the call is unavailable (the bar simply shows in the video then).
-fn exclude_from_capture(win: &tauri::WebviewWindow) {
+pub(crate) fn exclude_from_capture(win: &tauri::WebviewWindow) {
     use raw_window_handle::{HasWindowHandle, RawWindowHandle};
     use windows::Win32::Foundation::HWND;
     use windows::Win32::UI::WindowsAndMessaging::{
@@ -208,10 +208,11 @@ pub fn close_region_selector(app: &AppHandle) {
 pub const CAM_LABEL: &str = "rec-cam";
 
 /// Live webcam bubble — a focus-less, transparent, always-on-top circular window
-/// rendering the default camera. Unlike the control bar it is NOT excluded from
-/// capture: gdigrab records it as part of the screen. Positioned bottom-right of
-/// the recording area so it starts inside a region recording.
-pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, diameter: f64) -> tauri::Result<()> {
+/// rendering the default camera. In baked-in mode it is NOT excluded from capture:
+/// gdigrab records it as part of the screen. In `movable` mode it IS excluded, so the
+/// screen video is clean and the camera is recorded separately (composited later).
+/// Positioned bottom-right of the recording area so it starts inside a region recording.
+pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, diameter: f64, movable: bool) -> tauri::Result<()> {
     if app.get_webview_window(CAM_LABEL).is_some() {
         return Ok(());
     }
@@ -256,6 +257,12 @@ pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, 
         win.set_position(tauri::PhysicalPosition { x, y })?;
     } else {
         log::warn!("rec-cam: no primary monitor; default position");
+    }
+
+    // Movable mode: hide the bubble from gdigrab/ddagrab so the screen video is clean —
+    // the webcam is recorded separately and composited later in the trim editor.
+    if movable {
+        exclude_from_capture(&win);
     }
 
     win.show()?;

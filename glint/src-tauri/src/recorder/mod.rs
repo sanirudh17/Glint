@@ -129,6 +129,9 @@ pub struct ActiveRecording {
     /// Whether the webcam bubble is currently open (sibling window — not encoded
     /// by ffmpeg, gdigrab records it as part of the screen).
     pub webcam_on: bool,
+    /// Movable mode: the bubble is capture-excluded and the camera is recorded to its
+    /// own `.cam.webm` track for post-hoc compositing.
+    pub webcam_movable: bool,
     /// Active recording FX (click/keystroke/cursor). The overlay + hooks live here.
     pub fx_cfg: fx::FxConfig,
     pub fx: Option<fx::FxSession>,
@@ -578,6 +581,7 @@ pub async fn recorder_start(
     system: Option<bool>,
     mic: Option<bool>,
     webcam: Option<bool>,
+    webcam_movable: Option<bool>,
     click_viz: Option<bool>,
     keystrokes: Option<bool>,
     spotlight: Option<bool>,
@@ -659,8 +663,10 @@ pub async fn recorder_start(
     // and the countdown/capture don't begin until the user has pressed Allow. The
     // bubble stays open through the countdown so the user can frame.
     let want_cam = webcam.unwrap_or(false);
+    // Movable mode records the camera as its own track; the bubble is capture-excluded.
+    let want_cam_movable = want_cam && webcam_movable.unwrap_or(false);
     if want_cam {
-        let _ = windows::build_cam_bubble(&app, target, 170.0);
+        let _ = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable);
         wait_for_cam_ready(&app).await;
     }
 
@@ -706,6 +712,7 @@ pub async fn recorder_start(
         mic_avail: any_audio,
         controls: controls.clone(),
         webcam_on: want_cam,
+        webcam_movable: want_cam_movable,
         fx_cfg,
         fx: None,
     });
@@ -1145,9 +1152,10 @@ pub async fn recorder_set_webcam(app: tauri::AppHandle, on: bool) -> Result<(), 
         let mut guard = state.0.lock().unwrap();
         let rec = guard.as_mut().ok_or("not recording")?;
         rec.webcam_on = on;
-        rec.target
+        (rec.target, rec.webcam_movable)
     };
-    if on { let _ = windows::build_cam_bubble(&app, target, 170.0); }
+    let (target, movable) = target;
+    if on { let _ = windows::build_cam_bubble(&app, target, 170.0, movable); }
     else { windows::close_cam_bubble(&app); }
     // Notify the control bar so its toggle reflects the change — this is the path the
     // bubble's ✕ button takes, and the bar would otherwise still read "on".
