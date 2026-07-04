@@ -14,6 +14,9 @@ pub struct ProbeResult {
     pub fps: f64,
     pub width: u32,
     pub height: u32,
+    /// Whether a `<stem>.cam.webm` movable-webcam sidecar exists next to the recording
+    /// (set by the probe command, not the pure parser — which always leaves it false).
+    pub has_cam: bool,
 }
 
 /// One kept segment of the source timeline, exported at `speed` (0.5–2×).
@@ -104,7 +107,7 @@ pub fn parse_ffprobe_json(json: &str) -> Result<ProbeResult, String> {
         .and_then(|d| d.as_str())
         .and_then(|d| d.parse::<f64>().ok())
         .unwrap_or(0.0);
-    Ok(ProbeResult { duration_secs, has_audio, fps, width, height })
+    Ok(ProbeResult { duration_secs, has_audio, fps, width, height, has_cam: false })
 }
 
 /// Validate + sort kept segments: non-empty, each (start < end), all within [0, duration],
@@ -273,7 +276,11 @@ pub async fn recorder_trim_probe(app: tauri::AppHandle, path: String) -> Result<
         return Err(format!("ffprobe exited {:?}", out.status.code()));
     }
     let json = String::from_utf8_lossy(&out.stdout);
-    parse_ffprobe_json(&json)
+    let mut result = parse_ffprobe_json(&json)?;
+    // A movable recording writes a sibling <stem>.cam.webm — its presence tells the trim
+    // editor to offer the webcam overlay.
+    result.has_cam = crate::recorder::cam::cam_sidecar_path(&path).exists();
+    Ok(result)
 }
 
 /// Extract a downsampled mono waveform for the timeline. Runs ffmpeg to decode audio to
@@ -629,6 +636,15 @@ mod tests {
         assert!(p.has_audio);
         assert!((p.duration_secs - 12.5).abs() < 1e-6);
         assert!((p.fps - 30.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn probe_result_carries_has_cam() {
+        // The parser always leaves has_cam false; the probe command sets it from the sibling.
+        let p = ProbeResult { duration_secs: 1.0, has_audio: false, fps: 30.0, width: 2, height: 2, has_cam: true };
+        assert!(p.has_cam);
+        let parsed = parse_ffprobe_json(r#"{"streams":[{"codec_type":"video","width":2,"height":2,"avg_frame_rate":"30/1"}],"format":{"duration":"1.0"}}"#).unwrap();
+        assert!(!parsed.has_cam);
     }
 
     #[test]

@@ -7,6 +7,7 @@ export interface ProbeResult {
   fps: number;
   width: number;
   height: number;
+  has_cam: boolean;
 }
 export interface TrimTarget {
   id: number;
