@@ -51,5 +51,5 @@ export const trimExport = (
     mode,
   });
 
-export const trimWaveform = (path: string, buckets: number): Promise<number[]> =>
-  invoke<number[]>("recorder_trim_waveform", { path, buckets });
+export const trimWaveform = (path: string, buckets: number, duration: number): Promise<number[]> =>
+  invoke<number[]>("recorder_trim_waveform", { path, buckets, duration });

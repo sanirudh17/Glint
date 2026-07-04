@@ -57,7 +57,7 @@ export function TrimTimeline({
             <span
               key={i}
               className="trim-wave-bar"
-              style={{ left: `${(i / waveform.length) * 100}%`, height: `${Math.max(6, p * 100)}%` }}
+              style={{ left: `${(i / waveform.length) * 100}%`, height: `${Math.max(3, p * 90)}%` }}
             />
           ))}
         </div>

@@ -29,10 +29,12 @@ pub fn output_duration(segments: &[KeepSegment]) -> f64 {
     segments.iter().map(|s| (s.end - s.start) / s.speed).sum()
 }
 
-/// Reduce interleaved mono `s16le` PCM into `buckets` normalized peak values in [0,1]
-/// (per-bucket max |sample| / i16::MAX). Pure + unit-tested; `recorder_trim_waveform`
-/// is the thin ffmpeg+IO wrapper. Returns all-zeros for empty input, empty for 0 buckets.
-pub fn peaks_from_pcm_s16le(bytes: &[u8], buckets: usize) -> Vec<f32> {
+/// Reduce mono `s16le` PCM into `buckets` peak values in [0,1] (per-bucket max
+/// |sample| / i16::MAX). Buckets span `expected_samples` (= duration × sample-rate) rather
+/// than the decoded length, so bar `i` maps to timeline time `i/buckets` and the waveform
+/// stays glued to the trim ruler; if the audio is shorter than the video, trailing buckets
+/// read silent. Pure + unit-tested. Returns all-zeros for empty input, empty for 0 buckets.
+pub fn peaks_from_pcm_s16le(bytes: &[u8], buckets: usize, expected_samples: usize) -> Vec<f32> {
     if buckets == 0 {
         return Vec::new();
     }
@@ -40,16 +42,33 @@ pub fn peaks_from_pcm_s16le(bytes: &[u8], buckets: usize) -> Vec<f32> {
     if n_samples == 0 {
         return vec![0.0; buckets];
     }
+    // Divide by the timeline length so bars align to wall-clock time; samples past the
+    // expected length (audio slightly longer than the container) fold into the last bucket.
+    let span = if expected_samples > 0 { expected_samples } else { n_samples };
     let mut out = vec![0.0f32; buckets];
     for i in 0..n_samples {
         let s = i16::from_le_bytes([bytes[i * 2], bytes[i * 2 + 1]]);
         let amp = (s as f32).abs() / i16::MAX as f32;
-        let b = (i * buckets / n_samples).min(buckets - 1);
+        let b = (i * buckets / span).min(buckets - 1);
         if amp > out[b] {
             out[b] = amp;
         }
     }
     out
+}
+
+/// Auto-gain: scale peaks so the loudest bucket reaches full height, giving quiet mic audio
+/// real vertical distinction. Near-silent tracks (max ≤ 0.05) are left flat so we don't
+/// amplify hiss into a full-scale waveform. Pure + unit-tested.
+pub fn normalize_peaks(mut peaks: Vec<f32>) -> Vec<f32> {
+    let max = peaks.iter().copied().fold(0.0f32, f32::max);
+    if max > 0.05 {
+        let g = 1.0 / max;
+        for p in peaks.iter_mut() {
+            *p = (*p * g).min(1.0);
+        }
+    }
+    peaks
 }
 
 /// Parse `ffprobe -show_streams -show_format -of json` output.
@@ -198,11 +217,13 @@ pub fn build_trim_args(
         }
         fc.push_str(&format!(";[cv]{vf}[outv]"));
         if has_audio {
+            // qsin (quarter-sine) curve fades sound smoother/more natural than the default
+            // linear ramp — no abrupt onset at the fade's start.
             let mut af = String::new();
-            if fade_in > 1e-9 { af.push_str(&format!("afade=t=in:st=0:d={}", num(fade_in))); }
+            if fade_in > 1e-9 { af.push_str(&format!("afade=t=in:st=0:d={}:curve=qsin", num(fade_in))); }
             if fade_out > 1e-9 {
                 if !af.is_empty() { af.push(','); }
-                af.push_str(&format!("afade=t=out:st={}:d={}", num(st), num(fade_out)));
+                af.push_str(&format!("afade=t=out:st={}:d={}:curve=qsin", num(st), num(fade_out)));
             }
             fc.push_str(&format!(";[ca]{af}[outa]"));
         }
@@ -255,11 +276,14 @@ pub async fn recorder_trim_probe(app: tauri::AppHandle, path: String) -> Result<
 /// Extract a downsampled mono waveform for the timeline. Runs ffmpeg to decode audio to
 /// mono s16le @ 8 kHz, then buckets it. Any failure (no audio track, ffmpeg error) → Err;
 /// the frontend treats that as "no waveform" and renders the timeline without it.
+const WAVEFORM_RATE: usize = 8000;
+
 #[tauri::command(async)]
 pub async fn recorder_trim_waveform(
     app: tauri::AppHandle,
     path: String,
     buckets: u32,
+    duration: f64,
 ) -> Result<Vec<f32>, String> {
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("ffmpeg resolve: {e}"))?;
     let out = sidecar
@@ -268,7 +292,7 @@ pub async fn recorder_trim_waveform(
             "-i", &path,
             "-map", "0:a:0",
             "-ac", "1",
-            "-ar", "8000",
+            "-ar", &WAVEFORM_RATE.to_string(),
             "-f", "s16le",
             "-",
         ])
@@ -278,7 +302,10 @@ pub async fn recorder_trim_waveform(
     if !out.status.success() {
         return Err("no audio / ffmpeg failed".into());
     }
-    Ok(peaks_from_pcm_s16le(&out.stdout, buckets as usize))
+    // Bucket over the timeline length (duration × rate) so the waveform lines up with the
+    // ruler, then auto-gain so quiet mic audio still reads.
+    let expected = (duration.max(0.0) * WAVEFORM_RATE as f64) as usize;
+    Ok(normalize_peaks(peaks_from_pcm_s16le(&out.stdout, buckets as usize, expected)))
 }
 
 /// Video source extensions accepted for "Open in Glint" → trim. Matches the Windows
@@ -508,7 +535,7 @@ mod tests {
                   [0:a]atrim=0:10,asetpts=PTS-STARTPTS[a0];\
                   [v0][a0]concat=n=1:v=1:a=1[cv][ca];\
                   [cv]fade=t=in:st=0:d=1,fade=t=out:st=8:d=2[outv];\
-                  [ca]afade=t=in:st=0:d=1,afade=t=out:st=8:d=2[outa]";
+                  [ca]afade=t=in:st=0:d=1:curve=qsin,afade=t=out:st=8:d=2:curve=qsin[outa]";
         assert!(a.windows(2).any(|w| w[0] == "-filter_complex" && w[1] == fc), "got {a:?}");
         assert!(a.windows(2).any(|w| w[0] == "-map" && w[1] == "[outv]"));
         assert!(a.windows(2).any(|w| w[0] == "-map" && w[1] == "[outa]"));
@@ -544,20 +571,44 @@ mod tests {
         // 4 samples (i16le): 0, 16384(=0.5), -32768(=1.0), 8192(=0.25) → 2 buckets.
         let mut bytes = Vec::new();
         for v in [0i16, 16384, -32768, 8192] { bytes.extend_from_slice(&v.to_le_bytes()); }
-        let p = peaks_from_pcm_s16le(&bytes, 2);
+        let p = peaks_from_pcm_s16le(&bytes, 2, 4); // span = actual length
         assert_eq!(p.len(), 2);
         assert!((p[0] - 0.5).abs() < 1e-3, "bucket0 = {}", p[0]);  // max(|0|,|0.5|)
         assert!((p[1] - 1.0).abs() < 1e-3, "bucket1 = {}", p[1]);  // max(|1.0|,|0.25|)
     }
 
     #[test]
+    fn peaks_align_to_expected_len_with_trailing_silence() {
+        // 2 samples of full-scale audio but the timeline expects 4 samples → with 2 buckets,
+        // all the signal lands in bucket 0 and bucket 1 (past the audio) reads silent.
+        let mut bytes = Vec::new();
+        for v in [32767i16, 32767] { bytes.extend_from_slice(&v.to_le_bytes()); }
+        let p = peaks_from_pcm_s16le(&bytes, 2, 4);
+        assert!(p[0] > 0.9, "bucket0 = {}", p[0]);
+        assert_eq!(p[1], 0.0, "bucket1 should be silent");
+    }
+
+    #[test]
+    fn normalize_scales_loudest_to_full_height() {
+        let p = normalize_peaks(vec![0.1, 0.2, 0.4]);
+        assert!((p[2] - 1.0).abs() < 1e-6, "max→1: {}", p[2]);
+        assert!((p[0] - 0.25).abs() < 1e-6, "proportional: {}", p[0]);
+    }
+
+    #[test]
+    fn normalize_leaves_near_silence_flat() {
+        let p = normalize_peaks(vec![0.01, 0.02]);
+        assert!(p[1] < 0.05, "hiss must not be amplified: {}", p[1]);
+    }
+
+    #[test]
     fn peaks_empty_input_is_zeros() {
-        assert_eq!(peaks_from_pcm_s16le(&[], 3), vec![0.0, 0.0, 0.0]);
+        assert_eq!(peaks_from_pcm_s16le(&[], 3, 3), vec![0.0, 0.0, 0.0]);
     }
 
     #[test]
     fn peaks_zero_buckets_is_empty() {
-        assert!(peaks_from_pcm_s16le(&[0, 0, 0, 0], 0).is_empty());
+        assert!(peaks_from_pcm_s16le(&[0, 0, 0, 0], 0, 2).is_empty());
     }
 
     #[test]

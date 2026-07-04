@@ -31,6 +31,10 @@ export function TrimView() {
   const [playing, setPlaying] = useState(false);
   const [exporting, setExporting] = useState<number | null>(null); // percent or null
   const [waveform, setWaveform] = useState<number[] | null>(null);
+  // Which clip the speed/delete controls act on. STICKY: set on click, it stays put while
+  // playback moves the playhead — so "set this section to 2×" hits the section you clicked,
+  // not whatever the playhead has drifted onto.
+  const [selectedId, setSelectedId] = useState<number | null>(null);
 
   // Scrub plumbing: the pointer drives the playhead instantly (so the red line is
   // always glued to the cursor), while the <video> catches up via *coalesced* seeks —
@@ -45,17 +49,24 @@ export function TrimView() {
   const fps = probe?.fps && probe.fps > 0 ? probe.fps : 30;
   const ranges = keepRanges(clips);
   const outDur = outputDuration(clips);
+  // Latest clips/ranges for the rAF playback loop, so it reads current edits without
+  // re-subscribing every frame.
+  const clipsRef = useRef(clips); clipsRef.current = clips;
+  const rangesRef = useRef(ranges); rangesRef.current = ranges;
   const noop = ranges.length === 1 && ranges[0][0] <= 0.001 && ranges[0][1] >= duration - 0.05
     && clips.filter((c) => c.kept).every((c) => c.speed === 1) && fadeIn === 0 && fadeOut === 0;
   const canSave = clips.length > 0 && keptCount(clips) > 0 && !noop && exporting === null;
 
-  // The "selected" block is simply the kept clip under the playhead — position the line
-  // in a section and Delete removes it. (At the very end, fall back to the last kept.)
-  const selected =
-    clips.find((c) => c.kept && playhead >= c.start - EPS && playhead < c.end - EPS) ??
-    (playhead >= duration - EPS ? [...clips].reverse().find((c) => c.kept) : undefined);
-  const selectedId = selected?.id ?? null;
-  const canDelete = selectedId != null && keptCount(clips) > 1 && exporting === null;
+  // The selected block: the clip clicked on the timeline (sticky). Falls back to none once
+  // the id no longer exists (e.g. after undo/redo swaps in a different history state).
+  const selected = clips.find((c) => c.id === selectedId) ?? null;
+  const canDelete = selected != null && selected.kept && keptCount(clips) > 1 && exporting === null;
+  // Pick the clip covering time `t` (any clip, kept or gap) — used to seat the sticky selection.
+  const clipAt = useCallback(
+    (t: number) => clips.find((c) => t >= c.start - EPS && t < c.end - EPS)
+      ?? (t >= duration - EPS ? clips[clips.length - 1] : undefined),
+    [clips, duration],
+  );
 
   useEffect(() => {
     trimTarget().then(async (t) => {
@@ -65,9 +76,11 @@ export function TrimView() {
       try {
         const p = await trimProbe(t.path);
         setProbe(p);
-        setEdit({ clips: initClips(p.duration_secs), fadeIn: 0, fadeOut: 0 });
+        const clips0 = initClips(p.duration_secs);
+        setEdit({ clips: clips0, fadeIn: 0, fadeOut: 0 });
+        setSelectedId(clips0[0]?.id ?? null); // start with the whole clip selected
         if (p.has_audio) {
-          trimWaveform(t.path, 800).then(setWaveform).catch(() => setWaveform(null));
+          trimWaveform(t.path, 800, p.duration_secs).then(setWaveform).catch(() => setWaveform(null));
         }
       } catch { setErr("Couldn't read the recording."); }
     }).catch(() => setErr("Couldn't open the recording."));
@@ -100,6 +113,8 @@ export function TrimView() {
     const clamped = Math.max(0, Math.min(t, duration));
     if (phase === "start") {
       draggingRef.current = true;
+      const c = clipAt(clamped); // click seats the sticky selection
+      setSelectedId(c ? c.id : null);
       const v = videoRef.current;
       if (v) {
         if (!v.paused) { v.pause(); setPlaying(false); }
@@ -109,7 +124,7 @@ export function TrimView() {
     setPlayhead(clamped);
     applyVideoSeek(clamped);
     if (phase === "end") draggingRef.current = false;
-  }, [duration, applyVideoSeek]);
+  }, [duration, applyVideoSeek, clipAt]);
 
   // Programmatic seek (frame-step keys).
   const seek = useCallback((t: number) => {
@@ -123,14 +138,21 @@ export function TrimView() {
     setRedoStack([]);
     setEdit(next);
   }, [edit]);
-  const doSplit = useCallback(() => { commit({ ...edit, clips: splitClips(clips, playhead) }); }, [commit, edit, clips, playhead]);
+  const doSplit = useCallback(() => {
+    const next = splitClips(clips, playhead);
+    commit({ ...edit, clips: next });
+    // Splitting replaces the parent with two fresh-id halves — reseat selection on the half
+    // under the playhead so the sticky selection doesn't dangle on the vanished parent.
+    const c = next.find((cc) => playhead >= cc.start - EPS && playhead < cc.end - EPS);
+    if (c) setSelectedId(c.id);
+  }, [commit, edit, clips, playhead]);
   const doDelete = useCallback(() => {
-    if (selectedId == null || keptCount(clips) <= 1) return; // can't delete the last block
-    commit({ ...edit, clips: setKept(clips, selectedId, false) });
-  }, [commit, edit, clips, selectedId]);
+    if (!selected || !selected.kept || keptCount(clips) <= 1) return; // can't delete a gap or the last block
+    commit({ ...edit, clips: setKept(clips, selected.id, false) });
+  }, [commit, edit, clips, selected]);
   const SPEEDS = [0.5, 1, 1.5, 2];
   const selSpeed = selected?.speed ?? 1;
-  const canSpeed = selectedId != null && exporting === null;
+  const canSpeed = selected != null && selected.kept && exporting === null;
   const setSel = useCallback((k: number) => {
     if (selectedId == null) return;
     commit({ ...edit, clips: setSpeed(clips, selectedId, k) });
@@ -138,7 +160,7 @@ export function TrimView() {
   const FADE_MAX = 2;
   const bump = (which: "fadeIn" | "fadeOut", delta: number) => {
     const cur = which === "fadeIn" ? fadeIn : fadeOut;
-    const next = Math.max(0, Math.min(FADE_MAX, Math.round((cur + delta) * 4) / 4)); // 0.25 steps
+    const next = Math.max(0, Math.min(FADE_MAX, Math.round((cur + delta) * 2) / 2)); // 0.5s steps
     if (next === cur) return;
     commit({ ...edit, [which]: next });
   };
@@ -159,25 +181,34 @@ export function TrimView() {
     });
   }, [edit]);
 
-  // Gap-skipping playback: while playing, jump the playhead past removed regions.
-  const onTimeUpdate = () => {
-    const v = videoRef.current; if (!v) return;
-    if (draggingRef.current) return; // the pointer owns the playhead while scrubbing
-    let t = v.currentTime;
-    if (playing) {
-      const inKept = ranges.some(([s, e]) => t >= s - 0.02 && t < e);
-      if (!inKept) {
-        const next = ranges.find(([s]) => s > t);
-        if (next) { v.currentTime = next[0]; t = next[0]; }
-        else { v.pause(); }
+  // Playback engine: a rAF loop (~60 Hz) drives the playhead, skips removed gaps, and
+  // switches playbackRate exactly at segment boundaries. Far tighter than the ~4 Hz
+  // `timeupdate` event, which used to let a segment's speed bleed ~250 ms into its
+  // neighbour ("other sections also get affected").
+  useEffect(() => {
+    if (!playing) return;
+    let raf = 0;
+    const tick = () => {
+      const v = videoRef.current;
+      if (v && !draggingRef.current) {
+        let t = v.currentTime;
+        const rs = rangesRef.current;
+        const inKept = rs.some(([s, e]) => t >= s - 0.02 && t < e);
+        if (!inKept) {
+          const next = rs.find(([s]) => s > t);
+          if (next) { v.currentTime = next[0]; t = next[0]; }
+          else { v.pause(); }
+        }
+        const cur = clipsRef.current.find((c) => c.kept && t >= c.start - 0.02 && t < c.end);
+        const rate = cur?.speed ?? 1;
+        if (v.playbackRate !== rate) v.playbackRate = rate;
+        setPlayhead(t);
       }
-    }
-    // Preview per-segment speed: play the kept clip under the playhead at its speed.
-    const cur = clips.find((c) => c.kept && t >= c.start - 0.02 && t < c.end);
-    const rate = cur?.speed ?? 1;
-    if (v.playbackRate !== rate) v.playbackRate = rate;
-    setPlayhead(t);
-  };
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [playing]);
 
   const togglePlay = () => { const v = videoRef.current; if (!v) return; if (v.paused) { v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); } };
 
@@ -224,7 +255,6 @@ export function TrimView() {
           className="trim-video"
           src={src}
           preload="auto"
-          onTimeUpdate={onTimeUpdate}
           onSeeked={onSeeked}
           onPlay={() => setPlaying(true)}
           onPause={() => setPlaying(false)}
@@ -289,9 +319,9 @@ function FadeStepper({ label, value, disabled, onDelta }: {
   return (
     <div className="trim-fade" title={`${label} (0–2s)`}>
       <span className="trim-fade-label">{label}</span>
-      <button className="trim-fade-btn" disabled={disabled || value <= 0} onClick={() => onDelta(-0.25)}>−</button>
+      <button className="trim-fade-btn" disabled={disabled || value <= 0} onClick={() => onDelta(-0.5)}>−</button>
       <span className="trim-fade-val">{value === 0 ? "off" : `${value}s`}</span>
-      <button className="trim-fade-btn" disabled={disabled || value >= 2} onClick={() => onDelta(0.25)}>+</button>
+      <button className="trim-fade-btn" disabled={disabled || value >= 2} onClick={() => onDelta(0.5)}>+</button>
     </div>
   );
 }

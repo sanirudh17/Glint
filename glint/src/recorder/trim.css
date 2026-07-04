@@ -69,10 +69,11 @@
 .trim-fade-btn:disabled { opacity: .4; cursor: default; }
 .trim-fade-val { min-width: 26px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text); }
 
-/* Audio waveform behind the timeline clips */
+/* Audio waveform behind the timeline clips — mirrored around the track's centre so it
+   reads as a proper waveform; bright enough to stay legible under the translucent clips. */
 .trim-wave { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
 .trim-wave-bar {
-  position: absolute; bottom: 0; width: 1px;
-  background: rgba(160,175,220,0.5);
-  transform: translateX(-0.5px);
+  position: absolute; top: 50%; width: 1px;
+  background: rgba(150,170,235,0.85);
+  transform: translate(-0.5px, -50%);
 }
