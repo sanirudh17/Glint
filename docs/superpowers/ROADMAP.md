@@ -231,6 +231,24 @@ capture/library/editor path.
   draw_mouse, hwdownload, audio-input index shift); gdigrab args are byte-identical to before.
   *Shipped — at-screen accepted.*
 
+- **Phase 20 — Trim editor upgrades** (four CleanShot-parity wins on the recording trim window,
+  all inside the isolated recorder path). **Redo** (Ctrl+Shift+Z) alongside undo, driven by an
+  `EditState` history (`{clips, fadeIn, fadeOut}`) with paired undo/redo stacks. **Audio waveform**
+  under the timeline: a `recorder_trim_waveform` command decodes mono s16le @ 8 kHz and buckets it
+  into peaks — bucketed over the **timeline length** (`duration × rate`) so bars stay glued to the
+  ruler (audio shorter than the video reads as trailing silence), then **auto-gained** to the
+  loudest peak and drawn as a bright, center-mirrored trace behind translucent keep-blocks.
+  **Fades in/out**: 0.5 s-step steppers (0–2 s) that post-process the concat output with
+  `fade`/`afade` (audio on the smoother `qsin` curve); speed-aware fade-out start. **Per-segment
+  speed** (0.5/1/1.5/2×) via `setpts`+`atempo`, exported as un-merged `keptSegments` so each speed
+  boundary survives concat, with a timeline badge and live playback preview. Two at-screen bugs
+  fixed in a follow-up round: segment **selection made sticky** (set on click, not derived from the
+  live playhead — so a speed set lands on the section you clicked even as playback moves on), and
+  the **preview moved to a `requestAnimationFrame` loop** so per-clip playbackRate switches exactly
+  at boundaries instead of bleeding ~250 ms via the coarse `timeupdate` event. Backend
+  (`trim.rs`) stays pure + unit-tested; **recorder isolation honored**. *Shipped — at-screen
+  accepted.*
+
 ## Planned
 
 - **Deferred CleanShot video-polish** (in-scope, not yet scheduled — parked for a later phase):
@@ -243,7 +261,9 @@ capture/library/editor path.
   already feeds 60 fps; libx264-`ultrafast` is the remaining throughput bottleneck). Vendor-specific
   with a libx264 fallback; kept out of Phase 19 for universality + concat-copy simplicity.
 
-- **Deferred trim follow-ups**: clip reordering, redo, audio waveform, fades/speed changes.
+- **Deferred trim follow-up**: **clip reordering** (drag kept segments into a new order). Redo,
+  audio waveform, fades, and per-segment speed all shipped in Phase 20; reordering stays parked as
+  the larger change (the timeline model currently assumes segments stay in source order).
 
 ## Out of scope (project-wide, unchanged)
 Cloud/upload/share-links, teams/collaboration, login/auth, web backend/network calls, scrolling
