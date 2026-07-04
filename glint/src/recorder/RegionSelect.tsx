@@ -19,7 +19,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointer2 } from "lucide-react";
+import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointer2, Move, Lock } from "lucide-react";
 import { recorderStartRegion, recorderStartFullscreen } from "../lib/recorder";
 import { useAppStore } from "../store/useAppStore";
 import "./recorder.css";
@@ -72,6 +72,7 @@ export function RegionSelect() {
   const [sys, setSys] = useState(true);
   const [mic, setMic] = useState(false);
   const [cam, setCam] = useState(false);
+  const [camMovable, setCamMovable] = useState(false);
   // Recording FX intent for THIS recording, seeded from saved settings.
   const [clickViz, setClickViz] = useState(false);
   const [keystrokes, setKeystrokes] = useState(false);
@@ -88,6 +89,7 @@ export function RegionSelect() {
       setSys(settings.record_system_audio ?? true);
       setMic(settings.record_microphone ?? false);
       setCam(settings.record_webcam ?? false);
+      setCamMovable(settings.record_webcam_movable ?? false);
       setClickViz(settings.record_click_viz ?? false);
       setKeystrokes(settings.record_keystrokes ?? false);
       setSpotlight(settings.record_cursor_spotlight ?? false);
@@ -132,14 +134,14 @@ export function RegionSelect() {
       y: Math.round(env.oy + rect.y * env.scale),
       w: Math.round(rect.w * env.scale),
       h: Math.round(rect.h * env.scale),
-    }, { system: sys, mic, webcam: cam }, fxOpts).catch(() => { /* a toast already surfaces start failures */ });
-  }, [rect, env, sys, mic, cam, clickViz, keystrokes, spotlight, cursorHide, cursorSize]);
+    }, { system: sys, mic, webcam: cam, webcamMovable: camMovable }, fxOpts).catch(() => { /* a toast already surfaces start failures */ });
+  }, [rect, env, sys, mic, cam, camMovable, clickViz, keystrokes, spotlight, cursorHide, cursorSize]);
 
   const confirmFullscreen = useCallback(() => {
     if (confirmed.current) return;
     confirmed.current = true;
-    recorderStartFullscreen({ system: sys, mic, webcam: cam }, fxOpts).catch(() => { /* toast surfaces failures */ });
-  }, [sys, mic, cam, clickViz, keystrokes, spotlight, cursorHide, cursorSize]);
+    recorderStartFullscreen({ system: sys, mic, webcam: cam, webcamMovable: camMovable }, fxOpts).catch(() => { /* toast surfaces failures */ });
+  }, [sys, mic, cam, camMovable, clickViz, keystrokes, spotlight, cursorHide, cursorSize]);
 
   // Esc cancels (closing is safe — no follow-up IPC). Enter confirms the region.
   useEffect(() => {
@@ -264,6 +266,16 @@ export function RegionSelect() {
           >
             {cam ? <Video size={14} /> : <VideoOff size={14} />} Cam
           </button>
+          {cam && (
+            <button
+              className={`rec-sel-chip${camMovable ? "" : " rec-sel-chip--off"}`}
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => setCamMovable((v) => !v)}
+              title="Record the webcam as a separate track so you can move/resize/remove it after recording"
+            >
+              {camMovable ? <Move size={14} /> : <Lock size={14} />} Movable
+            </button>
+          )}
           <button
             className={`rec-sel-chip${cursorStyle === "normal" ? " rec-sel-chip--off" : ""}`}
             onPointerDown={(e) => e.stopPropagation()}

@@ -23,6 +23,7 @@ export interface Settings {
   record_system_audio: boolean;
   record_microphone: boolean;
   record_webcam: boolean;
+  record_webcam_movable: boolean;
   record_click_viz: boolean;
   record_keystrokes: boolean;
   record_cursor_spotlight: boolean;
@@ -56,6 +57,7 @@ interface AppState {
   setRecordSystemAudio: (on: boolean) => Promise<void>;
   setRecordMicrophone: (on: boolean) => Promise<void>;
   setRecordWebcam: (on: boolean) => Promise<void>;
+  setRecordWebcamMovable: (on: boolean) => Promise<void>;
   setRecordFx: (key: RecordFxKey, value: boolean | CursorSize) => Promise<void>;
   setHotkey: (action: string, accelerator: string) => Promise<void>;
   resetHotkeys: () => Promise<void>;
@@ -191,6 +193,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setRecordWebcam: async (on: boolean) => {
     const updated = await saveSetting("record_webcam", on);
     await persistSetting("record_webcam", on);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setRecordWebcamMovable: async (on: boolean) => {
+    const updated = await saveSetting("record_webcam_movable", on);
+    await persistSetting("record_webcam_movable", on);
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 
