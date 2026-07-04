@@ -548,21 +548,34 @@ pub async fn recorder_audio_check(app: tauri::AppHandle) -> Result<u64, String> 
 /// (`rec-cam-failed`), or 20s elapse. Called before the countdown so the WebView2
 /// camera-permission prompt is resolved up front and never recorded; bounded so a
 /// stuck prompt or a missing event can't wedge the start.
-async fn wait_for_cam_ready(app: &AppHandle) {
+///
+/// Returns whether movable-mode recording is supported (the `rec-cam-ready` payload's
+/// `movableOk`, i.e. MediaRecorder/VP8). Defaults `true` on timeout/parse issues; only
+/// consulted for movable recordings.
+async fn wait_for_cam_ready(app: &AppHandle) -> bool {
     use tauri::Listener;
-    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
     let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
     let txr = tx.clone();
-    let ready = app.once("rec-cam-ready", move |_| {
-        if let Some(t) = txr.lock().unwrap().take() { let _ = t.send(()); }
+    let ready = app.once("rec-cam-ready", move |e| {
+        let movable_ok = serde_json::from_str::<serde_json::Value>(e.payload())
+            .ok()
+            .and_then(|v| v.get("movableOk").and_then(|b| b.as_bool()))
+            .unwrap_or(true);
+        if let Some(t) = txr.lock().unwrap().take() { let _ = t.send(movable_ok); }
     });
     let txf = tx.clone();
     let failed = app.once("rec-cam-failed", move |_| {
-        if let Some(t) = txf.lock().unwrap().take() { let _ = t.send(()); }
+        if let Some(t) = txf.lock().unwrap().take() { let _ = t.send(true); }
     });
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(20), rx).await;
+    let movable_ok = tokio::time::timeout(std::time::Duration::from_secs(20), rx)
+        .await
+        .ok()
+        .and_then(|r| r.ok())
+        .unwrap_or(true);
     app.unlisten(ready);
     app.unlisten(failed);
+    movable_ok
 }
 
 /// Start recording. `mode` is "fullscreen" or "region"; region passes x/y/w/h
@@ -666,10 +679,19 @@ pub async fn recorder_start(
     // bubble stays open through the countdown so the user can frame.
     let want_cam = webcam.unwrap_or(false);
     // Movable mode records the camera as its own track; the bubble is capture-excluded.
-    let want_cam_movable = want_cam && webcam_movable.unwrap_or(false);
+    // `mut` so a pre-start fallback can demote it to baked-in when unsupported.
+    let mut want_cam_movable = want_cam && webcam_movable.unwrap_or(false);
     if want_cam {
         let _ = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable);
-        wait_for_cam_ready(&app).await;
+        let movable_ok = wait_for_cam_ready(&app).await;
+        if want_cam_movable && !movable_ok {
+            // MediaRecorder/VP8 unsupported here — rebuild the bubble WITHOUT capture
+            // exclusion so gdigrab bakes it in and the user still gets a webcam.
+            windows::close_cam_bubble(&app);
+            let _ = windows::build_cam_bubble(&app, target, 170.0, false);
+            let _ = app.emit("glint-toast", "Movable webcam unavailable — recorded in place");
+            want_cam_movable = false;
+        }
     }
 
     // 3-2-1 countdown, then Rust closes it BEFORE capture starts so the digit can

@@ -32,10 +32,15 @@ export function RecCam() {
         return;
       }
       // Resolves only AFTER the user grants the WebView2 camera prompt, so this
-      // is the signal recorder_start waits on before starting the countdown.
+      // is the signal recorder_start waits on before starting the countdown. The
+      // payload also reports whether movable-mode recording (MediaRecorder/VP8) is
+      // supported, so recorder_start can fall back to baked-in before capture.
       streamRef.current = s;
       if (videoRef.current) videoRef.current.srcObject = s;
-      emit("rec-cam-ready").catch(() => {});
+      const movableOk =
+        typeof MediaRecorder !== "undefined" &&
+        MediaRecorder.isTypeSupported("video/webm;codecs=vp8");
+      emit("rec-cam-ready", { movableOk }).catch(() => {});
     };
 
     const openDefault = () =>
@@ -79,7 +84,10 @@ export function RecCam() {
       try {
         mr = new MediaRecorder(stream, { mimeType: "video/webm;codecs=vp8" });
       } catch {
-        emit("rec-cam-record-failed").catch(() => {}); // pre-start fallback (A5)
+        // Unexpected: support was probed up front (rec-cam-ready.movableOk). Unblock a
+        // pending stop and toast — the screen is already recording cleanly without a cam.
+        emit("glint-toast", "Webcam recording failed").catch(() => {});
+        emit("rec-cam-record-saved").catch(() => {});
         return;
       }
       mr.ondataavailable = async (e) => {
