@@ -1,28 +1,35 @@
-/** TrimTimeline.tsx — the track of keep/gap clips + a draggable playhead. Pure
- *  presentational; state lives in TrimView. Press/drag anywhere to scrub the playhead
- *  (pointer-captured so a drag keeps tracking past the track edges). The clips are
- *  visual only (pointer-events: none) — the block under the playhead is the selected one. */
-import { useRef } from "react";
+/** TrimTimeline.tsx — the track of keep/gap clips + a draggable playhead, with a zoomable
+ *  content layer. Pure presentational; state lives in TrimView. Press/drag anywhere to scrub
+ *  the playhead (pointer-captured so a drag keeps tracking past the track edges).
+ *
+ *  Zoom is done entirely by the inner `.trim-content` layer: it's `zoom×` wider than the track
+ *  and panned with a single GPU `translateX`, so every child (waveform bars, clips, playhead)
+ *  keeps its plain `t/duration` positioning — no per-element zoom math — and 60 fps auto-scroll
+ *  stays cheap. The clips are visual only (pointer-events: none). */
+import { useMemo, useRef } from "react";
 import type { Clip } from "./trimModel";
 
 export function TrimTimeline({
-  clips, duration, playhead, selectedId, onScrub, waveform,
+  clips, duration, playhead, selectedId, onScrub, waveform, zoom, viewStart,
 }: {
   clips: Clip[]; duration: number; playhead: number;
   selectedId: number | null;
   onScrub: (t: number, phase: "start" | "move" | "end") => void;
   waveform: number[] | null;
+  zoom: number; viewStart: number;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
-  const pct = (t: number) => `${(t / Math.max(duration, 0.001)) * 100}%`;
+  const dur = Math.max(duration, 0.001);
+  const pct = (t: number) => `${(t / dur) * 100}%`;
 
   const timeAt = (clientX: number) => {
     const el = trackRef.current;
     if (!el) return 0;
     const r = el.getBoundingClientRect();
     const x = Math.max(0, Math.min(clientX - r.left, r.width));
-    return r.width > 0 ? (x / r.width) * duration : 0;
+    // The visible window is [viewStart, viewStart + duration/zoom]; map the cursor into it.
+    return r.width > 0 ? viewStart + (x / r.width) * (duration / zoom) : 0;
   };
 
   const down = (e: React.PointerEvent<HTMLDivElement>) => {
@@ -42,6 +49,23 @@ export function TrimTimeline({
     onScrub(timeAt(e.clientX), "end");
   };
 
+  // Waveform bars only depend on the samples — memoize so the per-frame pan (which just
+  // rewrites the content layer's transform) doesn't churn thousands of vnodes.
+  const bars = useMemo(
+    () => waveform && (
+      <div className="trim-wave" aria-hidden>
+        {waveform.map((p, i) => (
+          <span
+            key={i}
+            className="trim-wave-bar"
+            style={{ left: `${(i / waveform.length) * 100}%`, height: `${Math.max(2, p * 90)}%` }}
+          />
+        ))}
+      </div>
+    ),
+    [waveform],
+  );
+
   return (
     <div
       ref={trackRef}
@@ -51,27 +75,22 @@ export function TrimTimeline({
       onPointerUp={up}
       onPointerCancel={up}
     >
-      {waveform && (
-        <div className="trim-wave" aria-hidden>
-          {waveform.map((p, i) => (
-            <span
-              key={i}
-              className="trim-wave-bar"
-              style={{ left: `${(i / waveform.length) * 100}%`, height: `${Math.max(3, p * 90)}%` }}
-            />
-          ))}
-        </div>
-      )}
-      {clips.map((c) => (
-        <div
-          key={c.id}
-          className={`trim-clip${c.kept ? "" : " trim-clip--gap"}${c.id === selectedId ? " trim-clip--sel" : ""}`}
-          style={{ left: pct(c.start), width: pct(c.end - c.start) }}
-        >
-          {c.kept && c.speed !== 1 && <span className="trim-speed-badge">{c.speed}×</span>}
-        </div>
-      ))}
-      <div className="trim-playhead" style={{ left: pct(playhead) }} />
+      <div
+        className="trim-content"
+        style={{ width: `${zoom * 100}%`, transform: `translateX(-${(viewStart / dur) * 100}%)` }}
+      >
+        {bars}
+        {clips.map((c) => (
+          <div
+            key={c.id}
+            className={`trim-clip${c.kept ? "" : " trim-clip--gap"}${c.id === selectedId ? " trim-clip--sel" : ""}`}
+            style={{ left: pct(c.start), width: pct(c.end - c.start) }}
+          >
+            {c.kept && c.speed !== 1 && <span className="trim-speed-badge">{c.speed}×</span>}
+          </div>
+        ))}
+        <div className="trim-playhead" style={{ left: pct(playhead) }} />
+      </div>
     </div>
   );
 }

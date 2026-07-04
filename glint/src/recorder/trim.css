@@ -28,6 +28,10 @@
 .trim-iconbtn:disabled, .trim-btn:disabled { opacity: 0.4; cursor: default; }
 .trim-btn--primary { background: #5b7cfa; border-color: #5b7cfa; }
 .trim-track { position: relative; height: 56px; margin: 0 12px 4px; background: #14151c; border-radius: 8px; overflow: hidden; cursor: ew-resize; touch-action: none; }
+/* Zoomable content layer: `zoom×` wider than the track, panned via translateX. All timeline
+   children (waveform, clips, playhead) are positioned relative to this, so their plain
+   t/duration percentages scale with the zoom for free. */
+.trim-content { position: absolute; top: 0; bottom: 0; left: 0; will-change: transform; }
 /* Kept clips are translucent so the waveform behind them shows through; gaps are a
    dim translucent hatch that reads as "removed" and dims the waveform underneath. */
 .trim-clip { position: absolute; top: 6px; bottom: 6px; background: rgba(91,124,250,0.15); border: 1px solid #5b7cfa; border-radius: 5px; box-sizing: border-box; pointer-events: none; }
@@ -48,6 +52,10 @@
 }
 .trim-speedbtn--on { color: var(--text); border-color: var(--accent); background: var(--accent-subtle, rgba(91,124,250,.16)); }
 .trim-speedbtn:disabled { opacity: .45; cursor: default; }
+
+/* Timeline zoom control (actions row) */
+.trim-zoomctl { display: inline-flex; align-items: center; gap: 4px; }
+.trim-zoomval { min-width: 26px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-dim); }
 
 /* Per-clip speed badge on the timeline */
 .trim-speed-badge {
