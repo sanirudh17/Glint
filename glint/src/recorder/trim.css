@@ -6,12 +6,28 @@
   color: #e8e8ee;
   font: 13px system-ui, sans-serif;
 }
+/* Preview stage: holds the screen video + the webcam overlay layer. */
+.trim-stage { position: relative; flex: 1; min-height: 0; }
 .trim-video {
-  flex: 1;
-  min-height: 0;
   width: 100%;
+  height: 100%;
   background: #000;
   object-fit: contain;
+}
+
+/* Webcam overlay: a full-stage, click-through layer with a draggable circular bubble. */
+.trim-cam-layer { position: absolute; inset: 0; pointer-events: none; }
+.trim-cam {
+  position: absolute; border-radius: 50%; overflow: hidden;
+  pointer-events: auto; cursor: move; box-sizing: border-box;
+  border: 2px solid rgba(255,255,255,0.85);
+  box-shadow: 0 4px 14px rgba(0,0,0,0.45);
+}
+.trim-cam-video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.trim-cam-handle {
+  position: absolute; right: -6px; bottom: -6px; width: 16px; height: 16px;
+  border-radius: 50%; background: #5b7cfa; border: 2px solid #fff;
+  cursor: nwse-resize; pointer-events: auto;
 }
 .trim-meta {
   padding: 8px 12px;
@@ -52,6 +68,9 @@
 }
 .trim-speedbtn--on { color: var(--text); border-color: var(--accent); background: var(--accent-subtle, rgba(91,124,250,.16)); }
 .trim-speedbtn:disabled { opacity: .45; cursor: default; }
+
+/* Webcam overlay control (actions row) */
+.trim-camctl { display: inline-flex; align-items: center; gap: 4px; }
 
 /* Timeline zoom control (actions row) */
 .trim-zoomctl { display: inline-flex; align-items: center; gap: 4px; }
