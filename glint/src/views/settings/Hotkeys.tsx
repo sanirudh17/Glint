@@ -87,7 +87,11 @@ export function Hotkeys() {
     } catch (err) {
       setErrors((e) => ({ ...e, [action]: String(err) }));
     } finally {
-      await resumeHotkeys().catch(() => {}); // re-arm on every path (validation errors don't)
+      // Do NOT resume here: settings_set_hotkey already re-arms shortcuts on every path
+      // (success, validation error, OS reject). A second reapply would unregister then
+      // re-register the just-set accelerator microseconds apart, and Windows often hasn't
+      // released it yet — so the new shortcut would silently stay unregistered until the
+      // next save. (Escape/cancel still resumes via endCapture, where no setHotkey ran.)
       setCapturing(null);
     }
   }
