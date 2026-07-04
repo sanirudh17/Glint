@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { Scissors, Trash2, Undo2, Redo2, Play, Pause } from "lucide-react";
+import { Scissors, Trash2, Undo2, Redo2, Play, Pause, ZoomIn, ZoomOut } from "lucide-react";
 import { trimTarget, trimProbe, trimExport, trimWaveform, type ProbeResult } from "../lib/trim";
 import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
@@ -15,6 +15,7 @@ const fmt = (s: number) => {
 };
 
 const EPS = 1e-4;
+const ZOOMS = [1, 2, 4, 8];
 
 export function TrimView() {
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -35,6 +36,7 @@ export function TrimView() {
   // playback moves the playhead — so "set this section to 2×" hits the section you clicked,
   // not whatever the playhead has drifted onto.
   const [selectedId, setSelectedId] = useState<number | null>(null);
+  const [zoom, setZoom] = useState(1); // 1 | 2 | 4 | 8 — timeline magnification
 
   // Scrub plumbing: the pointer drives the playhead instantly (so the red line is
   // always glued to the cursor), while the <video> catches up via *coalesced* seeks —
@@ -53,6 +55,23 @@ export function TrimView() {
   // re-subscribing every frame.
   const clipsRef = useRef(clips); clipsRef.current = clips;
   const rangesRef = useRef(ranges); rangesRef.current = ranges;
+
+  // Zoomed view window [viewStart, viewStart + duration/zoom], centred on the playhead so it
+  // auto-follows during playback/stepping (no scrollbar needed). Frozen while dragging so the
+  // timeline doesn't chase the cursor; viewStartRef holds the last settled value during a drag.
+  const viewStartRef = useRef(0);
+  const viewDur = duration / zoom;
+  let viewStart: number;
+  if (zoom <= 1) {
+    viewStart = 0;
+  } else if (draggingRef.current) {
+    viewStart = viewStartRef.current;
+  } else {
+    viewStart = Math.min(Math.max(playhead - viewDur / 2, 0), Math.max(0, duration - viewDur));
+    viewStartRef.current = viewStart;
+  }
+  const zoomIn = useCallback(() => setZoom((z) => ZOOMS[Math.min(ZOOMS.indexOf(z) + 1, ZOOMS.length - 1)] ?? z), []);
+  const zoomOut = useCallback(() => setZoom((z) => ZOOMS[Math.max(ZOOMS.indexOf(z) - 1, 0)] ?? z), []);
   const noop = ranges.length === 1 && ranges[0][0] <= 0.001 && ranges[0][1] >= duration - 0.05
     && clips.filter((c) => c.kept).every((c) => c.speed === 1) && fadeIn === 0 && fadeOut === 0;
   const canSave = clips.length > 0 && keptCount(clips) > 0 && !noop && exporting === null;
@@ -80,7 +99,8 @@ export function TrimView() {
         setEdit({ clips: clips0, fadeIn: 0, fadeOut: 0 });
         setSelectedId(clips0[0]?.id ?? null); // start with the whole clip selected
         if (p.has_audio) {
-          trimWaveform(t.path, 800, p.duration_secs).then(setWaveform).catch(() => setWaveform(null));
+          // Extra buckets so zoomed-in detail resolves (at 8× ≈ 150 bars across the track).
+          trimWaveform(t.path, 1200, p.duration_secs).then(setWaveform).catch(() => setWaveform(null));
         }
       } catch { setErr("Couldn't read the recording."); }
     }).catch(() => setErr("Couldn't open the recording."));
@@ -232,11 +252,13 @@ export function TrimView() {
       }
       else if (e.key === "ArrowLeft") { e.preventDefault(); seek(playhead - 1 / fps); }
       else if (e.key === "ArrowRight") { e.preventDefault(); seek(playhead + 1 / fps); }
+      else if (e.key === "+" || e.key === "=") { e.preventDefault(); zoomIn(); }
+      else if (e.key === "-" || e.key === "_") { e.preventDefault(); zoomOut(); }
       else if (e.key === "Escape") { requestClose(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [doSplit, doDelete, undo, redo, seek, playhead, fps, exporting, requestClose]);
+  }, [doSplit, doDelete, undo, redo, seek, playhead, fps, exporting, requestClose, zoomIn, zoomOut]);
 
   const save = (mode: "copy" | "overwrite") => {
     if (!target || !probe || !canSave) return;
@@ -289,11 +311,17 @@ export function TrimView() {
         <TrimTimeline
           clips={clips} duration={duration} playhead={playhead}
           selectedId={selectedId} onScrub={scrub} waveform={waveform}
+          zoom={zoom} viewStart={viewStart}
         />
       )}
 
       <div className="trim-actions">
         <span className="trim-out">Output: {fmt(outDur)} / {fmt(duration)}</span>
+        <div className="trim-zoomctl" role="group" aria-label="Timeline zoom">
+          <button className="trim-iconbtn" onClick={zoomOut} disabled={zoom <= 1} title="Zoom out (−)"><ZoomOut size={16} /></button>
+          <span className="trim-zoomval">{zoom}×</span>
+          <button className="trim-iconbtn" onClick={zoomIn} disabled={zoom >= 8} title="Zoom in (+)"><ZoomIn size={16} /></button>
+        </div>
         <div className="trim-fades">
           <FadeStepper label="Fade in" value={fadeIn} disabled={exporting !== null} onDelta={(d) => bump("fadeIn", d)} />
           <FadeStepper label="Fade out" value={fadeOut} disabled={exporting !== null} onDelta={(d) => bump("fadeOut", d)} />

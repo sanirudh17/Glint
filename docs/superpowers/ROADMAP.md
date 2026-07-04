@@ -245,9 +245,14 @@ capture/library/editor path.
   fixed in a follow-up round: segment **selection made sticky** (set on click, not derived from the
   live playhead — so a speed set lands on the section you clicked even as playback moves on), and
   the **preview moved to a `requestAnimationFrame` loop** so per-clip playbackRate switches exactly
-  at boundaries instead of bleeding ~250 ms via the coarse `timeupdate` event. Backend
-  (`trim.rs`) stays pure + unit-tested; **recorder isolation honored**. *Shipped — at-screen
-  accepted.*
+  at boundaries instead of bleeding ~250 ms via the coarse `timeupdate` event. A second follow-up
+  round: the waveform switched from a **peak envelope to per-bucket RMS energy** (loud/quiet
+  passages separate on dense audio, where peaks saturated to full height everywhere), and a
+  **keyboard-first timeline zoom** (1/2/4/8×, `+`/`−` or buttons — no scrollbar) that magnifies
+  around the playhead and **auto-scrolls to follow** it during playback/stepping (frozen while
+  dragging); panning is a single GPU `translateX` on a content layer so children keep plain
+  `t/duration` positioning and 60 fps auto-scroll stays cheap. Backend (`trim.rs`) stays pure +
+  unit-tested; **recorder isolation honored**. *Shipped — at-screen accepted.*
 
 ## Planned
 

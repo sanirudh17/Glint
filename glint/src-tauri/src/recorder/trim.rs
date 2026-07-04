@@ -29,11 +29,13 @@ pub fn output_duration(segments: &[KeepSegment]) -> f64 {
     segments.iter().map(|s| (s.end - s.start) / s.speed).sum()
 }
 
-/// Reduce mono `s16le` PCM into `buckets` peak values in [0,1] (per-bucket max
-/// |sample| / i16::MAX). Buckets span `expected_samples` (= duration × sample-rate) rather
-/// than the decoded length, so bar `i` maps to timeline time `i/buckets` and the waveform
-/// stays glued to the trim ruler; if the audio is shorter than the video, trailing buckets
-/// read silent. Pure + unit-tested. Returns all-zeros for empty input, empty for 0 buckets.
+/// Reduce mono `s16le` PCM into `buckets` **RMS energy** values in [0,1] (per-bucket
+/// sqrt(mean(sample²))). RMS tracks how loud each stretch actually is, so loud/quiet
+/// passages separate visibly even on dense, continuous audio — where a peak envelope would
+/// saturate to full height everywhere. Buckets span `expected_samples` (= duration ×
+/// sample-rate) rather than the decoded length, so bar `i` maps to timeline time `i/buckets`
+/// and the waveform stays glued to the trim ruler; audio shorter than the video leaves
+/// trailing buckets silent. Pure + unit-tested. All-zeros for empty input, empty for 0 buckets.
 pub fn peaks_from_pcm_s16le(bytes: &[u8], buckets: usize, expected_samples: usize) -> Vec<f32> {
     if buckets == 0 {
         return Vec::new();
@@ -45,16 +47,17 @@ pub fn peaks_from_pcm_s16le(bytes: &[u8], buckets: usize, expected_samples: usiz
     // Divide by the timeline length so bars align to wall-clock time; samples past the
     // expected length (audio slightly longer than the container) fold into the last bucket.
     let span = if expected_samples > 0 { expected_samples } else { n_samples };
-    let mut out = vec![0.0f32; buckets];
+    let mut sum_sq = vec![0.0f64; buckets];
+    let mut count = vec![0u32; buckets];
     for i in 0..n_samples {
-        let s = i16::from_le_bytes([bytes[i * 2], bytes[i * 2 + 1]]);
-        let amp = (s as f32).abs() / i16::MAX as f32;
+        let s = i16::from_le_bytes([bytes[i * 2], bytes[i * 2 + 1]]) as f64 / i16::MAX as f64;
         let b = (i * buckets / span).min(buckets - 1);
-        if amp > out[b] {
-            out[b] = amp;
-        }
+        sum_sq[b] += s * s;
+        count[b] += 1;
     }
-    out
+    (0..buckets)
+        .map(|b| if count[b] > 0 { (sum_sq[b] / count[b] as f64).sqrt() as f32 } else { 0.0 })
+        .collect()
 }
 
 /// Auto-gain: scale peaks so the loudest bucket reaches full height, giving quiet mic audio
@@ -567,14 +570,14 @@ mod tests {
     }
 
     #[test]
-    fn peaks_bucket_max_abs_normalized() {
-        // 4 samples (i16le): 0, 16384(=0.5), -32768(=1.0), 8192(=0.25) → 2 buckets.
+    fn peaks_bucket_rms_energy() {
+        // 4 samples (i16le): 0, 16384(≈0.5), -32768(≈1.0), 8192(≈0.25) → 2 buckets.
         let mut bytes = Vec::new();
         for v in [0i16, 16384, -32768, 8192] { bytes.extend_from_slice(&v.to_le_bytes()); }
         let p = peaks_from_pcm_s16le(&bytes, 2, 4); // span = actual length
         assert_eq!(p.len(), 2);
-        assert!((p[0] - 0.5).abs() < 1e-3, "bucket0 = {}", p[0]);  // max(|0|,|0.5|)
-        assert!((p[1] - 1.0).abs() < 1e-3, "bucket1 = {}", p[1]);  // max(|1.0|,|0.25|)
+        assert!((p[0] - 0.354).abs() < 1e-2, "bucket0 = {}", p[0]);  // sqrt((0²+0.5²)/2)
+        assert!((p[1] - 0.729).abs() < 1e-2, "bucket1 = {}", p[1]);  // sqrt((1²+0.25²)/2)
     }
 
     #[test]
