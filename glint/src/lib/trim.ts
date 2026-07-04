@@ -20,23 +20,36 @@ export const trimProbe = (path: string): Promise<ProbeResult> =>
 export const openTrim = (id: number, path: string): Promise<void> =>
   invoke<void>("recorder_open_trim", { id, path });
 
+export interface KeepSegment {
+  start: number;
+  end: number;
+  speed: number;
+}
+
 export const trimExport = (
   id: number,
   srcPath: string,
-  keep: [number, number][],
+  segments: KeepSegment[],
   hasAudio: boolean,
   duration: number,
   width: number,
   height: number,
+  fadeIn: number,
+  fadeOut: number,
   mode: "copy" | "overwrite",
 ): Promise<void> =>
   invoke<void>("recorder_trim_export", {
     id,
     srcPath,
-    keep,
+    segments,
     hasAudio,
     duration,
     width,
     height,
+    fadeIn,
+    fadeOut,
     mode,
   });
+
+export const trimWaveform = (path: string, buckets: number, duration: number): Promise<number[]> =>
+  invoke<number[]>("recorder_trim_waveform", { path, buckets, duration });

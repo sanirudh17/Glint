@@ -6,11 +6,12 @@ import { useRef } from "react";
 import type { Clip } from "./trimModel";
 
 export function TrimTimeline({
-  clips, duration, playhead, selectedId, onScrub,
+  clips, duration, playhead, selectedId, onScrub, waveform,
 }: {
   clips: Clip[]; duration: number; playhead: number;
   selectedId: number | null;
   onScrub: (t: number, phase: "start" | "move" | "end") => void;
+  waveform: number[] | null;
 }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const dragging = useRef(false);
@@ -50,12 +51,25 @@ export function TrimTimeline({
       onPointerUp={up}
       onPointerCancel={up}
     >
+      {waveform && (
+        <div className="trim-wave" aria-hidden>
+          {waveform.map((p, i) => (
+            <span
+              key={i}
+              className="trim-wave-bar"
+              style={{ left: `${(i / waveform.length) * 100}%`, height: `${Math.max(3, p * 90)}%` }}
+            />
+          ))}
+        </div>
+      )}
       {clips.map((c) => (
         <div
           key={c.id}
           className={`trim-clip${c.kept ? "" : " trim-clip--gap"}${c.id === selectedId ? " trim-clip--sel" : ""}`}
           style={{ left: pct(c.start), width: pct(c.end - c.start) }}
-        />
+        >
+          {c.kept && c.speed !== 1 && <span className="trim-speed-badge">{c.speed}×</span>}
+        </div>
       ))}
       <div className="trim-playhead" style={{ left: pct(playhead) }} />
     </div>

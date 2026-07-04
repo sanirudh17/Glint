@@ -28,10 +28,52 @@
 .trim-iconbtn:disabled, .trim-btn:disabled { opacity: 0.4; cursor: default; }
 .trim-btn--primary { background: #5b7cfa; border-color: #5b7cfa; }
 .trim-track { position: relative; height: 56px; margin: 0 12px 4px; background: #14151c; border-radius: 8px; overflow: hidden; cursor: ew-resize; touch-action: none; }
-.trim-clip { position: absolute; top: 6px; bottom: 6px; background: #2f3a6b; border: 1px solid #5b7cfa; border-radius: 5px; box-sizing: border-box; pointer-events: none; }
-.trim-clip--gap { background: repeating-linear-gradient(45deg, #1a1b22, #1a1b22 6px, #15161c 6px, #15161c 12px); border-color: rgba(255,255,255,0.08); }
+/* Kept clips are translucent so the waveform behind them shows through; gaps are a
+   dim translucent hatch that reads as "removed" and dims the waveform underneath. */
+.trim-clip { position: absolute; top: 6px; bottom: 6px; background: rgba(91,124,250,0.15); border: 1px solid #5b7cfa; border-radius: 5px; box-sizing: border-box; pointer-events: none; }
+.trim-clip--gap { background: repeating-linear-gradient(45deg, rgba(20,21,28,0.82), rgba(20,21,28,0.82) 6px, rgba(15,16,22,0.82) 6px, rgba(15,16,22,0.82) 12px); border-color: rgba(255,255,255,0.08); }
 .trim-clip--sel { outline: 2px solid #9db2ff; }
 .trim-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff5d5d; pointer-events: none; }
 .trim-progress { position: relative; flex: 1; height: 26px; background: #14151c; border-radius: 7px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .trim-progress-fill { position: absolute; left: 0; top: 0; bottom: 0; background: #5b7cfa55; }
 .trim-progress span { position: relative; font-size: 12px; }
+
+/* Segment speed control (transport) */
+.trim-speedctl { display: inline-flex; gap: 2px; }
+.trim-speedbtn {
+  min-width: 30px; height: 26px; padding: 0 6px;
+  font-size: 11px; font-variant-numeric: tabular-nums;
+  color: var(--text-dim); background: var(--bg-elev, rgba(128,128,128,.12));
+  border: 1px solid var(--border); border-radius: var(--r1, 4px); cursor: pointer;
+}
+.trim-speedbtn--on { color: var(--text); border-color: var(--accent); background: var(--accent-subtle, rgba(91,124,250,.16)); }
+.trim-speedbtn:disabled { opacity: .45; cursor: default; }
+
+/* Per-clip speed badge on the timeline */
+.trim-speed-badge {
+  position: absolute; top: 2px; right: 3px;
+  font-size: 9px; line-height: 1; padding: 1px 3px;
+  color: #fff; background: rgba(8,9,13,.62); border-radius: 3px;
+  font-variant-numeric: tabular-nums; pointer-events: none;
+}
+
+/* Fade steppers (actions row) */
+.trim-fades { display: inline-flex; gap: 12px; align-items: center; }
+.trim-fade { display: inline-flex; align-items: center; gap: 4px; }
+.trim-fade-label { font-size: 11px; color: var(--text-dim); }
+.trim-fade-btn {
+  width: 20px; height: 20px; line-height: 1; font-size: 13px;
+  color: var(--text); background: var(--bg-elev, rgba(128,128,128,.12));
+  border: 1px solid var(--border); border-radius: var(--r1, 4px); cursor: pointer;
+}
+.trim-fade-btn:disabled { opacity: .4; cursor: default; }
+.trim-fade-val { min-width: 26px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text); }
+
+/* Audio waveform behind the timeline clips — mirrored around the track's centre so it
+   reads as a proper waveform; bright enough to stay legible under the translucent clips. */
+.trim-wave { position: absolute; inset: 0; pointer-events: none; overflow: hidden; }
+.trim-wave-bar {
+  position: absolute; top: 50%; width: 1px;
+  background: rgba(150,170,235,0.85);
+  transform: translate(-0.5px, -50%);
+}

@@ -16,6 +16,61 @@ pub struct ProbeResult {
     pub height: u32,
 }
 
+/// One kept segment of the source timeline, exported at `speed` (0.5–2×).
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
+pub struct KeepSegment {
+    pub start: f64,
+    pub end: f64,
+    pub speed: f64,
+}
+
+/// Output (exported) duration: each kept segment contributes `(end-start)/speed`.
+pub fn output_duration(segments: &[KeepSegment]) -> f64 {
+    segments.iter().map(|s| (s.end - s.start) / s.speed).sum()
+}
+
+/// Reduce mono `s16le` PCM into `buckets` peak values in [0,1] (per-bucket max
+/// |sample| / i16::MAX). Buckets span `expected_samples` (= duration × sample-rate) rather
+/// than the decoded length, so bar `i` maps to timeline time `i/buckets` and the waveform
+/// stays glued to the trim ruler; if the audio is shorter than the video, trailing buckets
+/// read silent. Pure + unit-tested. Returns all-zeros for empty input, empty for 0 buckets.
+pub fn peaks_from_pcm_s16le(bytes: &[u8], buckets: usize, expected_samples: usize) -> Vec<f32> {
+    if buckets == 0 {
+        return Vec::new();
+    }
+    let n_samples = bytes.len() / 2;
+    if n_samples == 0 {
+        return vec![0.0; buckets];
+    }
+    // Divide by the timeline length so bars align to wall-clock time; samples past the
+    // expected length (audio slightly longer than the container) fold into the last bucket.
+    let span = if expected_samples > 0 { expected_samples } else { n_samples };
+    let mut out = vec![0.0f32; buckets];
+    for i in 0..n_samples {
+        let s = i16::from_le_bytes([bytes[i * 2], bytes[i * 2 + 1]]);
+        let amp = (s as f32).abs() / i16::MAX as f32;
+        let b = (i * buckets / span).min(buckets - 1);
+        if amp > out[b] {
+            out[b] = amp;
+        }
+    }
+    out
+}
+
+/// Auto-gain: scale peaks so the loudest bucket reaches full height, giving quiet mic audio
+/// real vertical distinction. Near-silent tracks (max ≤ 0.05) are left flat so we don't
+/// amplify hiss into a full-scale waveform. Pure + unit-tested.
+pub fn normalize_peaks(mut peaks: Vec<f32>) -> Vec<f32> {
+    let max = peaks.iter().copied().fold(0.0f32, f32::max);
+    if max > 0.05 {
+        let g = 1.0 / max;
+        for p in peaks.iter_mut() {
+            *p = (*p * g).min(1.0);
+        }
+    }
+    peaks
+}
+
 /// Parse `ffprobe -show_streams -show_format -of json` output.
 pub fn parse_ffprobe_json(json: &str) -> Result<ProbeResult, String> {
     let v: serde_json::Value = serde_json::from_str(json).map_err(|e| e.to_string())?;
@@ -49,34 +104,43 @@ pub fn parse_ffprobe_json(json: &str) -> Result<ProbeResult, String> {
     Ok(ProbeResult { duration_secs, has_audio, fps, width, height })
 }
 
-/// Validate + sort keep-regions: non-empty, each (start < end), all within
-/// [0, duration], and non-overlapping after sorting by start.
-pub fn validate_keep(keep: &[(f64, f64)], duration: f64) -> Result<Vec<(f64, f64)>, String> {
-    if keep.is_empty() {
+/// Validate + sort kept segments: non-empty, each (start < end), all within [0, duration],
+/// non-overlapping after sorting by start, and speed within [0.5, 2].
+pub fn validate_segments(segments: &[KeepSegment], duration: f64) -> Result<Vec<KeepSegment>, String> {
+    if segments.is_empty() {
         return Err("nothing to keep".into());
     }
-    let mut v = keep.to_vec();
-    v.sort_by(|a, b| a.0.partial_cmp(&b.0).unwrap_or(std::cmp::Ordering::Equal));
+    let mut v = segments.to_vec();
+    v.sort_by(|a, b| a.start.partial_cmp(&b.start).unwrap_or(std::cmp::Ordering::Equal));
     let mut prev_end = 0.0;
-    for (i, (s, e)) in v.iter().enumerate() {
+    for (i, s) in v.iter().enumerate() {
         // Reject empty/inverted regions AND NaN (partial_cmp is None for NaN → rejected).
-        if !matches!(e.partial_cmp(s), Some(std::cmp::Ordering::Greater)) {
+        if !matches!(s.end.partial_cmp(&s.start), Some(std::cmp::Ordering::Greater)) {
             return Err("empty keep-region".into());
         }
-        if *s < -1e-6 || *e > duration + 1e-3 {
+        if s.start < -1e-6 || s.end > duration + 1e-3 {
             return Err("keep-region out of bounds".into());
         }
-        if i > 0 && *s < prev_end - 1e-6 {
+        if i > 0 && s.start < prev_end - 1e-6 {
             return Err("overlapping keep-regions".into());
         }
-        prev_end = *e;
+        // NaN fails both comparisons → rejected.
+        if !(s.speed >= 0.5 - 1e-9 && s.speed <= 2.0 + 1e-9) {
+            return Err("speed out of range".into());
+        }
+        prev_end = s.end;
     }
     Ok(v)
 }
 
-/// True when the edit changes nothing: a single region spanning ~the whole file.
-pub fn is_noop(keep: &[(f64, f64)], duration: f64) -> bool {
-    keep.len() == 1 && keep[0].0 <= 1e-3 && keep[0].1 >= duration - 0.05
+/// True when the edit changes nothing: a single full-span segment at speed 1 with no fades.
+pub fn is_noop(segments: &[KeepSegment], duration: f64, fade_in: f64, fade_out: f64) -> bool {
+    segments.len() == 1
+        && segments[0].start <= 1e-3
+        && segments[0].end >= duration - 0.05
+        && (segments[0].speed - 1.0).abs() < 1e-9
+        && fade_in <= 1e-9
+        && fade_out <= 1e-9
 }
 
 /// Derive `<name> (trimmed).mp4` next to the source; append a counter on collision.
@@ -93,31 +157,76 @@ pub fn trimmed_output_path(src: &Path) -> PathBuf {
     candidate
 }
 
-/// Build the ffmpeg args for a frame-accurate trim: trim each keep-region and
-/// concat them in one re-encode pass. `keep` is a list of (start, end) seconds in
-/// the source timeline (already validated: sorted, non-overlapping, in-bounds).
-/// `has_audio` picks the audio-bearing graph.
-pub fn build_trim_args(input: &str, output: &str, keep: &[(f64, f64)], has_audio: bool) -> Vec<String> {
+/// Build ffmpeg args for a per-segment trim: trim each kept segment (applying its speed),
+/// concat them in one re-encode pass, then optionally fade the concatenated output in/out.
+/// `segments` is already validated (sorted, non-overlapping, in-bounds, speed∈[0.5,2]).
+/// A speed-1 segment emits the plain `setpts=PTS-STARTPTS`; with both fades 0 the concat
+/// writes `[outv]`/`[outa]` directly (byte-identical to the pre-speed/fade path).
+pub fn build_trim_args(
+    input: &str,
+    output: &str,
+    segments: &[KeepSegment],
+    has_audio: bool,
+    fade_in: f64,
+    fade_out: f64,
+) -> Vec<String> {
     // Format a number without a trailing ".0" (so 1.5 -> "1.5", 3.0 -> "3").
     fn num(n: f64) -> String {
         if n.fract() == 0.0 { format!("{}", n as i64) } else { format!("{n}") }
     }
+    let one = |k: f64| (k - 1.0).abs() < 1e-9;
+
     let mut fc = String::new();
-    for (i, (s, e)) in keep.iter().enumerate() {
-        fc.push_str(&format!("[0:v]trim={}:{},setpts=PTS-STARTPTS[v{i}];", num(*s), num(*e)));
+    for (i, s) in segments.iter().enumerate() {
+        if one(s.speed) {
+            fc.push_str(&format!("[0:v]trim={}:{},setpts=PTS-STARTPTS[v{i}];", num(s.start), num(s.end)));
+        } else {
+            fc.push_str(&format!("[0:v]trim={}:{},setpts=(PTS-STARTPTS)/{}[v{i}];", num(s.start), num(s.end), num(s.speed)));
+        }
         if has_audio {
-            fc.push_str(&format!("[0:a]atrim={}:{},asetpts=PTS-STARTPTS[a{i}];", num(*s), num(*e)));
+            if one(s.speed) {
+                fc.push_str(&format!("[0:a]atrim={}:{},asetpts=PTS-STARTPTS[a{i}];", num(s.start), num(s.end)));
+            } else {
+                fc.push_str(&format!("[0:a]atrim={}:{},asetpts=PTS-STARTPTS,atempo={}[a{i}];", num(s.start), num(s.end), num(s.speed)));
+            }
         }
     }
-    let n = keep.len();
+    let n = segments.len();
     for i in 0..n {
         fc.push_str(&format!("[v{i}]"));
         if has_audio { fc.push_str(&format!("[a{i}]")); }
     }
+
+    // Fades post-process the concat output; with no fades, concat writes [outv]/[outa]
+    // directly (byte-identical to the pre-fade path).
+    let apply_fade = fade_in > 1e-9 || fade_out > 1e-9;
+    let (vlabel, alabel) = if apply_fade { ("cv", "ca") } else { ("outv", "outa") };
     if has_audio {
-        fc.push_str(&format!("concat=n={n}:v=1:a=1[outv][outa]"));
+        fc.push_str(&format!("concat=n={n}:v=1:a=1[{vlabel}][{alabel}]"));
     } else {
-        fc.push_str(&format!("concat=n={n}:v=1:a=0[outv]"));
+        fc.push_str(&format!("concat=n={n}:v=1:a=0[{vlabel}]"));
+    }
+    if apply_fade {
+        let out_dur = output_duration(segments);
+        let st = (out_dur - fade_out).max(0.0);
+        let mut vf = String::new();
+        if fade_in > 1e-9 { vf.push_str(&format!("fade=t=in:st=0:d={}", num(fade_in))); }
+        if fade_out > 1e-9 {
+            if !vf.is_empty() { vf.push(','); }
+            vf.push_str(&format!("fade=t=out:st={}:d={}", num(st), num(fade_out)));
+        }
+        fc.push_str(&format!(";[cv]{vf}[outv]"));
+        if has_audio {
+            // qsin (quarter-sine) curve fades sound smoother/more natural than the default
+            // linear ramp — no abrupt onset at the fade's start.
+            let mut af = String::new();
+            if fade_in > 1e-9 { af.push_str(&format!("afade=t=in:st=0:d={}:curve=qsin", num(fade_in))); }
+            if fade_out > 1e-9 {
+                if !af.is_empty() { af.push(','); }
+                af.push_str(&format!("afade=t=out:st={}:d={}:curve=qsin", num(st), num(fade_out)));
+            }
+            fc.push_str(&format!(";[ca]{af}[outa]"));
+        }
     }
 
     let mut a: Vec<String> = vec![
@@ -164,6 +273,41 @@ pub async fn recorder_trim_probe(app: tauri::AppHandle, path: String) -> Result<
     parse_ffprobe_json(&json)
 }
 
+/// Extract a downsampled mono waveform for the timeline. Runs ffmpeg to decode audio to
+/// mono s16le @ 8 kHz, then buckets it. Any failure (no audio track, ffmpeg error) → Err;
+/// the frontend treats that as "no waveform" and renders the timeline without it.
+const WAVEFORM_RATE: usize = 8000;
+
+#[tauri::command(async)]
+pub async fn recorder_trim_waveform(
+    app: tauri::AppHandle,
+    path: String,
+    buckets: u32,
+    duration: f64,
+) -> Result<Vec<f32>, String> {
+    let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("ffmpeg resolve: {e}"))?;
+    let out = sidecar
+        .args([
+            "-v", "error",
+            "-i", &path,
+            "-map", "0:a:0",
+            "-ac", "1",
+            "-ar", &WAVEFORM_RATE.to_string(),
+            "-f", "s16le",
+            "-",
+        ])
+        .output()
+        .await
+        .map_err(|e| format!("ffmpeg run: {e}"))?;
+    if !out.status.success() {
+        return Err("no audio / ffmpeg failed".into());
+    }
+    // Bucket over the timeline length (duration × rate) so the waveform lines up with the
+    // ruler, then auto-gain so quiet mic audio still reads.
+    let expected = (duration.max(0.0) * WAVEFORM_RATE as f64) as usize;
+    Ok(normalize_peaks(peaks_from_pcm_s16le(&out.stdout, buckets as usize, expected)))
+}
+
 /// Video source extensions accepted for "Open in Glint" → trim. Matches the Windows
 /// `video` perceived type the shell verb registers under.
 pub const VIDEO_EXTS: [&str; 7] = ["mp4", "mov", "mkv", "webm", "avi", "m4v", "wmv"];
@@ -197,18 +341,20 @@ pub async fn recorder_trim_export(
     app: tauri::AppHandle,
     id: i64,
     src_path: String,
-    keep: Vec<(f64, f64)>,
+    segments: Vec<KeepSegment>,
     has_audio: bool,
     duration: f64,
     width: i64,
     height: i64,
+    fade_in: f64,
+    fade_out: f64,
     mode: String,
 ) -> Result<(), String> {
-    let keep = validate_keep(&keep, duration)?;
-    if is_noop(&keep, duration) {
+    let segments = validate_segments(&segments, duration)?;
+    if is_noop(&segments, duration, fade_in, fade_out) {
         return Err("no changes to save".into());
     }
-    let total_kept: f64 = keep.iter().map(|(s, e)| e - s).sum();
+    let total_out: f64 = output_duration(&segments);
 
     let src = PathBuf::from(&src_path);
     let final_path = if mode == "overwrite" { src.clone() } else { trimmed_output_path(&src) };
@@ -216,7 +362,7 @@ pub async fn recorder_trim_export(
     let tmp_str = tmp.to_string_lossy().to_string();
     let _ = std::fs::remove_file(&tmp); // clear any stale temp from a prior failed run
 
-    let args = build_trim_args(&src_path, &tmp_str, &keep, has_audio);
+    let args = build_trim_args(&src_path, &tmp_str, &segments, has_audio, fade_in, fade_out);
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("ffmpeg resolve: {e}"))?;
     let (mut rx, _child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
 
@@ -229,7 +375,7 @@ pub async fn recorder_trim_export(
                 for kv in line.split_whitespace() {
                     if let Some(us) = kv.strip_prefix("out_time_us=") {
                         if let Ok(us) = us.parse::<f64>() {
-                            let pct = ((us / 1_000_000.0) / total_kept.max(0.001) * 100.0).clamp(0.0, 100.0);
+                            let pct = ((us / 1_000_000.0) / total_out.max(0.001) * 100.0).clamp(0.0, 100.0);
                             let _ = app.emit_to(crate::recorder::windows::TRIM_LABEL, "rec-trim-progress", pct);
                         }
                     }
@@ -333,9 +479,11 @@ mod tests {
         assert_eq!(first_video_arg(&args), None);
     }
 
+    fn seg(start: f64, end: f64, speed: f64) -> KeepSegment { KeepSegment { start, end, speed } }
+
     #[test]
     fn video_only_two_regions_concat() {
-        let a = build_trim_args("in.mp4", "out.mp4", &[(0.0, 1.5), (3.0, 4.0)], false);
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 1.5, 1.0), seg(3.0, 4.0, 1.0)], false, 0.0, 0.0);
         let fc = "[0:v]trim=0:1.5,setpts=PTS-STARTPTS[v0];\
                   [0:v]trim=3:4,setpts=PTS-STARTPTS[v1];\
                   [v0][v1]concat=n=2:v=1:a=0[outv]";
@@ -351,7 +499,7 @@ mod tests {
 
     #[test]
     fn video_audio_interleaves_streams() {
-        let a = build_trim_args("in.mp4", "out.mp4", &[(0.0, 2.0), (5.0, 6.5)], true);
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 2.0, 1.0), seg(5.0, 6.5, 1.0)], true, 0.0, 0.0);
         let fc = "[0:v]trim=0:2,setpts=PTS-STARTPTS[v0];\
                   [0:a]atrim=0:2,asetpts=PTS-STARTPTS[a0];\
                   [0:v]trim=5:6.5,setpts=PTS-STARTPTS[v1];\
@@ -365,19 +513,102 @@ mod tests {
     }
 
     #[test]
-    fn single_region_uses_concat_n1() {
-        let a = build_trim_args("in.mp4", "out.mp4", &[(2.0, 8.0)], false);
+    fn speed_segment_divides_video_pts_and_atempos_audio() {
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 4.0, 2.0)], true, 0.0, 0.0);
+        let fc = "[0:v]trim=0:4,setpts=(PTS-STARTPTS)/2[v0];\
+                  [0:a]atrim=0:4,asetpts=PTS-STARTPTS,atempo=2[a0];\
+                  [v0][a0]concat=n=1:v=1:a=1[outv][outa]";
+        assert!(a.windows(2).any(|w| w[0] == "-filter_complex" && w[1] == fc), "got {a:?}");
+    }
+
+    #[test]
+    fn speed_one_is_byte_identical_to_plain_trim() {
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(2.0, 8.0, 1.0)], false, 0.0, 0.0);
         assert!(a.windows(2).any(|w| w[0] == "-filter_complex"
             && w[1] == "[0:v]trim=2:8,setpts=PTS-STARTPTS[v0];[v0]concat=n=1:v=1:a=0[outv]"), "got {a:?}");
     }
 
     #[test]
+    fn fades_post_process_the_concat_output() {
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 10.0, 1.0)], true, 1.0, 2.0);
+        let fc = "[0:v]trim=0:10,setpts=PTS-STARTPTS[v0];\
+                  [0:a]atrim=0:10,asetpts=PTS-STARTPTS[a0];\
+                  [v0][a0]concat=n=1:v=1:a=1[cv][ca];\
+                  [cv]fade=t=in:st=0:d=1,fade=t=out:st=8:d=2[outv];\
+                  [ca]afade=t=in:st=0:d=1:curve=qsin,afade=t=out:st=8:d=2:curve=qsin[outa]";
+        assert!(a.windows(2).any(|w| w[0] == "-filter_complex" && w[1] == fc), "got {a:?}");
+        assert!(a.windows(2).any(|w| w[0] == "-map" && w[1] == "[outv]"));
+        assert!(a.windows(2).any(|w| w[0] == "-map" && w[1] == "[outa]"));
+    }
+
+    #[test]
+    fn fade_out_start_is_speed_aware() {
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 4.0, 2.0), seg(10.0, 14.0, 1.0)], false, 0.0, 1.0);
+        let fc = a.iter().position(|s| s == "-filter_complex").map(|i| a[i + 1].clone()).unwrap();
+        assert!(fc.contains("fade=t=out:st=5:d=1"), "got {fc}");
+    }
+
+    #[test]
     fn args_silence_stderr_and_progress() {
-        let a = build_trim_args("in.mp4", "out.mp4", &[(0.0, 1.0)], false);
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 1.0, 1.0)], false, 0.0, 0.0);
         assert!(a.iter().any(|s| s == "-nostats"));
         assert!(a.windows(2).any(|w| w[0] == "-loglevel" && w[1] == "error"));
         assert!(a.windows(2).any(|w| w[0] == "-progress" && w[1] == "pipe:1"));
         assert!(a.iter().any(|s| s == "-y"));
+        assert!(a.windows(2).any(|w| w[0] == "-c:v" && w[1] == "libx264"));
+        assert!(a.windows(2).any(|w| w[0] == "-pix_fmt" && w[1] == "yuv420p"));
+        assert!(a.windows(2).any(|w| w[0] == "-movflags" && w[1] == "+faststart"));
+    }
+
+    #[test]
+    fn output_duration_is_speed_weighted() {
+        let d = output_duration(&[seg(0.0, 4.0, 2.0), seg(10.0, 16.0, 1.0)]);
+        assert!((d - (2.0 + 6.0)).abs() < 1e-9, "got {d}");
+    }
+
+    #[test]
+    fn peaks_bucket_max_abs_normalized() {
+        // 4 samples (i16le): 0, 16384(=0.5), -32768(=1.0), 8192(=0.25) → 2 buckets.
+        let mut bytes = Vec::new();
+        for v in [0i16, 16384, -32768, 8192] { bytes.extend_from_slice(&v.to_le_bytes()); }
+        let p = peaks_from_pcm_s16le(&bytes, 2, 4); // span = actual length
+        assert_eq!(p.len(), 2);
+        assert!((p[0] - 0.5).abs() < 1e-3, "bucket0 = {}", p[0]);  // max(|0|,|0.5|)
+        assert!((p[1] - 1.0).abs() < 1e-3, "bucket1 = {}", p[1]);  // max(|1.0|,|0.25|)
+    }
+
+    #[test]
+    fn peaks_align_to_expected_len_with_trailing_silence() {
+        // 2 samples of full-scale audio but the timeline expects 4 samples → with 2 buckets,
+        // all the signal lands in bucket 0 and bucket 1 (past the audio) reads silent.
+        let mut bytes = Vec::new();
+        for v in [32767i16, 32767] { bytes.extend_from_slice(&v.to_le_bytes()); }
+        let p = peaks_from_pcm_s16le(&bytes, 2, 4);
+        assert!(p[0] > 0.9, "bucket0 = {}", p[0]);
+        assert_eq!(p[1], 0.0, "bucket1 should be silent");
+    }
+
+    #[test]
+    fn normalize_scales_loudest_to_full_height() {
+        let p = normalize_peaks(vec![0.1, 0.2, 0.4]);
+        assert!((p[2] - 1.0).abs() < 1e-6, "max→1: {}", p[2]);
+        assert!((p[0] - 0.25).abs() < 1e-6, "proportional: {}", p[0]);
+    }
+
+    #[test]
+    fn normalize_leaves_near_silence_flat() {
+        let p = normalize_peaks(vec![0.01, 0.02]);
+        assert!(p[1] < 0.05, "hiss must not be amplified: {}", p[1]);
+    }
+
+    #[test]
+    fn peaks_empty_input_is_zeros() {
+        assert_eq!(peaks_from_pcm_s16le(&[], 3, 3), vec![0.0, 0.0, 0.0]);
+    }
+
+    #[test]
+    fn peaks_zero_buckets_is_empty() {
+        assert!(peaks_from_pcm_s16le(&[0, 0, 0, 0], 0, 2).is_empty());
     }
 
     #[test]
@@ -406,25 +637,25 @@ mod tests {
     }
 
     #[test]
-    fn validate_sorts_and_rejects_overlap_and_oob() {
-        // sorted + in-bounds OK
-        assert_eq!(validate_keep(&[(3.0, 4.0), (0.0, 1.0)], 10.0).unwrap(), vec![(0.0, 1.0), (3.0, 4.0)]);
-        // overlap rejected
-        assert!(validate_keep(&[(0.0, 2.0), (1.0, 3.0)], 10.0).is_err());
-        // out of bounds rejected
-        assert!(validate_keep(&[(0.0, 11.0)], 10.0).is_err());
-        // zero/negative length rejected
-        assert!(validate_keep(&[(2.0, 2.0)], 10.0).is_err());
-        // empty rejected
-        assert!(validate_keep(&[], 10.0).is_err());
+    fn validate_sorts_rejects_overlap_oob_and_bad_speed() {
+        assert_eq!(
+            validate_segments(&[seg(3.0, 4.0, 1.0), seg(0.0, 1.0, 2.0)], 10.0).unwrap(),
+            vec![seg(0.0, 1.0, 2.0), seg(3.0, 4.0, 1.0)]
+        );
+        assert!(validate_segments(&[seg(0.0, 2.0, 1.0), seg(1.0, 3.0, 1.0)], 10.0).is_err()); // overlap
+        assert!(validate_segments(&[seg(0.0, 11.0, 1.0)], 10.0).is_err());                    // oob
+        assert!(validate_segments(&[seg(2.0, 2.0, 1.0)], 10.0).is_err());                     // empty
+        assert!(validate_segments(&[], 10.0).is_err());                                       // empty list
+        assert!(validate_segments(&[seg(0.0, 5.0, 3.0)], 10.0).is_err());                     // speed too high
+        assert!(validate_segments(&[seg(0.0, 5.0, 0.25)], 10.0).is_err());                    // speed too low
     }
 
     #[test]
-    fn noop_when_single_full_span() {
-        assert!(is_noop(&[(0.0, 10.0)], 10.0));
-        assert!(is_noop(&[(0.0, 9.98)], 10.0)); // within tolerance of full
-        assert!(!is_noop(&[(0.0, 5.0)], 10.0));
-        assert!(!is_noop(&[(0.0, 4.0), (6.0, 10.0)], 10.0)); // a gap exists
+    fn noop_only_when_full_span_speed1_no_fades() {
+        assert!(is_noop(&[seg(0.0, 10.0, 1.0)], 10.0, 0.0, 0.0));
+        assert!(!is_noop(&[seg(0.0, 10.0, 2.0)], 10.0, 0.0, 0.0));  // speed change is an edit
+        assert!(!is_noop(&[seg(0.0, 10.0, 1.0)], 10.0, 0.5, 0.0));  // fade is an edit
+        assert!(!is_noop(&[seg(0.0, 5.0, 1.0)], 10.0, 0.0, 0.0));   // a cut
     }
 
     #[test]
