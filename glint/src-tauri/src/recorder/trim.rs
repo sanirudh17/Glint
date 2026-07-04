@@ -420,6 +420,18 @@ pub async fn recorder_trim_export(
     mode: String,
 ) -> Result<(), String> {
     let segments = validate_segments(&segments, duration)?;
+    // Degrade gracefully: if the editor asked for the overlay but the sidecar is missing or
+    // implausibly small, drop it (screen-only export + toast) rather than feeding ffmpeg a
+    // bad input. Done before the noop check so "just the webcam" on a broken track is a noop.
+    let cam_ok = cam_path
+        .as_deref()
+        .is_some_and(|p| std::fs::metadata(p).map(|m| m.len() > 1024).unwrap_or(false));
+    let cam_overlay = if cam_overlay.is_some() && !cam_ok {
+        let _ = app.emit("glint-toast", "Webcam track unavailable — exported without it");
+        None
+    } else {
+        cam_overlay
+    };
     if is_noop(&segments, duration, fade_in, fade_out) && cam_overlay.is_none() {
         return Err("no changes to save".into());
     }
