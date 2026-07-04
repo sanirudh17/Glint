@@ -3,6 +3,7 @@
 //! only outbound coupling is on stop: write the MP4 + insert one Library row.
 
 pub mod audio;
+pub mod cam;
 pub mod ffmpeg;
 pub mod fx;
 pub mod pipes;

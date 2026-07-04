@@ -295,6 +295,7 @@ pub fn run() {
             recorder::recorder_status,
             recorder::recorder_set_mute,
             recorder::recorder_set_webcam,
+            recorder::cam::recorder_cam_write_chunk,
             recorder::recorder_set_fx,
             recorder::recorder_open_region_selector,
             recorder::rec_hud_data,
