@@ -88,8 +88,9 @@ export function RegionSelect() {
       seeded.current = true;
       setSys(settings.record_system_audio ?? true);
       setMic(settings.record_microphone ?? false);
-      setCam(settings.record_webcam ?? false);
-      setCamMovable(settings.record_webcam_movable ?? false);
+      const movable = settings.record_webcam_movable ?? false;
+      setCam((settings.record_webcam ?? false) || movable); // movable implies webcam on
+      setCamMovable(movable);
       setClickViz(settings.record_click_viz ?? false);
       setKeystrokes(settings.record_keystrokes ?? false);
       setSpotlight(settings.record_cursor_spotlight ?? false);
@@ -261,7 +262,7 @@ export function RegionSelect() {
           <button
             className={`rec-sel-chip${cam ? "" : " rec-sel-chip--off"}`}
             onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => setCam((v) => !v)}
+            onClick={() => { const next = !cam; setCam(next); if (!next) setCamMovable(false); }}
             title="Webcam"
           >
             {cam ? <Video size={14} /> : <VideoOff size={14} />} Cam

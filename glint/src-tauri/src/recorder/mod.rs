@@ -677,12 +677,14 @@ pub async fn recorder_start(
     // permission prompt is then resolved up front, so it never lands in the recording
     // and the countdown/capture don't begin until the user has pressed Allow. The
     // bubble stays open through the countdown so the user can frame.
-    let want_cam = webcam.unwrap_or(false);
-    // Movable mode records the camera as its own track; the bubble is capture-excluded.
-    // Honoured from the per-recording selector chip OR the persisted Settings default.
+    // "Movable" is a webcam *mode* — honoured from the per-recording chip OR the persisted
+    // Settings default. Wanting it implies recording the webcam at all, so a user who only
+    // flips the Movable toggle still gets a (movable) webcam instead of silently nothing.
+    let want_movable_pref = webcam_movable.unwrap_or(false) || setting_movable;
+    let want_cam = webcam.unwrap_or(false) || want_movable_pref;
     // `mut` so a pre-start fallback can demote it to baked-in when unsupported.
-    let mut want_cam_movable = want_cam && (webcam_movable.unwrap_or(false) || setting_movable);
-    log::info!("recorder_start: want_cam={want_cam} want_cam_movable={want_cam_movable} (chip={webcam_movable:?} setting={setting_movable})");
+    let mut want_cam_movable = want_cam && want_movable_pref;
+    log::info!("recorder_start: want_cam={want_cam} want_cam_movable={want_cam_movable} (webcam={webcam:?} chip_movable={webcam_movable:?} setting_movable={setting_movable})");
     if want_cam {
         let _ = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable);
         let movable_ok = wait_for_cam_ready(&app).await;
