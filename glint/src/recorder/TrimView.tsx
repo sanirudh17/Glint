@@ -8,7 +8,7 @@ import { trimTarget, trimProbe, trimExport, trimWaveform, type ProbeResult } fro
 import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
 import { TrimCamOverlay } from "./TrimCamOverlay";
-import { type CamPlacement, DEFAULT_PLACEMENT } from "./camOverlay";
+import { type CamPlacement, DEFAULT_PLACEMENT, toPixels } from "./camOverlay";
 import "./trim.css";
 
 /** `<stem>.cam.webm` sibling of the recording — matches Rust `cam_sidecar_path`. */
@@ -84,7 +84,9 @@ export function TrimView() {
   const zoomOut = useCallback(() => setZoom((z) => ZOOMS[Math.max(ZOOMS.indexOf(z) - 1, 0)] ?? z), []);
   const noop = ranges.length === 1 && ranges[0][0] <= 0.001 && ranges[0][1] >= duration - 0.05
     && clips.filter((c) => c.kept).every((c) => c.speed === 1) && fadeIn === 0 && fadeOut === 0;
-  const canSave = clips.length > 0 && keptCount(clips) > 0 && !noop && exporting === null;
+  // A visible webcam overlay is itself an edit worth exporting, even with no cuts/speed/fades.
+  const camEdit = !!(probe?.has_cam && cam?.visible);
+  const canSave = clips.length > 0 && keptCount(clips) > 0 && (!noop || camEdit) && exporting === null;
 
   // The selected block: the clip clicked on the timeline (sticky). Falls back to none once
   // the id no longer exists (e.g. after undo/redo swaps in a different history state).
@@ -291,7 +293,11 @@ export function TrimView() {
   const save = (mode: "copy" | "overwrite") => {
     if (!target || !probe || !canSave) return;
     setExporting(0);
-    trimExport(target.id, target.path, keptSegments(clips), probe.has_audio, duration, probe.width, probe.height, fadeIn, fadeOut, mode)
+    // Bake the webcam overlay only when it's present and visible; else export as before.
+    const useCam = probe.has_cam && !!cam?.visible;
+    const camPath = useCam ? camSiblingPath(target.path) : null;
+    const camOverlay = useCam && cam ? toPixels(cam, probe.width, probe.height) : null;
+    trimExport(target.id, target.path, keptSegments(clips), probe.has_audio, duration, probe.width, probe.height, fadeIn, fadeOut, camPath, camOverlay, mode)
       .catch(() => setExporting(null)); // a toast already surfaced; window stays open
   };
 

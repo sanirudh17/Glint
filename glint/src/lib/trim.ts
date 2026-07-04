@@ -27,6 +27,13 @@ export interface KeepSegment {
   speed: number;
 }
 
+/** Webcam overlay placement in source pixels (top-left + diameter), or null for none. */
+export interface CamOverlay {
+  x: number;
+  y: number;
+  d: number;
+}
+
 export const trimExport = (
   id: number,
   srcPath: string,
@@ -37,6 +44,8 @@ export const trimExport = (
   height: number,
   fadeIn: number,
   fadeOut: number,
+  camPath: string | null,
+  camOverlay: CamOverlay | null,
   mode: "copy" | "overwrite",
 ): Promise<void> =>
   invoke<void>("recorder_trim_export", {
@@ -49,6 +58,8 @@ export const trimExport = (
     height,
     fadeIn,
     fadeOut,
+    camPath,
+    camOverlay,
     mode,
   });
 
