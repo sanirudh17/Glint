@@ -117,12 +117,16 @@
   background: #1b1d27; color: #e8e8ee;
   border: 1px solid rgba(255,255,255,0.12); border-radius: 7px;
   cursor: grab; user-select: none; -webkit-user-select: none;
+  touch-action: none; /* pointer drag must not be hijacked by the strip's horizontal scroll */
   transition: border-color 120ms var(--ease, ease), background 120ms var(--ease, ease);
 }
 .trim-strip-tile:active { cursor: grabbing; }
 .trim-strip-tile--dragging { opacity: 0.5; }
 /* Insertion target: a bright accent edge marks where the dragged tile will land. */
 .trim-strip-tile--over { border-color: var(--accent); box-shadow: -2px 0 0 0 var(--accent); }
+/* Selected clip: matches the timeline's sticky selection so number/speed keys have a clear
+   target. Uses the accent so it reads as "active". */
+.trim-strip-tile--selected { border-color: var(--accent); background: var(--accent-subtle); }
 .trim-strip-grip { opacity: 0.5; }
 .trim-strip-index {
   display: inline-flex; align-items: center; justify-content: center;

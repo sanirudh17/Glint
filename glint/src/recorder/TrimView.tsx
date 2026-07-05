@@ -204,6 +204,13 @@ export function TrimView() {
     const next = reorderKept(clips, from, to);
     if (next !== clips) commit({ ...edit, clips: next });
   }, [commit, edit, clips]);
+  // Clicking a filmstrip tile seats the sticky timeline selection on that clip (so the speed
+  // buttons/keys act on it) and jumps the playhead there for a clear visual indication.
+  const selectClip = useCallback((id: number) => {
+    setSelectedId(id);
+    const c = clips.find((x) => x.id === id);
+    if (c) seek(c.start);
+  }, [clips, seek]);
   const SPEEDS = [0.5, 1, 1.5, 2];
   const selSpeed = selected?.speed ?? 1;
   const canSpeed = selected != null && selected.kept && exporting === null;
@@ -397,7 +404,7 @@ export function TrimView() {
         />
       )}
 
-      <TrimFilmstrip clips={clips} disabled={exporting !== null} onReorder={doReorder} />
+      <TrimFilmstrip clips={clips} disabled={exporting !== null} selectedId={selectedId} onReorder={doReorder} onSelect={selectClip} />
 
       <div className="trim-actions">
         <span className="trim-out">Output: {fmt(outDur)} / {fmt(duration)}</span>
