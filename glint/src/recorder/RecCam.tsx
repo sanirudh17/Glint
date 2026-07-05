@@ -17,6 +17,7 @@ export function RecCam() {
   const mrRef = useRef<MediaRecorder | null>(null);
   const firstChunkRef = useRef(true);
   const [sizeIdx, setSizeIdx] = useState(1);
+  const [shape, setShape] = useState<string>("circle");
 
   useEffect(() => {
     // Do NOT register onCloseRequested here. @tauri-apps/api's onCloseRequested
@@ -54,8 +55,9 @@ export function RecCam() {
       // straight from the backend settings.
       let deviceId = "";
       try {
-        const s = await invoke<{ webcam_device_id?: string }>("settings_get_all");
+        const s = await invoke<{ webcam_device_id?: string; webcam_shape?: string }>("settings_get_all");
         deviceId = s?.webcam_device_id ?? "";
+        if (s?.webcam_shape) setShape(s.webcam_shape);
       } catch {
         deviceId = "";
       }
@@ -140,11 +142,16 @@ export function RecCam() {
     const win = getCurrentWindow();
     const cur = SIZES[sizeIdx];
     const dim = SIZES[next];
+    // rounded/rect windows are 16:9; circle/square are 1:1 (keep the aspect on resize).
+    const ratio = shape === "rounded" || shape === "rect" ? 9 / 16 : 1;
+    const curH = cur * ratio;
+    const dimH = dim * ratio;
     const scale = await win.scaleFactor();
     const pos = await win.outerPosition(); // physical
-    const delta = Math.round((dim - cur) * scale);
-    await win.setSize(new LogicalSize(dim, dim));
-    await win.setPosition(new PhysicalPosition(pos.x - delta, pos.y - delta));
+    const dx = Math.round((dim - cur) * scale);
+    const dy = Math.round((dimH - curH) * scale);
+    await win.setSize(new LogicalSize(dim, dimH));
+    await win.setPosition(new PhysicalPosition(pos.x - dx, pos.y - dy));
     setSizeIdx(next);
   }
 
@@ -167,7 +174,7 @@ export function RecCam() {
   }
 
   return (
-    <div className="reccam" onPointerDown={onPointerDown}>
+    <div className={`reccam reccam--${shape}`} onPointerDown={onPointerDown}>
       <video ref={videoRef} className="reccam-video" autoPlay muted playsInline />
       <div className="reccam-controls">
         <button className="reccam-btn" title="Resize" aria-label="Resize" onClick={cycleSize}>

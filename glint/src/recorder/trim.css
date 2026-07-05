@@ -23,10 +23,15 @@
   border: 2px solid rgba(255,255,255,0.85);
   box-shadow: 0 4px 14px rgba(0,0,0,0.45);
 }
+/* Shape is clipped by the overflow:hidden container's border-radius. */
+.trim-cam--circle  { border-radius: 50%; }
+.trim-cam--square  { border-radius: 14%; }
+.trim-cam--rounded { border-radius: 16px; }
+.trim-cam--rect    { border-radius: 0; }
 .trim-cam-video { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
 .trim-cam-handle {
   position: absolute; right: -6px; bottom: -6px; width: 16px; height: 16px;
-  border-radius: 50%; background: #5b7cfa; border: 2px solid #fff;
+  border-radius: 50%; background: var(--accent); border: 2px solid #fff;
   cursor: nwse-resize; pointer-events: auto;
 }
 .trim-meta {
@@ -42,7 +47,7 @@
 .trim-time, .trim-out { opacity: 0.85; font-variant-numeric: tabular-nums; }
 .trim-iconbtn, .trim-btn { background: #1b1d27; color: #e8e8ee; border: 1px solid rgba(255,255,255,0.12); border-radius: 7px; padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .trim-iconbtn:disabled, .trim-btn:disabled { opacity: 0.4; cursor: default; }
-.trim-btn--primary { background: #5b7cfa; border-color: #5b7cfa; }
+.trim-btn--primary { background: var(--accent); border-color: var(--accent); }
 .trim-track { position: relative; height: 56px; margin: 0 12px 4px; background: #14151c; border-radius: 8px; overflow: hidden; cursor: ew-resize; touch-action: none; }
 /* Zoomable content layer: `zoom×` wider than the track, panned via translateX. All timeline
    children (waveform, clips, playhead) are positioned relative to this, so their plain
@@ -50,12 +55,12 @@
 .trim-content { position: absolute; top: 0; bottom: 0; left: 0; will-change: transform; }
 /* Kept clips are translucent so the waveform behind them shows through; gaps are a
    dim translucent hatch that reads as "removed" and dims the waveform underneath. */
-.trim-clip { position: absolute; top: 6px; bottom: 6px; background: rgba(91,124,250,0.15); border: 1px solid #5b7cfa; border-radius: 5px; box-sizing: border-box; pointer-events: none; }
+.trim-clip { position: absolute; top: 6px; bottom: 6px; background: var(--accent-subtle); border: 1px solid var(--accent); border-radius: 5px; box-sizing: border-box; pointer-events: none; }
 .trim-clip--gap { background: repeating-linear-gradient(45deg, rgba(20,21,28,0.82), rgba(20,21,28,0.82) 6px, rgba(15,16,22,0.82) 6px, rgba(15,16,22,0.82) 12px); border-color: rgba(255,255,255,0.08); }
 .trim-clip--sel { outline: 2px solid #9db2ff; }
 .trim-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff5d5d; pointer-events: none; }
 .trim-progress { position: relative; flex: 1; height: 26px; background: #14151c; border-radius: 7px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
-.trim-progress-fill { position: absolute; left: 0; top: 0; bottom: 0; background: #5b7cfa55; }
+.trim-progress-fill { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 33%, transparent); }
 .trim-progress span { position: relative; font-size: 12px; }
 
 /* Segment speed control (transport) */
@@ -84,8 +89,13 @@
   font-variant-numeric: tabular-nums; pointer-events: none;
 }
 
-/* Fade steppers (actions row) */
-.trim-fades { display: inline-flex; gap: 12px; align-items: center; }
+/* Fade steppers (actions row) — separated from the zoom/cam controls to their left by a
+   divider + breathing room so the −/+ steppers aren't confused with the zoom −/+ buttons. */
+.trim-fades {
+  display: inline-flex; gap: 14px; align-items: center;
+  margin-left: 8px; padding-left: 18px;
+  border-left: 1px solid rgba(255,255,255,0.1);
+}
 .trim-fade { display: inline-flex; align-items: center; gap: 4px; }
 .trim-fade-label { font-size: 11px; color: var(--text-dim); }
 .trim-fade-btn {

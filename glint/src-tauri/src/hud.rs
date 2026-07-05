@@ -32,6 +32,9 @@ pub const MARGIN_Y: f64 = 48.0;
 /// hidden/re-shown focus-less transparent WebView2 gets its renderer suspended —
 /// see the module note), sizing itself to its content via `tray_resize`.
 pub fn ensure_open(app: &AppHandle) -> tauri::Result<()> {
+    // The recording HUD shares this bottom-left corner; a new capture DISPLACES it so the two
+    // never sit as separate stacks (symmetric with build_rec_hud tearing this one down).
+    crate::recorder::windows::close_rec_hud(app);
     if app.get_webview_window(HUD_LABEL).is_some() {
         let _ = app.emit_to(HUD_LABEL, "tray-updated", ());
         return Ok(());

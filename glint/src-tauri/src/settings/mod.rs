@@ -67,6 +67,8 @@ pub struct Settings {
     pub record_fps: u32,
     /// Preferred webcam deviceId (browser MediaDevices id). Empty = system default camera.
     pub webcam_device_id: String,
+    /// Webcam bubble shape: "circle" | "rounded" | "square" | "rect".
+    pub webcam_shape: String,
 }
 
 impl Default for Settings {
@@ -96,6 +98,7 @@ impl Default for Settings {
             jpeg_quality: "high".into(),
             record_fps: 60,
             webcam_device_id: String::new(),
+            webcam_shape: "circle".into(),
         }
     }
 }
@@ -195,6 +198,13 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         "webcam_device_id" => {
             s.webcam_device_id =
                 value.as_str().ok_or("webcam_device_id must be string")?.to_string();
+        }
+        "webcam_shape" => {
+            let v = value.as_str().ok_or("webcam_shape must be string")?;
+            if !matches!(v, "circle" | "rounded" | "square" | "rect") {
+                return Err("webcam_shape must be circle|rounded|square|rect".into());
+            }
+            s.webcam_shape = v.to_string();
         }
         other => return Err(format!("unknown settings key: {other}")),
     }
@@ -398,5 +408,18 @@ mod tests {
     fn apply_update_rejects_non_string_webcam_device_id() {
         let mut s = Settings::default();
         assert!(apply_update(&mut s, "webcam_device_id", json!(5)).is_err());
+    }
+
+    #[test]
+    fn default_webcam_shape_is_circle() {
+        assert_eq!(Settings::default().webcam_shape, "circle");
+    }
+
+    #[test]
+    fn apply_update_sets_and_validates_webcam_shape() {
+        let mut s = Settings::default();
+        apply_update(&mut s, "webcam_shape", json!("rounded")).unwrap();
+        assert_eq!(s.webcam_shape, "rounded");
+        assert!(apply_update(&mut s, "webcam_shape", json!("triangle")).is_err());
     }
 }

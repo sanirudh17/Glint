@@ -8,7 +8,12 @@ import { trimTarget, trimProbe, trimExport, trimWaveform, type ProbeResult } fro
 import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
 import { TrimCamOverlay } from "./TrimCamOverlay";
-import { type CamPlacement, DEFAULT_PLACEMENT, toPixels, clampPlacement } from "./camOverlay";
+import { type CamPlacement, type CamShape, DEFAULT_PLACEMENT, toPixels, clampPlacement } from "./camOverlay";
+
+/** Cycle order for the webcam shape control. */
+const CAM_SHAPES: CamShape[] = ["circle", "rounded", "square", "rect"];
+const nextShape = (s: CamShape): CamShape => CAM_SHAPES[(CAM_SHAPES.indexOf(s) + 1) % CAM_SHAPES.length];
+const SHAPE_LABEL: Record<CamShape, string> = { circle: "Circle", rounded: "Rounded", square: "Square", rect: "Rectangle" };
 import "./trim.css";
 
 /** `<stem>.cam.webm` sibling of the recording — matches Rust `cam_sidecar_path`. */
@@ -118,9 +123,10 @@ export function TrimView() {
           setCamSrc(convertFileSrc(camSiblingPath(t.path)));
           // Start the overlay where the webcam actually was during recording (same size +
           // above-taskbar position); fall back to the default for older recordings.
+          const shape = (CAM_SHAPES.includes(p.cam_shape as CamShape) ? p.cam_shape : "circle") as CamShape;
           const placed = p.cam_d > 0
-            ? clampPlacement({ x: p.cam_x, y: p.cam_y, diameter: p.cam_d, visible: true })
-            : DEFAULT_PLACEMENT;
+            ? clampPlacement({ x: p.cam_x, y: p.cam_y, diameter: p.cam_d, visible: true, shape })
+            : { ...DEFAULT_PLACEMENT, shape };
           setCam(placed);
         }
       } catch { setErr("Couldn't read the recording."); }
@@ -301,7 +307,8 @@ export function TrimView() {
     // Bake the webcam overlay only when it's present and visible; else export as before.
     const useCam = probe.has_cam && !!cam?.visible;
     const camPath = useCam ? camSiblingPath(target.path) : null;
-    const camOverlay = useCam && cam ? toPixels(cam, probe.width, probe.height) : null;
+    const camAspect = probe.height > 0 ? probe.width / probe.height : 16 / 9;
+    const camOverlay = useCam && cam ? { ...toPixels(cam, probe.width, probe.height, camAspect), shape: cam.shape } : null;
     trimExport(target.id, target.path, keptSegments(clips), probe.has_audio, duration, probe.width, probe.height, fadeIn, fadeOut, camPath, camOverlay, mode)
       .catch(() => setExporting(null)); // a toast already surfaced; window stays open
   };
@@ -376,7 +383,8 @@ export function TrimView() {
           <div className="trim-camctl" role="group" aria-label="Webcam overlay">
             {cam.visible ? (
               <>
-                <button className="trim-iconbtn" onClick={() => setCam(DEFAULT_PLACEMENT)} title="Reset webcam position & size"><RotateCcw size={15} /> Cam</button>
+                <button className="trim-iconbtn" onClick={() => setCam((c) => (c ? { ...c, shape: nextShape(c.shape) } : c))} title="Change the webcam shape">{SHAPE_LABEL[cam.shape]}</button>
+                <button className="trim-iconbtn" onClick={() => setCam((c) => (c ? { ...DEFAULT_PLACEMENT, shape: c.shape } : c))} title="Reset webcam position & size"><RotateCcw size={15} /> Cam</button>
                 <button className="trim-iconbtn" onClick={() => setCam((c) => (c ? { ...c, visible: false } : c))} title="Remove the webcam overlay"><X size={16} /></button>
               </>
             ) : (

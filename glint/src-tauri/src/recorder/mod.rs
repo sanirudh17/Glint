@@ -58,6 +58,53 @@ async fn probe_capture_engine(app: &AppHandle) -> ffmpeg::CaptureEngine {
     if ok { ffmpeg::CaptureEngine::Ddagrab } else { ffmpeg::CaptureEngine::Gdigrab }
 }
 
+/// Cached, session-wide chosen video encoder.
+static VIDEO_ENCODER: std::sync::OnceLock<ffmpeg::VideoEncoder> = std::sync::OnceLock::new();
+
+/// Decide the H.264 encoder once per session for the given capture `engine`. Tries the hardware
+/// encoders in priority order (NVENC → QSV → AMF) by capturing a few REAL frames through the
+/// exact same front-end the recording will use and encoding them to a temp file; the first that
+/// yields a non-empty file wins. Any failure/timeout falls through, and if none work → libx264.
+///
+/// The probe MUST be representative of the real pipeline: a hardware encoder can encode a
+/// synthetic `lavfi` source yet fail on ddagrab's D3D11 frames (e.g. NVENC's "no encode device"
+/// on a hybrid GPU) — and ffmpeg then writes an EMPTY file while still exiting 0, so the probe
+/// checks the output size, not just the exit status. Cached so only the first recording pays it.
+async fn probe_video_encoder(app: &AppHandle, engine: ffmpeg::CaptureEngine) -> ffmpeg::VideoEncoder {
+    use ffmpeg::VideoEncoder as VE;
+    if let Some(&e) = VIDEO_ENCODER.get() {
+        return e;
+    }
+    let tmp = std::env::temp_dir().join("glint-encoder-probe.mp4");
+    let tmp_str = tmp.to_string_lossy().to_string();
+    let mut chosen = VE::Libx264;
+    for enc in [VE::Nvenc, VE::Qsv, VE::Amf] {
+        let Ok(cmd) = app.shell().sidecar("ffmpeg") else { continue };
+        // Reuse the real recording command (same engine, hw-device setup, and encoder tail) so
+        // the probe fails exactly when the recording would. Cap it to a handful of frames and
+        // redirect the output to a temp file (the output path is the last arg).
+        let mut args = ffmpeg::build_ffmpeg_args(engine, &RecordTarget::Fullscreen, 30, &tmp_str, &[], false, true, enc);
+        let out = args.pop().unwrap();
+        args.extend(["-frames:v".to_string(), "8".to_string(), out]);
+        let _ = std::fs::remove_file(&tmp);
+        let ran = matches!(
+            tokio::time::timeout(std::time::Duration::from_secs(6), cmd.args(args).output()).await,
+            Ok(Ok(out)) if out.status.success()
+        );
+        // A failed hardware encode leaves a 0-byte file despite exit 0; a real 8-frame clip is
+        // several KB. Require a non-trivial size to accept the encoder.
+        let bytes = std::fs::metadata(&tmp).map(|m| m.len()).unwrap_or(0);
+        if ran && bytes > 1024 {
+            chosen = enc;
+            break;
+        }
+    }
+    let _ = std::fs::remove_file(&tmp);
+    let _ = VIDEO_ENCODER.set(chosen);
+    log::info!("video encoder probe ({engine:?}): chose {chosen:?}");
+    chosen
+}
+
 /// One running ffmpeg span — a contiguous stretch of recording between pauses.
 /// Holds the child (to send `q` on stdin) and its event receiver (to wait for a
 /// clean exit + finished moov atom rather than guessing with a fixed delay).
@@ -107,6 +154,8 @@ pub struct ActiveRecording {
     /// pause/resume segment so all segments share identical output stream params
     /// (the concat `-c copy` invariant).
     pub engine: ffmpeg::CaptureEngine,
+    /// H.264 encoder chosen once at start; reused for every segment (concat-copy invariant).
+    pub encoder: ffmpeg::VideoEncoder,
     pub out_path: String,
     pub width: u32,
     pub height: u32,
@@ -163,6 +212,7 @@ fn segment_path(out_path: &str, idx: usize) -> String {
 async fn spawn_segment(
     app: &AppHandle,
     engine: ffmpeg::CaptureEngine,
+    encoder: ffmpeg::VideoEncoder,
     target: RecordTarget,
     fps: u32,
     path: &str,
@@ -234,7 +284,7 @@ async fn spawn_segment(
     // `want_audio` is the recording's intent (system or mic enabled), not how many
     // sources actually connected this segment — so a segment whose sources all failed
     // still gets a silent aac track and stays concat-copy compatible with audio segments.
-    let args = ffmpeg::build_ffmpeg_args(engine, &target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse);
+    let args = ffmpeg::build_ffmpeg_args(engine, &target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse, encoder);
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("sidecar resolve: {e}"))?;
     let (rx_ev, child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
 
@@ -611,16 +661,27 @@ pub async fn recorder_start(
     // Capture/encode frame rate + movable-webcam default from settings. Reading
     // `record_webcam_movable` here (not only from the selector chip) makes the Settings
     // toggle authoritative — a recording started from anywhere honours it.
-    let (fps, setting_movable) = {
+    let (fps, setting_movable, webcam_shape) = {
         let state = app.state::<crate::settings::commands::SettingsState>();
         let s = state.0.lock().unwrap();
-        (s.record_fps, s.record_webcam_movable)
+        (s.record_fps, s.record_webcam_movable, s.webcam_shape.clone())
     };
 
     // Choose the capture engine once (cached per session): ddagrab (GPU, true 60 fps)
     // when the machine supports it, else the proven gdigrab path. Fixed for the whole
     // recording so pause/resume segments stay concat-copy compatible.
     let engine = probe_capture_engine(&app).await;
+
+    // Choose the H.264 encoder once (cached per session): a hardware encoder (NVENC/QSV/AMF)
+    // when available so full-res 60 fps keeps up, else libx264. Run it CONCURRENTLY — the
+    // first-recording probe does real work (a short real capture) and would otherwise delay
+    // the webcam bubble + countdown by a couple of seconds; its result is only needed when
+    // segment 0 spawns, well after the cam warmup and the 3-2-1 countdown. Cached after the
+    // first recording, so this is instant thereafter.
+    let encoder_probe = {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move { probe_video_encoder(&app, engine).await })
+    };
 
     // The selector (if this start came from it) closes itself, so the frontend's
     // IPC survives (closing destroys its JS context) and a full-screen capture
@@ -677,10 +738,12 @@ pub async fn recorder_start(
     // permission prompt is then resolved up front, so it never lands in the recording
     // and the countdown/capture don't begin until the user has pressed Allow. The
     // bubble stays open through the countdown so the user can frame.
-    // "Movable" is a webcam *mode* — honoured from the per-recording chip OR the persisted
-    // Settings default. Wanting it implies recording the webcam at all, so a user who only
-    // flips the Movable toggle still gets a (movable) webcam instead of silently nothing.
-    let want_movable_pref = webcam_movable.unwrap_or(false) || setting_movable;
+    // "Movable" is a webcam *mode*. The per-recording chip is AUTHORITATIVE when the selector
+    // provided it (Some(_)): turning Movable OFF for a recording must give a baked-in webcam
+    // (composited into the video) even if the Settings default is on — otherwise the webcam
+    // records as a separate capture-excluded track and never appears in the final video. The
+    // Settings default only applies to a chip-less start (tray / global hotkey → None).
+    let want_movable_pref = webcam_movable.unwrap_or(setting_movable);
     let want_cam = webcam.unwrap_or(false) || want_movable_pref;
     // `mut` so a pre-start fallback can demote it to baked-in when unsupported.
     let mut want_cam_movable = want_cam && want_movable_pref;
@@ -688,13 +751,13 @@ pub async fn recorder_start(
     // overlay starts at the same spot/size.
     let mut cam_placement: Option<(f64, f64, f64)> = None;
     if want_cam {
-        cam_placement = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable).ok().flatten();
+        cam_placement = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable, &webcam_shape).ok().flatten();
         let movable_ok = wait_for_cam_ready(&app).await;
         if want_cam_movable && !movable_ok {
             // MediaRecorder/VP8 unsupported here — rebuild the bubble WITHOUT capture
             // exclusion so gdigrab bakes it in and the user still gets a webcam.
             windows::close_cam_bubble(&app);
-            let _ = windows::build_cam_bubble(&app, target, 170.0, false);
+            let _ = windows::build_cam_bubble(&app, target, 170.0, false, &webcam_shape);
             let _ = app.emit("glint-toast", "Movable webcam unavailable — recorded in place");
             want_cam_movable = false;
         }
@@ -722,6 +785,10 @@ pub async fn recorder_start(
         cursor_size: match cursor_size.as_deref() { Some("large") => 1, Some("xl") => 2, _ => 0 },
     };
 
+    // Collect the concurrent encoder probe — it resolved during the cam warmup + countdown,
+    // so this doesn't block. `mut` so a segment-0 failure can demote it to libx264 below.
+    let mut encoder = encoder_probe.await.unwrap_or(ffmpeg::VideoEncoder::Libx264);
+
     // Show the control bar IMMEDIATELY (no dead gap while ffmpeg's gdigrab input
     // initializes, which takes ~1s+). A preliminary state with `current: None`
     // backs the bar and gives Stop a target until segment 0 is up; availability is
@@ -730,6 +797,7 @@ pub async fn recorder_start(
         target,
         fps,
         engine,
+        encoder,
         out_path: out_str.clone(),
         width,
         height,
@@ -752,7 +820,19 @@ pub async fn recorder_start(
     // Bring segment 0 up behind the visible bar. Pause/resume appends further
     // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual
     // delivered rate still depends on the machine/screen resolution).
-    let seg0 = match spawn_segment(&app, engine, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
+    // Bring segment 0 up. If a hardware encoder passed the probe but still fails to start a
+    // real segment, demote the whole session to libx264 and retry once — the "recording
+    // never breaks" guarantee. Later segments inherit the demoted encoder via rec.encoder.
+    let seg0_result = match spawn_segment(&app, engine, encoder, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
+        Ok(s) => Ok(s),
+        Err(e) if encoder != ffmpeg::VideoEncoder::Libx264 => {
+            log::warn!("segment 0 failed on {encoder:?} ({e}); falling back to libx264");
+            encoder = ffmpeg::VideoEncoder::Libx264;
+            spawn_segment(&app, engine, encoder, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await
+        }
+        Err(e) => Err(e),
+    };
+    let seg0 = match seg0_result {
         Ok(s) => s,
         Err(e) => {
             windows::close_control_bar(&app);
@@ -776,6 +856,8 @@ pub async fn recorder_start(
             Some(rec) => {
                 rec.sys_avail = sys_avail;
                 rec.mic_avail = mic_avail;
+                // Reflect a possible segment-0 encoder demotion so resume segments match.
+                rec.encoder = encoder;
                 rec.current = Some(seg0);
                 None
             }
@@ -824,7 +906,7 @@ pub async fn recorder_start(
         let cam_path = crate::recorder::cam::cam_sidecar_path(&out_str).to_string_lossy().to_string();
         // Persist the bubble's placement so the trim editor's overlay starts where it was.
         if let Some((nx, ny, nd)) = cam_placement {
-            crate::recorder::cam::write_cam_placement(&out_str, nx, ny, nd);
+            crate::recorder::cam::write_cam_placement(&out_str, nx, ny, nd, &webcam_shape);
         }
         if let Some(rec) = app.state::<RecorderState>().0.lock().unwrap().as_mut() {
             rec.cam_path = Some(cam_path.clone());
@@ -886,14 +968,14 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
             // `current.is_none()` also holds during the preliminary start state (seg0
             // not up yet); require a completed span so resume can't run mid-init.
             Some(rec) if rec.current.is_none() && !rec.done.is_empty() => {
-                Some((rec.engine, rec.target, rec.fps, rec.out_path.clone(), rec.seg_index, rec.audio_cfg, rec.controls.clone()))
+                Some((rec.engine, rec.encoder, rec.target, rec.fps, rec.out_path.clone(), rec.seg_index, rec.audio_cfg, rec.controls.clone()))
             }
             _ => None,
         }
     };
-    let (engine, target, fps, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
+    let (engine, encoder, target, fps, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
     let path = segment_path(&out_path, idx);
-    let seg = spawn_segment(&app, engine, target, fps, &path, idx, cfg, &controls, true).await
+    let seg = spawn_segment(&app, engine, encoder, target, fps, &path, idx, cfg, &controls, true).await
         .inspect_err(|_e| {
             let _ = app.emit("glint-toast", "Couldn't resume recording");
         })?;
@@ -1227,8 +1309,14 @@ pub async fn recorder_set_webcam(app: tauri::AppHandle, on: bool) -> Result<(), 
         (rec.target, rec.webcam_movable)
     };
     let (target, movable) = target;
-    if on { let _ = windows::build_cam_bubble(&app, target, 170.0, movable); }
-    else { windows::close_cam_bubble(&app); }
+    if on {
+        let shape = {
+            let state = app.state::<crate::settings::commands::SettingsState>();
+            let s = state.0.lock().unwrap();
+            s.webcam_shape.clone()
+        };
+        let _ = windows::build_cam_bubble(&app, target, 170.0, movable, &shape);
+    } else { windows::close_cam_bubble(&app); }
     // Notify the control bar so its toggle reflects the change — this is the path the
     // bubble's ✕ button takes, and the bar would otherwise still read "on".
     let _ = app.emit_to(windows::BAR_LABEL, "recorder-webcam", on);

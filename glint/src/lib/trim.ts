@@ -13,6 +13,8 @@ export interface ProbeResult {
   cam_x: number;
   cam_y: number;
   cam_d: number;
+  /** Webcam bubble shape at record time ("circle" | "rounded" | "square" | "rect"). */
+  cam_shape: string;
 }
 export interface TrimTarget {
   id: number;
@@ -32,11 +34,13 @@ export interface KeepSegment {
   speed: number;
 }
 
-/** Webcam overlay placement in source pixels (top-left + diameter), or null for none. */
+/** Webcam overlay placement in source pixels (top-left + box w/h + shape), or null for none. */
 export interface CamOverlay {
   x: number;
   y: number;
-  d: number;
+  w: number;
+  h: number;
+  shape: string;
 }
 
 export const trimExport = (

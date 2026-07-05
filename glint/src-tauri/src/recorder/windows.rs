@@ -140,6 +140,11 @@ pub const REC_HUD_LABEL: &str = "rec-hud";
 /// capture.
 pub fn build_rec_hud(app: &AppHandle) -> tauri::Result<()> {
     close_rec_hud(app);
+    // The screenshot tray and the recording HUD share the same bottom-left corner and must
+    // never coexist as two separate stacks — a new recording HUD DISPLACES the screenshot
+    // tray (its in-memory stack persists and reappears on the next screenshot). This is the
+    // capture side of the mutual-exclusion; the screenshot path closes this HUD symmetrically.
+    crate::hud::teardown(app);
     let win = WebviewWindowBuilder::new(app, REC_HUD_LABEL, WebviewUrl::App("index.html#/rec-hud".into()))
         .title("Glint Recording")
         .decorations(false)
@@ -191,7 +196,27 @@ pub fn build_region_selector(app: &AppHandle) -> tauri::Result<()> {
         win.set_position(tauri::PhysicalPosition { x: pos.x, y: pos.y })?;
         win.set_size(tauri::PhysicalSize { width: size.width, height: size.height })?;
     }
-    win.show()?; win.set_focus()?;
+    // Reveal only once the frontend has PAINTED its current toolbar (it emits
+    // `rec-select-ready` after two rAFs). Showing synchronously here would flash the stale
+    // frame WebView2 still holds from the previous selector session before React repaints.
+    // A fallback timer guarantees the window still appears if that event is ever missed.
+    use tauri::Listener;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let shown = std::sync::Arc::new(AtomicBool::new(false));
+    {
+        let win = win.clone();
+        let shown = shown.clone();
+        app.once("rec-select-ready", move |_| {
+            if !shown.swap(true, Ordering::SeqCst) { let _ = win.show(); let _ = win.set_focus(); }
+        });
+    }
+    {
+        let win = win.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+            if !shown.swap(true, Ordering::SeqCst) { let _ = win.show(); let _ = win.set_focus(); }
+        });
+    }
     Ok(())
 }
 
@@ -217,10 +242,13 @@ pub const CAM_LABEL: &str = "rec-cam";
 /// 0..1 (top-left + diameter/frame-width), so a movable recording can persist it and the trim
 /// editor can start its overlay exactly where the webcam was. `None` if no monitor / the
 /// bubble already exists.
-pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, diameter: f64, movable: bool) -> tauri::Result<Option<(f64, f64, f64)>> {
+pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, diameter: f64, movable: bool, shape: &str) -> tauri::Result<Option<(f64, f64, f64)>> {
     if app.get_webview_window(CAM_LABEL).is_some() {
         return Ok(None);
     }
+    // circle/square are 1:1; rounded/rect show the full webcam frame at 16:9 (the window is
+    // shaped so gdigrab bakes the true shape and the live preview matches).
+    let bubble_h = if matches!(shape, "rounded" | "rect") { diameter * 9.0 / 16.0 } else { diameter };
     let win = WebviewWindowBuilder::new(app, CAM_LABEL, WebviewUrl::App("index.html#/rec-cam".into()))
         .title("Glint Camera")
         .decorations(false)
@@ -230,7 +258,7 @@ pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, 
         .resizable(false)
         .shadow(false)
         .focused(false)
-        .inner_size(diameter, diameter)
+        .inner_size(diameter, bubble_h)
         .visible(false)
         .build()?;
 
@@ -247,21 +275,23 @@ pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, 
             }
         };
         let d = (diameter * s) as i32;
+        let dh = (bubble_h * s) as i32;
         let margin = (24.0 * s) as i32;
         let x = rx + rw - d - margin;
-        let mut y = ry + rh - d - margin;
+        let mut y = ry + rh - dh - margin;
         // Keep the bubble above the taskbar: clamp its bottom to the primary
         // monitor's WORK AREA. For a fullscreen recording the area is the whole
         // monitor (taskbar included), so an un-clamped bottom-right lands the
         // bubble under the taskbar where it can't be seen or dragged.
         if let Some(wa) = primary_work_area() {
-            let max_y = wa.bottom - d - margin;
+            let max_y = wa.bottom - dh - margin;
             if y > max_y {
                 y = max_y;
             }
         }
         win.set_position(tauri::PhysicalPosition { x, y })?;
         // Normalize to the recorded frame so the trim overlay starts here at the same size.
+        // `diameter` is the box WIDTH (the trim editor derives height from the shape aspect).
         if rw > 0 && rh > 0 {
             placement = Some((
                 (x - rx) as f64 / rw as f64,
@@ -334,6 +364,9 @@ pub fn build_trim_window(app: &AppHandle) -> tauri::Result<()> {
         .inner_size(900.0, 600.0)
         .min_inner_size(640.0, 460.0)
         .center()
+        // Open maximized so the preview + timeline get the full screen — a 900×600 window
+        // is cramped for scrubbing. Still a normal decorated window the user can un-maximize.
+        .maximized(true)
         .visible(true)
         .build()?;
     let _ = win.set_focus();

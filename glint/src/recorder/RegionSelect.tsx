@@ -19,7 +19,12 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointer2, Move, Lock } from "lucide-react";
+import { emit } from "@tauri-apps/api/event";
+import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointer2, Move, Lock, Shapes } from "lucide-react";
+
+type WebcamShape = "circle" | "rounded" | "square" | "rect";
+const SHAPE_ORDER: WebcamShape[] = ["circle", "rounded", "square", "rect"];
+const SHAPE_LABEL: Record<WebcamShape, string> = { circle: "Circle", rounded: "Rounded", square: "Square", rect: "Rect" };
 import { recorderStartRegion, recorderStartFullscreen } from "../lib/recorder";
 import { useAppStore } from "../store/useAppStore";
 import "./recorder.css";
@@ -73,6 +78,10 @@ export function RegionSelect() {
   const [mic, setMic] = useState(false);
   const [cam, setCam] = useState(false);
   const [camMovable, setCamMovable] = useState(false);
+  // Shape persists to settings (unlike the other chips): the bubble window + RecCam read it
+  // straight from the backend at record time, so the last-used shape sticks.
+  const setWebcamShape = useAppStore((s) => s.setWebcamShape);
+  const [camShape, setCamShape] = useState<WebcamShape>("circle");
   // Recording FX intent for THIS recording, seeded from saved settings.
   const [clickViz, setClickViz] = useState(false);
   const [keystrokes, setKeystrokes] = useState(false);
@@ -91,6 +100,7 @@ export function RegionSelect() {
       const movable = settings.record_webcam_movable ?? false;
       setCam((settings.record_webcam ?? false) || movable); // movable implies webcam on
       setCamMovable(movable);
+      setCamShape((settings.webcam_shape ?? "circle") as WebcamShape);
       setClickViz(settings.record_click_viz ?? false);
       setKeystrokes(settings.record_keystrokes ?? false);
       setSpotlight(settings.record_cursor_spotlight ?? false);
@@ -98,6 +108,17 @@ export function RegionSelect() {
       setCursorSize(settings.record_cursor_size ?? "off");
     }
   }, [settings]);
+  // Reveal the (initially hidden) selector window as soon as THIS mount has painted — Rust
+  // waits for `rec-select-ready` before calling show(), so WebView2 never flashes the stale
+  // frame from the previous selector session. Fired on first paint (not gated on settings) so
+  // there's no perceptible open delay; the chips seed a beat later without any stale content.
+  useEffect(() => {
+    const r1 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => { emit("rec-select-ready").catch(() => {}); });
+    });
+    return () => cancelAnimationFrame(r1);
+  }, []);
+
   // Click/keystroke/spotlight are no longer chips here (they're live in the pill +
   // defaulted in Settings) but still flow through from the saved defaults so a user
   // who turned them on in Settings starts recording with them on.
@@ -275,6 +296,20 @@ export function RegionSelect() {
               title="Record the webcam as a separate track so you can move/resize/remove it after recording"
             >
               {camMovable ? <Move size={14} /> : <Lock size={14} />} Movable
+            </button>
+          )}
+          {cam && (
+            <button
+              className="rec-sel-chip"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => {
+                const next = SHAPE_ORDER[(SHAPE_ORDER.indexOf(camShape) + 1) % SHAPE_ORDER.length];
+                setCamShape(next);
+                setWebcamShape(next).catch(() => {});
+              }}
+              title="Webcam shape: Circle → Rounded → Square → Rect"
+            >
+              <Shapes size={14} /> {SHAPE_LABEL[camShape]}
             </button>
           )}
           <button
