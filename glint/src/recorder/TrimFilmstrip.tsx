@@ -1,9 +1,13 @@
-/** TrimFilmstrip.tsx — reorderable strip of kept clips (playback order) for the trim editor.
- *  Recorder-owned. Drag reorders; a click (no drag) selects the clip in the timeline. Uses
- *  pointer CAPTURE + geometry hit-testing (WebView2-safe: capture guarantees we keep the
- *  move/up stream even as the cursor leaves the tile, and geometry never "misses" a target). */
-import { useRef, useState } from "react";
-import { GripVertical, ArrowLeftRight } from "lucide-react";
+/** TrimFilmstrip.tsx — reorderable strip of kept clips for the trim editor. Each tile's NUMBER
+ *  is the clip's recorded (source-order) identity; its LEFT-TO-RIGHT position is the playback
+ *  order. So after a reorder the numbers read out of sequence (e.g. 2 3 1 4 5), which is the
+ *  indication that clips were moved — recorded clip 1 now plays third. Chevrons between tiles
+ *  show the processing direction. Drag reorders; a click (no drag) selects the clip.
+ *
+ *  Recorder-owned. Uses pointer CAPTURE + geometry hit-testing (WebView2-safe: capture keeps
+ *  the move/up stream as the cursor leaves the tile; geometry never "misses" a target). */
+import { Fragment, useRef, useState } from "react";
+import { GripVertical, ChevronRight } from "lucide-react";
 import { keptClipsInOrder, type Clip } from "./trimModel";
 
 const secs = (start: number, end: number, speed: number) => `${((end - start) / speed).toFixed(1)}s`;
@@ -23,11 +27,12 @@ export function TrimFilmstrip({
   onReorder: (from: number, to: number) => void;
   onSelect: (id: number) => void;
 }) {
-  const ordered = keptClipsInOrder(clips);
-  // A clip is "moved" when its play-order position differs from its recorded (source-time)
-  // position — so tiles that were dragged out of place get a distinct marker at a glance.
-  const sourceOrderIds = [...ordered].sort((a, b) => a.start - b.start).map((c) => c.id);
-  const movedIds = new Set(ordered.filter((c, i) => sourceOrderIds[i] !== c.id).map((c) => c.id));
+  const ordered = keptClipsInOrder(clips); // playback order (left → right)
+  // Each clip's stable recorded number = its position when sorted by source time. Fixed to the
+  // clip's identity, so a tile keeps its number wherever it's dragged.
+  const recordedNo = new Map<number, number>();
+  [...ordered].sort((a, b) => a.start - b.start).forEach((c, i) => recordedNo.set(c.id, i + 1));
+
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -39,7 +44,7 @@ export function TrimFilmstrip({
   if (ordered.length < 2) return null;
 
   // Target index for a pointer x: the first tile whose horizontal midpoint the cursor hasn't
-  // passed (i.e. where the dragged tile would land), clamped to the last tile.
+  // passed (where the dragged tile would land), clamped to the last tile.
   const tileIndexAtX = (clientX: number): number => {
     const rects = rectsRef.current;
     for (let k = 0; k < rects.length; k++) {
@@ -79,29 +84,29 @@ export function TrimFilmstrip({
   };
 
   return (
-    <div className="trim-filmstrip" ref={rowRef} role="listbox" aria-label="Clip order">
+    <div className="trim-filmstrip" ref={rowRef} role="listbox" aria-label="Clip play order">
       {ordered.map((c, i) => (
-        <div
-          key={c.id}
-          data-strip-index={i}
-          className={
-            "trim-strip-tile" +
-            (movedIds.has(c.id) ? " trim-strip-tile--moved" : "") +
-            (c.id === selectedId ? " trim-strip-tile--selected" : "") +
-            (dragFrom === i ? " trim-strip-tile--dragging" : "") +
-            (overIndex === i && dragFrom !== null && dragFrom !== i ? " trim-strip-tile--over" : "")
-          }
-          onPointerDown={(e) => onPointerDown(e, i)}
-          onPointerMove={onPointerMove}
-          onPointerUp={(e) => onPointerUp(e, i)}
-          title={movedIds.has(c.id) ? "Moved from its recorded position · drag to reorder · click to select" : "Drag to reorder · click to select"}
-        >
-          <GripVertical size={13} className="trim-strip-grip" />
-          <span className="trim-strip-index">{i + 1}</span>
-          {movedIds.has(c.id) && <ArrowLeftRight size={12} className="trim-strip-moved" aria-label="moved" />}
-          <span className="trim-strip-dur">{secs(c.start, c.end, c.speed)}</span>
-          {c.speed !== 1 && <span className="trim-strip-speed">{c.speed}×</span>}
-        </div>
+        <Fragment key={c.id}>
+          {i > 0 && <ChevronRight size={14} className="trim-strip-arrow" aria-hidden="true" />}
+          <div
+            data-strip-index={i}
+            className={
+              "trim-strip-tile" +
+              (c.id === selectedId ? " trim-strip-tile--selected" : "") +
+              (dragFrom === i ? " trim-strip-tile--dragging" : "") +
+              (overIndex === i && dragFrom !== null && dragFrom !== i ? " trim-strip-tile--over" : "")
+            }
+            onPointerDown={(e) => onPointerDown(e, i)}
+            onPointerMove={onPointerMove}
+            onPointerUp={(e) => onPointerUp(e, i)}
+            title={`Recorded clip ${recordedNo.get(c.id)} · drag to reorder · click to select`}
+          >
+            <GripVertical size={13} className="trim-strip-grip" />
+            <span className="trim-strip-index">{recordedNo.get(c.id)}</span>
+            <span className="trim-strip-dur">{secs(c.start, c.end, c.speed)}</span>
+            {c.speed !== 1 && <span className="trim-strip-speed">{c.speed}×</span>}
+          </div>
+        </Fragment>
       ))}
     </div>
   );

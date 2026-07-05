@@ -122,14 +122,13 @@
 }
 .trim-strip-tile:active { cursor: grabbing; }
 .trim-strip-tile--dragging { opacity: 0.5; }
-/* Moved clip: an amber ring + ↔ glyph, distinct from the accent used for selection, so a tile
-   dragged out of its recorded order is obvious at a glance regardless of its duration/speed. */
-.trim-strip-tile--moved { border-color: #f5a623; background: rgba(245,166,35,0.10); }
-.trim-strip-moved { color: #f5a623; flex: none; }
+/* Direction chevron between tiles — shows the left→right processing order. Non-interactive so
+   it never interferes with a drag. */
+.trim-strip-arrow { flex: none; color: rgba(255,255,255,0.28); pointer-events: none; }
 /* Insertion target: a bright accent edge marks where the dragged tile will land. */
 .trim-strip-tile--over { border-color: var(--accent); box-shadow: -2px 0 0 0 var(--accent); }
 /* Selected clip: matches the timeline's sticky selection so number/speed keys have a clear
-   target. Uses the accent so it reads as "active" (wins the border over --moved when both). */
+   target. Uses the accent so it reads as "active". */
 .trim-strip-tile--selected { border-color: var(--accent); background: var(--accent-subtle); }
 .trim-strip-grip { opacity: 0.5; }
 .trim-strip-index {
