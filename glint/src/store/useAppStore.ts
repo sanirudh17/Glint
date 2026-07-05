@@ -37,6 +37,7 @@ export interface Settings {
   jpeg_quality: "high" | "medium" | "low";
   record_fps: 30 | 60;
   webcam_device_id: string;
+  webcam_shape: "circle" | "rounded" | "square" | "rect";
 }
 
 export interface Toast {
@@ -69,6 +70,7 @@ interface AppState {
   setJpegQuality: (v: "high" | "medium" | "low") => Promise<void>;
   setRecordFps: (v: 30 | 60) => Promise<void>;
   setWebcamDevice: (id: string) => Promise<void>;
+  setWebcamShape: (shape: "circle" | "rounded" | "square" | "rect") => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -112,6 +114,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (dbRecordMic !== null) record_microphone = dbRecordMic;
       const dbRecordWebcam = await readSetting<boolean>("record_webcam");
       if (dbRecordWebcam !== null) record_webcam = dbRecordWebcam;
+      const dbWebcamShape = await readSetting<Settings["webcam_shape"]>("webcam_shape");
+      if (dbWebcamShape) rustSettings.webcam_shape = dbWebcamShape;
       // Recording FX defaults — override the Rust defaults with persisted values.
       for (const k of ["record_click_viz", "record_keystrokes", "record_cursor_spotlight", "record_cursor_hide"] as const) {
         const v = await readSetting<boolean>(k);
@@ -267,6 +271,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setWebcamDevice: async (id: string) => {
     const updated = await saveSetting("webcam_device_id", id);
     await persistSetting("webcam_device_id", id);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setWebcamShape: async (shape: "circle" | "rounded" | "square" | "rect") => {
+    const updated = await saveSetting("webcam_shape", shape);
+    await persistSetting("webcam_shape", shape);
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 
