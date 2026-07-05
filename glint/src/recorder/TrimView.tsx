@@ -3,7 +3,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { Scissors, Trash2, Undo2, Redo2, Play, Pause, ZoomIn, ZoomOut, X, RotateCcw } from "lucide-react";
+import { Scissors, Trash2, Undo2, Redo2, Play, Pause, SkipBack, ZoomIn, ZoomOut, X, RotateCcw } from "lucide-react";
 import { trimTarget, trimProbe, trimExport, trimWaveform, type ProbeResult } from "../lib/trim";
 import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, reorderKept, segmentIndexAtSource, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
@@ -89,8 +89,13 @@ export function TrimView() {
   }
   const zoomIn = useCallback(() => setZoom((z) => ZOOMS[Math.min(ZOOMS.indexOf(z) + 1, ZOOMS.length - 1)] ?? z), []);
   const zoomOut = useCallback(() => setZoom((z) => ZOOMS[Math.max(ZOOMS.indexOf(z) - 1, 0)] ?? z), []);
+  // Reordered when the kept clips no longer play in ascending source-time order — this is a
+  // real edit even with no cuts/speed/fades (keepRanges merges by source time and would miss it).
+  const orderedSegs = keptSegments(clips);
+  const reordered = orderedSegs.some((s, i) => i > 0 && s.start < orderedSegs[i - 1].start - EPS);
   const noop = ranges.length === 1 && ranges[0][0] <= 0.001 && ranges[0][1] >= duration - 0.05
-    && clips.filter((c) => c.kept).every((c) => c.speed === 1) && fadeIn === 0 && fadeOut === 0;
+    && clips.filter((c) => c.kept).every((c) => c.speed === 1) && fadeIn === 0 && fadeOut === 0
+    && !reordered;
   // A visible webcam overlay is itself an edit worth exporting, even with no cuts/speed/fades.
   const camEdit = !!(probe?.has_cam && cam?.visible);
   const canSave = clips.length > 0 && keptCount(clips) > 0 && (!noop || camEdit) && exporting === null;
@@ -298,6 +303,18 @@ export function TrimView() {
     } else { v.pause(); setPlaying(false); }
   };
 
+  // Play the whole reordered flow from the very first segment (in play order), so the user can
+  // preview the updated sequence start-to-finish instead of resuming mid-way from the playhead.
+  const playFromStart = () => {
+    const v = videoRef.current; if (!v) return;
+    const segs = keptSegments(clipsRef.current);
+    if (segs.length === 0) return;
+    segCursorRef.current = 0;
+    try { v.currentTime = segs[0].start; } catch { /* ignore */ }
+    setPlayhead(segs[0].start);
+    v.play(); setPlaying(true);
+  };
+
   // Keep the webcam overlay's play state mirrored to the main player (muted, so autoplay
   // is allowed). Time/rate are corrected in the rAF loop.
   useEffect(() => {
@@ -375,6 +392,9 @@ export function TrimView() {
       <div className="trim-transport">
         <button className="trim-iconbtn" onClick={togglePlay} title="Play/Pause (Space)">
           {playing ? <Pause size={16} /> : <Play size={16} />}
+        </button>
+        <button className="trim-iconbtn" onClick={playFromStart} title="Play the updated sequence from the start">
+          <SkipBack size={16} />
         </button>
         <span className="trim-time">{fmt(playhead)} / {fmt(duration)}</span>
         <span className="trim-spacer" />
