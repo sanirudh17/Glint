@@ -98,7 +98,10 @@ export function TrimView() {
     && !reordered;
   // A visible webcam overlay is itself an edit worth exporting, even with no cuts/speed/fades.
   const camEdit = !!(probe?.has_cam && cam?.visible);
-  const canSave = clips.length > 0 && keptCount(clips) > 0 && (!noop || camEdit) && exporting === null;
+  // Any real edit (cuts / speed / fades / reorder / cam) — gates both Save and the
+  // "play from start" affordance, which is pointless with nothing changed.
+  const hasEdit = !noop || camEdit;
+  const canSave = clips.length > 0 && keptCount(clips) > 0 && hasEdit && exporting === null;
 
   // The selected block: the clip clicked on the timeline (sticky). Falls back to none once
   // the id no longer exists (e.g. after undo/redo swaps in a different history state).
@@ -393,9 +396,11 @@ export function TrimView() {
         <button className="trim-iconbtn" onClick={togglePlay} title="Play/Pause (Space)">
           {playing ? <Pause size={16} /> : <Play size={16} />}
         </button>
-        <button className="trim-iconbtn" onClick={playFromStart} title="Play the updated sequence from the start">
-          <SkipBack size={16} />
-        </button>
+        {hasEdit && (
+          <button className="trim-iconbtn" onClick={playFromStart} title="Play the updated sequence from the start">
+            <SkipBack size={16} />
+          </button>
+        )}
         <span className="trim-time">{fmt(playhead)} / {fmt(duration)}</span>
         <span className="trim-spacer" />
         <button className="trim-iconbtn" onClick={doSplit} title="Split at playhead (S)"><Scissors size={16} /></button>
