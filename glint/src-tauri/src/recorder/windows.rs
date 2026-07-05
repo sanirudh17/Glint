@@ -217,10 +217,13 @@ pub const CAM_LABEL: &str = "rec-cam";
 /// 0..1 (top-left + diameter/frame-width), so a movable recording can persist it and the trim
 /// editor can start its overlay exactly where the webcam was. `None` if no monitor / the
 /// bubble already exists.
-pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, diameter: f64, movable: bool) -> tauri::Result<Option<(f64, f64, f64)>> {
+pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, diameter: f64, movable: bool, shape: &str) -> tauri::Result<Option<(f64, f64, f64)>> {
     if app.get_webview_window(CAM_LABEL).is_some() {
         return Ok(None);
     }
+    // circle/square are 1:1; rounded/rect show the full webcam frame at 16:9 (the window is
+    // shaped so gdigrab bakes the true shape and the live preview matches).
+    let bubble_h = if matches!(shape, "rounded" | "rect") { diameter * 9.0 / 16.0 } else { diameter };
     let win = WebviewWindowBuilder::new(app, CAM_LABEL, WebviewUrl::App("index.html#/rec-cam".into()))
         .title("Glint Camera")
         .decorations(false)
@@ -230,7 +233,7 @@ pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, 
         .resizable(false)
         .shadow(false)
         .focused(false)
-        .inner_size(diameter, diameter)
+        .inner_size(diameter, bubble_h)
         .visible(false)
         .build()?;
 
@@ -247,21 +250,23 @@ pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, 
             }
         };
         let d = (diameter * s) as i32;
+        let dh = (bubble_h * s) as i32;
         let margin = (24.0 * s) as i32;
         let x = rx + rw - d - margin;
-        let mut y = ry + rh - d - margin;
+        let mut y = ry + rh - dh - margin;
         // Keep the bubble above the taskbar: clamp its bottom to the primary
         // monitor's WORK AREA. For a fullscreen recording the area is the whole
         // monitor (taskbar included), so an un-clamped bottom-right lands the
         // bubble under the taskbar where it can't be seen or dragged.
         if let Some(wa) = primary_work_area() {
-            let max_y = wa.bottom - d - margin;
+            let max_y = wa.bottom - dh - margin;
             if y > max_y {
                 y = max_y;
             }
         }
         win.set_position(tauri::PhysicalPosition { x, y })?;
         // Normalize to the recorded frame so the trim overlay starts here at the same size.
+        // `diameter` is the box WIDTH (the trim editor derives height from the shape aspect).
         if rw > 0 && rh > 0 {
             placement = Some((
                 (x - rx) as f64 / rw as f64,

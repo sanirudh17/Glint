@@ -19,7 +19,11 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointer2, Move, Lock } from "lucide-react";
+import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointer2, Move, Lock, Shapes } from "lucide-react";
+
+type WebcamShape = "circle" | "rounded" | "square" | "rect";
+const SHAPE_ORDER: WebcamShape[] = ["circle", "rounded", "square", "rect"];
+const SHAPE_LABEL: Record<WebcamShape, string> = { circle: "Circle", rounded: "Rounded", square: "Square", rect: "Rect" };
 import { recorderStartRegion, recorderStartFullscreen } from "../lib/recorder";
 import { useAppStore } from "../store/useAppStore";
 import "./recorder.css";
@@ -73,6 +77,10 @@ export function RegionSelect() {
   const [mic, setMic] = useState(false);
   const [cam, setCam] = useState(false);
   const [camMovable, setCamMovable] = useState(false);
+  // Shape persists to settings (unlike the other chips): the bubble window + RecCam read it
+  // straight from the backend at record time, so the last-used shape sticks.
+  const setWebcamShape = useAppStore((s) => s.setWebcamShape);
+  const [camShape, setCamShape] = useState<WebcamShape>("circle");
   // Recording FX intent for THIS recording, seeded from saved settings.
   const [clickViz, setClickViz] = useState(false);
   const [keystrokes, setKeystrokes] = useState(false);
@@ -91,6 +99,7 @@ export function RegionSelect() {
       const movable = settings.record_webcam_movable ?? false;
       setCam((settings.record_webcam ?? false) || movable); // movable implies webcam on
       setCamMovable(movable);
+      setCamShape((settings.webcam_shape ?? "circle") as WebcamShape);
       setClickViz(settings.record_click_viz ?? false);
       setKeystrokes(settings.record_keystrokes ?? false);
       setSpotlight(settings.record_cursor_spotlight ?? false);
@@ -275,6 +284,20 @@ export function RegionSelect() {
               title="Record the webcam as a separate track so you can move/resize/remove it after recording"
             >
               {camMovable ? <Move size={14} /> : <Lock size={14} />} Movable
+            </button>
+          )}
+          {cam && (
+            <button
+              className="rec-sel-chip"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => {
+                const next = SHAPE_ORDER[(SHAPE_ORDER.indexOf(camShape) + 1) % SHAPE_ORDER.length];
+                setCamShape(next);
+                setWebcamShape(next).catch(() => {});
+              }}
+              title="Webcam shape: Circle → Rounded → Square → Rect"
+            >
+              <Shapes size={14} /> {SHAPE_LABEL[camShape]}
             </button>
           )}
           <button

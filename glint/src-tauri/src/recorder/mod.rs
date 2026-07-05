@@ -739,13 +739,13 @@ pub async fn recorder_start(
     // overlay starts at the same spot/size.
     let mut cam_placement: Option<(f64, f64, f64)> = None;
     if want_cam {
-        cam_placement = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable).ok().flatten();
+        cam_placement = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable, &webcam_shape).ok().flatten();
         let movable_ok = wait_for_cam_ready(&app).await;
         if want_cam_movable && !movable_ok {
             // MediaRecorder/VP8 unsupported here — rebuild the bubble WITHOUT capture
             // exclusion so gdigrab bakes it in and the user still gets a webcam.
             windows::close_cam_bubble(&app);
-            let _ = windows::build_cam_bubble(&app, target, 170.0, false);
+            let _ = windows::build_cam_bubble(&app, target, 170.0, false, &webcam_shape);
             let _ = app.emit("glint-toast", "Movable webcam unavailable — recorded in place");
             want_cam_movable = false;
         }
@@ -1293,8 +1293,14 @@ pub async fn recorder_set_webcam(app: tauri::AppHandle, on: bool) -> Result<(), 
         (rec.target, rec.webcam_movable)
     };
     let (target, movable) = target;
-    if on { let _ = windows::build_cam_bubble(&app, target, 170.0, movable); }
-    else { windows::close_cam_bubble(&app); }
+    if on {
+        let shape = {
+            let state = app.state::<crate::settings::commands::SettingsState>();
+            let s = state.0.lock().unwrap();
+            s.webcam_shape.clone()
+        };
+        let _ = windows::build_cam_bubble(&app, target, 170.0, movable, &shape);
+    } else { windows::close_cam_bubble(&app); }
     // Notify the control bar so its toggle reflects the change — this is the path the
     // bubble's ✕ button takes, and the bar would otherwise still read "on".
     let _ = app.emit_to(windows::BAR_LABEL, "recorder-webcam", on);

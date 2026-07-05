@@ -14,6 +14,16 @@
   width: 100%; height: 100%; object-fit: cover; pointer-events: none;
   clip-path: circle(50%);
 }
+/* Per-shape clip (WebView2 needs clip-path on the video, not just border-radius) + the
+   container's ring radius. circle/square are 1:1; rounded/rect are 16:9 (window is shaped). */
+.reccam--circle  { border-radius: 50%; }
+.reccam--square  { border-radius: 14%; }
+.reccam--rounded { border-radius: 16px; }
+.reccam--rect    { border-radius: 0; }
+.reccam--circle  .reccam-video { clip-path: circle(50%); }
+.reccam--square  .reccam-video { clip-path: inset(0 round 14%); }
+.reccam--rounded .reccam-video { clip-path: inset(0 round 16px); }
+.reccam--rect    .reccam-video { clip-path: none; }
 /* Hidden at rest so they never appear in the recorded frame; shown on hover. */
 .reccam-controls {
   position: absolute; bottom: 10%; left: 50%; transform: translateX(-50%);
