@@ -122,7 +122,6 @@ pub fn run() {
         .manage(crate::ocr::OcrState::default())
         .setup(|app| {
             tray::build(app.handle())?;
-            shortcuts::register(app.handle())?;
 
             // Open tray-core's rusqlite connection to the same glint.db plugin-sql uses.
             use tauri::Manager;
@@ -144,6 +143,10 @@ pub fn run() {
                 crate::settings::hydrate::hydrate_from_db(&conn, &mut s);
             }
             app.manage(Db(std::sync::Mutex::new(conn)));
+
+            // Register global shortcuts AFTER hydration so persisted custom hotkeys win —
+            // registering earlier would arm the built-in defaults and ignore the user's keys.
+            shortcuts::register(app.handle())?;
 
             // Apply the persisted taskbar preference to the main window.
             {
@@ -295,6 +298,7 @@ pub fn run() {
             recorder::recorder_status,
             recorder::recorder_set_mute,
             recorder::recorder_set_webcam,
+            recorder::cam::recorder_cam_write_chunk,
             recorder::recorder_set_fx,
             recorder::recorder_open_region_selector,
             recorder::rec_hud_data,

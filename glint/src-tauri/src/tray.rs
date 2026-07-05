@@ -65,7 +65,8 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
             "rec_full" => {
                 let a = app.clone();
                 tauri::async_runtime::spawn(async move {
-                    let _ = crate::recorder::recorder_start(a, "fullscreen".into(), None, None, None, None, None, None, None, None, None, None, None, None).await;
+                    // args: mode, x, y, w, h, system, mic, webcam, webcam_movable, click_viz, keystrokes, spotlight, cursor_hide, cursor_size
+                    let _ = crate::recorder::recorder_start(a, "fullscreen".into(), None, None, None, None, None, None, None, None, None, None, None, None, None).await;
                 });
             }
             "rec_stop" => {

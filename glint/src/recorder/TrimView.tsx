@@ -3,11 +3,16 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { Scissors, Trash2, Undo2, Redo2, Play, Pause, ZoomIn, ZoomOut } from "lucide-react";
+import { Scissors, Trash2, Undo2, Redo2, Play, Pause, ZoomIn, ZoomOut, X, RotateCcw } from "lucide-react";
 import { trimTarget, trimProbe, trimExport, trimWaveform, type ProbeResult } from "../lib/trim";
 import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
+import { TrimCamOverlay } from "./TrimCamOverlay";
+import { type CamPlacement, DEFAULT_PLACEMENT, toPixels, clampPlacement } from "./camOverlay";
 import "./trim.css";
+
+/** `<stem>.cam.webm` sibling of the recording — matches Rust `cam_sidecar_path`. */
+const camSiblingPath = (p: string) => p.replace(/\.[^.\\/]+$/, ".cam.webm");
 
 const fmt = (s: number) => {
   const m = Math.floor(s / 60), r = Math.floor(s % 60);
@@ -37,6 +42,11 @@ export function TrimView() {
   // not whatever the playhead has drifted onto.
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [zoom, setZoom] = useState(1); // 1 | 2 | 4 | 8 — timeline magnification
+  // Movable webcam overlay (only when the recording has a .cam.webm sidecar). Placement is
+  // its own state — deliberately outside the clip undo/redo history.
+  const [camSrc, setCamSrc] = useState<string | null>(null);
+  const [cam, setCam] = useState<CamPlacement | null>(null);
+  const camVideoRef = useRef<HTMLVideoElement>(null);
 
   // Scrub plumbing: the pointer drives the playhead instantly (so the red line is
   // always glued to the cursor), while the <video> catches up via *coalesced* seeks —
@@ -74,7 +84,9 @@ export function TrimView() {
   const zoomOut = useCallback(() => setZoom((z) => ZOOMS[Math.max(ZOOMS.indexOf(z) - 1, 0)] ?? z), []);
   const noop = ranges.length === 1 && ranges[0][0] <= 0.001 && ranges[0][1] >= duration - 0.05
     && clips.filter((c) => c.kept).every((c) => c.speed === 1) && fadeIn === 0 && fadeOut === 0;
-  const canSave = clips.length > 0 && keptCount(clips) > 0 && !noop && exporting === null;
+  // A visible webcam overlay is itself an edit worth exporting, even with no cuts/speed/fades.
+  const camEdit = !!(probe?.has_cam && cam?.visible);
+  const canSave = clips.length > 0 && keptCount(clips) > 0 && (!noop || camEdit) && exporting === null;
 
   // The selected block: the clip clicked on the timeline (sticky). Falls back to none once
   // the id no longer exists (e.g. after undo/redo swaps in a different history state).
@@ -102,6 +114,15 @@ export function TrimView() {
           // Extra buckets so zoomed-in detail resolves (at 8× ≈ 150 bars across the track).
           trimWaveform(t.path, 1200, p.duration_secs).then(setWaveform).catch(() => setWaveform(null));
         }
+        if (p.has_cam) {
+          setCamSrc(convertFileSrc(camSiblingPath(t.path)));
+          // Start the overlay where the webcam actually was during recording (same size +
+          // above-taskbar position); fall back to the default for older recordings.
+          const placed = p.cam_d > 0
+            ? clampPlacement({ x: p.cam_x, y: p.cam_y, diameter: p.cam_d, visible: true })
+            : DEFAULT_PLACEMENT;
+          setCam(placed);
+        }
       } catch { setErr("Couldn't read the recording."); }
     }).catch(() => setErr("Couldn't open the recording."));
   }, []);
@@ -118,6 +139,7 @@ export function TrimView() {
     if (seekingRef.current) { pendingRef.current = clamped; return; }
     seekingRef.current = true;
     try { v.currentTime = clamped; } catch { seekingRef.current = false; }
+    const cv = camVideoRef.current; if (cv) { try { cv.currentTime = clamped; } catch { /* ignore */ } }
   }, [duration]);
   const onSeeked = () => {
     seekingRef.current = false;
@@ -222,6 +244,12 @@ export function TrimView() {
         const cur = clipsRef.current.find((c) => c.kept && t >= c.start - 0.02 && t < c.end);
         const rate = cur?.speed ?? 1;
         if (v.playbackRate !== rate) v.playbackRate = rate;
+        // Slave the webcam overlay to the same time base (correct drift; match speed).
+        const cv = camVideoRef.current;
+        if (cv) {
+          if (Math.abs(cv.currentTime - t) > 0.15) { try { cv.currentTime = t; } catch { /* ignore */ } }
+          if (cv.playbackRate !== rate) cv.playbackRate = rate;
+        }
         setPlayhead(t);
       }
       raf = requestAnimationFrame(tick);
@@ -231,6 +259,13 @@ export function TrimView() {
   }, [playing]);
 
   const togglePlay = () => { const v = videoRef.current; if (!v) return; if (v.paused) { v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); } };
+
+  // Keep the webcam overlay's play state mirrored to the main player (muted, so autoplay
+  // is allowed). Time/rate are corrected in the rAF loop.
+  useEffect(() => {
+    const cv = camVideoRef.current; if (!cv) return;
+    if (playing) cv.play().catch(() => {}); else cv.pause();
+  }, [playing]);
 
   // Cancel/close: confirm first if there are unsaved cuts (each split/delete pushes
   // history; undoing back to the start empties it). Never closes mid-export.
@@ -263,7 +298,11 @@ export function TrimView() {
   const save = (mode: "copy" | "overwrite") => {
     if (!target || !probe || !canSave) return;
     setExporting(0);
-    trimExport(target.id, target.path, keptSegments(clips), probe.has_audio, duration, probe.width, probe.height, fadeIn, fadeOut, mode)
+    // Bake the webcam overlay only when it's present and visible; else export as before.
+    const useCam = probe.has_cam && !!cam?.visible;
+    const camPath = useCam ? camSiblingPath(target.path) : null;
+    const camOverlay = useCam && cam ? toPixels(cam, probe.width, probe.height) : null;
+    trimExport(target.id, target.path, keptSegments(clips), probe.has_audio, duration, probe.width, probe.height, fadeIn, fadeOut, camPath, camOverlay, mode)
       .catch(() => setExporting(null)); // a toast already surfaced; window stays open
   };
 
@@ -271,17 +310,28 @@ export function TrimView() {
 
   return (
     <div className="trim-root">
-      {src && (
-        <video
-          ref={videoRef}
-          className="trim-video"
-          src={src}
-          preload="auto"
-          onSeeked={onSeeked}
-          onPlay={() => setPlaying(true)}
-          onPause={() => setPlaying(false)}
-        />
-      )}
+      <div className="trim-stage">
+        {src && (
+          <video
+            ref={videoRef}
+            className="trim-video"
+            src={src}
+            preload="auto"
+            onSeeked={onSeeked}
+            onPlay={() => setPlaying(true)}
+            onPause={() => setPlaying(false)}
+          />
+        )}
+        {cam && camSrc && probe && (
+          <TrimCamOverlay
+            ref={camVideoRef}
+            camSrc={camSrc}
+            placement={cam}
+            videoAspect={probe.height > 0 ? probe.width / probe.height : 16 / 9}
+            onChange={setCam}
+          />
+        )}
+      </div>
 
       <div className="trim-transport">
         <button className="trim-iconbtn" onClick={togglePlay} title="Play/Pause (Space)">
@@ -322,6 +372,18 @@ export function TrimView() {
           <span className="trim-zoomval">{zoom}×</span>
           <button className="trim-iconbtn" onClick={zoomIn} disabled={zoom >= 8} title="Zoom in (+)"><ZoomIn size={16} /></button>
         </div>
+        {probe?.has_cam && cam && (
+          <div className="trim-camctl" role="group" aria-label="Webcam overlay">
+            {cam.visible ? (
+              <>
+                <button className="trim-iconbtn" onClick={() => setCam(DEFAULT_PLACEMENT)} title="Reset webcam position & size"><RotateCcw size={15} /> Cam</button>
+                <button className="trim-iconbtn" onClick={() => setCam((c) => (c ? { ...c, visible: false } : c))} title="Remove the webcam overlay"><X size={16} /></button>
+              </>
+            ) : (
+              <button className="trim-iconbtn" onClick={() => setCam((c) => (c ? { ...c, visible: true } : DEFAULT_PLACEMENT))} title="Add the webcam overlay back">Add cam</button>
+            )}
+          </div>
+        )}
         <div className="trim-fades">
           <FadeStepper label="Fade in" value={fadeIn} disabled={exporting !== null} onDelta={(d) => bump("fadeIn", d)} />
           <FadeStepper label="Fade out" value={fadeOut} disabled={exporting !== null} onDelta={(d) => bump("fadeOut", d)} />

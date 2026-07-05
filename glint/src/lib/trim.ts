@@ -7,6 +7,12 @@ export interface ProbeResult {
   fps: number;
   width: number;
   height: number;
+  has_cam: boolean;
+  /** Webcam overlay's initial placement (normalized), from the record-time .cam.json.
+   *  All zero when absent → the editor uses its default. */
+  cam_x: number;
+  cam_y: number;
+  cam_d: number;
 }
 export interface TrimTarget {
   id: number;
@@ -26,6 +32,13 @@ export interface KeepSegment {
   speed: number;
 }
 
+/** Webcam overlay placement in source pixels (top-left + diameter), or null for none. */
+export interface CamOverlay {
+  x: number;
+  y: number;
+  d: number;
+}
+
 export const trimExport = (
   id: number,
   srcPath: string,
@@ -36,6 +49,8 @@ export const trimExport = (
   height: number,
   fadeIn: number,
   fadeOut: number,
+  camPath: string | null,
+  camOverlay: CamOverlay | null,
   mode: "copy" | "overwrite",
 ): Promise<void> =>
   invoke<void>("recorder_trim_export", {
@@ -48,6 +63,8 @@ export const trimExport = (
     height,
     fadeIn,
     fadeOut,
+    camPath,
+    camOverlay,
     mode,
   });
 

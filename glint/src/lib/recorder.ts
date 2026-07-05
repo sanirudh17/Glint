@@ -35,23 +35,28 @@ const fxPayload = (fx?: FxOpts) => ({
   cursorSize: fx?.cursor_size ?? "off",
 });
 
+// `webcamMovable` maps to Rust `webcam_movable` (record the camera as its own track).
+type StartSources = { system: boolean; mic: boolean; webcam: boolean; webcamMovable?: boolean };
+
 export const recorderStartFullscreen = (
-  audio?: { system: boolean; mic: boolean; webcam: boolean },
+  audio?: StartSources,
   fx?: FxOpts,
 ): Promise<void> =>
   invoke<void>("recorder_start", {
     mode: "fullscreen",
     system: audio?.system ?? true, mic: audio?.mic ?? false, webcam: audio?.webcam ?? false,
+    webcamMovable: audio?.webcamMovable ?? false,
     ...fxPayload(fx),
   });
 export const recorderStartRegion = (
   r: { x: number; y: number; w: number; h: number },
-  audio?: { system: boolean; mic: boolean; webcam: boolean },
+  audio?: StartSources,
   fx?: FxOpts,
 ): Promise<void> =>
   invoke<void>("recorder_start", {
     mode: "region", x: r.x, y: r.y, w: r.w, h: r.h,
     system: audio?.system ?? true, mic: audio?.mic ?? false, webcam: audio?.webcam ?? false,
+    webcamMovable: audio?.webcamMovable ?? false,
     ...fxPayload(fx),
   });
 export const recorderPause = (): Promise<void> => invoke<void>("recorder_pause");

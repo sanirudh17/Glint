@@ -22,6 +22,7 @@ export function Recording() {
   const setRecordSystemAudio = useAppStore((s) => s.setRecordSystemAudio);
   const setRecordMicrophone = useAppStore((s) => s.setRecordMicrophone);
   const setRecordWebcam = useAppStore((s) => s.setRecordWebcam);
+  const setRecordWebcamMovable = useAppStore((s) => s.setRecordWebcamMovable);
   const setRecordFx = useAppStore((s) => s.setRecordFx);
   const setRecordFps = useAppStore((s) => s.setRecordFps);
   const setWebcamDevice = useAppStore((s) => s.setWebcamDevice);
@@ -112,6 +113,15 @@ export function Recording() {
         <Switch
           checked={settings?.record_webcam ?? false}
           onChange={(v) => setRecordWebcam(v)}
+        />
+      </Field>
+      <Field
+        label="Movable webcam"
+        hint="Record the webcam as its own track so you can move, resize, or remove it in the trim editor afterward."
+      >
+        <Switch
+          checked={settings?.record_webcam_movable ?? false}
+          onChange={(v) => setRecordWebcamMovable(v)}
         />
       </Field>
       <Field label="Visualize clicks" hint="Show a ripple at each mouse click during recording.">

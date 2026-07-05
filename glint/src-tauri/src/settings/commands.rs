@@ -58,19 +58,32 @@ pub fn settings_set_hotkey(
     action: String,
     accelerator: String,
 ) -> Result<Settings, String> {
+    // The frontend suspends (unregisters) shortcuts while capturing the combo, so this
+    // command MUST re-arm on EVERY exit — including validation errors. It is then the single
+    // owner of the post-rebind registration: the frontend must NOT reapply again afterwards,
+    // or the second unregister/register races the OS and drops the just-set shortcut.
+    let rearm = || { let _ = crate::shortcuts::reapply(&app, false); };
+
     if !HOTKEY_ACTIONS.contains(&action.as_str()) {
+        rearm();
         return Err(format!("Unknown action: {action}"));
     }
     let accel = accelerator.trim().to_string();
     if !accel.is_empty() {
-        hotkeys::validate_accelerator(&accel).map_err(friendly)?;
+        if let Err(e) = hotkeys::validate_accelerator(&accel) {
+            rearm();
+            return Err(friendly(e));
+        }
     }
 
     let old = {
         let mut s = state.0.lock().unwrap();
         if !accel.is_empty() {
             if let Some(other) = hotkeys::duplicate_of(&s.hotkeys, &action, &accel) {
-                return Err(friendly(HotkeyError::Duplicate(action_label(&other))));
+                let label = action_label(&other);
+                drop(s);
+                rearm();
+                return Err(friendly(HotkeyError::Duplicate(label)));
             }
         }
         let old = hotkeys::get_field(&s.hotkeys, &action).unwrap_or("").to_string();

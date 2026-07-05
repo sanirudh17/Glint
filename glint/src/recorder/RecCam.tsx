@@ -1,7 +1,10 @@
-/** RecCam.tsx — webcam bubble (route #/rec-cam): draggable, S/M/L, un-mirrored. */
+/** RecCam.tsx — webcam bubble (route #/rec-cam): draggable, S/M/L, un-mirrored. In
+ *  "movable" recordings the bubble also records its own camera stream to a .cam.webm
+ *  sidecar via MediaRecorder, driven entirely by backend events so the track shares the
+ *  screen capture's timeline. */
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
-import { emit } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
 import { Maximize2, X } from "lucide-react";
 import "./reccam.css";
@@ -11,6 +14,8 @@ const SIZES = [120, 170, 230]; // S / M / L diameter (logical px); index 1 = def
 export function RecCam() {
   const videoRef = useRef<HTMLVideoElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const mrRef = useRef<MediaRecorder | null>(null);
+  const firstChunkRef = useRef(true);
   const [sizeIdx, setSizeIdx] = useState(1);
 
   useEffect(() => {
@@ -27,14 +32,22 @@ export function RecCam() {
         return;
       }
       // Resolves only AFTER the user grants the WebView2 camera prompt, so this
-      // is the signal recorder_start waits on before starting the countdown.
+      // is the signal recorder_start waits on before starting the countdown. The
+      // payload also reports whether movable-mode recording (MediaRecorder/VP8) is
+      // supported, so recorder_start can fall back to baked-in before capture.
       streamRef.current = s;
       if (videoRef.current) videoRef.current.srcObject = s;
-      emit("rec-cam-ready").catch(() => {});
+      const movableOk =
+        typeof MediaRecorder !== "undefined" &&
+        MediaRecorder.isTypeSupported("video/webm;codecs=vp8");
+      emit("rec-cam-ready", { movableOk }).catch(() => {});
     };
 
+    // Cap at 720p: plenty for the bubble/overlay and keeps the streamed .cam.webm chunks
+    // small over IPC in movable mode.
+    const VIDEO_RES = { width: { ideal: 1280 }, height: { ideal: 720 } };
     const openDefault = () =>
-      navigator.mediaDevices.getUserMedia({ video: true, audio: false }).then(attach);
+      navigator.mediaDevices.getUserMedia({ video: VIDEO_RES, audio: false }).then(attach);
 
     (async () => {
       // RecCam is its own window (no Zustand hydration) — read the chosen camera
@@ -49,7 +62,7 @@ export function RecCam() {
       try {
         if (deviceId) {
           await navigator.mediaDevices
-            .getUserMedia({ video: { deviceId: { exact: deviceId } }, audio: false })
+            .getUserMedia({ video: { deviceId: { exact: deviceId }, ...VIDEO_RES }, audio: false })
             .then(attach)
             .catch(async () => {
               // Saved camera unplugged/unavailable — fall back to the default.
@@ -66,8 +79,55 @@ export function RecCam() {
       }
     })();
 
+    // ── Movable-mode recording: driven by backend events so the .cam.webm shares the
+    // screen capture's timeline. Chunks stream to disk as they arrive (flat memory). ──
+    const startCamRecording = (path: string, stream: MediaStream) => {
+      firstChunkRef.current = true;
+      let mr: MediaRecorder;
+      try {
+        mr = new MediaRecorder(stream, { mimeType: "video/webm;codecs=vp8" });
+      } catch {
+        // Unexpected: support was probed up front (rec-cam-ready.movableOk). Unblock a
+        // pending stop and toast — the screen is already recording cleanly without a cam.
+        emit("glint-toast", "Webcam recording failed").catch(() => {});
+        emit("rec-cam-record-saved").catch(() => {});
+        return;
+      }
+      mr.ondataavailable = async (e) => {
+        if (!e.data || e.data.size === 0) return;
+        const bytes = Array.from(new Uint8Array(await e.data.arrayBuffer()));
+        const first = firstChunkRef.current;
+        firstChunkRef.current = false;
+        invoke("recorder_cam_write_chunk", { path, bytes, first }).catch(() => {
+          emit("glint-toast", "Webcam recording error").catch(() => {});
+        });
+      };
+      mr.onstop = () => emit("rec-cam-record-saved").catch(() => {});
+      mrRef.current = mr;
+      mr.start(1000); // 1s timeslice → periodic flushes
+    };
+
+    const offs: Array<() => void> = [];
+    listen<{ path: string }>("rec-cam-record-start", (e) => {
+      if (streamRef.current && !cancelled) startCamRecording(e.payload.path, streamRef.current);
+    }).then((f) => offs.push(f)).catch(() => {});
+    listen("rec-cam-record-pause", () => {
+      if (mrRef.current?.state === "recording") mrRef.current.pause();
+    }).then((f) => offs.push(f)).catch(() => {});
+    listen("rec-cam-record-resume", () => {
+      if (mrRef.current?.state === "paused") mrRef.current.resume();
+    }).then((f) => offs.push(f)).catch(() => {});
+    listen("rec-cam-record-stop", () => {
+      const mr = mrRef.current;
+      if (mr && mr.state !== "inactive") mr.stop(); // fires onstop → rec-cam-record-saved
+      else emit("rec-cam-record-saved").catch(() => {}); // nothing to flush; unblock stop
+    }).then((f) => offs.push(f)).catch(() => {});
+
     return () => {
       cancelled = true;
+      offs.forEach((f) => f());
+      if (mrRef.current && mrRef.current.state !== "inactive") { try { mrRef.current.stop(); } catch { /* ignore */ } }
+      mrRef.current = null;
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };

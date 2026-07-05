@@ -41,6 +41,9 @@ pub struct Settings {
     pub record_system_audio: bool,
     pub record_microphone: bool,
     pub record_webcam: bool,
+    /// Record the webcam as its own track (movable/resizable in the trim editor)
+    /// instead of baking the on-screen bubble into the screen video.
+    pub record_webcam_movable: bool,
     pub record_click_viz: bool,
     pub record_keystrokes: bool,
     pub record_cursor_spotlight: bool,
@@ -79,6 +82,7 @@ impl Default for Settings {
             record_system_audio: true,
             record_microphone: false,
             record_webcam: false,
+            record_webcam_movable: false,
             record_click_viz: false,
             record_keystrokes: false,
             record_cursor_spotlight: false,
@@ -130,6 +134,10 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         }
         "record_webcam" => {
             s.record_webcam = value.as_bool().ok_or("record_webcam must be boolean")?;
+        }
+        "record_webcam_movable" => {
+            s.record_webcam_movable =
+                value.as_bool().ok_or("record_webcam_movable must be boolean")?;
         }
         "record_click_viz" => {
             s.record_click_viz = value.as_bool().ok_or("record_click_viz must be boolean")?;

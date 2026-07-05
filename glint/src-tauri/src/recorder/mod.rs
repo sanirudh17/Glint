@@ -3,6 +3,7 @@
 //! only outbound coupling is on stop: write the MP4 + insert one Library row.
 
 pub mod audio;
+pub mod cam;
 pub mod ffmpeg;
 pub mod fx;
 pub mod pipes;
@@ -128,6 +129,11 @@ pub struct ActiveRecording {
     /// Whether the webcam bubble is currently open (sibling window — not encoded
     /// by ffmpeg, gdigrab records it as part of the screen).
     pub webcam_on: bool,
+    /// Movable mode: the bubble is capture-excluded and the camera is recorded to its
+    /// own `.cam.webm` track for post-hoc compositing.
+    pub webcam_movable: bool,
+    /// Sibling webcam-track path while a movable recording is in flight (`None` otherwise).
+    pub cam_path: Option<String>,
     /// Active recording FX (click/keystroke/cursor). The overlay + hooks live here.
     pub fx_cfg: fx::FxConfig,
     pub fx: Option<fx::FxSession>,
@@ -542,21 +548,34 @@ pub async fn recorder_audio_check(app: tauri::AppHandle) -> Result<u64, String> 
 /// (`rec-cam-failed`), or 20s elapse. Called before the countdown so the WebView2
 /// camera-permission prompt is resolved up front and never recorded; bounded so a
 /// stuck prompt or a missing event can't wedge the start.
-async fn wait_for_cam_ready(app: &AppHandle) {
+///
+/// Returns whether movable-mode recording is supported (the `rec-cam-ready` payload's
+/// `movableOk`, i.e. MediaRecorder/VP8). Defaults `true` on timeout/parse issues; only
+/// consulted for movable recordings.
+async fn wait_for_cam_ready(app: &AppHandle) -> bool {
     use tauri::Listener;
-    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
     let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
     let txr = tx.clone();
-    let ready = app.once("rec-cam-ready", move |_| {
-        if let Some(t) = txr.lock().unwrap().take() { let _ = t.send(()); }
+    let ready = app.once("rec-cam-ready", move |e| {
+        let movable_ok = serde_json::from_str::<serde_json::Value>(e.payload())
+            .ok()
+            .and_then(|v| v.get("movableOk").and_then(|b| b.as_bool()))
+            .unwrap_or(true);
+        if let Some(t) = txr.lock().unwrap().take() { let _ = t.send(movable_ok); }
     });
     let txf = tx.clone();
     let failed = app.once("rec-cam-failed", move |_| {
-        if let Some(t) = txf.lock().unwrap().take() { let _ = t.send(()); }
+        if let Some(t) = txf.lock().unwrap().take() { let _ = t.send(true); }
     });
-    let _ = tokio::time::timeout(std::time::Duration::from_secs(20), rx).await;
+    let movable_ok = tokio::time::timeout(std::time::Duration::from_secs(20), rx)
+        .await
+        .ok()
+        .and_then(|r| r.ok())
+        .unwrap_or(true);
     app.unlisten(ready);
     app.unlisten(failed);
+    movable_ok
 }
 
 /// Start recording. `mode` is "fullscreen" or "region"; region passes x/y/w/h
@@ -577,6 +596,7 @@ pub async fn recorder_start(
     system: Option<bool>,
     mic: Option<bool>,
     webcam: Option<bool>,
+    webcam_movable: Option<bool>,
     click_viz: Option<bool>,
     keystrokes: Option<bool>,
     spotlight: Option<bool>,
@@ -588,14 +608,14 @@ pub async fn recorder_start(
         return Err("already recording".into());
     }
 
-    // Capture/encode frame rate from settings (30 or 60). gdigrab's actually-delivered
-    // rate still depends on the machine and screen resolution.
-    let fps = app
-        .state::<crate::settings::commands::SettingsState>()
-        .0
-        .lock()
-        .unwrap()
-        .record_fps;
+    // Capture/encode frame rate + movable-webcam default from settings. Reading
+    // `record_webcam_movable` here (not only from the selector chip) makes the Settings
+    // toggle authoritative — a recording started from anywhere honours it.
+    let (fps, setting_movable) = {
+        let state = app.state::<crate::settings::commands::SettingsState>();
+        let s = state.0.lock().unwrap();
+        (s.record_fps, s.record_webcam_movable)
+    };
 
     // Choose the capture engine once (cached per session): ddagrab (GPU, true 60 fps)
     // when the machine supports it, else the proven gdigrab path. Fixed for the whole
@@ -657,10 +677,27 @@ pub async fn recorder_start(
     // permission prompt is then resolved up front, so it never lands in the recording
     // and the countdown/capture don't begin until the user has pressed Allow. The
     // bubble stays open through the countdown so the user can frame.
-    let want_cam = webcam.unwrap_or(false);
+    // "Movable" is a webcam *mode* — honoured from the per-recording chip OR the persisted
+    // Settings default. Wanting it implies recording the webcam at all, so a user who only
+    // flips the Movable toggle still gets a (movable) webcam instead of silently nothing.
+    let want_movable_pref = webcam_movable.unwrap_or(false) || setting_movable;
+    let want_cam = webcam.unwrap_or(false) || want_movable_pref;
+    // `mut` so a pre-start fallback can demote it to baked-in when unsupported.
+    let mut want_cam_movable = want_cam && want_movable_pref;
+    // Bubble's normalized on-screen placement — persisted for movable recordings so the trim
+    // overlay starts at the same spot/size.
+    let mut cam_placement: Option<(f64, f64, f64)> = None;
     if want_cam {
-        let _ = windows::build_cam_bubble(&app, target, 170.0);
-        wait_for_cam_ready(&app).await;
+        cam_placement = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable).ok().flatten();
+        let movable_ok = wait_for_cam_ready(&app).await;
+        if want_cam_movable && !movable_ok {
+            // MediaRecorder/VP8 unsupported here — rebuild the bubble WITHOUT capture
+            // exclusion so gdigrab bakes it in and the user still gets a webcam.
+            windows::close_cam_bubble(&app);
+            let _ = windows::build_cam_bubble(&app, target, 170.0, false);
+            let _ = app.emit("glint-toast", "Movable webcam unavailable — recorded in place");
+            want_cam_movable = false;
+        }
     }
 
     // 3-2-1 countdown, then Rust closes it BEFORE capture starts so the digit can
@@ -705,6 +742,8 @@ pub async fn recorder_start(
         mic_avail: any_audio,
         controls: controls.clone(),
         webcam_on: want_cam,
+        webcam_movable: want_cam_movable,
+        cam_path: None,
         fx_cfg,
         fx: None,
     });
@@ -778,7 +817,36 @@ pub async fn recorder_start(
         });
     }
     let _ = app.emit("recorder-started", ());
+
+    // Movable webcam: hand the bubble the sibling path and tell it to start MediaRecorder
+    // at the true capture t=0 (so the .cam.webm shares the screen's timeline).
+    if want_cam_movable {
+        let cam_path = crate::recorder::cam::cam_sidecar_path(&out_str).to_string_lossy().to_string();
+        // Persist the bubble's placement so the trim editor's overlay starts where it was.
+        if let Some((nx, ny, nd)) = cam_placement {
+            crate::recorder::cam::write_cam_placement(&out_str, nx, ny, nd);
+        }
+        if let Some(rec) = app.state::<RecorderState>().0.lock().unwrap().as_mut() {
+            rec.cam_path = Some(cam_path.clone());
+        }
+        let _ = app.emit_to(windows::CAM_LABEL, "rec-cam-record-start", serde_json::json!({ "path": cam_path }));
+    }
     Ok(())
+}
+
+/// Block until the webcam bubble finishes flushing its `.cam.webm` (`rec-cam-record-saved`),
+/// or 3s elapse. Called at stop before the bubble is destroyed, so the sidecar is complete
+/// on disk. Bounded so a gone/stuck webview can't wedge stop.
+async fn wait_for_cam_saved(app: &AppHandle) {
+    use tauri::Listener;
+    let (tx, rx) = tokio::sync::oneshot::channel::<()>();
+    let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
+    let txr = tx.clone();
+    let saved = app.once("rec-cam-record-saved", move |_| {
+        if let Some(t) = txr.lock().unwrap().take() { let _ = t.send(()); }
+    });
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(3), rx).await;
+    app.unlisten(saved);
 }
 
 /// Pause: stop the running span (a clean, self-contained MP4) and keep it. The
@@ -801,6 +869,8 @@ pub async fn recorder_pause(app: tauri::AppHandle) -> Result<(), String> {
     };
     let seg = seg.ok_or("not recording, or already paused")?;
     finish_segment(seg).await;
+    // Mirror the pause to the webcam recorder so both timelines stay aligned.
+    let _ = app.emit_to(windows::CAM_LABEL, "rec-cam-record-pause", ());
     let _ = app.emit("recorder-paused", ());
     Ok(())
 }
@@ -844,6 +914,8 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
         let _ = std::fs::remove_file(&path);
         return Err("recording ended before resume".into());
     }
+    // Mirror the resume to the webcam recorder.
+    let _ = app.emit_to(windows::CAM_LABEL, "rec-cam-record-resume", ());
     let _ = app.emit("recorder-resumed", ());
     Ok(())
 }
@@ -854,6 +926,11 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
+    // Movable webcam: flush + finalize the .cam.webm BEFORE destroying the bubble webview.
+    if rec.as_ref().is_some_and(|r| r.cam_path.is_some()) {
+        let _ = app.emit_to(windows::CAM_LABEL, "rec-cam-record-stop", ());
+        wait_for_cam_saved(&app).await;
+    }
     windows::close_cam_bubble(&app);
     let rec = rec.ok_or("not recording")?;
     let ActiveRecording { out_path, width, height, mut done, current, fx, .. } = rec;
@@ -935,9 +1012,12 @@ pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     windows::close_control_bar(&app);
     windows::close_cam_bubble(&app);
     windows::close_countdown(&app); // in case cancel races the countdown
-    if let Some(ActiveRecording { mut done, current, out_path, fx, .. }) = rec {
+    if let Some(ActiveRecording { mut done, current, out_path, fx, cam_path, .. }) = rec {
         // Tear down FX (unhook input, destroy overlay) on discard.
         if let Some(session) = fx { session.stop(&app); }
+        // Drop any partial webcam sidecar + placement written before cancel.
+        if let Some(cp) = cam_path { let _ = std::fs::remove_file(cp); }
+        let _ = std::fs::remove_file(crate::recorder::cam::cam_placement_path(&out_path));
         // Discarding everything, so finalization doesn't matter — quit the running
         // span fast, then delete every segment file (and any assembled output).
         if let Some(Segment { mut child, path, audio, .. }) = current {
@@ -1144,9 +1224,10 @@ pub async fn recorder_set_webcam(app: tauri::AppHandle, on: bool) -> Result<(), 
         let mut guard = state.0.lock().unwrap();
         let rec = guard.as_mut().ok_or("not recording")?;
         rec.webcam_on = on;
-        rec.target
+        (rec.target, rec.webcam_movable)
     };
-    if on { let _ = windows::build_cam_bubble(&app, target, 170.0); }
+    let (target, movable) = target;
+    if on { let _ = windows::build_cam_bubble(&app, target, 170.0, movable); }
     else { windows::close_cam_bubble(&app); }
     // Notify the control bar so its toggle reflects the change — this is the path the
     // bubble's ✕ button takes, and the bar would otherwise still read "on".

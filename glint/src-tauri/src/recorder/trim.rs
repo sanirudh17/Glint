@@ -14,6 +14,14 @@ pub struct ProbeResult {
     pub fps: f64,
     pub width: u32,
     pub height: u32,
+    /// Whether a `<stem>.cam.webm` movable-webcam sidecar exists next to the recording
+    /// (set by the probe command, not the pure parser — which always leaves it false).
+    pub has_cam: bool,
+    /// The webcam overlay's initial placement (normalized top-left + diameter), read from the
+    /// `.cam.json` written at record time. All zero when absent → the editor uses its default.
+    pub cam_x: f64,
+    pub cam_y: f64,
+    pub cam_d: f64,
 }
 
 /// One kept segment of the source timeline, exported at `speed` (0.5–2×).
@@ -22,6 +30,15 @@ pub struct KeepSegment {
     pub start: f64,
     pub end: f64,
     pub speed: f64,
+}
+
+/// Webcam overlay placement in SOURCE pixels: top-left `x,y` + diameter `d`. The editor
+/// converts its normalized placement to these via `toPixels` before export.
+#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
+pub struct CamOverlay {
+    pub x: f64,
+    pub y: f64,
+    pub d: f64,
 }
 
 /// Output (exported) duration: each kept segment contributes `(end-start)/speed`.
@@ -104,7 +121,7 @@ pub fn parse_ffprobe_json(json: &str) -> Result<ProbeResult, String> {
         .and_then(|d| d.as_str())
         .and_then(|d| d.parse::<f64>().ok())
         .unwrap_or(0.0);
-    Ok(ProbeResult { duration_secs, has_audio, fps, width, height })
+    Ok(ProbeResult { duration_secs, has_audio, fps, width, height, has_cam: false, cam_x: 0.0, cam_y: 0.0, cam_d: 0.0 })
 }
 
 /// Validate + sort kept segments: non-empty, each (start < end), all within [0, duration],
@@ -161,10 +178,18 @@ pub fn trimmed_output_path(src: &Path) -> PathBuf {
 }
 
 /// Build ffmpeg args for a per-segment trim: trim each kept segment (applying its speed),
-/// concat them in one re-encode pass, then optionally fade the concatenated output in/out.
-/// `segments` is already validated (sorted, non-overlapping, in-bounds, speed∈[0.5,2]).
-/// A speed-1 segment emits the plain `setpts=PTS-STARTPTS`; with both fades 0 the concat
-/// writes `[outv]`/`[outa]` directly (byte-identical to the pre-speed/fade path).
+/// concat them in one re-encode pass, then optionally composite a circular webcam overlay
+/// and fade the result in/out. `segments` is already validated (sorted, non-overlapping,
+/// in-bounds, speed∈[0.5,2]). A speed-1 segment emits the plain `setpts=PTS-STARTPTS`.
+///
+/// When `cam` + `overlay` are both `Some`, a second input (`cam`, index 1) is trimmed with
+/// the IDENTICAL per-segment `trim`/`setpts` as the screen (so it stays in sync through cuts
+/// and speed changes), concatenated, circular-masked, and overlaid at `overlay`'s pixel
+/// position. When either is `None`, the overlay branch is skipped and the args are
+/// byte-identical to the no-webcam path.
+// Retained: each arg is a distinct filtergraph input (io paths, segments, audio, fades,
+// optional webcam) — a params struct would only relocate the same fields.
+#[allow(clippy::too_many_arguments)]
 pub fn build_trim_args(
     input: &str,
     output: &str,
@@ -172,12 +197,15 @@ pub fn build_trim_args(
     has_audio: bool,
     fade_in: f64,
     fade_out: f64,
+    cam: Option<&str>,
+    overlay: Option<CamOverlay>,
 ) -> Vec<String> {
     // Format a number without a trailing ".0" (so 1.5 -> "1.5", 3.0 -> "3").
     fn num(n: f64) -> String {
         if n.fract() == 0.0 { format!("{}", n as i64) } else { format!("{n}") }
     }
     let one = |k: f64| (k - 1.0).abs() < 1e-9;
+    let has_cam = cam.is_some() && overlay.is_some();
 
     let mut fc = String::new();
     for (i, s) in segments.iter().enumerate() {
@@ -193,22 +221,54 @@ pub fn build_trim_args(
                 fc.push_str(&format!("[0:a]atrim={}:{},asetpts=PTS-STARTPTS,atempo={}[a{i}];", num(s.start), num(s.end), num(s.speed)));
             }
         }
+        // Webcam track (input 1): same trim + setpts as the screen segment, so it stays
+        // frame-synced through cuts and speed changes.
+        if has_cam {
+            if one(s.speed) {
+                fc.push_str(&format!("[1:v]trim={}:{},setpts=PTS-STARTPTS[c{i}];", num(s.start), num(s.end)));
+            } else {
+                fc.push_str(&format!("[1:v]trim={}:{},setpts=(PTS-STARTPTS)/{}[c{i}];", num(s.start), num(s.end), num(s.speed)));
+            }
+        }
     }
     let n = segments.len();
+    // Screen concat.
     for i in 0..n {
         fc.push_str(&format!("[v{i}]"));
         if has_audio { fc.push_str(&format!("[a{i}]")); }
     }
 
-    // Fades post-process the concat output; with no fades, concat writes [outv]/[outa]
-    // directly (byte-identical to the pre-fade path).
     let apply_fade = fade_in > 1e-9 || fade_out > 1e-9;
-    let (vlabel, alabel) = if apply_fade { ("cv", "ca") } else { ("outv", "outa") };
+    // Screen video concat label: fed to the overlay stage when there's a webcam, else to the
+    // fade stage, else it's the final [outv].
+    let vconcat = if has_cam { "vbase" } else if apply_fade { "cv" } else { "outv" };
+    let aconcat = if apply_fade { "ca" } else { "outa" };
     if has_audio {
-        fc.push_str(&format!("concat=n={n}:v=1:a=1[{vlabel}][{alabel}]"));
+        fc.push_str(&format!("concat=n={n}:v=1:a=1[{vconcat}][{aconcat}]"));
     } else {
-        fc.push_str(&format!("concat=n={n}:v=1:a=0[{vlabel}]"));
+        fc.push_str(&format!("concat=n={n}:v=1:a=0[{vconcat}]"));
     }
+
+    // Webcam overlay: concat the cam segments, crop to a centred square, scale to the target
+    // diameter, punch a circular alpha (single-quoted exprs protect the commas), and overlay.
+    // The overlay output is the fade stage's input (or the final [outv] with no fades).
+    let vpost = if has_cam {
+        let ov = overlay.unwrap();
+        let d = num(ov.d);
+        let h = num(ov.d / 2.0);
+        fc.push(';');
+        for i in 0..n { fc.push_str(&format!("[c{i}]")); }
+        fc.push_str(&format!("concat=n={n}:v=1:a=0[camcat]"));
+        fc.push_str(&format!(
+            ";[camcat]crop='min(iw,ih)':'min(iw,ih)',scale={d}:{d},format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(hypot(X-{h},Y-{h}),{h}),255,0)'[cammask]"
+        ));
+        let ovlabel = if apply_fade { "cvf" } else { "outv" };
+        fc.push_str(&format!(";[vbase][cammask]overlay=x={}:y={}:eof_action=pass[{ovlabel}]", num(ov.x), num(ov.y)));
+        ovlabel
+    } else {
+        vconcat
+    };
+
     if apply_fade {
         let out_dur = output_duration(segments);
         let st = (out_dur - fade_out).max(0.0);
@@ -218,7 +278,7 @@ pub fn build_trim_args(
             if !vf.is_empty() { vf.push(','); }
             vf.push_str(&format!("fade=t=out:st={}:d={}", num(st), num(fade_out)));
         }
-        fc.push_str(&format!(";[cv]{vf}[outv]"));
+        fc.push_str(&format!(";[{vpost}]{vf}[outv]"));
         if has_audio {
             // qsin (quarter-sine) curve fades sound smoother/more natural than the default
             // linear ramp — no abrupt onset at the fade's start.
@@ -228,7 +288,7 @@ pub fn build_trim_args(
                 if !af.is_empty() { af.push(','); }
                 af.push_str(&format!("afade=t=out:st={}:d={}:curve=qsin", num(st), num(fade_out)));
             }
-            fc.push_str(&format!(";[ca]{af}[outa]"));
+            fc.push_str(&format!(";[{aconcat}]{af}[outa]"));
         }
     }
 
@@ -238,9 +298,14 @@ pub fn build_trim_args(
         "-loglevel".into(), "error".into(),
         "-progress".into(), "pipe:1".into(),
         "-i".into(), input.into(),
+    ];
+    if has_cam {
+        a.extend(["-i".into(), cam.unwrap().into()]);
+    }
+    a.extend([
         "-filter_complex".into(), fc,
         "-map".into(), "[outv]".into(),
-    ];
+    ]);
     if has_audio {
         a.extend(["-map".into(), "[outa]".into()]);
     }
@@ -273,7 +338,18 @@ pub async fn recorder_trim_probe(app: tauri::AppHandle, path: String) -> Result<
         return Err(format!("ffprobe exited {:?}", out.status.code()));
     }
     let json = String::from_utf8_lossy(&out.stdout);
-    parse_ffprobe_json(&json)
+    let mut result = parse_ffprobe_json(&json)?;
+    // A movable recording writes a sibling <stem>.cam.webm — its presence tells the trim
+    // editor to offer the webcam overlay; the .cam.json carries where it was on screen.
+    result.has_cam = crate::recorder::cam::cam_sidecar_path(&path).exists();
+    if result.has_cam {
+        if let Some((x, y, d)) = crate::recorder::cam::read_cam_placement(&path) {
+            result.cam_x = x;
+            result.cam_y = y;
+            result.cam_d = d;
+        }
+    }
+    Ok(result)
 }
 
 /// Extract a downsampled mono waveform for the timeline. Runs ffmpeg to decode audio to
@@ -351,10 +427,24 @@ pub async fn recorder_trim_export(
     height: i64,
     fade_in: f64,
     fade_out: f64,
+    cam_path: Option<String>,
+    cam_overlay: Option<CamOverlay>,
     mode: String,
 ) -> Result<(), String> {
     let segments = validate_segments(&segments, duration)?;
-    if is_noop(&segments, duration, fade_in, fade_out) {
+    // Degrade gracefully: if the editor asked for the overlay but the sidecar is missing or
+    // implausibly small, drop it (screen-only export + toast) rather than feeding ffmpeg a
+    // bad input. Done before the noop check so "just the webcam" on a broken track is a noop.
+    let cam_ok = cam_path
+        .as_deref()
+        .is_some_and(|p| std::fs::metadata(p).map(|m| m.len() > 1024).unwrap_or(false));
+    let cam_overlay = if cam_overlay.is_some() && !cam_ok {
+        let _ = app.emit("glint-toast", "Webcam track unavailable — exported without it");
+        None
+    } else {
+        cam_overlay
+    };
+    if is_noop(&segments, duration, fade_in, fade_out) && cam_overlay.is_none() {
         return Err("no changes to save".into());
     }
     let total_out: f64 = output_duration(&segments);
@@ -365,7 +455,10 @@ pub async fn recorder_trim_export(
     let tmp_str = tmp.to_string_lossy().to_string();
     let _ = std::fs::remove_file(&tmp); // clear any stale temp from a prior failed run
 
-    let args = build_trim_args(&src_path, &tmp_str, &segments, has_audio, fade_in, fade_out);
+    // Composite the webcam overlay only when the editor asked for it AND the sidecar is a
+    // plausibly-real file (E1 guards missing/tiny tracks — else we'd feed ffmpeg a bad input).
+    let cam_ref = cam_overlay.and(cam_path.as_deref());
+    let args = build_trim_args(&src_path, &tmp_str, &segments, has_audio, fade_in, fade_out, cam_ref, cam_overlay);
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("ffmpeg resolve: {e}"))?;
     let (mut rx, _child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
 
@@ -486,7 +579,7 @@ mod tests {
 
     #[test]
     fn video_only_two_regions_concat() {
-        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 1.5, 1.0), seg(3.0, 4.0, 1.0)], false, 0.0, 0.0);
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 1.5, 1.0), seg(3.0, 4.0, 1.0)], false, 0.0, 0.0, None, None);
         let fc = "[0:v]trim=0:1.5,setpts=PTS-STARTPTS[v0];\
                   [0:v]trim=3:4,setpts=PTS-STARTPTS[v1];\
                   [v0][v1]concat=n=2:v=1:a=0[outv]";
@@ -502,7 +595,7 @@ mod tests {
 
     #[test]
     fn video_audio_interleaves_streams() {
-        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 2.0, 1.0), seg(5.0, 6.5, 1.0)], true, 0.0, 0.0);
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 2.0, 1.0), seg(5.0, 6.5, 1.0)], true, 0.0, 0.0, None, None);
         let fc = "[0:v]trim=0:2,setpts=PTS-STARTPTS[v0];\
                   [0:a]atrim=0:2,asetpts=PTS-STARTPTS[a0];\
                   [0:v]trim=5:6.5,setpts=PTS-STARTPTS[v1];\
@@ -517,7 +610,7 @@ mod tests {
 
     #[test]
     fn speed_segment_divides_video_pts_and_atempos_audio() {
-        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 4.0, 2.0)], true, 0.0, 0.0);
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 4.0, 2.0)], true, 0.0, 0.0, None, None);
         let fc = "[0:v]trim=0:4,setpts=(PTS-STARTPTS)/2[v0];\
                   [0:a]atrim=0:4,asetpts=PTS-STARTPTS,atempo=2[a0];\
                   [v0][a0]concat=n=1:v=1:a=1[outv][outa]";
@@ -526,14 +619,14 @@ mod tests {
 
     #[test]
     fn speed_one_is_byte_identical_to_plain_trim() {
-        let a = build_trim_args("in.mp4", "out.mp4", &[seg(2.0, 8.0, 1.0)], false, 0.0, 0.0);
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(2.0, 8.0, 1.0)], false, 0.0, 0.0, None, None);
         assert!(a.windows(2).any(|w| w[0] == "-filter_complex"
             && w[1] == "[0:v]trim=2:8,setpts=PTS-STARTPTS[v0];[v0]concat=n=1:v=1:a=0[outv]"), "got {a:?}");
     }
 
     #[test]
     fn fades_post_process_the_concat_output() {
-        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 10.0, 1.0)], true, 1.0, 2.0);
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 10.0, 1.0)], true, 1.0, 2.0, None, None);
         let fc = "[0:v]trim=0:10,setpts=PTS-STARTPTS[v0];\
                   [0:a]atrim=0:10,asetpts=PTS-STARTPTS[a0];\
                   [v0][a0]concat=n=1:v=1:a=1[cv][ca];\
@@ -546,14 +639,52 @@ mod tests {
 
     #[test]
     fn fade_out_start_is_speed_aware() {
-        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 4.0, 2.0), seg(10.0, 14.0, 1.0)], false, 0.0, 1.0);
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 4.0, 2.0), seg(10.0, 14.0, 1.0)], false, 0.0, 1.0, None, None);
         let fc = a.iter().position(|s| s == "-filter_complex").map(|i| a[i + 1].clone()).unwrap();
         assert!(fc.contains("fade=t=out:st=5:d=1"), "got {fc}");
     }
 
+    fn cam(x: f64, y: f64, d: f64) -> CamOverlay { CamOverlay { x, y, d } }
+
+    #[test]
+    fn no_cam_is_byte_identical() {
+        // With cam=None/overlay=None the graph and inputs are exactly the no-webcam path.
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 2.0, 1.0)], true, 0.0, 0.0, None, None);
+        assert!(a.windows(2).any(|w| w[0] == "-filter_complex"
+            && w[1] == "[0:v]trim=0:2,setpts=PTS-STARTPTS[v0];[0:a]atrim=0:2,asetpts=PTS-STARTPTS[a0];[v0][a0]concat=n=1:v=1:a=1[outv][outa]"),
+            "got {a:?}");
+        assert_eq!(a.iter().filter(|s| *s == "-i").count(), 1); // no cam input
+    }
+
+    #[test]
+    fn cam_overlay_trims_in_sync_masks_and_overlays() {
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 4.0, 1.0)], false, 0.0, 0.0, Some("cam.webm"), Some(cam(100.0, 50.0, 200.0)));
+        let fc = "[0:v]trim=0:4,setpts=PTS-STARTPTS[v0];\
+                  [1:v]trim=0:4,setpts=PTS-STARTPTS[c0];\
+                  [v0]concat=n=1:v=1:a=0[vbase];\
+                  [c0]concat=n=1:v=1:a=0[camcat];\
+                  [camcat]crop='min(iw,ih)':'min(iw,ih)',scale=200:200,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(hypot(X-100,Y-100),100),255,0)'[cammask];\
+                  [vbase][cammask]overlay=x=100:y=50:eof_action=pass[outv]";
+        assert!(a.windows(2).any(|w| w[0] == "-filter_complex" && w[1] == fc), "got {a:?}");
+        assert!(a.windows(2).any(|w| w[0] == "-map" && w[1] == "[outv]"));
+        // cam is a second input, added AFTER the screen input.
+        assert_eq!(a.iter().filter(|s| *s == "-i").count(), 2);
+        let ins: Vec<&String> = a.iter().enumerate().filter(|(i, s)| *s == &"-i".to_string() && a.get(i + 1).is_some()).map(|(i, _)| &a[i + 1]).collect();
+        assert_eq!(ins, vec!["in.mp4", "cam.webm"]);
+    }
+
+    #[test]
+    fn cam_overlay_feeds_the_fade_stage() {
+        // With fades, the overlay writes [cvf] and the fade produces [outv].
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 10.0, 1.0)], false, 0.0, 2.0, Some("cam.webm"), Some(cam(0.0, 0.0, 100.0)));
+        let fc = a.iter().position(|s| s == "-filter_complex").map(|i| a[i + 1].clone()).unwrap();
+        assert!(fc.contains("overlay=x=0:y=0:eof_action=pass[cvf]"), "overlay→cvf: {fc}");
+        assert!(fc.contains("[cvf]fade=t=out:st=8:d=2[outv]"), "fade cvf→outv: {fc}");
+    }
+
     #[test]
     fn args_silence_stderr_and_progress() {
-        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 1.0, 1.0)], false, 0.0, 0.0);
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 1.0, 1.0)], false, 0.0, 0.0, None, None);
         assert!(a.iter().any(|s| s == "-nostats"));
         assert!(a.windows(2).any(|w| w[0] == "-loglevel" && w[1] == "error"));
         assert!(a.windows(2).any(|w| w[0] == "-progress" && w[1] == "pipe:1"));
@@ -629,6 +760,15 @@ mod tests {
         assert!(p.has_audio);
         assert!((p.duration_secs - 12.5).abs() < 1e-6);
         assert!((p.fps - 30.0).abs() < 1e-6);
+    }
+
+    #[test]
+    fn probe_result_carries_has_cam() {
+        // The parser always leaves has_cam false; the probe command sets it from the sibling.
+        let p = ProbeResult { duration_secs: 1.0, has_audio: false, fps: 30.0, width: 2, height: 2, has_cam: true, cam_x: 0.0, cam_y: 0.0, cam_d: 0.0 };
+        assert!(p.has_cam);
+        let parsed = parse_ffprobe_json(r#"{"streams":[{"codec_type":"video","width":2,"height":2,"avg_frame_rate":"30/1"}],"format":{"duration":"1.0"}}"#).unwrap();
+        assert!(!parsed.has_cam);
     }
 
     #[test]
