@@ -656,10 +656,10 @@ pub async fn recorder_start(
     // Capture/encode frame rate + movable-webcam default from settings. Reading
     // `record_webcam_movable` here (not only from the selector chip) makes the Settings
     // toggle authoritative — a recording started from anywhere honours it.
-    let (fps, setting_movable) = {
+    let (fps, setting_movable, webcam_shape) = {
         let state = app.state::<crate::settings::commands::SettingsState>();
         let s = state.0.lock().unwrap();
-        (s.record_fps, s.record_webcam_movable)
+        (s.record_fps, s.record_webcam_movable, s.webcam_shape.clone())
     };
 
     // Choose the capture engine once (cached per session): ddagrab (GPU, true 60 fps)
@@ -890,7 +890,7 @@ pub async fn recorder_start(
         let cam_path = crate::recorder::cam::cam_sidecar_path(&out_str).to_string_lossy().to_string();
         // Persist the bubble's placement so the trim editor's overlay starts where it was.
         if let Some((nx, ny, nd)) = cam_placement {
-            crate::recorder::cam::write_cam_placement(&out_str, nx, ny, nd);
+            crate::recorder::cam::write_cam_placement(&out_str, nx, ny, nd, &webcam_shape);
         }
         if let Some(rec) = app.state::<RecorderState>().0.lock().unwrap().as_mut() {
             rec.cam_path = Some(cam_path.clone());
