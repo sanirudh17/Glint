@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { initClips, splitClips, setKept, keepRanges, keptCount, keptSegments, outputDuration, setSpeed } from "./trimModel";
+import { initClips, splitClips, setKept, keepRanges, keptCount, keptSegments, keptClipsInOrder, outputDuration, setSpeed } from "./trimModel";
 
 describe("trimModel", () => {
   it("starts as one kept clip spanning the whole duration", () => {
@@ -60,6 +60,29 @@ describe("trimModel", () => {
       { start: 0, end: 3, speed: 1 },
       { start: 6, end: 10, speed: 1 },
     ]);
+  });
+
+  it("keptSegments follows play order (order key), not array order", () => {
+    let c = splitClips(initClips(10), 5); // [0-5 order0][5-10 order1]
+    // Manually flip the play order: make the second clip sort first.
+    c = c.map((x, i) => (i === 1 ? { ...x, order: -1 } : x));
+    expect(keptSegments(c)).toEqual([
+      { start: 5, end: 10, speed: 1 },
+      { start: 0, end: 5, speed: 1 },
+    ]);
+  });
+
+  it("keptClipsInOrder returns kept clips (with ids) in play order", () => {
+    const c = splitClips(initClips(10), 5);
+    const ordered = keptClipsInOrder(c);
+    expect(ordered.map((x) => [x.start, x.end])).toEqual([[0, 5], [5, 10]]);
+    expect(ordered.every((x) => typeof x.id === "number")).toBe(true);
+  });
+
+  it("split assigns the right half an order just after the left", () => {
+    const c = splitClips(initClips(10), 4);
+    const [a, b] = c;
+    expect(a.order).toBeLessThan(b.order); // left plays before right by default
   });
 
   it("outputDuration is speed-weighted over kept clips", () => {
