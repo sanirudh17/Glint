@@ -35,13 +35,49 @@ pub struct KeepSegment {
     pub speed: f64,
 }
 
-/// Webcam overlay placement in SOURCE pixels: top-left `x,y` + diameter `d`. The editor
-/// converts its normalized placement to these via `toPixels` before export.
-#[derive(Debug, Clone, Copy, PartialEq, serde::Deserialize)]
+/// Webcam overlay placement in SOURCE pixels: top-left `x,y` + box `w,h` + `shape`. The
+/// editor converts its normalized placement to these via `toPixels` before export.
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct CamOverlay {
     pub x: f64,
     pub y: f64,
-    pub d: f64,
+    pub w: f64,
+    pub h: f64,
+    /// "circle" | "rounded" | "square" | "rect"
+    pub shape: String,
+}
+
+/// The cam filter chain from `[camcat]` to `[cammask]`: crop/scale to the box, then (for all
+/// shapes except `rect`) punch a rounded-rectangle alpha. Circle = square box with radius =
+/// half-width; square = small radius; rounded = larger radius; rect = no mask (sharp frame).
+fn cam_shape_chain(shape: &str, w: f64, h: f64) -> String {
+    // Format like build_trim_args' `num`: integers lose the trailing ".0" (28.0 -> "28"),
+    // fractions stay (25.2 -> "25.2"). Commas inside the single-quoted `a='…'` expression are
+    // protected by the quotes, so they need no backslash escaping (same as the circle path).
+    let n = |v: f64| if v.fract() == 0.0 { format!("{}", v as i64) } else { format!("{v}") };
+    // circle/square use a centred square box (min side); rounded/rect keep the native w×h.
+    let square = matches!(shape, "circle" | "square");
+    let crop = if square { "crop='min(iw,ih)':'min(iw,ih)'," } else { "" };
+    let (bw, bh) = if square { (w.min(h), w.min(h)) } else { (w, h) };
+    let radius = match shape {
+        "circle" => bw / 2.0,
+        "square" => bw * 0.14,
+        "rounded" => bw.min(bh) * 0.14,
+        _ => 0.0, // rect
+    };
+    let scale = format!("{crop}scale={bw}:{bh}", bw = n(bw), bh = n(bh));
+    if shape == "rect" {
+        // No alpha mask — a sharp rectangle overlays directly.
+        return format!("{scale}[cammask]");
+    }
+    // Rounded-rectangle SDF: inside iff hypot(max(|X-cx|-(W/2-r),0), max(|Y-cy|-(H/2-r),0)) <= r.
+    // (For a circle, r = W/2 so hx=hy=0 and this reduces to hypot(|X-cx|,|Y-cy|) <= r.)
+    let (cx, cy) = (bw / 2.0, bh / 2.0);
+    let (hx, hy) = (bw / 2.0 - radius, bh / 2.0 - radius);
+    format!(
+        "{scale},format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(hypot(max(abs(X-{cx})-{hx},0),max(abs(Y-{cy})-{hy},0)),{r}),255,0)'[cammask]",
+        cx = n(cx), cy = n(cy), hx = n(hx), hy = n(hy), r = n(radius),
+    )
 }
 
 /// Output (exported) duration: each kept segment contributes `(end-start)/speed`.
@@ -252,19 +288,15 @@ pub fn build_trim_args(
         fc.push_str(&format!("concat=n={n}:v=1:a=0[{vconcat}]"));
     }
 
-    // Webcam overlay: concat the cam segments, crop to a centred square, scale to the target
-    // diameter, punch a circular alpha (single-quoted exprs protect the commas), and overlay.
-    // The overlay output is the fade stage's input (or the final [outv] with no fades).
+    // Webcam overlay: concat the cam segments, then crop/scale/mask per shape (circle/square/
+    // rounded punch a rounded-rect alpha; rect stays sharp), and overlay at the source-pixel
+    // position. The overlay output is the fade stage's input (or the final [outv] with no fades).
     let vpost = if has_cam {
-        let ov = overlay.unwrap();
-        let d = num(ov.d);
-        let h = num(ov.d / 2.0);
+        let ov = overlay.as_ref().unwrap();
         fc.push(';');
         for i in 0..n { fc.push_str(&format!("[c{i}]")); }
         fc.push_str(&format!("concat=n={n}:v=1:a=0[camcat]"));
-        fc.push_str(&format!(
-            ";[camcat]crop='min(iw,ih)':'min(iw,ih)',scale={d}:{d},format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(hypot(X-{h},Y-{h}),{h}),255,0)'[cammask]"
-        ));
+        fc.push_str(&format!(";[camcat]{}", cam_shape_chain(&ov.shape, ov.w, ov.h)));
         let ovlabel = if apply_fade { "cvf" } else { "outv" };
         fc.push_str(&format!(";[vbase][cammask]overlay=x={}:y={}:eof_action=pass[{ovlabel}]", num(ov.x), num(ov.y)));
         ovlabel
@@ -461,7 +493,7 @@ pub async fn recorder_trim_export(
 
     // Composite the webcam overlay only when the editor asked for it AND the sidecar is a
     // plausibly-real file (E1 guards missing/tiny tracks — else we'd feed ffmpeg a bad input).
-    let cam_ref = cam_overlay.and(cam_path.as_deref());
+    let cam_ref = cam_overlay.as_ref().and(cam_path.as_deref());
     let args = build_trim_args(&src_path, &tmp_str, &segments, has_audio, fade_in, fade_out, cam_ref, cam_overlay);
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("ffmpeg resolve: {e}"))?;
     let (mut rx, _child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
@@ -648,7 +680,10 @@ mod tests {
         assert!(fc.contains("fade=t=out:st=5:d=1"), "got {fc}");
     }
 
-    fn cam(x: f64, y: f64, d: f64) -> CamOverlay { CamOverlay { x, y, d } }
+    fn cam(x: f64, y: f64, d: f64) -> CamOverlay { CamOverlay { x, y, w: d, h: d, shape: "circle".into() } }
+    fn cam_shaped(x: f64, y: f64, w: f64, h: f64, shape: &str) -> CamOverlay {
+        CamOverlay { x, y, w, h, shape: shape.into() }
+    }
 
     #[test]
     fn no_cam_is_byte_identical() {
@@ -667,7 +702,7 @@ mod tests {
                   [1:v]trim=0:4,setpts=PTS-STARTPTS[c0];\
                   [v0]concat=n=1:v=1:a=0[vbase];\
                   [c0]concat=n=1:v=1:a=0[camcat];\
-                  [camcat]crop='min(iw,ih)':'min(iw,ih)',scale=200:200,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(hypot(X-100,Y-100),100),255,0)'[cammask];\
+                  [camcat]crop='min(iw,ih)':'min(iw,ih)',scale=200:200,format=rgba,geq=r='r(X,Y)':g='g(X,Y)':b='b(X,Y)':a='if(lte(hypot(max(abs(X-100)-0,0),max(abs(Y-100)-0,0)),100),255,0)'[cammask];\
                   [vbase][cammask]overlay=x=100:y=50:eof_action=pass[outv]";
         assert!(a.windows(2).any(|w| w[0] == "-filter_complex" && w[1] == fc), "got {a:?}");
         assert!(a.windows(2).any(|w| w[0] == "-map" && w[1] == "[outv]"));
@@ -675,6 +710,36 @@ mod tests {
         assert_eq!(a.iter().filter(|s| *s == "-i").count(), 2);
         let ins: Vec<&String> = a.iter().enumerate().filter(|(i, s)| *s == &"-i".to_string() && a.get(i + 1).is_some()).map(|(i, _)| &a[i + 1]).collect();
         assert_eq!(ins, vec!["in.mp4", "cam.webm"]);
+    }
+
+    #[test]
+    fn rect_shape_has_no_geq_mask() {
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 4.0, 1.0)], false, 0.0, 0.0, Some("cam.webm"), Some(cam_shaped(10.0, 10.0, 320.0, 180.0, "rect")));
+        let fc = a.iter().position(|s| s == "-filter_complex").map(|i| a[i + 1].clone()).unwrap();
+        assert!(!fc.contains("geq"), "rect should not punch an alpha mask: {fc}");
+        assert!(!fc.contains("crop="), "rect keeps native aspect (no square crop): {fc}");
+        assert!(fc.contains("scale=320:180"), "rect scales to native box: {fc}");
+        assert!(fc.contains("overlay=x=10:y=10"), "rect still overlays: {fc}");
+    }
+
+    #[test]
+    fn rounded_shape_uses_rounded_rect_geq() {
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 4.0, 1.0)], false, 0.0, 0.0, Some("cam.webm"), Some(cam_shaped(10.0, 10.0, 320.0, 180.0, "rounded")));
+        let fc = a.iter().position(|s| s == "-filter_complex").map(|i| a[i + 1].clone()).unwrap();
+        assert!(fc.contains("geq"), "rounded punches an alpha: {fc}");
+        assert!(fc.contains("hypot"), "rounded uses the SDF: {fc}");
+        assert!(!fc.contains("crop="), "rounded keeps native aspect: {fc}");
+        assert!(fc.contains("scale=320:180"), "rounded scales to native box: {fc}");
+    }
+
+    #[test]
+    fn square_shape_crops_and_masks_with_small_radius() {
+        let a = build_trim_args("in.mp4", "out.mp4", &[seg(0.0, 4.0, 1.0)], false, 0.0, 0.0, Some("cam.webm"), Some(cam_shaped(0.0, 0.0, 200.0, 200.0, "square")));
+        let fc = a.iter().position(|s| s == "-filter_complex").map(|i| a[i + 1].clone()).unwrap();
+        assert!(fc.contains("crop='min(iw,ih)':'min(iw,ih)'"), "square crops to a centred square: {fc}");
+        assert!(fc.contains("geq"), "square rounds its corners: {fc}");
+        // radius = 200 * 0.14 = 28 → hx = 100 - 28 = 72 (not 0, i.e. not a full circle).
+        assert!(fc.contains("abs(X-100)-72"), "square uses a small corner radius: {fc}");
     }
 
     #[test]
