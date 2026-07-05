@@ -88,6 +88,12 @@ export function reorderKept(clips: Clip[], from: number, to: number): Clip[] {
   return clips.map((c) => (c.id === moved.id ? { ...c, order } : c));
 }
 
+/** Index of the play-order segment whose [start, end) contains source time `t`, or -1 if `t`
+ *  lies in no kept segment. The preview loop uses it to resume from the clicked position. */
+export function segmentIndexAtSource(segs: { start: number; end: number }[], t: number): number {
+  return segs.findIndex((s) => t >= s.start - EPS && t < s.end - EPS);
+}
+
 /** Exported duration: each kept clip contributes (end-start)/speed. */
 export function outputDuration(clips: Clip[]): number {
   return clips.filter((c) => c.kept).reduce((a, c) => a + (c.end - c.start) / c.speed, 0);

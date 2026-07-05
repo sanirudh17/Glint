@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { initClips, splitClips, setKept, keepRanges, keptCount, keptSegments, keptClipsInOrder, reorderKept, outputDuration, setSpeed } from "./trimModel";
+import { initClips, splitClips, setKept, keepRanges, keptCount, keptSegments, keptClipsInOrder, reorderKept, segmentIndexAtSource, outputDuration, setSpeed } from "./trimModel";
 
 describe("trimModel", () => {
   it("starts as one kept clip spanning the whole duration", () => {
@@ -118,6 +118,13 @@ describe("trimModel", () => {
     expect(keptSegments(c).map((s) => [s.start, s.end])).toEqual([
       [20, 30], [0, 5], [5, 10], [10, 20],
     ]);
+  });
+
+  it("segmentIndexAtSource finds the play-order segment covering a source time", () => {
+    const segs = [ { start: 20, end: 30 }, { start: 0, end: 10 } ]; // reordered play order
+    expect(segmentIndexAtSource(segs, 25)).toBe(0); // inside the first play segment (20-30)
+    expect(segmentIndexAtSource(segs, 5)).toBe(1);  // inside the second (0-10)
+    expect(segmentIndexAtSource(segs, 15)).toBe(-1); // in a gap → none
   });
 
   it("outputDuration is speed-weighted over kept clips", () => {
