@@ -108,19 +108,16 @@ export function RegionSelect() {
       setCursorSize(settings.record_cursor_size ?? "off");
     }
   }, [settings]);
-  // Reveal the (initially hidden) selector window only once its toolbar has PAINTED with the
-  // seeded chips — Rust waits for `rec-select-ready` before calling show(), so WebView2 never
-  // flashes the stale frame from the previous selector session. Two rAFs guarantee the seeded
-  // render has hit the screen before we signal.
-  const readyEmitted = useRef(false);
+  // Reveal the (initially hidden) selector window as soon as THIS mount has painted — Rust
+  // waits for `rec-select-ready` before calling show(), so WebView2 never flashes the stale
+  // frame from the previous selector session. Fired on first paint (not gated on settings) so
+  // there's no perceptible open delay; the chips seed a beat later without any stale content.
   useEffect(() => {
-    if (!settings || readyEmitted.current) return;
-    readyEmitted.current = true;
     const r1 = requestAnimationFrame(() => {
       requestAnimationFrame(() => { emit("rec-select-ready").catch(() => {}); });
     });
     return () => cancelAnimationFrame(r1);
-  }, [settings]);
+  }, []);
 
   // Click/keystroke/spotlight are no longer chips here (they're live in the pill +
   // defaulted in Settings) but still flow through from the saved defaults so a user

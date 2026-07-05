@@ -673,10 +673,15 @@ pub async fn recorder_start(
     let engine = probe_capture_engine(&app).await;
 
     // Choose the H.264 encoder once (cached per session): a hardware encoder (NVENC/QSV/AMF)
-    // when available so full-res 60 fps keeps up, else libx264. Also locked for the whole
-    // recording so every segment's stream params match (concat `-c copy`). `mut` so a
-    // segment-0 failure can demote it to libx264 (see below).
-    let mut encoder = probe_video_encoder(&app, engine).await;
+    // when available so full-res 60 fps keeps up, else libx264. Run it CONCURRENTLY — the
+    // first-recording probe does real work (a short real capture) and would otherwise delay
+    // the webcam bubble + countdown by a couple of seconds; its result is only needed when
+    // segment 0 spawns, well after the cam warmup and the 3-2-1 countdown. Cached after the
+    // first recording, so this is instant thereafter.
+    let encoder_probe = {
+        let app = app.clone();
+        tauri::async_runtime::spawn(async move { probe_video_encoder(&app, engine).await })
+    };
 
     // The selector (if this start came from it) closes itself, so the frontend's
     // IPC survives (closing destroys its JS context) and a full-screen capture
@@ -779,6 +784,10 @@ pub async fn recorder_start(
         cursor_hide: cursor_hide.unwrap_or(false),
         cursor_size: match cursor_size.as_deref() { Some("large") => 1, Some("xl") => 2, _ => 0 },
     };
+
+    // Collect the concurrent encoder probe — it resolved during the cam warmup + countdown,
+    // so this doesn't block. `mut` so a segment-0 failure can demote it to libx264 below.
+    let mut encoder = encoder_probe.await.unwrap_or(ffmpeg::VideoEncoder::Libx264);
 
     // Show the control bar IMMEDIATELY (no dead gap while ffmpeg's gdigrab input
     // initializes, which takes ~1s+). A preliminary state with `current: None`
