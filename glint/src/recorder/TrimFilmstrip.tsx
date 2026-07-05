@@ -3,7 +3,7 @@
  *  pointer CAPTURE + geometry hit-testing (WebView2-safe: capture guarantees we keep the
  *  move/up stream even as the cursor leaves the tile, and geometry never "misses" a target). */
 import { useRef, useState } from "react";
-import { GripVertical } from "lucide-react";
+import { GripVertical, ArrowLeftRight } from "lucide-react";
 import { keptClipsInOrder, type Clip } from "./trimModel";
 
 const secs = (start: number, end: number, speed: number) => `${((end - start) / speed).toFixed(1)}s`;
@@ -24,6 +24,10 @@ export function TrimFilmstrip({
   onSelect: (id: number) => void;
 }) {
   const ordered = keptClipsInOrder(clips);
+  // A clip is "moved" when its play-order position differs from its recorded (source-time)
+  // position — so tiles that were dragged out of place get a distinct marker at a glance.
+  const sourceOrderIds = [...ordered].sort((a, b) => a.start - b.start).map((c) => c.id);
+  const movedIds = new Set(ordered.filter((c, i) => sourceOrderIds[i] !== c.id).map((c) => c.id));
   const [dragFrom, setDragFrom] = useState<number | null>(null);
   const [overIndex, setOverIndex] = useState<number | null>(null);
   const rowRef = useRef<HTMLDivElement>(null);
@@ -82,6 +86,7 @@ export function TrimFilmstrip({
           data-strip-index={i}
           className={
             "trim-strip-tile" +
+            (movedIds.has(c.id) ? " trim-strip-tile--moved" : "") +
             (c.id === selectedId ? " trim-strip-tile--selected" : "") +
             (dragFrom === i ? " trim-strip-tile--dragging" : "") +
             (overIndex === i && dragFrom !== null && dragFrom !== i ? " trim-strip-tile--over" : "")
@@ -89,10 +94,11 @@ export function TrimFilmstrip({
           onPointerDown={(e) => onPointerDown(e, i)}
           onPointerMove={onPointerMove}
           onPointerUp={(e) => onPointerUp(e, i)}
-          title="Drag to reorder · click to select"
+          title={movedIds.has(c.id) ? "Moved from its recorded position · drag to reorder · click to select" : "Drag to reorder · click to select"}
         >
           <GripVertical size={13} className="trim-strip-grip" />
           <span className="trim-strip-index">{i + 1}</span>
+          {movedIds.has(c.id) && <ArrowLeftRight size={12} className="trim-strip-moved" aria-label="moved" />}
           <span className="trim-strip-dur">{secs(c.start, c.end, c.speed)}</span>
           {c.speed !== 1 && <span className="trim-strip-speed">{c.speed}×</span>}
         </div>
