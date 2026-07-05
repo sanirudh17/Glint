@@ -5,8 +5,9 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { Scissors, Trash2, Undo2, Redo2, Play, Pause, ZoomIn, ZoomOut, X, RotateCcw } from "lucide-react";
 import { trimTarget, trimProbe, trimExport, trimWaveform, type ProbeResult } from "../lib/trim";
-import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, outputDuration, type Clip } from "./trimModel";
+import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, reorderKept, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
+import { TrimFilmstrip } from "./TrimFilmstrip";
 import { TrimCamOverlay } from "./TrimCamOverlay";
 import { type CamPlacement, type CamShape, DEFAULT_PLACEMENT, toPixels, clampPlacement } from "./camOverlay";
 
@@ -198,6 +199,10 @@ export function TrimView() {
     if (!selected || !selected.kept || keptCount(clips) <= 1) return; // can't delete a gap or the last block
     commit({ ...edit, clips: setKept(clips, selected.id, false) });
   }, [commit, edit, clips, selected]);
+  const doReorder = useCallback((from: number, to: number) => {
+    const next = reorderKept(clips, from, to);
+    if (next !== clips) commit({ ...edit, clips: next });
+  }, [commit, edit, clips]);
   const SPEEDS = [0.5, 1, 1.5, 2];
   const selSpeed = selected?.speed ?? 1;
   const canSpeed = selected != null && selected.kept && exporting === null;
@@ -371,6 +376,8 @@ export function TrimView() {
           zoom={zoom} viewStart={viewStart}
         />
       )}
+
+      <TrimFilmstrip clips={clips} disabled={exporting !== null} onReorder={doReorder} />
 
       <div className="trim-actions">
         <span className="trim-out">Output: {fmt(outDur)} / {fmt(duration)}</span>
