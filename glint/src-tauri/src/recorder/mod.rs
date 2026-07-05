@@ -58,6 +58,48 @@ async fn probe_capture_engine(app: &AppHandle) -> ffmpeg::CaptureEngine {
     if ok { ffmpeg::CaptureEngine::Ddagrab } else { ffmpeg::CaptureEngine::Gdigrab }
 }
 
+/// Cached, session-wide chosen video encoder.
+static VIDEO_ENCODER: std::sync::OnceLock<ffmpeg::VideoEncoder> = std::sync::OnceLock::new();
+
+/// Decide the H.264 encoder once per session. Tries the hardware encoders in priority order
+/// (NVENC → QSV → AMF) by encoding a few synthetic frames to the null muxer; the first that
+/// exits 0 is used. Any failure/timeout falls through, and if none work → libx264 (CPU).
+/// Cached so only the first recording pays the probe cost.
+async fn probe_video_encoder(app: &AppHandle) -> ffmpeg::VideoEncoder {
+    use ffmpeg::VideoEncoder as VE;
+    if let Some(&e) = VIDEO_ENCODER.get() {
+        return e;
+    }
+    // (encoder, its rate-control probe args after `-c:v`)
+    let candidates: [(VE, &[&str]); 3] = [
+        (VE::Nvenc, &["h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "21", "-b:v", "0"]),
+        (VE::Qsv, &["h264_qsv", "-preset", "veryfast", "-global_quality", "21"]),
+        (VE::Amf, &["h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "21", "-qp_p", "21"]),
+    ];
+    let mut chosen = VE::Libx264;
+    for (enc, cargs) in candidates {
+        let Ok(cmd) = app.shell().sidecar("ffmpeg") else { continue };
+        let mut args: Vec<&str> = vec![
+            "-nostats", "-loglevel", "error",
+            "-f", "lavfi", "-i", "color=c=black:s=256x256:r=30",
+            "-frames:v", "5", "-c:v",
+        ];
+        args.extend(cargs);
+        args.extend(["-pix_fmt", "yuv420p", "-f", "null", "-"]);
+        let ok = matches!(
+            tokio::time::timeout(std::time::Duration::from_secs(4), cmd.args(args).output()).await,
+            Ok(Ok(out)) if out.status.success()
+        );
+        if ok {
+            chosen = enc;
+            break;
+        }
+    }
+    let _ = VIDEO_ENCODER.set(chosen);
+    log::info!("video encoder probe: chose {chosen:?}");
+    chosen
+}
+
 /// One running ffmpeg span — a contiguous stretch of recording between pauses.
 /// Holds the child (to send `q` on stdin) and its event receiver (to wait for a
 /// clean exit + finished moov atom rather than guessing with a fixed delay).
@@ -107,6 +149,8 @@ pub struct ActiveRecording {
     /// pause/resume segment so all segments share identical output stream params
     /// (the concat `-c copy` invariant).
     pub engine: ffmpeg::CaptureEngine,
+    /// H.264 encoder chosen once at start; reused for every segment (concat-copy invariant).
+    pub encoder: ffmpeg::VideoEncoder,
     pub out_path: String,
     pub width: u32,
     pub height: u32,
@@ -163,6 +207,7 @@ fn segment_path(out_path: &str, idx: usize) -> String {
 async fn spawn_segment(
     app: &AppHandle,
     engine: ffmpeg::CaptureEngine,
+    encoder: ffmpeg::VideoEncoder,
     target: RecordTarget,
     fps: u32,
     path: &str,
@@ -234,7 +279,7 @@ async fn spawn_segment(
     // `want_audio` is the recording's intent (system or mic enabled), not how many
     // sources actually connected this segment — so a segment whose sources all failed
     // still gets a silent aac track and stays concat-copy compatible with audio segments.
-    let args = ffmpeg::build_ffmpeg_args(engine, &target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse);
+    let args = ffmpeg::build_ffmpeg_args(engine, &target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse, encoder);
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("sidecar resolve: {e}"))?;
     let (rx_ev, child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
 
@@ -622,6 +667,11 @@ pub async fn recorder_start(
     // recording so pause/resume segments stay concat-copy compatible.
     let engine = probe_capture_engine(&app).await;
 
+    // Choose the H.264 encoder once (cached per session): a hardware encoder (NVENC/QSV/AMF)
+    // when available so full-res 60 fps keeps up, else libx264. Also locked for the whole
+    // recording so every segment's stream params match (concat `-c copy`).
+    let encoder = probe_video_encoder(&app).await;
+
     // The selector (if this start came from it) closes itself, so the frontend's
     // IPC survives (closing destroys its JS context) and a full-screen capture
     // never includes the transparent overlay. No-op for a tray/hotkey fullscreen.
@@ -730,6 +780,7 @@ pub async fn recorder_start(
         target,
         fps,
         engine,
+        encoder,
         out_path: out_str.clone(),
         width,
         height,
@@ -752,7 +803,7 @@ pub async fn recorder_start(
     // Bring segment 0 up behind the visible bar. Pause/resume appends further
     // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual
     // delivered rate still depends on the machine/screen resolution).
-    let seg0 = match spawn_segment(&app, engine, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
+    let seg0 = match spawn_segment(&app, engine, encoder, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
         Ok(s) => s,
         Err(e) => {
             windows::close_control_bar(&app);
@@ -886,14 +937,14 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
             // `current.is_none()` also holds during the preliminary start state (seg0
             // not up yet); require a completed span so resume can't run mid-init.
             Some(rec) if rec.current.is_none() && !rec.done.is_empty() => {
-                Some((rec.engine, rec.target, rec.fps, rec.out_path.clone(), rec.seg_index, rec.audio_cfg, rec.controls.clone()))
+                Some((rec.engine, rec.encoder, rec.target, rec.fps, rec.out_path.clone(), rec.seg_index, rec.audio_cfg, rec.controls.clone()))
             }
             _ => None,
         }
     };
-    let (engine, target, fps, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
+    let (engine, encoder, target, fps, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
     let path = segment_path(&out_path, idx);
-    let seg = spawn_segment(&app, engine, target, fps, &path, idx, cfg, &controls, true).await
+    let seg = spawn_segment(&app, engine, encoder, target, fps, &path, idx, cfg, &controls, true).await
         .inspect_err(|_e| {
             let _ = app.emit("glint-toast", "Couldn't resume recording");
         })?;
