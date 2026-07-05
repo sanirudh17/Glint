@@ -61,42 +61,47 @@ async fn probe_capture_engine(app: &AppHandle) -> ffmpeg::CaptureEngine {
 /// Cached, session-wide chosen video encoder.
 static VIDEO_ENCODER: std::sync::OnceLock<ffmpeg::VideoEncoder> = std::sync::OnceLock::new();
 
-/// Decide the H.264 encoder once per session. Tries the hardware encoders in priority order
-/// (NVENC → QSV → AMF) by encoding a few synthetic frames to the null muxer; the first that
-/// exits 0 is used. Any failure/timeout falls through, and if none work → libx264 (CPU).
-/// Cached so only the first recording pays the probe cost.
-async fn probe_video_encoder(app: &AppHandle) -> ffmpeg::VideoEncoder {
+/// Decide the H.264 encoder once per session for the given capture `engine`. Tries the hardware
+/// encoders in priority order (NVENC → QSV → AMF) by capturing a few REAL frames through the
+/// exact same front-end the recording will use and encoding them to a temp file; the first that
+/// yields a non-empty file wins. Any failure/timeout falls through, and if none work → libx264.
+///
+/// The probe MUST be representative of the real pipeline: a hardware encoder can encode a
+/// synthetic `lavfi` source yet fail on ddagrab's D3D11 frames (e.g. NVENC's "no encode device"
+/// on a hybrid GPU) — and ffmpeg then writes an EMPTY file while still exiting 0, so the probe
+/// checks the output size, not just the exit status. Cached so only the first recording pays it.
+async fn probe_video_encoder(app: &AppHandle, engine: ffmpeg::CaptureEngine) -> ffmpeg::VideoEncoder {
     use ffmpeg::VideoEncoder as VE;
     if let Some(&e) = VIDEO_ENCODER.get() {
         return e;
     }
-    // (encoder, its rate-control probe args after `-c:v`)
-    let candidates: [(VE, &[&str]); 3] = [
-        (VE::Nvenc, &["h264_nvenc", "-preset", "p4", "-rc", "vbr", "-cq", "21", "-b:v", "0"]),
-        (VE::Qsv, &["h264_qsv", "-preset", "veryfast", "-global_quality", "21"]),
-        (VE::Amf, &["h264_amf", "-quality", "balanced", "-rc", "cqp", "-qp_i", "21", "-qp_p", "21"]),
-    ];
+    let tmp = std::env::temp_dir().join("glint-encoder-probe.mp4");
+    let tmp_str = tmp.to_string_lossy().to_string();
     let mut chosen = VE::Libx264;
-    for (enc, cargs) in candidates {
+    for enc in [VE::Nvenc, VE::Qsv, VE::Amf] {
         let Ok(cmd) = app.shell().sidecar("ffmpeg") else { continue };
-        let mut args: Vec<&str> = vec![
-            "-nostats", "-loglevel", "error",
-            "-f", "lavfi", "-i", "color=c=black:s=256x256:r=30",
-            "-frames:v", "5", "-c:v",
-        ];
-        args.extend(cargs);
-        args.extend(["-pix_fmt", "yuv420p", "-f", "null", "-"]);
-        let ok = matches!(
-            tokio::time::timeout(std::time::Duration::from_secs(4), cmd.args(args).output()).await,
+        // Reuse the real recording command (same engine, hw-device setup, and encoder tail) so
+        // the probe fails exactly when the recording would. Cap it to a handful of frames and
+        // redirect the output to a temp file (the output path is the last arg).
+        let mut args = ffmpeg::build_ffmpeg_args(engine, &RecordTarget::Fullscreen, 30, &tmp_str, &[], false, true, enc);
+        let out = args.pop().unwrap();
+        args.extend(["-frames:v".to_string(), "8".to_string(), out]);
+        let _ = std::fs::remove_file(&tmp);
+        let ran = matches!(
+            tokio::time::timeout(std::time::Duration::from_secs(6), cmd.args(args).output()).await,
             Ok(Ok(out)) if out.status.success()
         );
-        if ok {
+        // A failed hardware encode leaves a 0-byte file despite exit 0; a real 8-frame clip is
+        // several KB. Require a non-trivial size to accept the encoder.
+        let bytes = std::fs::metadata(&tmp).map(|m| m.len()).unwrap_or(0);
+        if ran && bytes > 1024 {
             chosen = enc;
             break;
         }
     }
+    let _ = std::fs::remove_file(&tmp);
     let _ = VIDEO_ENCODER.set(chosen);
-    log::info!("video encoder probe: chose {chosen:?}");
+    log::info!("video encoder probe ({engine:?}): chose {chosen:?}");
     chosen
 }
 
@@ -671,7 +676,7 @@ pub async fn recorder_start(
     // when available so full-res 60 fps keeps up, else libx264. Also locked for the whole
     // recording so every segment's stream params match (concat `-c copy`). `mut` so a
     // segment-0 failure can demote it to libx264 (see below).
-    let mut encoder = probe_video_encoder(&app).await;
+    let mut encoder = probe_video_encoder(&app, engine).await;
 
     // The selector (if this start came from it) closes itself, so the frontend's
     // IPC survives (closing destroys its JS context) and a full-screen capture

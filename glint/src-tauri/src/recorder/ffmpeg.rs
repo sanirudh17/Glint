@@ -59,6 +59,26 @@ pub fn encoder_args(enc: VideoEncoder) -> Vec<String> {
     a
 }
 
+/// Global hw-device flags for the ddagrab front-end under `encoder`. ddagrab needs a D3D11
+/// device to capture the desktop. NVENC must NOT inherit that device: on hybrid-GPU laptops
+/// the display's D3D11 adapter is the iGPU, not the NVIDIA card, so an NVENC session opened on
+/// it dies with "no encode device" and ffmpeg writes an empty file while still exiting 0. So we
+/// name the D3D11 device, scope it to the filter graph (`-filter_hw_device`), and give NVENC its
+/// own CUDA device — the frames are already in system memory after `hwdownload`, so the encoder
+/// needs no shared surface. libx264/QSV/AMF read those downloaded frames and keep the plain
+/// single-device setup (byte-identical to the historical ddagrab command).
+fn ddagrab_hw_device_args(encoder: VideoEncoder) -> Vec<String> {
+    let s = |x: &str| x.to_string();
+    match encoder {
+        VideoEncoder::Nvenc => vec![
+            s("-init_hw_device"), s("d3d11va=d3d"),
+            s("-init_hw_device"), s("cuda=cu"),
+            s("-filter_hw_device"), s("d3d"),
+        ],
+        _ => vec![s("-init_hw_device"), s("d3d11va")],
+    }
+}
+
 /// Build the ffmpeg arg list: capture the screen (via the chosen `engine`) and encode
 /// H.264 MP4. `-preset ultrafast` keeps encoding real-time; `+faststart` + a clean
 /// `q`-driven stop yield a seekable, playable file.
@@ -122,7 +142,7 @@ pub fn build_ffmpeg_args(
             1
         }
         CaptureEngine::Ddagrab => {
-            a.extend(["-init_hw_device".into(), "d3d11va".into()]);
+            a.extend(ddagrab_hw_device_args(encoder));
             0
         }
     };
@@ -277,6 +297,36 @@ mod tests {
             let a = encoder_args(enc);
             assert!(a.windows(2).any(|w| w[0] == "-c:v" && w[1] == name), "{name} -c:v");
             assert!(a.windows(2).any(|w| w[0] == "-pix_fmt" && w[1] == "yuv420p"), "{name} pix_fmt");
+        }
+    }
+
+    #[test]
+    fn ddagrab_nvenc_scopes_d3d11_to_filters_and_adds_cuda() {
+        // The display's D3D11 adapter isn't the NVIDIA card on hybrid machines, so NVENC
+        // gets its own cuda device and the d3d11 one is scoped to the ddagrab filter graph.
+        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, VideoEncoder::Nvenc);
+        assert!(a.windows(2).any(|w| w[0] == "-init_hw_device" && w[1] == "d3d11va=d3d"));
+        assert!(a.windows(2).any(|w| w[0] == "-init_hw_device" && w[1] == "cuda=cu"));
+        assert!(a.windows(2).any(|w| w[0] == "-filter_hw_device" && w[1] == "d3d"));
+        assert!(a.windows(2).any(|w| w[0] == "-c:v" && w[1] == "h264_nvenc"));
+    }
+
+    #[test]
+    fn ddagrab_libx264_keeps_single_unnamed_d3d11_device() {
+        // Unchanged historical ddagrab front-end for the CPU encoder (no cuda, no scoping).
+        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, VideoEncoder::Libx264);
+        assert!(a.windows(2).any(|w| w[0] == "-init_hw_device" && w[1] == "d3d11va"));
+        assert!(!a.iter().any(|s| s == "cuda=cu"));
+        assert!(!a.iter().any(|s| s == "-filter_hw_device"));
+    }
+
+    #[test]
+    fn gdigrab_needs_no_hw_device_for_any_encoder() {
+        // gdigrab frames are already CPU-side; NVENC opens its own session with no d3d11 in
+        // play, so no -init_hw_device is emitted regardless of encoder.
+        for enc in [VideoEncoder::Libx264, VideoEncoder::Nvenc] {
+            let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, enc);
+            assert!(!a.iter().any(|s| s == "-init_hw_device"), "{enc:?} should have no hw device");
         }
     }
 
