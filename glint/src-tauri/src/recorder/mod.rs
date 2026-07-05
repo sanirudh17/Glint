@@ -733,10 +733,12 @@ pub async fn recorder_start(
     // permission prompt is then resolved up front, so it never lands in the recording
     // and the countdown/capture don't begin until the user has pressed Allow. The
     // bubble stays open through the countdown so the user can frame.
-    // "Movable" is a webcam *mode* — honoured from the per-recording chip OR the persisted
-    // Settings default. Wanting it implies recording the webcam at all, so a user who only
-    // flips the Movable toggle still gets a (movable) webcam instead of silently nothing.
-    let want_movable_pref = webcam_movable.unwrap_or(false) || setting_movable;
+    // "Movable" is a webcam *mode*. The per-recording chip is AUTHORITATIVE when the selector
+    // provided it (Some(_)): turning Movable OFF for a recording must give a baked-in webcam
+    // (composited into the video) even if the Settings default is on — otherwise the webcam
+    // records as a separate capture-excluded track and never appears in the final video. The
+    // Settings default only applies to a chip-less start (tray / global hotkey → None).
+    let want_movable_pref = webcam_movable.unwrap_or(setting_movable);
     let want_cam = webcam.unwrap_or(false) || want_movable_pref;
     // `mut` so a pre-start fallback can demote it to baked-in when unsupported.
     let mut want_cam_movable = want_cam && want_movable_pref;
