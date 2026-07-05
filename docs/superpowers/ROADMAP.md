@@ -254,12 +254,32 @@ capture/library/editor path.
   `t/duration` positioning and 60 fps auto-scroll stays cheap. Backend (`trim.rs`) stays pure +
   unit-tested; **recorder isolation honored**. *Shipped — at-screen accepted.*
 
-## Planned
+- **Phase 21 — Independent webcam layer** (reposition/resize/remove the webcam *after* recording).
+  An **opt-in** mode (the baked-in bubble stays the default): when **Movable webcam** is on (a
+  Settings default or a per-recording sub-chip on the selector), the `rec-cam` bubble is marked
+  `WDA_EXCLUDEFROMCAPTURE` so gdigrab/ddagrab records a **clean** screen, and the camera is captured
+  **separately** — the bubble webview runs `MediaRecorder(video/webm;codecs=vp8)` (video-only, no
+  audio) and streams chunks to a sibling `<stem>.cam.webm` via `recorder_cam_write_chunk` (append
+  per `ondataavailable`); pause/resume mirror to the recorder. The bubble's normalized on-screen
+  placement is persisted to `<stem>.cam.json` so the trim overlay **starts at the same spot/size**.
+  In the trim editor the webcam becomes a **draggable, corner-resizable circular layer** (free move
+  + resize about center, Reset, and ✕-to-remove / Add-back). Export composites in the **same single
+  ffmpeg pass**: the cam track is trimmed with the **identical** per-segment `trim`/`setpts` as the
+  screen, concatenated, circular-alpha-masked (`geq`), overlaid at the chosen source-pixel position,
+  then faded — **byte-identical to before when no cam** is present. Safe fallbacks throughout:
+  "Movable" implies recording the webcam at all (a lone toggle never yields silently nothing), a
+  pre-start check demotes to the baked-in bubble when `vp8` MediaRecorder is unsupported, and export
+  drops the overlay (with a toast) if the sidecar is missing/truncated. Pure geometry
+  (`camOverlay.ts`: `clampPlacement`/`videoRectInBox`/`toPixels`) and the filter builder are
+  unit-tested; a normalized↔source-pixel boundary keeps `CamPlacement` (TS, 0–1) and `CamOverlay`
+  (Rust, pixels) cleanly separated. **Recorder isolation honored** (`recorder/cam.rs` + `trim.rs`
+  touch only recorder helpers + `crate::db`). Two at-screen fixes folded in: the overlay now starts
+  at the recorded placement/size, and global-shortcut reliability was hardened (rebind re-arms on
+  every path via a single owner; **custom hotkeys now win at startup** — `shortcuts::register` runs
+  *after* the DB hydrates, so a restart no longer silently re-arms the built-in defaults).
+  *Shipped — at-screen accepted.*
 
-- **Deferred CleanShot video-polish** (in-scope, not yet scheduled — parked for a later phase):
-  - **Independent webcam layer** — reposition/resize/remove the webcam *after* recording (today
-    the bubble is baked into the video at capture time; a post-hoc layer would need a separate
-    webcam track, a bigger architectural change).
+## Planned
 
 - **Deferred recorder follow-up**: **hardware video encoder** (NVENC / QuickSync / AMF) to offload
   H.264 encoding from the CPU and lock a true 60 fps at full resolution (Phase 19's ddagrab capture

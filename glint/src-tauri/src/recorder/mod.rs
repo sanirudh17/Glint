@@ -684,7 +684,6 @@ pub async fn recorder_start(
     let want_cam = webcam.unwrap_or(false) || want_movable_pref;
     // `mut` so a pre-start fallback can demote it to baked-in when unsupported.
     let mut want_cam_movable = want_cam && want_movable_pref;
-    log::info!("recorder_start: want_cam={want_cam} want_cam_movable={want_cam_movable} (webcam={webcam:?} chip_movable={webcam_movable:?} setting_movable={setting_movable})");
     // Bubble's normalized on-screen placement — persisted for movable recordings so the trim
     // overlay starts at the same spot/size.
     let mut cam_placement: Option<(f64, f64, f64)> = None;
