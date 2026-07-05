@@ -19,6 +19,7 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { emit } from "@tauri-apps/api/event";
 import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointer2, Move, Lock, Shapes } from "lucide-react";
 
 type WebcamShape = "circle" | "rounded" | "square" | "rect";
@@ -107,6 +108,20 @@ export function RegionSelect() {
       setCursorSize(settings.record_cursor_size ?? "off");
     }
   }, [settings]);
+  // Reveal the (initially hidden) selector window only once its toolbar has PAINTED with the
+  // seeded chips — Rust waits for `rec-select-ready` before calling show(), so WebView2 never
+  // flashes the stale frame from the previous selector session. Two rAFs guarantee the seeded
+  // render has hit the screen before we signal.
+  const readyEmitted = useRef(false);
+  useEffect(() => {
+    if (!settings || readyEmitted.current) return;
+    readyEmitted.current = true;
+    const r1 = requestAnimationFrame(() => {
+      requestAnimationFrame(() => { emit("rec-select-ready").catch(() => {}); });
+    });
+    return () => cancelAnimationFrame(r1);
+  }, [settings]);
+
   // Click/keystroke/spotlight are no longer chips here (they're live in the pill +
   // defaulted in Settings) but still flow through from the saved defaults so a user
   // who turned them on in Settings starts recording with them on.

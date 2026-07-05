@@ -191,7 +191,27 @@ pub fn build_region_selector(app: &AppHandle) -> tauri::Result<()> {
         win.set_position(tauri::PhysicalPosition { x: pos.x, y: pos.y })?;
         win.set_size(tauri::PhysicalSize { width: size.width, height: size.height })?;
     }
-    win.show()?; win.set_focus()?;
+    // Reveal only once the frontend has PAINTED its current toolbar (it emits
+    // `rec-select-ready` after two rAFs). Showing synchronously here would flash the stale
+    // frame WebView2 still holds from the previous selector session before React repaints.
+    // A fallback timer guarantees the window still appears if that event is ever missed.
+    use tauri::Listener;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let shown = std::sync::Arc::new(AtomicBool::new(false));
+    {
+        let win = win.clone();
+        let shown = shown.clone();
+        app.once("rec-select-ready", move |_| {
+            if !shown.swap(true, Ordering::SeqCst) { let _ = win.show(); let _ = win.set_focus(); }
+        });
+    }
+    {
+        let win = win.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+            if !shown.swap(true, Ordering::SeqCst) { let _ = win.show(); let _ = win.set_focus(); }
+        });
+    }
     Ok(())
 }
 

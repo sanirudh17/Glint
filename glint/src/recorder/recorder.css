@@ -80,7 +80,7 @@
   background: var(--accent); color: #fff; border: none; border-radius: 8px;
   font-size: 13px; font-weight: 600; cursor: pointer;
 }
-.rec-sel-fullbtn:hover { background: #6d8bff; }
+.rec-sel-fullbtn:hover { background: var(--accent-hover); }
 .rec-sel-chipgroup { pointer-events: none; display: inline-flex; align-items: center; gap: 8px; }
 /* Fixed width + height so every chip is identical and NOTHING resizes as the cursor
    chip cycles through its states (Normal → Large → XL → Hidden). */
