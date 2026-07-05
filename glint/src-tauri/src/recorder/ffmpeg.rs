@@ -22,6 +22,43 @@ pub enum CaptureEngine {
     Ddagrab,
 }
 
+/// Which H.264 encoder ffmpeg uses. Hardware encoders (`Nvenc`/`Qsv`/`Amf`) offload the
+/// encode from the CPU so full-resolution 60 fps capture keeps up; `Libx264` is the
+/// universal CPU fallback. Chosen once per session (see `probe_video_encoder`) and locked
+/// for a whole recording so pause/resume segments stay concat-copy compatible.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum VideoEncoder {
+    Libx264,
+    Nvenc,
+    Qsv,
+    Amf,
+}
+
+/// The `-c:v …` encode tail for `encoder`. Every variant outputs H.264 / yuv420p so the
+/// downstream muxer, segment concat, trim editor, and players are all unchanged. The
+/// `Libx264` tail is byte-identical to the historical inline tail.
+pub fn encoder_args(enc: VideoEncoder) -> Vec<String> {
+    let s = |x: &str| x.to_string();
+    let mut a = match enc {
+        VideoEncoder::Libx264 => vec![s("-c:v"), s("libx264"), s("-preset"), s("ultrafast")],
+        // p4 = balanced NVENC preset; vbr+cq 21 targets visually-transparent quality with
+        // the GPU picking bitrate. b:v 0 lets cq drive rate control.
+        VideoEncoder::Nvenc => vec![
+            s("-c:v"), s("h264_nvenc"), s("-preset"), s("p4"),
+            s("-rc"), s("vbr"), s("-cq"), s("21"), s("-b:v"), s("0"),
+        ],
+        VideoEncoder::Qsv => vec![
+            s("-c:v"), s("h264_qsv"), s("-preset"), s("veryfast"), s("-global_quality"), s("21"),
+        ],
+        VideoEncoder::Amf => vec![
+            s("-c:v"), s("h264_amf"), s("-quality"), s("balanced"),
+            s("-rc"), s("cqp"), s("-qp_i"), s("21"), s("-qp_p"), s("21"),
+        ],
+    };
+    a.extend([s("-pix_fmt"), s("yuv420p")]);
+    a
+}
+
 /// Build the ffmpeg arg list: capture the screen (via the chosen `engine`) and encode
 /// H.264 MP4. `-preset ultrafast` keeps encoding real-time; `+faststart` + a clean
 /// `q`-driven stop yield a seekable, playable file.
@@ -218,6 +255,31 @@ fn audio_graph(audio: &[AudioInput], silent_pad: bool, base: usize) -> Option<St
 mod tests {
     use super::*;
     use crate::recorder::RecordTarget;
+
+    #[test]
+    fn encoder_args_libx264_is_unchanged_tail() {
+        assert_eq!(
+            encoder_args(VideoEncoder::Libx264),
+            vec![
+                "-c:v".to_string(), "libx264".into(),
+                "-preset".into(), "ultrafast".into(),
+                "-pix_fmt".into(), "yuv420p".into(),
+            ]
+        );
+    }
+
+    #[test]
+    fn encoder_args_hw_encoders_are_yuv420p_h264() {
+        for (enc, name) in [
+            (VideoEncoder::Nvenc, "h264_nvenc"),
+            (VideoEncoder::Qsv, "h264_qsv"),
+            (VideoEncoder::Amf, "h264_amf"),
+        ] {
+            let a = encoder_args(enc);
+            assert!(a.windows(2).any(|w| w[0] == "-c:v" && w[1] == name), "{name} -c:v");
+            assert!(a.windows(2).any(|w| w[0] == "-pix_fmt" && w[1] == "yuv420p"), "{name} pix_fmt");
+        }
+    }
 
     #[test]
     fn args_silence_stderr_to_avoid_pipe_backpressure() {
