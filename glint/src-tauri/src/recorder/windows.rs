@@ -140,6 +140,11 @@ pub const REC_HUD_LABEL: &str = "rec-hud";
 /// capture.
 pub fn build_rec_hud(app: &AppHandle) -> tauri::Result<()> {
     close_rec_hud(app);
+    // The screenshot tray and the recording HUD share the same bottom-left corner and must
+    // never coexist as two separate stacks — a new recording HUD DISPLACES the screenshot
+    // tray (its in-memory stack persists and reappears on the next screenshot). This is the
+    // capture side of the mutual-exclusion; the screenshot path closes this HUD symmetrically.
+    crate::hud::teardown(app);
     let win = WebviewWindowBuilder::new(app, REC_HUD_LABEL, WebviewUrl::App("index.html#/rec-hud".into()))
         .title("Glint Recording")
         .decorations(false)
@@ -359,6 +364,9 @@ pub fn build_trim_window(app: &AppHandle) -> tauri::Result<()> {
         .inner_size(900.0, 600.0)
         .min_inner_size(640.0, 460.0)
         .center()
+        // Open maximized so the preview + timeline get the full screen — a 900×600 window
+        // is cramped for scrubbing. Still a normal decorated window the user can un-maximize.
+        .maximized(true)
         .visible(true)
         .build()?;
     let _ = win.set_focus();
