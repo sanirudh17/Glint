@@ -279,12 +279,32 @@ capture/library/editor path.
   *after* the DB hydrates, so a restart no longer silently re-arms the built-in defaults).
   *Shipped — at-screen accepted.*
 
-## Planned
+- **Phase 22 — Hardware encode · webcam shapes · app-wide accent** (three tracks, all inside the
+  isolated recorder/settings paths). **Track A — hardware H.264 encoder** (NVENC / QuickSync / AMF,
+  automatic, no UI): a session-cached probe picks the fastest working encoder and locks it for the
+  whole recording (concat-copy invariant); a `VideoEncoder` enum swaps only the `-c:v` tail, every
+  variant emitting H.264/yuv420p. The probe is **representative** — it runs the REAL capture command
+  (same engine + hw-device setup, capped to 8 frames) and requires a **non-empty** output file,
+  because a hardware encoder can pass a synthetic `lavfi` probe yet fail on the live pipeline while
+  ffmpeg still exits 0. On this hybrid-GPU machine that mattered: ddagrab's D3D11 device binds to the
+  iGPU, so NVENC died with "no encode device" and wrote an empty file — fixed by naming the D3D11
+  device, scoping it to the filter graph, and giving NVENC its own CUDA device (frames are already in
+  system memory after `hwdownload`). Any still-unviable encoder falls back to libx264 ("recording
+  never breaks"). The probe runs **concurrently** with the cam warmup + countdown so it adds no
+  perceived start latency. **Track B — webcam shapes** (circle / rounded / square / rect): a persisted
+  `webcam_shape` setting drives a shape-aware bubble window (1:1 vs 16:9), a live `clip-path` preview,
+  a selector chip + trim-editor post-hoc control, and a unified rounded-rect `geq` export mask (rect =
+  unmasked); shape round-trips through `<stem>.cam.json`. **Track C — app-wide accent**: audited out
+  the hardcoded `#5b7cfa`/`#6d8bff` in OCR, region-selector, and trim CSS so `var(--accent)` (already
+  applied per-window) now reaches every surface, including hover. Several at-screen fixes folded in:
+  the per-recording **Movable chip is now authoritative** (Movable-off bakes the webcam into the
+  video even when the Settings default is on — it was silently recording a capture-excluded track),
+  the **trim editor opens maximized**, the **recording HUD and screenshot tray are mutually exclusive**
+  at the shared bottom-left corner (each displaces the other), the region selector **reveals on first
+  paint** (no stale-frame flash, no open delay), and trim zoom/fade controls got a divider so their
+  −/+ steppers don't blur together. *Shipped — at-screen accepted.*
 
-- **Deferred recorder follow-up**: **hardware video encoder** (NVENC / QuickSync / AMF) to offload
-  H.264 encoding from the CPU and lock a true 60 fps at full resolution (Phase 19's ddagrab capture
-  already feeds 60 fps; libx264-`ultrafast` is the remaining throughput bottleneck). Vendor-specific
-  with a libx264 fallback; kept out of Phase 19 for universality + concat-copy simplicity.
+## Planned
 
 - **Deferred trim follow-up**: **clip reordering** (drag kept segments into a new order). Redo,
   audio waveform, fades, and per-segment speed all shipped in Phase 20; reordering stays parked as
