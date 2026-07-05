@@ -5,7 +5,7 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { Scissors, Trash2, Undo2, Redo2, Play, Pause, ZoomIn, ZoomOut, X, RotateCcw } from "lucide-react";
 import { trimTarget, trimProbe, trimExport, trimWaveform, type ProbeResult } from "../lib/trim";
-import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, reorderKept, outputDuration, type Clip } from "./trimModel";
+import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, reorderKept, segmentIndexAtSource, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
 import { TrimFilmstrip } from "./TrimFilmstrip";
 import { TrimCamOverlay } from "./TrimCamOverlay";
@@ -67,15 +67,16 @@ export function TrimView() {
   const fps = probe?.fps && probe.fps > 0 ? probe.fps : 30;
   const ranges = keepRanges(clips);
   const outDur = outputDuration(clips);
-  // Latest clips/ranges for the rAF playback loop, so it reads current edits without
-  // re-subscribing every frame.
+  // Latest clips for the rAF playback loop, so it reads current edits (and their play order)
+  // without re-subscribing every frame.
   const clipsRef = useRef(clips); clipsRef.current = clips;
-  const rangesRef = useRef(ranges); rangesRef.current = ranges;
 
   // Zoomed view window [viewStart, viewStart + duration/zoom], centred on the playhead so it
   // auto-follows during playback/stepping (no scrollbar needed). Frozen while dragging so the
   // timeline doesn't chase the cursor; viewStartRef holds the last settled value during a drag.
   const viewStartRef = useRef(0);
+  // Which play-order segment the preview is currently in (index into keptSegments).
+  const segCursorRef = useRef(0);
   const viewDur = duration / zoom;
   let viewStart: number;
   if (zoom <= 1) {
@@ -234,26 +235,33 @@ export function TrimView() {
     });
   }, [edit]);
 
-  // Playback engine: a rAF loop (~60 Hz) drives the playhead, skips removed gaps, and
-  // switches playbackRate exactly at segment boundaries. Far tighter than the ~4 Hz
-  // `timeupdate` event, which used to let a segment's speed bleed ~250 ms into its
-  // neighbour ("other sections also get affected").
+  // Playback engine: a rAF loop (~60 Hz) walks the KEPT segments in PLAY order. Within a
+  // segment the <video> plays naturally; at a segment boundary it seeks to the next segment's
+  // source start (covers reordered jumps and deleted gaps uniformly) and switches playbackRate.
+  // Far tighter than the ~4 Hz `timeupdate` event, which used to let a segment's speed bleed
+  // ~250 ms into its neighbour ("other sections also get affected").
   useEffect(() => {
     if (!playing) return;
     let raf = 0;
     const tick = () => {
       const v = videoRef.current;
       if (v && !draggingRef.current) {
+        const segs = keptSegments(clipsRef.current); // play order
+        if (segs.length === 0) { v.pause(); setPlaying(false); return; }
+        let idx = segCursorRef.current;
+        if (idx < 0 || idx >= segs.length) idx = 0;
+        let seg = segs[idx];
         let t = v.currentTime;
-        const rs = rangesRef.current;
-        const inKept = rs.some(([s, e]) => t >= s - 0.02 && t < e);
-        if (!inKept) {
-          const next = rs.find(([s]) => s > t);
-          if (next) { v.currentTime = next[0]; t = next[0]; }
-          else { v.pause(); }
+        // Reached the end of this segment's SOURCE span → advance to the next play-order segment.
+        if (t >= seg.end - 0.02) {
+          if (idx + 1 >= segs.length) { v.pause(); setPlaying(false); raf = requestAnimationFrame(tick); return; }
+          idx += 1;
+          segCursorRef.current = idx;
+          seg = segs[idx];
+          try { v.currentTime = seg.start; } catch { /* ignore */ }
+          t = seg.start;
         }
-        const cur = clipsRef.current.find((c) => c.kept && t >= c.start - 0.02 && t < c.end);
-        const rate = cur?.speed ?? 1;
+        const rate = seg.speed;
         if (v.playbackRate !== rate) v.playbackRate = rate;
         // Slave the webcam overlay to the same time base (correct drift; match speed).
         const cv = camVideoRef.current;
@@ -269,7 +277,19 @@ export function TrimView() {
     return () => cancelAnimationFrame(raf);
   }, [playing]);
 
-  const togglePlay = () => { const v = videoRef.current; if (!v) return; if (v.paused) { v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); } };
+  // Seat the play-order cursor from the current source position when playback starts, so Play
+  // resumes from the segment under the playhead (or the first segment if it's in a gap).
+  const togglePlay = () => {
+    const v = videoRef.current; if (!v) return;
+    if (v.paused) {
+      const segs = keptSegments(clipsRef.current);
+      if (segs.length === 0) return;
+      let idx = segmentIndexAtSource(segs, v.currentTime);
+      if (idx < 0) { idx = 0; try { v.currentTime = segs[0].start; } catch { /* ignore */ } }
+      segCursorRef.current = idx;
+      v.play(); setPlaying(true);
+    } else { v.pause(); setPlaying(false); }
+  };
 
   // Keep the webcam overlay's play state mirrored to the main player (muted, so autoplay
   // is allowed). Time/rate are corrected in the rAF loop.
