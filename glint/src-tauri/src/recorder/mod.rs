@@ -669,8 +669,9 @@ pub async fn recorder_start(
 
     // Choose the H.264 encoder once (cached per session): a hardware encoder (NVENC/QSV/AMF)
     // when available so full-res 60 fps keeps up, else libx264. Also locked for the whole
-    // recording so every segment's stream params match (concat `-c copy`).
-    let encoder = probe_video_encoder(&app).await;
+    // recording so every segment's stream params match (concat `-c copy`). `mut` so a
+    // segment-0 failure can demote it to libx264 (see below).
+    let mut encoder = probe_video_encoder(&app).await;
 
     // The selector (if this start came from it) closes itself, so the frontend's
     // IPC survives (closing destroys its JS context) and a full-screen capture
@@ -803,7 +804,19 @@ pub async fn recorder_start(
     // Bring segment 0 up behind the visible bar. Pause/resume appends further
     // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual
     // delivered rate still depends on the machine/screen resolution).
-    let seg0 = match spawn_segment(&app, engine, encoder, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
+    // Bring segment 0 up. If a hardware encoder passed the probe but still fails to start a
+    // real segment, demote the whole session to libx264 and retry once — the "recording
+    // never breaks" guarantee. Later segments inherit the demoted encoder via rec.encoder.
+    let seg0_result = match spawn_segment(&app, engine, encoder, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
+        Ok(s) => Ok(s),
+        Err(e) if encoder != ffmpeg::VideoEncoder::Libx264 => {
+            log::warn!("segment 0 failed on {encoder:?} ({e}); falling back to libx264");
+            encoder = ffmpeg::VideoEncoder::Libx264;
+            spawn_segment(&app, engine, encoder, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await
+        }
+        Err(e) => Err(e),
+    };
+    let seg0 = match seg0_result {
         Ok(s) => s,
         Err(e) => {
             windows::close_control_bar(&app);
@@ -827,6 +840,8 @@ pub async fn recorder_start(
             Some(rec) => {
                 rec.sys_avail = sys_avail;
                 rec.mic_avail = mic_avail;
+                // Reflect a possible segment-0 encoder demotion so resume segments match.
+                rec.encoder = encoder;
                 rec.current = Some(seg0);
                 None
             }
