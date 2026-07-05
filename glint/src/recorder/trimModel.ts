@@ -71,6 +71,23 @@ export function keptClipsInOrder(clips: Clip[]): Clip[] {
   return clips.filter((c) => c.kept).sort((a, b) => a.order - b.order);
 }
 
+/** Move the kept clip at play-order index `from` to index `to` (0-based over the kept
+ *  subsequence; `to` is the destination index in the final sequence). Rewrites only the moved
+ *  clip's `order` key — the array (source order) is unchanged. No-op for bad indices. */
+export function reorderKept(clips: Clip[], from: number, to: number): Clip[] {
+  const kept = keptClipsInOrder(clips);
+  if (from < 0 || from >= kept.length || to < 0 || to >= kept.length || from === to) return clips;
+  const moved = kept[from];
+  const rest = kept.filter((_, i) => i !== from);
+  const before = rest[to - 1];
+  const after = rest[to];
+  let order: number;
+  if (!before) order = after.order - 1;        // to front
+  else if (!after) order = before.order + 1;    // to end
+  else order = (before.order + after.order) / 2; // between neighbors
+  return clips.map((c) => (c.id === moved.id ? { ...c, order } : c));
+}
+
 /** Exported duration: each kept clip contributes (end-start)/speed. */
 export function outputDuration(clips: Clip[]): number {
   return clips.filter((c) => c.kept).reduce((a, c) => a + (c.end - c.start) / c.speed, 0);
