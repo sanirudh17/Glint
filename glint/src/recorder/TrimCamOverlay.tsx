@@ -3,7 +3,7 @@
  *  letterboxed video rect inside its box and converts to/from pixels via the pure helpers.
  *  The <video> ref is forwarded so TrimView can slave its time to the main player. */
 import { forwardRef, useCallback, useLayoutEffect, useRef, useState } from "react";
-import { type CamPlacement, clampPlacement, videoRectInBox } from "./camOverlay";
+import { type CamPlacement, clampPlacement, videoRectInBox, shapeAspect } from "./camOverlay";
 
 type Props = {
   camSrc: string;
@@ -36,7 +36,10 @@ export const TrimCamOverlay = forwardRef<HTMLVideoElement, Props>(function TrimC
   const rect = videoRectInBox(box, videoAspect);
   const left = rect.x + placement.x * rect.w;
   const top = rect.y + placement.y * rect.h;
+  // Box width follows `diameter`; height follows the shape's aspect (1:1 for circle/square,
+  // the camera's native ratio for rounded/rect).
   const size = placement.diameter * rect.w;
+  const height = size / shapeAspect(placement.shape, videoAspect);
 
   const onDown = useCallback(
     (mode: "move" | "resize") => (e: React.PointerEvent) => {
@@ -77,8 +80,8 @@ export const TrimCamOverlay = forwardRef<HTMLVideoElement, Props>(function TrimC
     <div ref={boxRef} className="trim-cam-layer">
       {placement.visible && rect.w > 0 && (
         <div
-          className="trim-cam"
-          style={{ left, top, width: size, height: size }}
+          className={`trim-cam trim-cam--${placement.shape}`}
+          style={{ left, top, width: size, height }}
           onPointerDown={onDown("move")}
           onPointerMove={onMove}
           onPointerUp={onUp}
