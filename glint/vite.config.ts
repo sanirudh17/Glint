@@ -12,16 +12,20 @@ export default defineConfig(async () => ({
   //
   // 1. prevent Vite from obscuring rust errors
   clearScreen: false,
-  // 2. tauri expects a fixed port, fail if that port is not available
+  // 2. tauri expects a fixed port, fail if that port is not available.
+  //    NOTE: moved off Tauri's default 1420 — on Windows with Hyper-V/WSL2/Docker,
+  //    WinNAT reserves dynamic port ranges that routinely include 1420, so binding it
+  //    fails with `EACCES: permission denied`. 5173 (Vite's own default) sits outside
+  //    those reserved ranges. Keep this in sync with `devUrl` in tauri.conf.json.
   server: {
-    port: 1420,
+    port: 5173,
     strictPort: true,
     host: host || false,
     hmr: host
       ? {
           protocol: "ws",
           host,
-          port: 1421,
+          port: 5174,
         }
       : undefined,
     watch: {
