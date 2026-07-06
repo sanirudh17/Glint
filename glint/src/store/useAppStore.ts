@@ -40,6 +40,8 @@ export interface Settings {
   webcam_device_id: string;
   webcam_shape: "circle" | "rounded" | "square" | "rect";
   capture_delay_secs: 3 | 5 | 10;
+  record_resolution: "original" | "1080p" | "720p";
+  record_quality: "high" | "medium" | "low";
 }
 
 export interface Toast {
@@ -74,6 +76,8 @@ interface AppState {
   setWebcamDevice: (id: string) => Promise<void>;
   setWebcamShape: (shape: "circle" | "rounded" | "square" | "rect") => Promise<void>;
   setCaptureDelay: (v: 3 | 5 | 10) => Promise<void>;
+  setRecordResolution: (v: "original" | "1080p" | "720p") => Promise<void>;
+  setRecordQuality: (v: "high" | "medium" | "low") => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -294,6 +298,18 @@ export const useAppStore = create<AppState>((set, get) => ({
   setCaptureDelay: async (v: 3 | 5 | 10) => {
     const updated = await saveSetting("capture_delay_secs", v);
     await persistSetting("capture_delay_secs", v);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setRecordResolution: async (v: "original" | "1080p" | "720p") => {
+    const updated = await saveSetting("record_resolution", v);
+    await persistSetting("record_resolution", v);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setRecordQuality: async (v: "high" | "medium" | "low") => {
+    const updated = await saveSetting("record_quality", v);
+    await persistSetting("record_quality", v);
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 
