@@ -3,10 +3,11 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { Scissors, Trash2, Undo2, Redo2, Play, Pause, ZoomIn, ZoomOut, X, RotateCcw } from "lucide-react";
+import { Scissors, Trash2, Undo2, Redo2, Play, Pause, SkipBack, ZoomIn, ZoomOut, X, RotateCcw } from "lucide-react";
 import { trimTarget, trimProbe, trimExport, trimWaveform, type ProbeResult } from "../lib/trim";
-import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, outputDuration, type Clip } from "./trimModel";
+import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, reorderKept, segmentIndexAtSource, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
+import { TrimFilmstrip } from "./TrimFilmstrip";
 import { TrimCamOverlay } from "./TrimCamOverlay";
 import { type CamPlacement, type CamShape, DEFAULT_PLACEMENT, toPixels, clampPlacement } from "./camOverlay";
 
@@ -66,15 +67,16 @@ export function TrimView() {
   const fps = probe?.fps && probe.fps > 0 ? probe.fps : 30;
   const ranges = keepRanges(clips);
   const outDur = outputDuration(clips);
-  // Latest clips/ranges for the rAF playback loop, so it reads current edits without
-  // re-subscribing every frame.
+  // Latest clips for the rAF playback loop, so it reads current edits (and their play order)
+  // without re-subscribing every frame.
   const clipsRef = useRef(clips); clipsRef.current = clips;
-  const rangesRef = useRef(ranges); rangesRef.current = ranges;
 
   // Zoomed view window [viewStart, viewStart + duration/zoom], centred on the playhead so it
   // auto-follows during playback/stepping (no scrollbar needed). Frozen while dragging so the
   // timeline doesn't chase the cursor; viewStartRef holds the last settled value during a drag.
   const viewStartRef = useRef(0);
+  // Which play-order segment the preview is currently in (index into keptSegments).
+  const segCursorRef = useRef(0);
   const viewDur = duration / zoom;
   let viewStart: number;
   if (zoom <= 1) {
@@ -87,11 +89,19 @@ export function TrimView() {
   }
   const zoomIn = useCallback(() => setZoom((z) => ZOOMS[Math.min(ZOOMS.indexOf(z) + 1, ZOOMS.length - 1)] ?? z), []);
   const zoomOut = useCallback(() => setZoom((z) => ZOOMS[Math.max(ZOOMS.indexOf(z) - 1, 0)] ?? z), []);
+  // Reordered when the kept clips no longer play in ascending source-time order — this is a
+  // real edit even with no cuts/speed/fades (keepRanges merges by source time and would miss it).
+  const orderedSegs = keptSegments(clips);
+  const reordered = orderedSegs.some((s, i) => i > 0 && s.start < orderedSegs[i - 1].start - EPS);
   const noop = ranges.length === 1 && ranges[0][0] <= 0.001 && ranges[0][1] >= duration - 0.05
-    && clips.filter((c) => c.kept).every((c) => c.speed === 1) && fadeIn === 0 && fadeOut === 0;
+    && clips.filter((c) => c.kept).every((c) => c.speed === 1) && fadeIn === 0 && fadeOut === 0
+    && !reordered;
   // A visible webcam overlay is itself an edit worth exporting, even with no cuts/speed/fades.
   const camEdit = !!(probe?.has_cam && cam?.visible);
-  const canSave = clips.length > 0 && keptCount(clips) > 0 && (!noop || camEdit) && exporting === null;
+  // Any real edit (cuts / speed / fades / reorder / cam) — gates both Save and the
+  // "play from start" affordance, which is pointless with nothing changed.
+  const hasEdit = !noop || camEdit;
+  const canSave = clips.length > 0 && keptCount(clips) > 0 && hasEdit && exporting === null;
 
   // The selected block: the clip clicked on the timeline (sticky). Falls back to none once
   // the id no longer exists (e.g. after undo/redo swaps in a different history state).
@@ -198,6 +208,17 @@ export function TrimView() {
     if (!selected || !selected.kept || keptCount(clips) <= 1) return; // can't delete a gap or the last block
     commit({ ...edit, clips: setKept(clips, selected.id, false) });
   }, [commit, edit, clips, selected]);
+  const doReorder = useCallback((from: number, to: number) => {
+    const next = reorderKept(clips, from, to);
+    if (next !== clips) commit({ ...edit, clips: next });
+  }, [commit, edit, clips]);
+  // Clicking a filmstrip tile seats the sticky timeline selection on that clip (so the speed
+  // buttons/keys act on it) and jumps the playhead there for a clear visual indication.
+  const selectClip = useCallback((id: number) => {
+    setSelectedId(id);
+    const c = clips.find((x) => x.id === id);
+    if (c) seek(c.start);
+  }, [clips, seek]);
   const SPEEDS = [0.5, 1, 1.5, 2];
   const selSpeed = selected?.speed ?? 1;
   const canSpeed = selected != null && selected.kept && exporting === null;
@@ -229,26 +250,33 @@ export function TrimView() {
     });
   }, [edit]);
 
-  // Playback engine: a rAF loop (~60 Hz) drives the playhead, skips removed gaps, and
-  // switches playbackRate exactly at segment boundaries. Far tighter than the ~4 Hz
-  // `timeupdate` event, which used to let a segment's speed bleed ~250 ms into its
-  // neighbour ("other sections also get affected").
+  // Playback engine: a rAF loop (~60 Hz) walks the KEPT segments in PLAY order. Within a
+  // segment the <video> plays naturally; at a segment boundary it seeks to the next segment's
+  // source start (covers reordered jumps and deleted gaps uniformly) and switches playbackRate.
+  // Far tighter than the ~4 Hz `timeupdate` event, which used to let a segment's speed bleed
+  // ~250 ms into its neighbour ("other sections also get affected").
   useEffect(() => {
     if (!playing) return;
     let raf = 0;
     const tick = () => {
       const v = videoRef.current;
       if (v && !draggingRef.current) {
+        const segs = keptSegments(clipsRef.current); // play order
+        if (segs.length === 0) { v.pause(); setPlaying(false); return; }
+        let idx = segCursorRef.current;
+        if (idx < 0 || idx >= segs.length) idx = 0;
+        let seg = segs[idx];
         let t = v.currentTime;
-        const rs = rangesRef.current;
-        const inKept = rs.some(([s, e]) => t >= s - 0.02 && t < e);
-        if (!inKept) {
-          const next = rs.find(([s]) => s > t);
-          if (next) { v.currentTime = next[0]; t = next[0]; }
-          else { v.pause(); }
+        // Reached the end of this segment's SOURCE span → advance to the next play-order segment.
+        if (t >= seg.end - 0.02) {
+          if (idx + 1 >= segs.length) { v.pause(); setPlaying(false); raf = requestAnimationFrame(tick); return; }
+          idx += 1;
+          segCursorRef.current = idx;
+          seg = segs[idx];
+          try { v.currentTime = seg.start; } catch { /* ignore */ }
+          t = seg.start;
         }
-        const cur = clipsRef.current.find((c) => c.kept && t >= c.start - 0.02 && t < c.end);
-        const rate = cur?.speed ?? 1;
+        const rate = seg.speed;
         if (v.playbackRate !== rate) v.playbackRate = rate;
         // Slave the webcam overlay to the same time base (correct drift; match speed).
         const cv = camVideoRef.current;
@@ -264,7 +292,31 @@ export function TrimView() {
     return () => cancelAnimationFrame(raf);
   }, [playing]);
 
-  const togglePlay = () => { const v = videoRef.current; if (!v) return; if (v.paused) { v.play(); setPlaying(true); } else { v.pause(); setPlaying(false); } };
+  // Seat the play-order cursor from the current source position when playback starts, so Play
+  // resumes from the segment under the playhead (or the first segment if it's in a gap).
+  const togglePlay = () => {
+    const v = videoRef.current; if (!v) return;
+    if (v.paused) {
+      const segs = keptSegments(clipsRef.current);
+      if (segs.length === 0) return;
+      let idx = segmentIndexAtSource(segs, v.currentTime);
+      if (idx < 0) { idx = 0; try { v.currentTime = segs[0].start; } catch { /* ignore */ } }
+      segCursorRef.current = idx;
+      v.play(); setPlaying(true);
+    } else { v.pause(); setPlaying(false); }
+  };
+
+  // Play the whole reordered flow from the very first segment (in play order), so the user can
+  // preview the updated sequence start-to-finish instead of resuming mid-way from the playhead.
+  const playFromStart = () => {
+    const v = videoRef.current; if (!v) return;
+    const segs = keptSegments(clipsRef.current);
+    if (segs.length === 0) return;
+    segCursorRef.current = 0;
+    try { v.currentTime = segs[0].start; } catch { /* ignore */ }
+    setPlayhead(segs[0].start);
+    v.play(); setPlaying(true);
+  };
 
   // Keep the webcam overlay's play state mirrored to the main player (muted, so autoplay
   // is allowed). Time/rate are corrected in the rAF loop.
@@ -344,6 +396,11 @@ export function TrimView() {
         <button className="trim-iconbtn" onClick={togglePlay} title="Play/Pause (Space)">
           {playing ? <Pause size={16} /> : <Play size={16} />}
         </button>
+        {hasEdit && (
+          <button className="trim-iconbtn" onClick={playFromStart} title="Play the updated sequence from the start">
+            <SkipBack size={16} />
+          </button>
+        )}
         <span className="trim-time">{fmt(playhead)} / {fmt(duration)}</span>
         <span className="trim-spacer" />
         <button className="trim-iconbtn" onClick={doSplit} title="Split at playhead (S)"><Scissors size={16} /></button>
@@ -371,6 +428,8 @@ export function TrimView() {
           zoom={zoom} viewStart={viewStart}
         />
       )}
+
+      <TrimFilmstrip clips={clips} disabled={exporting !== null} selectedId={selectedId} onReorder={doReorder} onSelect={selectClip} />
 
       <div className="trim-actions">
         <span className="trim-out">Output: {fmt(outDur)} / {fmt(duration)}</span>

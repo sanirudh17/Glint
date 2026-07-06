@@ -163,33 +163,42 @@ pub fn parse_ffprobe_json(json: &str) -> Result<ProbeResult, String> {
     Ok(ProbeResult { duration_secs, has_audio, fps, width, height, has_cam: false, cam_x: 0.0, cam_y: 0.0, cam_d: 0.0, cam_shape: "circle".into() })
 }
 
-/// Validate + sort kept segments: non-empty, each (start < end), all within [0, duration],
-/// non-overlapping after sorting by start, and speed within [0.5, 2].
+/// Validate kept segments: non-empty list, each region non-empty and within [0, duration],
+/// source spans non-overlapping, and speed in [0.5, 2]. Returns them in the CALLER's order
+/// (play order) — overlap is checked on a sorted copy but the order is preserved so a
+/// reordered sequence concatenates as arranged.
 pub fn validate_segments(segments: &[KeepSegment], duration: f64) -> Result<Vec<KeepSegment>, String> {
+    use std::cmp::Ordering;
     if segments.is_empty() {
         return Err("nothing to keep".into());
     }
-    let mut v = segments.to_vec();
-    v.sort_by(|a, b| a.start.partial_cmp(&b.start).unwrap_or(std::cmp::Ordering::Equal));
-    let mut prev_end = 0.0;
-    for (i, s) in v.iter().enumerate() {
+    // Per-segment validity (bounds, non-empty, speed) — order-independent.
+    for s in segments {
         // Reject empty/inverted regions AND NaN (partial_cmp is None for NaN → rejected).
-        if !matches!(s.end.partial_cmp(&s.start), Some(std::cmp::Ordering::Greater)) {
+        if !matches!(s.end.partial_cmp(&s.start), Some(Ordering::Greater)) {
             return Err("empty keep-region".into());
         }
         if s.start < -1e-6 || s.end > duration + 1e-3 {
             return Err("keep-region out of bounds".into());
         }
-        if i > 0 && s.start < prev_end - 1e-6 {
-            return Err("overlapping keep-regions".into());
-        }
         // NaN fails both comparisons → rejected.
         if !(s.speed >= 0.5 - 1e-9 && s.speed <= 2.0 + 1e-9) {
             return Err("speed out of range".into());
         }
+    }
+    // Non-overlap is checked on a SORTED COPY (each source span may be used at most once), but
+    // the segments are RETURNED in the caller's order so a reordered play sequence survives to
+    // concat unchanged.
+    let mut sorted = segments.to_vec();
+    sorted.sort_by(|a, b| a.start.partial_cmp(&b.start).unwrap_or(Ordering::Equal));
+    let mut prev_end = 0.0;
+    for (i, s) in sorted.iter().enumerate() {
+        if i > 0 && s.start < prev_end - 1e-6 {
+            return Err("overlapping keep-regions".into());
+        }
         prev_end = s.end;
     }
-    Ok(v)
+    Ok(segments.to_vec())
 }
 
 /// True when the edit changes nothing: a single full-span segment at speed 1 with no fades.
@@ -849,10 +858,12 @@ mod tests {
     }
 
     #[test]
-    fn validate_sorts_rejects_overlap_oob_and_bad_speed() {
+    fn validate_preserves_order_rejects_overlap_oob_and_bad_speed() {
+        // Play order is preserved (segments are NOT re-sorted by start) so a reordered
+        // sequence survives to concat; only overlap/bounds/speed are validated.
         assert_eq!(
             validate_segments(&[seg(3.0, 4.0, 1.0), seg(0.0, 1.0, 2.0)], 10.0).unwrap(),
-            vec![seg(0.0, 1.0, 2.0), seg(3.0, 4.0, 1.0)]
+            vec![seg(3.0, 4.0, 1.0), seg(0.0, 1.0, 2.0)]
         );
         assert!(validate_segments(&[seg(0.0, 2.0, 1.0), seg(1.0, 3.0, 1.0)], 10.0).is_err()); // overlap
         assert!(validate_segments(&[seg(0.0, 11.0, 1.0)], 10.0).is_err());                    // oob

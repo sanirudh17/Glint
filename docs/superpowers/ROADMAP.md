@@ -304,11 +304,35 @@ capture/library/editor path.
   paint** (no stale-frame flash, no open delay), and trim zoom/fade controls got a divider so their
   −/+ steppers don't blur together. *Shipped — at-screen accepted.*
 
+- **Phase 23 — Clip reordering** (drag kept segments into a new playback order in the trim editor,
+  all inside the isolated recorder path). The timeline model no longer assumes segments stay in
+  source order: each clip carries an `order` sort key **decoupled** from its source position, so the
+  array stays source-ordered (the timeline/ruler never moves) while a new play order layers on top.
+  `keptSegments`/`keptClipsInOrder` sort by `order` and become the single source of truth for the
+  filmstrip, the preview loop, and export — `reorderKept` rewrites only the moved clip's key
+  (midpoint insertion between neighbors), and `splitClips` seats each new right-half immediately
+  after its left in play order. A new **filmstrip** below the timeline shows the kept clips as
+  draggable tiles: each tile's **number is its recorded (source-order) identity**, its **left→right
+  position is play order**, and chevrons between tiles show the processing direction — so after a
+  reorder the numbers read out of sequence (e.g. 2 3 1 4 5), which *is* the indication that clips
+  moved (no separate colored cue needed). Drag uses **pointer capture + geometry hit-testing**
+  (WebView2-safe — capture keeps the move/up stream as the cursor leaves the tile, geometry never
+  misses a target); a press under the drag-slop is a **click that selects** the clip (seating the
+  timeline selection + seeking to its start) instead of reordering. The preview **plays in play
+  order**: an rAF loop walks `keptSegments` via a play-order cursor, seeking `currentTime` to the
+  next segment's start at each boundary and slaving the webcam overlay, with a **⏮ "play from
+  start"** transport button (shown only once a real edit exists) to preview the whole updated
+  sequence from the top. Export was made **order-preserving** end-to-end: the backend
+  `validate_segments` now validates per-segment + overlap on a sorted copy but **returns segments in
+  caller (play) order**, so the single `trim`+`concat` pass emits clips in the chosen sequence. Save
+  is enabled on a **pure reorder** (not just speed/fade/cut edits). The model stays pure +
+  unit-tested (`order` key, `reorderKept`, `segmentIndexAtSource`, play-order `keptSegments`);
+  **recorder isolation honored** (only `trimModel.ts` + recorder-owned trim UI/`trim.rs` touched).
+  *Shipped — at-screen accepted.*
+
 ## Planned
 
-- **Deferred trim follow-up**: **clip reordering** (drag kept segments into a new order). Redo,
-  audio waveform, fades, and per-segment speed all shipped in Phase 20; reordering stays parked as
-  the larger change (the timeline model currently assumes segments stay in source order).
+- *(none — trim follow-ups from Phase 20/23 all shipped.)*
 
 ## Out of scope (project-wide, unchanged)
 Cloud/upload/share-links, teams/collaboration, login/auth, web backend/network calls, scrolling
