@@ -70,6 +70,16 @@
   color: var(--text-dim); cursor: pointer; font-size: var(--fz-xs);
 }
 .editor-width--active { border-color: var(--accent); color: var(--text); }
+/* Word-labelled toggles (e.g. Solid / Pixel) need room to breathe — the fixed
+   28px width is for single letters (S/M/L), not whole words. */
+.editor-toggle {
+  display: inline-flex; align-items: center; justify-content: center;
+  box-sizing: border-box; flex: none;
+  height: 24px; padding: 0 10px; border-radius: var(--r1);
+  border: 1px solid var(--border); background: transparent;
+  color: var(--text-dim); cursor: pointer; font-size: var(--fz-xs); white-space: nowrap;
+}
+.editor-toggle--active { border-color: var(--accent); color: var(--text); }
 .editor-fillgroup { display: inline-flex; align-items: center; gap: 6px; }
 .editor-opacity { width: 72px; accent-color: var(--accent); }
 .editor-fontsize {
@@ -78,8 +88,8 @@
   background: var(--bg); color: var(--text); font-size: var(--fz-sm);
 }
 .editor-rail {
-  display: flex; flex-direction: column; gap: 2px;
-  padding: var(--s2); border-right: 1px solid var(--border); background: var(--bg-elev);
+  display: flex; flex-direction: column; gap: 4px;
+  padding: var(--s3) var(--s2); border-right: 1px solid var(--border); background: var(--bg-elev);
 }
 .editor-tool {
   display: inline-flex; align-items: center; justify-content: center;
@@ -95,7 +105,10 @@
   background: color-mix(in srgb, var(--danger) 16%, transparent);
   color: var(--danger);
 }
-.editor-rail-sep { height: 1px; margin: var(--s2) 0; background: var(--border); }
+/* Push the trailing action group (undo/redo/clear) to the bottom of the rail so the
+   tools sit as one tidy zone up top and the free space collects between them, instead
+   of the actions crowding against the last tool. */
+.editor-rail-sep { height: 1px; margin: var(--s2) 4px; margin-top: auto; background: var(--border); }
 
 /* Inline text-annotation editor: a real <textarea> floated over the Konva text
    node's screen position while editing (Konva has no text input). */

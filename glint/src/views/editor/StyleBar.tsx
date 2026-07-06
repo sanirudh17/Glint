@@ -202,7 +202,7 @@ export function StyleBar() {
       {isRedact && (
         <div className="editor-widths" role="group" aria-label="Redaction style">
           <button
-            className={`editor-width${(eff.redactStyle ?? "solid") === "solid" ? " editor-width--active" : ""}`}
+            className={`editor-toggle${(eff.redactStyle ?? "solid") === "solid" ? " editor-toggle--active" : ""}`}
             title="Solid block"
             aria-label="Solid block"
             onClick={() => applyRedactStyle("solid")}
@@ -210,7 +210,7 @@ export function StyleBar() {
             Solid
           </button>
           <button
-            className={`editor-width${eff.redactStyle === "pixelate" ? " editor-width--active" : ""}`}
+            className={`editor-toggle${eff.redactStyle === "pixelate" ? " editor-toggle--active" : ""}`}
             title="Pixelate"
             aria-label="Pixelate"
             onClick={() => applyRedactStyle("pixelate")}

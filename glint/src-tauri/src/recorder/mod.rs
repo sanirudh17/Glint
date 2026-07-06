@@ -291,6 +291,10 @@ async fn spawn_segment(
     // sources actually connected this segment — so a segment whose sources all failed
     // still gets a silent aac track and stays concat-copy compatible with audio segments.
     let args = ffmpeg::build_ffmpeg_args(engine, &target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse, encoder, resolution, quality);
+    log::info!(
+        "[rec] segment {seg_index}: engine={engine:?} encoder={encoder:?} fps={fps} resolution={resolution} quality={quality}"
+    );
+    log::info!("[rec-args] ffmpeg {}", args.join(" "));
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("sidecar resolve: {e}"))?;
     let (rx_ev, child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
 
