@@ -55,6 +55,9 @@ pub fn ensure_open(app: &AppHandle) -> tauri::Result<()> {
         .visible(false) // shown after it positions to the monitor
         .build()?;
 
+    // No OS fade/scale-in — the post-capture card should appear the instant it's shown.
+    crate::window::disable_transitions(&win);
+
     // Position bottom-LEFT of the primary monitor (CleanShot-style corner).
     if let Some(monitor) = win.primary_monitor()? {
         let scale = monitor.scale_factor();
