@@ -44,6 +44,9 @@ pub fn build(app: &AppHandle, seconds: u32) -> tauri::Result<()> {
     }
 
     win.set_ignore_cursor_events(true)?; // click-through
+    // Hidden from screen capture — the digit must never appear in a recording that
+    // is being warmed up while the countdown is still on screen.
+    crate::window::exclude_from_capture(&win);
     win.show()?;
     Ok(())
 }

@@ -41,3 +41,31 @@ pub fn disable_transitions(win: &tauri::WebviewWindow) {
 }
 #[cfg(not(windows))]
 pub fn disable_transitions(_win: &tauri::WebviewWindow) {}
+
+/// Mark a window as excluded from screen capture (Win10 2004+): it stays visible on
+/// screen but is omitted from anything that captures the desktop (gdigrab/ddagrab). Used
+/// for the recording control bar and the pre-record countdown so neither is baked into the
+/// video. Best-effort — logs and moves on if the handle or the call is unavailable.
+#[cfg(windows)]
+pub fn exclude_from_capture(win: &tauri::WebviewWindow) {
+    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
+    use windows::Win32::Foundation::HWND;
+    use windows::Win32::UI::WindowsAndMessaging::{
+        SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE,
+    };
+    let raw = match win.window_handle() {
+        Ok(h) => h.as_raw(),
+        Err(e) => {
+            log::warn!("exclude_from_capture: no window handle: {e}");
+            return;
+        }
+    };
+    if let RawWindowHandle::Win32(h) = raw {
+        let hwnd = HWND(h.hwnd.get() as *mut core::ffi::c_void);
+        if let Err(e) = unsafe { SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) } {
+            log::warn!("exclude_from_capture: SetWindowDisplayAffinity failed: {e}");
+        }
+    }
+}
+#[cfg(not(windows))]
+pub fn exclude_from_capture(_win: &tauri::WebviewWindow) {}

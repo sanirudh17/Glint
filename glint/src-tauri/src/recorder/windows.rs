@@ -55,24 +55,7 @@ pub fn build_control_bar(app: &AppHandle) -> tauri::Result<()> {
 /// that capture while leaving it on screen. Best-effort: logs and moves on if the
 /// handle or the call is unavailable (the bar simply shows in the video then).
 pub(crate) fn exclude_from_capture(win: &tauri::WebviewWindow) {
-    use raw_window_handle::{HasWindowHandle, RawWindowHandle};
-    use windows::Win32::Foundation::HWND;
-    use windows::Win32::UI::WindowsAndMessaging::{
-        SetWindowDisplayAffinity, WDA_EXCLUDEFROMCAPTURE,
-    };
-    let raw = match win.window_handle() {
-        Ok(h) => h.as_raw(),
-        Err(e) => {
-            log::warn!("rec-bar: no window handle for capture-exclusion: {e}");
-            return;
-        }
-    };
-    if let RawWindowHandle::Win32(h) = raw {
-        let hwnd = HWND(h.hwnd.get() as *mut core::ffi::c_void);
-        if let Err(e) = unsafe { SetWindowDisplayAffinity(hwnd, WDA_EXCLUDEFROMCAPTURE) } {
-            log::warn!("rec-bar: SetWindowDisplayAffinity failed: {e}");
-        }
-    }
+    crate::window::exclude_from_capture(win);
 }
 
 /// Close the control bar if it is open. Safe to call when none exists.

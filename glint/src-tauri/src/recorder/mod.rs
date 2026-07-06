@@ -773,12 +773,14 @@ pub async fn recorder_start(
         }
     }
 
-    // 3-2-1 countdown, then Rust closes it BEFORE capture starts so the digit can
-    // never bleed into the first recorded frames (and a webview that failed to
-    // self-close isn't left orphaned on screen).
+    // 3-2-1 countdown. It is NOT closed here: it stays up (holding on an "arming" dot
+    // past zero) until segment 0 is confirmed capturing, then we close it below. That
+    // way the user's "go" moment (the countdown vanishing) coincides with ffmpeg being
+    // genuinely live — so the first action is never lost to ffmpeg's ~1s warmup — and
+    // no dead pre-roll is prepended. The countdown window is excluded from capture, so
+    // its digit never bleeds into the first frames.
     let _ = windows::build_countdown(&app);
     tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
-    windows::close_countdown(&app);
 
     let audio_cfg = AudioConfig { system: system.unwrap_or(true), mic: mic.unwrap_or(false) };
     // A source off in the selector starts muted so it can be unmuted live.
@@ -847,6 +849,7 @@ pub async fn recorder_start(
     let seg0 = match seg0_result {
         Ok(s) => s,
         Err(e) => {
+            windows::close_countdown(&app);
             windows::close_control_bar(&app);
             windows::close_cam_bubble(&app);
             *app.state::<RecorderState>().0.lock().unwrap() = None;
@@ -855,6 +858,9 @@ pub async fn recorder_start(
             return Err(e);
         }
     };
+    // ffmpeg is capturing now — drop the countdown. Its disappearance is the user's
+    // real "go" signal, aligned with genuine capture (see the countdown note above).
+    windows::close_countdown(&app);
 
     // Patch in the running span + accurate per-source availability. Decide under
     // the lock and move `seg0` either into the state or back out, so any teardown
