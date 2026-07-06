@@ -3,7 +3,7 @@
 //! called from async (`#[tauri::command(async)]`) contexts, which keeps the
 //! builds off the main thread and avoids the WebView2 deadlock.
 
-use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub const BAR_LABEL: &str = "rec-bar";
 pub const COUNTDOWN_LABEL: &str = "rec-countdown";
@@ -183,23 +183,53 @@ pub fn close_rec_hud(app: &AppHandle) {
 
 pub const SELECT_LABEL: &str = "rec-select";
 
-/// Full-screen, transparent, LIVE (non-frozen) region selector. Takes focus so it
-/// gets pointer + Esc. Covers the primary monitor.
-pub fn build_region_selector(app: &AppHandle) -> tauri::Result<()> {
-    if app.get_webview_window(SELECT_LABEL).is_some() { return Ok(()); }
+/// Build the (hidden) full-screen, transparent, LIVE region selector window. Takes focus
+/// so it gets pointer + Esc. Covers the primary monitor. Not shown here — callers decide.
+fn build_selector_window(app: &AppHandle) -> tauri::Result<WebviewWindow> {
     let win = WebviewWindowBuilder::new(app, SELECT_LABEL, WebviewUrl::App("index.html#/rec-select".into()))
         .title("Glint Select Region").decorations(false).transparent(true)
         .always_on_top(true).skip_taskbar(true).resizable(false).shadow(false)
         .focused(true).visible(false).build()?;
+    cover_primary_monitor(&win)?;
+    Ok(win)
+}
+
+/// Size + position the window to fill the primary monitor at its physical origin.
+fn cover_primary_monitor(win: &WebviewWindow) -> tauri::Result<()> {
     if let Some(m) = win.primary_monitor()? {
         let pos = m.position(); let size = m.size();
         win.set_position(tauri::PhysicalPosition { x: pos.x, y: pos.y })?;
         win.set_size(tauri::PhysicalSize { width: size.width, height: size.height })?;
     }
-    // Reveal only once the frontend has PAINTED its current toolbar (it emits
-    // `rec-select-ready` after two rAFs). Showing synchronously here would flash the stale
-    // frame WebView2 still holds from the previous selector session before React repaints.
-    // A fallback timer guarantees the window still appears if that event is ever missed.
+    Ok(())
+}
+
+/// Build the region selector once, hidden + mounted, at startup so the first Record press
+/// doesn't pay the WebView2 cold-start (the dominant open delay). Idempotent — a no-op if
+/// it already exists. Safe from a spawned thread (mirrors `overlay::prewarm`). The selector
+/// takes focus on show, so — like the capture overlay — it is safe to keep alive and reuse
+/// (the focus-less HUD is the one that must not be).
+pub fn prewarm_region_selector(app: &AppHandle) {
+    if app.get_webview_window(SELECT_LABEL).is_some() { return; }
+    if let Err(e) = build_selector_window(app) {
+        log::warn!("region selector prewarm failed (will build on demand): {e}");
+    }
+}
+
+/// Show the region selector. Reuses the pre-warmed window when present — instant, no cold
+/// load, and it was reset to a clean state when last hidden (so no stale frame). A reset
+/// event re-seeds its chips from the latest settings. Falls back to an on-demand build with
+/// a paint handshake (reveal only after the frontend emits `rec-select-ready`, 800 ms
+/// fallback) so a cold build never flashes the stale frame WebView2 holds from last time.
+pub fn build_region_selector(app: &AppHandle) -> tauri::Result<()> {
+    if let Some(win) = app.get_webview_window(SELECT_LABEL) {
+        cover_primary_monitor(&win)?; // monitor / DPI may have changed since prewarm
+        let _ = app.emit_to(SELECT_LABEL, "rec-select-reset", ());
+        win.show()?;
+        win.set_focus()?;
+        return Ok(());
+    }
+    let win = build_selector_window(app)?;
     use tauri::Listener;
     use std::sync::atomic::{AtomicBool, Ordering};
     let shown = std::sync::Arc::new(AtomicBool::new(false));
@@ -220,13 +250,15 @@ pub fn build_region_selector(app: &AppHandle) -> tauri::Result<()> {
     Ok(())
 }
 
-/// Close the region selector if it is open. Rust owns this teardown: the selector
-/// must NOT close itself before invoking `recorder_start` (closing destroys its
-/// webview's JS context, so the IPC never fires), and a full-screen recording
-/// would otherwise capture the transparent overlay. Safe to call when none exists.
+/// HIDE the region selector (kept alive for reuse — never closed) and reset it to a clean
+/// state so the next open shows no leftover region. Rust owns this teardown: the selector
+/// must NOT close itself before invoking `recorder_start` (closing destroys its webview's
+/// JS context, so the IPC never fires), and a hidden window is never captured by a
+/// full-screen recording. Safe to call when none exists.
 pub fn close_region_selector(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(SELECT_LABEL) {
-        let _ = w.close();
+        let _ = w.hide();
+        let _ = app.emit_to(SELECT_LABEL, "rec-select-reset", ());
     }
 }
 

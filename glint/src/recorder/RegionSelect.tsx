@@ -19,14 +19,14 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { emit } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointer2, Move, Lock, Shapes } from "lucide-react";
 
 type WebcamShape = "circle" | "rounded" | "square" | "rect";
 const SHAPE_ORDER: WebcamShape[] = ["circle", "rounded", "square", "rect"];
 const SHAPE_LABEL: Record<WebcamShape, string> = { circle: "Circle", rounded: "Rounded", square: "Square", rect: "Rect" };
 import { recorderStartRegion, recorderStartFullscreen } from "../lib/recorder";
-import { useAppStore } from "../store/useAppStore";
+import { useAppStore, type Settings } from "../store/useAppStore";
 import "./recorder.css";
 
 type Rect = { x: number; y: number; w: number; h: number };
@@ -88,26 +88,45 @@ export function RegionSelect() {
   const [spotlight, setSpotlight] = useState(false);
   const [cursorHide, setCursorHide] = useState(false);
   const [cursorSize, setCursorSize] = useState<"off" | "large" | "xl">("off");
+  // Seed all chips from saved settings. Called once on first settings arrival AND again
+  // whenever Rust re-opens the pre-warmed selector (`rec-select-reset`), so a reused
+  // window always reflects the latest saved defaults. Setters are stable → no deps.
+  const applySeed = useCallback((s: Settings) => {
+    setSys(s.record_system_audio ?? true);
+    setMic(s.record_microphone ?? false);
+    const movable = s.record_webcam_movable ?? false;
+    setCam((s.record_webcam ?? false) || movable); // movable implies webcam on
+    setCamMovable(movable);
+    setCamShape((s.webcam_shape ?? "circle") as WebcamShape);
+    setClickViz(s.record_click_viz ?? false);
+    setKeystrokes(s.record_keystrokes ?? false);
+    setSpotlight(s.record_cursor_spotlight ?? false);
+    setCursorHide(s.record_cursor_hide ?? false);
+    setCursorSize(s.record_cursor_size ?? "off");
+  }, []);
+
   // Seed the chips from saved settings exactly ONCE (on first settings arrival).
   // Re-seeding on every `settings` change would wipe a choice the user just made in
   // the overlay if the store happened to update mid-selection.
   const seeded = useRef(false);
   useEffect(() => {
-    if (settings && !seeded.current) {
-      seeded.current = true;
-      setSys(settings.record_system_audio ?? true);
-      setMic(settings.record_microphone ?? false);
-      const movable = settings.record_webcam_movable ?? false;
-      setCam((settings.record_webcam ?? false) || movable); // movable implies webcam on
-      setCamMovable(movable);
-      setCamShape((settings.webcam_shape ?? "circle") as WebcamShape);
-      setClickViz(settings.record_click_viz ?? false);
-      setKeystrokes(settings.record_keystrokes ?? false);
-      setSpotlight(settings.record_cursor_spotlight ?? false);
-      setCursorHide(settings.record_cursor_hide ?? false);
-      setCursorSize(settings.record_cursor_size ?? "off");
-    }
-  }, [settings]);
+    if (settings && !seeded.current) { seeded.current = true; applySeed(settings); }
+  }, [settings, applySeed]);
+
+  // The pre-warmed selector is reused across recordings. When Rust hides it (after a
+  // recording starts) or re-opens it for the next Record, it emits `rec-select-reset`:
+  // clear any drawn region, drop the confirm latch, and re-seed the chips from the latest
+  // settings — so every open is a clean slate with no leftover selection or stale frame.
+  useEffect(() => {
+    const p = listen("rec-select-reset", () => {
+      confirmed.current = false;
+      drag.current = null;
+      setRect(null);
+      const s = useAppStore.getState().settings;
+      if (s) applySeed(s);
+    });
+    return () => { p.then((un) => un()); };
+  }, [applySeed]);
   // Reveal the (initially hidden) selector window as soon as THIS mount has painted — Rust
   // waits for `rec-select-ready` before calling show(), so WebView2 never flashes the stale
   // frame from the previous selector session. Fired on first paint (not gated on settings) so
@@ -144,7 +163,15 @@ export function RegionSelect() {
       .catch(() => { /* keep 1×/origin-0 fallback */ });
   }, []);
 
-  const close = () => { getCurrentWindow().close(); };
+  // Esc cancels: HIDE (not close) so the pre-warmed window survives for reuse, and reset
+  // locally so the next open is a clean slate. Closing would destroy the webview and force
+  // the next Record to pay a cold rebuild — the very delay this pre-warm removes.
+  const cancel = useCallback(() => {
+    confirmed.current = false;
+    drag.current = null;
+    setRect(null);
+    getCurrentWindow().hide();
+  }, []);
 
   const confirmRegion = useCallback(() => {
     if (confirmed.current || !rect || rect.w < MIN || rect.h < MIN) return;
@@ -168,12 +195,12 @@ export function RegionSelect() {
   // Esc cancels (closing is safe — no follow-up IPC). Enter confirms the region.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") { e.preventDefault(); close(); }
+      if (e.key === "Escape") { e.preventDefault(); cancel(); }
       else if (e.key === "Enter") { e.preventDefault(); confirmRegion(); }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [confirmRegion]);
+  }, [confirmRegion, cancel]);
 
   // ── Layer: start a fresh draw (ignore events bubbled from rect/handles/toolbar) ─
   function onLayerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
