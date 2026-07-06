@@ -39,6 +39,7 @@ export interface Settings {
   record_fps: 30 | 60;
   webcam_device_id: string;
   webcam_shape: "circle" | "rounded" | "square" | "rect";
+  capture_delay_secs: 3 | 5 | 10;
 }
 
 export interface Toast {
@@ -72,6 +73,7 @@ interface AppState {
   setRecordFps: (v: 30 | 60) => Promise<void>;
   setWebcamDevice: (id: string) => Promise<void>;
   setWebcamShape: (shape: "circle" | "rounded" | "square" | "rect") => Promise<void>;
+  setCaptureDelay: (v: 3 | 5 | 10) => Promise<void>;
   pushToast: (text: string) => void;
   dismissToast: (id: number) => void;
 }
@@ -286,6 +288,12 @@ export const useAppStore = create<AppState>((set, get) => ({
   setWebcamShape: async (shape: "circle" | "rounded" | "square" | "rect") => {
     const updated = await saveSetting("webcam_shape", shape);
     await persistSetting("webcam_shape", shape);
+    set({ settings: { ...get().settings, ...updated } as Settings });
+  },
+
+  setCaptureDelay: async (v: 3 | 5 | 10) => {
+    const updated = await saveSetting("capture_delay_secs", v);
+    await persistSetting("capture_delay_secs", v);
     set({ settings: { ...get().settings, ...updated } as Settings });
   },
 

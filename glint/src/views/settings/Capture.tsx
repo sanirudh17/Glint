@@ -13,11 +13,18 @@ const QUALITY_OPTIONS = [
   { value: "low",    label: "Low" },
 ];
 
+const DELAY_OPTIONS = [
+  { value: "3",  label: "3 seconds" },
+  { value: "5",  label: "5 seconds" },
+  { value: "10", label: "10 seconds" },
+];
+
 export function Capture() {
   const settings = useAppStore((s) => s.settings);
   const setImageFormat = useAppStore((s) => s.setImageFormat);
   const setJpegQuality = useAppStore((s) => s.setJpegQuality);
   const setIncludeCursor = useAppStore((s) => s.setIncludeCursor);
+  const setCaptureDelay = useAppStore((s) => s.setCaptureDelay);
   const isJpeg = (settings?.image_format ?? "png") === "jpeg";
   return (
     <Section
@@ -43,6 +50,13 @@ export function Capture() {
         <Switch
           checked={settings?.include_cursor ?? false}
           onChange={(v) => void setIncludeCursor(v)}
+        />
+      </Field>
+      <Field label="Capture delay" hint="Countdown length for the delayed-capture hotkeys (set them under Hotkeys).">
+        <Select
+          value={String(settings?.capture_delay_secs ?? 5)}
+          options={DELAY_OPTIONS}
+          onChange={(v) => void setCaptureDelay(Number(v) as 3 | 5 | 10)}
         />
       </Field>
     </Section>
