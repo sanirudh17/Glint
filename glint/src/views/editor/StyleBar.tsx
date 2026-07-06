@@ -53,11 +53,16 @@ export function StyleBar() {
   // slide is a single undo; typing a font size just isn't tracked in history.
   const applyFontSize = (fontSize: number) => { setStyle({ fontSize }); patchSelected({ fontSize }, false); };
   const applyFillOpacity = (fillOpacity: number) => { setStyle({ fillOpacity }); patchSelected({ fillOpacity }, false); };
+  const applyRedactStyle = (redactStyle: "solid" | "pixelate") => { setStyle({ redactStyle }); patchSelected({ redactStyle }); };
+  const applyRegion = (region: "rect" | "ellipse") => { setStyle({ region }); patchSelected({ region }); };
+  const applyDim = (fillOpacity: number) => { setStyle({ fillOpacity }); patchSelected({ fillOpacity }, false); };
 
   const isShape = effType === "rect" || effType === "ellipse";
   const isStroke = isShape || effType === "line" || effType === "arrow";
   const isArrow = effType === "arrow";
   const isText = effType === "text";
+  const isRedact = effType === "redact";
+  const isSpotlight = effType === "spotlight";
 
   const current = eff.color.toLowerCase();
   const isPreset = COLORS.some((c) => c.toLowerCase() === current);
@@ -193,6 +198,56 @@ export function StyleBar() {
           onChange={(e) => applyFontSize(Number(e.currentTarget.value) || 24)}
           aria-label="Font size"
         />
+      )}
+      {isRedact && (
+        <div className="editor-widths" role="group" aria-label="Redaction style">
+          <button
+            className={`editor-width${(eff.redactStyle ?? "solid") === "solid" ? " editor-width--active" : ""}`}
+            title="Solid block"
+            aria-label="Solid block"
+            onClick={() => applyRedactStyle("solid")}
+          >
+            Solid
+          </button>
+          <button
+            className={`editor-width${eff.redactStyle === "pixelate" ? " editor-width--active" : ""}`}
+            title="Pixelate"
+            aria-label="Pixelate"
+            onClick={() => applyRedactStyle("pixelate")}
+          >
+            Pixel
+          </button>
+        </div>
+      )}
+      {isSpotlight && (
+        <>
+          <div className="editor-widths" role="group" aria-label="Spotlight shape">
+            <button
+              className={`editor-width${(eff.region ?? "rect") === "rect" ? " editor-width--active" : ""}`}
+              title="Rectangle" aria-label="Rectangle"
+              onClick={() => applyRegion("rect")}
+            >
+              ▭
+            </button>
+            <button
+              className={`editor-width${eff.region === "ellipse" ? " editor-width--active" : ""}`}
+              title="Ellipse" aria-label="Ellipse"
+              onClick={() => applyRegion("ellipse")}
+            >
+              ◯
+            </button>
+          </div>
+          <input
+            className="editor-opacity"
+            type="range"
+            min={10} max={90}
+            value={Math.round((eff.fillOpacity ?? 0.6) * 100)}
+            onPointerDown={() => { const st = useEditorStore.getState(); if (st.selectedId) st.pushHistory(); }}
+            onChange={(e) => applyDim(Number(e.currentTarget.value) / 100)}
+            aria-label="Dim strength"
+            title="Dim strength"
+          />
+        </>
       )}
     </div>
   );
