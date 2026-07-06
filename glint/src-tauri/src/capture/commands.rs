@@ -239,14 +239,12 @@ fn finish_commit(
     // are re-read from disk when an action needs them. Evicting the oldest past the
     // cap deletes its temp file (never a saved Library file).
     {
-        // Card preview: a bounded thumbnail, NOT the full-res PNG. The card renders at
-        // 208×136 logical px (hud.css), so a 720px thumb stays crisp under object-fit:
-        // cover even at 3× DPI, while the base64 payload — encoded here on the capture's
-        // critical path and decoded by the HUD — is a fraction of a full-screen PNG, so
-        // the HUD appears faster. Falls back to the full-res PNG if the resize fails.
-        let thumb_png = crate::capture::thumb::make_thumb(&cropped, clamped.w, clamped.h, 720)
-            .unwrap_or_else(|_| png.clone());
-        let b64 = base64::engine::general_purpose::STANDARD.encode(&thumb_png);
+        // Card preview uses the full-resolution capture PNG (already encoded above) — it
+        // stays crisp under the card's object-fit: cover. NOTE: do NOT resize here to
+        // shrink the base64 — resizing a full-screen frame on this critical path (before
+        // the HUD opens) measurably delayed the HUD's appearance; base64-ing the existing
+        // bytes is far cheaper. Full pixels are re-read from disk when an action needs them.
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
         let thumb = format!("data:image/png;base64,{b64}");
         let evicted = {
             let tray = app.state::<crate::capture::tray::TrayState>();
