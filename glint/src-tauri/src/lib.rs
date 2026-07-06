@@ -1,6 +1,7 @@
 mod autostart;
 mod capture;
 mod clipboard;
+mod countdown;
 mod db;
 mod editor;
 mod hud;

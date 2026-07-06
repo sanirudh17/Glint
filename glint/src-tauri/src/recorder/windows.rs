@@ -6,7 +6,6 @@
 use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
 
 pub const BAR_LABEL: &str = "rec-bar";
-pub const COUNTDOWN_LABEL: &str = "rec-countdown";
 
 /// Bottom-center floating control bar. Interactive but focus-less (pin pattern).
 pub fn build_control_bar(app: &AppHandle) -> tauri::Result<()> {
@@ -83,52 +82,17 @@ pub fn close_control_bar(app: &AppHandle) {
     }
 }
 
-/// Fullscreen, centered, click-through countdown. Closes itself at 0.
+/// Fullscreen, centered, click-through 3·2·1 countdown before recording. Delegates to
+/// the neutral `crate::countdown` module (shared with delayed capture); N is fixed at 3.
 pub fn build_countdown(app: &AppHandle) -> tauri::Result<()> {
-    if app.get_webview_window(COUNTDOWN_LABEL).is_some() {
-        return Ok(());
-    }
-    let win = WebviewWindowBuilder::new(
-        app,
-        COUNTDOWN_LABEL,
-        WebviewUrl::App("index.html#/rec-countdown".into()),
-    )
-    .title("Glint")
-    .decorations(false)
-    .transparent(true)
-    .always_on_top(true)
-    .skip_taskbar(true)
-    .resizable(false)
-    .shadow(false)
-    .focused(false)
-    .visible(false)
-    .build()?;
-
-    if let Some(m) = win.primary_monitor()? {
-        let pos = m.position();
-        let size = m.size();
-        win.set_position(tauri::PhysicalPosition { x: pos.x, y: pos.y })?;
-        win.set_size(tauri::PhysicalSize {
-            width: size.width,
-            height: size.height,
-        })?;
-    } else {
-        log::warn!("rec-countdown: no primary monitor; using default window position");
-    }
-
-    win.set_ignore_cursor_events(true)?; // click-through
-    win.show()?;
-    Ok(())
+    crate::countdown::build(app, 3)
 }
 
-/// Close the countdown overlay if it is open. Rust owns the teardown so the digit
-/// is gone before capture begins (it must never bleed into the first frames) and a
-/// countdown webview that failed to self-close can't be left orphaned. Safe to call
+/// Close the countdown overlay if it is open. Rust owns the teardown so the digit is
+/// gone before capture begins (it must never bleed into the first frames). Safe to call
 /// when none exists.
 pub fn close_countdown(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window(COUNTDOWN_LABEL) {
-        let _ = w.close();
-    }
+    crate::countdown::close(app);
 }
 
 pub const REC_HUD_LABEL: &str = "rec-hud";
