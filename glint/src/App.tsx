@@ -28,13 +28,12 @@ export default function App() {
   const pushToast = useAppStore((s) => s.pushToast);
 
   useEffect(() => {
-    // Apply dark theme immediately so there's no flash before settings load
-    document.documentElement.dataset.theme = "dark";
-
-    // Load persisted settings from the Rust backend
+    // Theme + accent were already applied synchronously in main.tsx (from the
+    // localStorage mirror) before first paint — no flash. Just hydrate the full
+    // settings from the backend, which re-applies the same theme/accent from the DB.
     loadSettings().catch(() => {
-      // Backend not ready (e.g., running plain Vite without Tauri).
-      // Fall back to dark theme — already applied above.
+      // Backend not ready (e.g., running plain Vite without Tauri) — main.tsx's
+      // pre-paint fallback already stamped a theme, so there's nothing more to do.
     });
   }, [loadSettings]);
 

@@ -293,6 +293,14 @@ export const useAppStore = create<AppState>((set, get) => ({
 
 // ─── Theme helpers ────────────────────────────────────────────────────────────
 
+// Persisted mirrors of the two visual settings, written on every apply. main.tsx
+// reads these SYNCHRONOUSLY before React's first paint so the app boots straight to
+// the user's theme + accent — no flash of the tokens.css default while loadSettings()
+// does its async SQLite round-trip. localStorage is shared across every Glint window
+// (one origin), so the HUD / overlay / selector all benefit too.
+export const THEME_STORAGE_KEY = "glint.theme";
+export const ACCENT_STORAGE_KEY = "glint.accent";
+
 /** Resolve "system" → actual dark/light, then stamp onto <html data-theme>. */
 export function applyTheme(theme: Theme): void {
   const resolved =
@@ -302,6 +310,7 @@ export function applyTheme(theme: Theme): void {
         : "light"
       : theme;
   document.documentElement.dataset.theme = resolved;
+  try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch { /* no storage → skip */ }
 }
 
 // ─── Accent palette + helpers ─────────────────────────────────────────────────
@@ -361,6 +370,7 @@ export const ACCENT_PALETTE: AccentEntry[] = [
  * Falls back to raw hex with computed variants if not in the palette.
  */
 export function applyAccent(hex: string): void {
+  try { localStorage.setItem(ACCENT_STORAGE_KEY, hex); } catch { /* no storage → skip */ }
   const entry = ACCENT_PALETTE.find(
     (e) => e.accent.toLowerCase() === hex.toLowerCase(),
   );
