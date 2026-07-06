@@ -211,17 +211,23 @@ fn finish_commit(
         crate::settings::sound::play_shutter();
     }
 
-    // Copy to clipboard (gated by auto_copy) — non-fatal: log a warning but carry on.
-    let _cb = std::time::Instant::now();
-    let clip = if auto_copy {
-        clipboard::copy_image(&cropped, clamped.w, clamped.h)
-    } else {
-        Ok(())
-    };
-    if let Err(ref e) = clip {
-        log::warn!("clipboard copy failed: {e}");
+    // Copy to clipboard (gated by auto_copy) on a DEDICATED thread — non-fatal.
+    // arboard's Windows image copy converts the frame to a DIB and can take the better
+    // part of a second for a large capture; done inline it dominated the pre-HUD
+    // critical path (evidence: `[perf] commit clipboard copy` ~700-1000ms). The HUD's
+    // render never depends on the clipboard, so fire-and-forget here and let the HUD
+    // open immediately; the HUD's own re-copy button covers the rare failure.
+    if auto_copy {
+        let cb_rgba = cropped.clone();
+        let (cw, ch) = (clamped.w, clamped.h);
+        std::thread::spawn(move || {
+            let _cb = std::time::Instant::now();
+            if let Err(e) = clipboard::copy_image(&cb_rgba, cw, ch) {
+                log::warn!("clipboard copy failed: {e}");
+            }
+            log::info!("[perf] async clipboard copy: {}ms", _cb.elapsed().as_millis());
+        });
     }
-    log::info!("[perf] commit clipboard copy: {}ms (auto_copy={auto_copy})", _cb.elapsed().as_millis());
 
     // Stash the result for the HUD to act on (re-copy / drag / save / copy-path /
     // reveal) BEFORE opening the HUD, so its mount-time fetch sees this capture.
@@ -295,7 +301,8 @@ fn finish_commit(
                     "path": path_str,
                     "width": clamped.w,
                     "height": clamped.h,
-                    "clipboard": clip.is_ok(),
+                    // Copy runs on its own thread now; report whether it was requested.
+                    "clipboard": auto_copy,
                 }),
             )
             .map_err(|e| e.to_string())?;
