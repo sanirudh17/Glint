@@ -28,6 +28,16 @@ const step = (id: string, number: number): StepAnno => ({
 const pen = (id: string, points: number[]): FreehandAnno => ({
   id, type: "pen", z: 0, style: { color: "#fff", strokeWidth: 3, fontSize: 24 }, points,
 });
+const redactBox = (id: string): BoxAnno => ({
+  id, type: "redact", z: 0,
+  style: { color: "#000000", strokeWidth: 3, fontSize: 24, redactStyle: "solid" },
+  x: 10, y: 10, w: 40, h: 20,
+});
+const spotlightBox = (id: string): BoxAnno => ({
+  id, type: "spotlight", z: 0,
+  style: { color: "#000000", strokeWidth: 3, fontSize: 24, region: "rect", fillOpacity: 0.6 },
+  x: 10, y: 10, w: 40, h: 20,
+});
 
 describe("annotation model", () => {
   it("adds to the end (z-order)", () => {
@@ -132,6 +142,21 @@ describe("duplicateAnnotation", () => {
     const d = duplicateAnnotation(arrowA("a")) as TwoPointAnno;
     expect([d.x1, d.y1, d.x2, d.y2]).toEqual([12, 12, 17, 17]);
   });
+  it("duplicates a redact box preserving redactStyle", () => {
+    const d = duplicateAnnotation(redactBox("a")) as BoxAnno;
+    expect(d.type).toBe("redact");
+    expect(d.id).not.toBe("a");
+    expect([d.x, d.y]).toEqual([22, 22]);
+    expect(d.style.redactStyle).toBe("solid");
+  });
+  it("duplicates a spotlight preserving region + dim", () => {
+    const d = duplicateAnnotation(spotlightBox("a")) as BoxAnno;
+    expect(d.type).toBe("spotlight");
+    expect(d.id).not.toBe("a");
+    expect([d.x, d.y]).toEqual([22, 22]);
+    expect(d.style.region).toBe("rect");
+    expect(d.style.fillOpacity).toBe(0.6);
+  });
 });
 
 describe("nudgeAnnotation", () => {
@@ -142,6 +167,14 @@ describe("nudgeAnnotation", () => {
   it("shifts every freehand vertex", () => {
     const n = nudgeAnnotation(pen("a", [0, 0, 2, 4]), 3, 7) as FreehandAnno;
     expect(n.points).toEqual([3, 7, 5, 11]);
+  });
+  it("shifts a redact box", () => {
+    const n = nudgeAnnotation(redactBox("a"), 5, -3) as BoxAnno;
+    expect([n.x, n.y]).toEqual([15, 7]);
+  });
+  it("shifts a spotlight box", () => {
+    const n = nudgeAnnotation(spotlightBox("a"), -4, 6) as BoxAnno;
+    expect([n.x, n.y]).toEqual([6, 16]);
   });
 });
 
