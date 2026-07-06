@@ -1,10 +1,10 @@
+import { lazy, Suspense, type ReactNode } from "react";
 import { createHashRouter, Navigate, Outlet } from "react-router-dom";
 import { Titlebar } from "./components/Titlebar";
 import { NavRail } from "./components/NavRail";
 import HomeView from "./views/HomeView";
-import LibraryView from "./views/LibraryView";
-import SettingsView from "./views/SettingsView";
-import EditorView from "./views/EditorView";
+// Small, chrome-free transient routes stay EAGER so their windows (overlay, HUD, the
+// pre-warmed region selector, etc.) render the instant they're shown.
 import { OverlayApp } from "./overlay/OverlayApp";
 import { HudApp } from "./hud/HudApp";
 import { PinApp } from "./pin/PinApp";
@@ -14,9 +14,22 @@ import { RegionSelect } from "./recorder/RegionSelect";
 import { RecHud } from "./recorder/RecHud";
 import { RecCam } from "./recorder/RecCam";
 import { FxOverlay } from "./recorder/FxOverlay";
-import { TrimView } from "./recorder/TrimView";
-import { OcrPanel } from "./ocr/OcrPanel";
 import "./components/shell.css";
+
+// Heavy, on-demand routes are code-split so their JS (Konva in the editor, the trim
+// timeline/video, etc.) is NOT loaded into every window's renderer. This is what keeps the
+// background webviews (the pre-warmed selector/overlay/HUD, the tray) lean: they never
+// navigate to these routes, so their chunks are never fetched or parsed. The main window
+// loads a chunk only when you actually open that view.
+const LibraryView = lazy(() => import("./views/LibraryView"));
+const SettingsView = lazy(() => import("./views/SettingsView"));
+const EditorView = lazy(() => import("./views/EditorView"));
+const TrimView = lazy(() => import("./recorder/TrimView").then((m) => ({ default: m.TrimView })));
+const OcrPanel = lazy(() => import("./ocr/OcrPanel").then((m) => ({ default: m.OcrPanel })));
+
+/** Suspense wrapper for a lazily-loaded route element. Fallback is empty — the chunk loads
+ *  from local disk in a blink, and a spinner would flash more than it helps. */
+const lazyRoute = (el: ReactNode) => <Suspense fallback={null}>{el}</Suspense>;
 
 /**
  * AppShell — the real layout: Titlebar + NavRail + scrollable content.
@@ -32,7 +45,9 @@ function AppShell() {
       <div className="g-shell-body">
         <NavRail />
         <main className="g-content">
-          <Outlet />
+          <Suspense fallback={null}>
+            <Outlet />
+          </Suspense>
         </main>
       </div>
     </div>
@@ -134,7 +149,7 @@ export const router = createHashRouter([
      * is the sole root. URL: tauri://localhost/#/rec-trim
      */
     path: "/rec-trim",
-    element: <TrimView />,
+    element: lazyRoute(<TrimView />),
   },
   {
     /**
@@ -143,7 +158,7 @@ export const router = createHashRouter([
      * OcrPanel is the sole root. URL: tauri://localhost/#/ocr
      */
     path: "/ocr",
-    element: <OcrPanel />,
+    element: lazyRoute(<OcrPanel />),
   },
   {
     path: "/",

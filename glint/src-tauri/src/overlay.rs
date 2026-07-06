@@ -10,7 +10,7 @@ pub const OVERLAY_PREFIX: &str = "overlay-";
 
 fn build(app: &AppHandle, label: &str, monitor_id: u32) -> tauri::Result<WebviewWindow> {
     let url = WebviewUrl::App(format!("index.html#/overlay?monitor={monitor_id}").into());
-    WebviewWindowBuilder::new(app, label, url)
+    let win = WebviewWindowBuilder::new(app, label, url)
         .title("Glint Capture")
         .decorations(false)
         .transparent(true)
@@ -19,7 +19,11 @@ fn build(app: &AppHandle, label: &str, monitor_id: u32) -> tauri::Result<Webview
         .resizable(false)
         .shadow(false)
         .visible(false) // shown after it positions to the monitor
-        .build()
+        .build()?;
+    // Kill the OS fade/scale-in transition so the frozen overlay snaps on screen the
+    // instant the shortcut fires (set once — it persists across every reuse show()).
+    crate::window::disable_transitions(&win);
+    Ok(win)
 }
 
 /// Build the overlay window once, hidden, so the first capture doesn't pay the

@@ -172,17 +172,19 @@ pub fn run() {
                 }
             }
 
-            // Pre-warm the capture OVERLAY webview (hidden) so the first capture
-            // doesn't pay the webview-creation cost — the dominant source of the
-            // open delay. The overlay is safe to reuse because it takes focus on
-            // show; the HUD is NOT pre-warmed/reused (it must stay focus-less, and
-            // a hidden focus-less WebView2 stops repainting after a few cycles).
-            // Off-thread + delayed so it never blocks startup.
+            // Pre-warm the focus-taking transient webviews (hidden) so the first use
+            // doesn't pay the webview-creation cost — the dominant source of the open
+            // delay: the capture OVERLAY and the recording region SELECTOR. Both are safe
+            // to keep alive and reuse because they take focus on show; the HUD is NOT
+            // pre-warmed/reused (it must stay focus-less, and a hidden focus-less WebView2
+            // stops repainting after a few cycles). Off-thread + delayed so it never
+            // blocks startup.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(500));
                     crate::overlay::prewarm(&h, 0);
+                    crate::recorder::windows::prewarm_region_selector(&h);
                 });
             }
 

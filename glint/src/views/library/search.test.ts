@@ -4,7 +4,7 @@ import type { CaptureItem } from "../../lib/captures";
 
 const item = (over: Partial<CaptureItem>): CaptureItem => ({
   id: 1, kind: "screenshot", path: "/x/Glint 2026-07-02 at 13.07.00.png",
-  thumb_data_url: null, width: 800, height: 600, bytes: 1234,
+  thumb_url: null, width: 800, height: 600, bytes: 1234,
   created_at: 1751461620, title: null, ...over,
 });
 

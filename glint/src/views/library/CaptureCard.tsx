@@ -62,8 +62,8 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
       title="Drag to share"
     >
       <div className="cap-thumb">
-        {item.thumb_data_url ? (
-          <img src={item.thumb_data_url} alt="" draggable={false} />
+        {item.thumb_url ? (
+          <img src={item.thumb_url} alt="" draggable={false} />
         ) : (
           <div className="cap-thumb--empty" />
         )}

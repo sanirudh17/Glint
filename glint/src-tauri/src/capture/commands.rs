@@ -211,17 +211,23 @@ fn finish_commit(
         crate::settings::sound::play_shutter();
     }
 
-    // Copy to clipboard (gated by auto_copy) — non-fatal: log a warning but carry on.
-    let _cb = std::time::Instant::now();
-    let clip = if auto_copy {
-        clipboard::copy_image(&cropped, clamped.w, clamped.h)
-    } else {
-        Ok(())
-    };
-    if let Err(ref e) = clip {
-        log::warn!("clipboard copy failed: {e}");
+    // Copy to clipboard (gated by auto_copy) on a DEDICATED thread — non-fatal.
+    // arboard's Windows image copy converts the frame to a DIB and can take the better
+    // part of a second for a large capture; done inline it dominated the pre-HUD
+    // critical path (evidence: `[perf] commit clipboard copy` ~700-1000ms). The HUD's
+    // render never depends on the clipboard, so fire-and-forget here and let the HUD
+    // open immediately; the HUD's own re-copy button covers the rare failure.
+    if auto_copy {
+        let cb_rgba = cropped.clone();
+        let (cw, ch) = (clamped.w, clamped.h);
+        std::thread::spawn(move || {
+            let _cb = std::time::Instant::now();
+            if let Err(e) = clipboard::copy_image(&cb_rgba, cw, ch) {
+                log::warn!("clipboard copy failed: {e}");
+            }
+            log::info!("[perf] async clipboard copy: {}ms", _cb.elapsed().as_millis());
+        });
     }
-    log::info!("[perf] commit clipboard copy: {}ms (auto_copy={auto_copy})", _cb.elapsed().as_millis());
 
     // Stash the result for the HUD to act on (re-copy / drag / save / copy-path /
     // reveal) BEFORE opening the HUD, so its mount-time fetch sees this capture.
@@ -239,6 +245,11 @@ fn finish_commit(
     // are re-read from disk when an action needs them. Evicting the oldest past the
     // cap deletes its temp file (never a saved Library file).
     {
+        // Card preview uses the full-resolution capture PNG (already encoded above) — it
+        // stays crisp under the card's object-fit: cover. NOTE: do NOT resize here to
+        // shrink the base64 — resizing a full-screen frame on this critical path (before
+        // the HUD opens) measurably delayed the HUD's appearance; base64-ing the existing
+        // bytes is far cheaper. Full pixels are re-read from disk when an action needs them.
         let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
         let thumb = format!("data:image/png;base64,{b64}");
         let evicted = {
@@ -290,7 +301,8 @@ fn finish_commit(
                     "path": path_str,
                     "width": clamped.w,
                     "height": clamped.h,
-                    "clipboard": clip.is_ok(),
+                    // Copy runs on its own thread now; report whether it was requested.
+                    "clipboard": auto_copy,
                 }),
             )
             .map_err(|e| e.to_string())?;
@@ -546,35 +558,37 @@ pub struct CaptureListItem {
     pub created_at: i64,
     /// User-assigned custom name, when set (drives Library display + search).
     pub title: Option<String>,
-    /// base64 data URL of the thumbnail PNG, when one exists on disk.
-    pub thumb_data_url: Option<String>,
+    /// Filesystem path of the thumbnail PNG, when one exists on disk. The frontend
+    /// turns it into an asset-protocol URL (convertFileSrc) so the WebView loads it
+    /// lazily + natively. Previously this inlined a base64 data URL, which read every
+    /// thumbnail off disk under the DB lock and made Library/Home load time scale with
+    /// the library size.
+    pub thumb_path: Option<String>,
 }
 
-/// List all (non-deleted) captures, newest first, with inlined thumbnail data URLs.
+/// List (non-deleted) captures, newest first — id/metadata + the thumbnail's PATH (the
+/// frontend resolves it to an asset URL). Does NO file I/O and holds the DB lock only for
+/// the metadata query, so load time no longer scales with the number/size of thumbnails.
+/// `limit` caps the result — Home previews only the few most recent.
 #[tauri::command]
-pub fn captures_list(db: State<crate::Db>) -> Result<Vec<CaptureListItem>, String> {
-    let conn = db.0.lock().unwrap();
-    let rows = crate::db::list_captures(&conn).map_err(|e| e.to_string())?;
+pub fn captures_list(db: State<crate::Db>, limit: Option<usize>) -> Result<Vec<CaptureListItem>, String> {
+    let rows = {
+        let conn = db.0.lock().unwrap();
+        crate::db::list_captures(&conn).map_err(|e| e.to_string())?
+    };
     let items = rows
         .into_iter()
-        .map(|r| {
-            let thumb_data_url = r.thumb_path.as_ref().and_then(|tp| {
-                std::fs::read(tp).ok().map(|bytes| {
-                    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                    format!("data:image/png;base64,{b64}")
-                })
-            });
-            CaptureListItem {
-                id: r.id,
-                kind: r.kind,
-                path: r.path,
-                width: r.width,
-                height: r.height,
-                bytes: r.bytes,
-                created_at: r.created_at,
-                title: r.title,
-                thumb_data_url,
-            }
+        .take(limit.unwrap_or(usize::MAX))
+        .map(|r| CaptureListItem {
+            id: r.id,
+            kind: r.kind,
+            path: r.path,
+            width: r.width,
+            height: r.height,
+            bytes: r.bytes,
+            created_at: r.created_at,
+            title: r.title,
+            thumb_path: r.thumb_path,
         })
         .collect();
     Ok(items)

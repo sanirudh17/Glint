@@ -5,7 +5,7 @@
   "identifier": "com.glint.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1420",
+    "devUrl": "http://localhost:5173",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
@@ -30,7 +30,7 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$VIDEO/Glint/**"]
+        "scope": ["$VIDEO/Glint/**", "$APPLOCALDATA/thumbs/**"]
       }
     }
   },
