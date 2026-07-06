@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
 import { persistSetting, readSetting, saveSetting, setHotkey as setHotkeyIpc, resetHotkeys as resetHotkeysIpc, setSaveDir as setSaveDirIpc, windowSetTaskbar } from "../lib/ipc";
 import { registerExplorerMenu, unregisterExplorerMenu } from "../lib/shell";
 
@@ -138,8 +139,13 @@ export const useAppStore = create<AppState>((set, get) => ({
     const updated = await saveSetting("theme", theme);
     // b. Persist to SQLite so it survives the next restart.
     await persistSetting("theme", theme);
-    set({ settings: { ...updated, accent: get().settings?.accent ?? updated.accent } });
+    const accent = get().settings?.accent ?? updated.accent;
+    set({ settings: { ...updated, accent } });
     applyTheme(theme);
+    // c. Push the change to every OTHER live window (overlay, HUD, recorder,
+    //    editor). localStorage alone won't do it — a running WebView2 never
+    //    re-reads it — so we broadcast and each window re-applies (see App.tsx).
+    broadcastVisual(theme, accent);
   },
 
   setAccent: async (hex: string) => {
@@ -147,8 +153,11 @@ export const useAppStore = create<AppState>((set, get) => ({
     const updated = await saveSetting("accent", hex);
     // b. Persist to SQLite.
     await persistSetting("accent", hex);
+    const theme = get().settings?.theme ?? updated.theme;
     set({ settings: { ...updated, accent: hex } });
     applyAccent(hex);
+    // c. Broadcast so already-open windows re-apply the new accent live.
+    broadcastVisual(theme, hex);
   },
 
   setAutoSave: async (on: boolean) => {
@@ -300,6 +309,24 @@ export const useAppStore = create<AppState>((set, get) => ({
 // (one origin), so the HUD / overlay / selector all benefit too.
 export const THEME_STORAGE_KEY = "glint.theme";
 export const ACCENT_STORAGE_KEY = "glint.accent";
+
+// Broadcast so every OTHER Glint window re-applies theme/accent the instant they
+// change — the overlay, HUD, recorder and editor webviews are long-lived (some
+// pre-warmed at startup) and won't pick up a new value from the shared
+// localStorage on their own. App.tsx listens for this in every window.
+export const VISUAL_SETTINGS_EVENT = "settings-visual-changed";
+export interface VisualSettings {
+  theme: Theme;
+  accent: string;
+}
+
+/** Fire-and-forget broadcast of the current theme+accent to all windows (incl.
+ *  self — re-applying is idempotent). No-op if not running under Tauri. */
+function broadcastVisual(theme: Theme, accent: string): void {
+  void emit(VISUAL_SETTINGS_EVENT, { theme, accent } satisfies VisualSettings).catch(() => {
+    /* not in a Tauri window (plain Vite) — nothing to broadcast */
+  });
+}
 
 /** Resolve "system" → actual dark/light, then stamp onto <html data-theme>. */
 export function applyTheme(theme: Theme): void {

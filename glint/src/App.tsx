@@ -3,7 +3,13 @@ import { RouterProvider } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { router } from "./router";
-import { useAppStore } from "./store/useAppStore";
+import {
+  useAppStore,
+  applyTheme,
+  applyAccent,
+  VISUAL_SETTINGS_EVENT,
+  type VisualSettings,
+} from "./store/useAppStore";
 import { ToastHost } from "./components/ui";
 import { consumePendingExternalOpen } from "./lib/shell";
 
@@ -112,6 +118,16 @@ export default function App() {
       // stays mounted for the whole session.
       listen("editor-open", () => {
         if (isMain) router.navigate("/editor");
+      }),
+
+      // Theme/accent changed in Settings — re-apply in THIS window too. Runs in
+      // EVERY window (not main-only): the whole point is that the long-lived
+      // overlay / HUD / recorder / editor webviews update their colors live
+      // instead of keeping the accent they were built with. Idempotent, so the
+      // window that emitted it re-applying is harmless.
+      listen<VisualSettings>(VISUAL_SETTINGS_EVENT, (e) => {
+        applyTheme(e.payload.theme);
+        applyAccent(e.payload.accent);
       }),
     ];
 
