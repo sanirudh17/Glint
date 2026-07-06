@@ -239,7 +239,14 @@ fn finish_commit(
     // are re-read from disk when an action needs them. Evicting the oldest past the
     // cap deletes its temp file (never a saved Library file).
     {
-        let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+        // Card preview: a bounded thumbnail, NOT the full-res PNG. The card renders at
+        // 208×136 logical px (hud.css), so a 720px thumb stays crisp under object-fit:
+        // cover even at 3× DPI, while the base64 payload — encoded here on the capture's
+        // critical path and decoded by the HUD — is a fraction of a full-screen PNG, so
+        // the HUD appears faster. Falls back to the full-res PNG if the resize fails.
+        let thumb_png = crate::capture::thumb::make_thumb(&cropped, clamped.w, clamped.h, 720)
+            .unwrap_or_else(|_| png.clone());
+        let b64 = base64::engine::general_purpose::STANDARD.encode(&thumb_png);
         let thumb = format!("data:image/png;base64,{b64}");
         let evicted = {
             let tray = app.state::<crate::capture::tray::TrayState>();
@@ -546,35 +553,37 @@ pub struct CaptureListItem {
     pub created_at: i64,
     /// User-assigned custom name, when set (drives Library display + search).
     pub title: Option<String>,
-    /// base64 data URL of the thumbnail PNG, when one exists on disk.
-    pub thumb_data_url: Option<String>,
+    /// Filesystem path of the thumbnail PNG, when one exists on disk. The frontend
+    /// turns it into an asset-protocol URL (convertFileSrc) so the WebView loads it
+    /// lazily + natively. Previously this inlined a base64 data URL, which read every
+    /// thumbnail off disk under the DB lock and made Library/Home load time scale with
+    /// the library size.
+    pub thumb_path: Option<String>,
 }
 
-/// List all (non-deleted) captures, newest first, with inlined thumbnail data URLs.
+/// List (non-deleted) captures, newest first — id/metadata + the thumbnail's PATH (the
+/// frontend resolves it to an asset URL). Does NO file I/O and holds the DB lock only for
+/// the metadata query, so load time no longer scales with the number/size of thumbnails.
+/// `limit` caps the result — Home previews only the few most recent.
 #[tauri::command]
-pub fn captures_list(db: State<crate::Db>) -> Result<Vec<CaptureListItem>, String> {
-    let conn = db.0.lock().unwrap();
-    let rows = crate::db::list_captures(&conn).map_err(|e| e.to_string())?;
+pub fn captures_list(db: State<crate::Db>, limit: Option<usize>) -> Result<Vec<CaptureListItem>, String> {
+    let rows = {
+        let conn = db.0.lock().unwrap();
+        crate::db::list_captures(&conn).map_err(|e| e.to_string())?
+    };
     let items = rows
         .into_iter()
-        .map(|r| {
-            let thumb_data_url = r.thumb_path.as_ref().and_then(|tp| {
-                std::fs::read(tp).ok().map(|bytes| {
-                    let b64 = base64::engine::general_purpose::STANDARD.encode(&bytes);
-                    format!("data:image/png;base64,{b64}")
-                })
-            });
-            CaptureListItem {
-                id: r.id,
-                kind: r.kind,
-                path: r.path,
-                width: r.width,
-                height: r.height,
-                bytes: r.bytes,
-                created_at: r.created_at,
-                title: r.title,
-                thumb_data_url,
-            }
+        .take(limit.unwrap_or(usize::MAX))
+        .map(|r| CaptureListItem {
+            id: r.id,
+            kind: r.kind,
+            path: r.path,
+            width: r.width,
+            height: r.height,
+            bytes: r.bytes,
+            created_at: r.created_at,
+            title: r.title,
+            thumb_path: r.thumb_path,
         })
         .collect();
     Ok(items)

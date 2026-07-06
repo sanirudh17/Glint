@@ -30,7 +30,7 @@
       "csp": null,
       "assetProtocol": {
         "enable": true,
-        "scope": ["$VIDEO/Glint/**"]
+        "scope": ["$VIDEO/Glint/**", "$APPLOCALDATA/thumbs/**"]
       }
     }
   },

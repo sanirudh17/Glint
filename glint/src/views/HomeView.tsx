@@ -56,8 +56,8 @@ export default function HomeView() {
   // Recent-captures preview — newest first, capped at RECENT_LIMIT.
   const [recent, setRecent] = useState<CaptureItem[]>([]);
   const reloadRecent = useCallback(() => {
-    listCaptures()
-      .then((c) => setRecent(c.slice(0, RECENT_LIMIT)))
+    listCaptures(RECENT_LIMIT)
+      .then(setRecent)
       .catch(() => setRecent([]));
   }, []);
   useEffect(() => { reloadRecent(); }, [reloadRecent]);
