@@ -3,8 +3,10 @@
 
 use super::Hotkeys;
 
-pub const HOTKEY_ACTIONS: [&str; 5] =
-    ["capture_area", "capture_window", "capture_fullscreen", "record", "copy_path"];
+pub const HOTKEY_ACTIONS: [&str; 8] = [
+    "capture_area", "capture_window", "capture_fullscreen", "record", "copy_path",
+    "capture_area_delayed", "capture_window_delayed", "capture_fullscreen_delayed",
+];
 
 #[derive(Debug, PartialEq)]
 pub enum HotkeyError {
@@ -102,6 +104,9 @@ pub fn get_field<'a>(h: &'a Hotkeys, action: &str) -> Option<&'a str> {
         "capture_fullscreen" => h.capture_fullscreen.as_str(),
         "record" => h.record.as_str(),
         "copy_path" => h.copy_path.as_str(),
+        "capture_area_delayed" => h.capture_area_delayed.as_str(),
+        "capture_window_delayed" => h.capture_window_delayed.as_str(),
+        "capture_fullscreen_delayed" => h.capture_fullscreen_delayed.as_str(),
         _ => return None,
     })
 }
@@ -113,6 +118,9 @@ pub fn set_field(h: &mut Hotkeys, action: &str, accel: String) -> bool {
         "capture_fullscreen" => h.capture_fullscreen = accel,
         "record" => h.record = accel,
         "copy_path" => h.copy_path = accel,
+        "capture_area_delayed" => h.capture_area_delayed = accel,
+        "capture_window_delayed" => h.capture_window_delayed = accel,
+        "capture_fullscreen_delayed" => h.capture_fullscreen_delayed = accel,
         _ => return false,
     }
     true
@@ -145,7 +153,20 @@ mod tests {
             capture_fullscreen: "CmdOrCtrl+Shift+3".into(),
             record: "CmdOrCtrl+Shift+5".into(),
             copy_path: "CmdOrCtrl+Shift+C".into(),
+            capture_area_delayed: String::new(),
+            capture_window_delayed: String::new(),
+            capture_fullscreen_delayed: String::new(),
         }
+    }
+
+    #[test]
+    fn delayed_actions_registered_and_default_unbound() {
+        assert!(HOTKEY_ACTIONS.contains(&"capture_area_delayed"));
+        assert!(HOTKEY_ACTIONS.contains(&"capture_window_delayed"));
+        assert!(HOTKEY_ACTIONS.contains(&"capture_fullscreen_delayed"));
+        let h = Hotkeys::default();
+        assert_eq!(h.capture_area_delayed, "");
+        assert_eq!(get_field(&h, "capture_area_delayed"), Some(""));
     }
 
     #[test]

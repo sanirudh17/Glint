@@ -15,6 +15,12 @@ pub struct Hotkeys {
     pub capture_fullscreen: String,
     pub record: String,
     pub copy_path: String,
+    #[serde(default)]
+    pub capture_area_delayed: String,
+    #[serde(default)]
+    pub capture_window_delayed: String,
+    #[serde(default)]
+    pub capture_fullscreen_delayed: String,
 }
 
 impl Default for Hotkeys {
@@ -25,6 +31,9 @@ impl Default for Hotkeys {
             capture_fullscreen: "CmdOrCtrl+Shift+3".into(),
             record: "CmdOrCtrl+Shift+5".into(),
             copy_path: "CmdOrCtrl+Shift+C".into(),
+            capture_area_delayed: String::new(),
+            capture_window_delayed: String::new(),
+            capture_fullscreen_delayed: String::new(),
         }
     }
 }
@@ -69,6 +78,13 @@ pub struct Settings {
     pub webcam_device_id: String,
     /// Webcam bubble shape: "circle" | "rounded" | "square" | "rect".
     pub webcam_shape: String,
+    /// Countdown seconds for delayed captures (3, 5, or 10).
+    #[serde(default = "default_capture_delay")]
+    pub capture_delay_secs: u32,
+}
+
+fn default_capture_delay() -> u32 {
+    5
 }
 
 impl Default for Settings {
@@ -99,6 +115,7 @@ impl Default for Settings {
             record_fps: 60,
             webcam_device_id: String::new(),
             webcam_shape: "circle".into(),
+            capture_delay_secs: 5,
         }
     }
 }
@@ -205,6 +222,13 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
                 return Err("webcam_shape must be circle|rounded|square|rect".into());
             }
             s.webcam_shape = v.to_string();
+        }
+        "capture_delay_secs" => {
+            let v = value.as_u64().ok_or("capture_delay_secs must be a number")?;
+            if !matches!(v, 3 | 5 | 10) {
+                return Err("capture_delay_secs must be 3, 5, or 10".into());
+            }
+            s.capture_delay_secs = v as u32;
         }
         other => return Err(format!("unknown settings key: {other}")),
     }
@@ -408,6 +432,20 @@ mod tests {
     fn apply_update_rejects_non_string_webcam_device_id() {
         let mut s = Settings::default();
         assert!(apply_update(&mut s, "webcam_device_id", json!(5)).is_err());
+    }
+
+    #[test]
+    fn default_capture_delay_is_five() {
+        assert_eq!(Settings::default().capture_delay_secs, 5);
+    }
+
+    #[test]
+    fn apply_update_sets_and_validates_capture_delay() {
+        let mut s = Settings::default();
+        apply_update(&mut s, "capture_delay_secs", json!(10)).unwrap();
+        assert_eq!(s.capture_delay_secs, 10);
+        assert!(apply_update(&mut s, "capture_delay_secs", json!(7)).is_err());
+        assert!(apply_update(&mut s, "capture_delay_secs", json!("x")).is_err());
     }
 
     #[test]

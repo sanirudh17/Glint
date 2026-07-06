@@ -34,6 +34,9 @@ fn action_label(action: &str) -> String {
         "capture_fullscreen" => "Capture fullscreen",
         "record" => "Record",
         "copy_path" => "Copy path",
+        "capture_area_delayed" => "Delayed capture area",
+        "capture_window_delayed" => "Delayed capture window",
+        "capture_fullscreen_delayed" => "Delayed capture fullscreen",
         _ => action,
     }
     .to_string()
