@@ -70,6 +70,14 @@ export function StyleBar() {
   const current = eff.color.toLowerCase();
   const isPreset = COLORS.some((c) => c.toLowerCase() === current);
 
+  // Select ("cursor") is purely for moving/picking shapes — it has no style of its
+  // own. With nothing selected there's nothing to restyle, so show an EMPTY bar (no
+  // colors, no S/M/L). The controls only reappear once a shape is selected, where
+  // they legitimately restyle that shape. Keeps the toolbar row height stable.
+  if (tool === "select" && !selectedAnno) {
+    return <div className="editor-stylebar" role="toolbar" aria-label="Style" />;
+  }
+
   // Eraser has no color/stroke — only a footprint size. Show just that so the
   // S/M/L controls unambiguously mean the eraser radius (not pen thickness).
   if (tool === "eraser") {

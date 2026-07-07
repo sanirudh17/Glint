@@ -432,11 +432,3 @@
   border-bottom-width: 2px;
   border-radius: var(--r1, 5px); padding: 2px 8px; text-align: center;
 }
-
-/* Export-scale toggle (1× / 2×) in the export bar. */
-.editor-scale { display: inline-flex; gap: 2px; margin-right: 6px; }
-.editor-scale-btn {
-  height: 28px; min-width: 30px; padding: 0 8px; border: none; border-radius: 6px;
-  background: rgba(255,255,255,0.08); color: var(--text, #fff); cursor: pointer; font-size: 12px;
-}
-.editor-scale-btn--active { background: var(--accent); color: #fff; }
