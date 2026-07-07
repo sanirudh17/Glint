@@ -13,6 +13,7 @@ import {
 } from "./model";
 import type { Crop } from "./composition";
 import { GRADIENTS } from "./gradients";
+import { loadToolStyles, saveToolStyles } from "./toolStylePersistence";
 
 /** Non-serializable base image for the live session (5c persists annotations only). */
 export interface EditorBase {
@@ -148,7 +149,7 @@ const INITIAL = {
   selectedId: null as string | null,
   tool: "select" as ToolId,
   style: { ...DEFAULT_STYLE },
-  toolStyles: {} as Partial<Record<ToolId, Style>>,
+  toolStyles: loadToolStyles(),
   crop: null as Crop | null,
   frame: freshFrame(),
   past: [] as DocSnapshot[],
@@ -171,7 +172,6 @@ export const useEditorStore = create<EditorState>((set) => ({
       annotations: doc?.annotations ?? [],
       crop: doc?.crop ?? null,
       frame: mergeFrame(doc?.frame),
-      toolStyles: {},
       past: [],
       future: [],
       selectedId: null,
@@ -182,13 +182,15 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   markSaved: (path, name) => set({ projectPath: path, projectName: name, dirty: false }),
 
-  reset: () => set({ ...INITIAL, style: { ...DEFAULT_STYLE }, toolStyles: {}, frame: freshFrame() }),
+  reset: () => set({ ...INITIAL, style: { ...DEFAULT_STYLE }, toolStyles: loadToolStyles(), frame: freshFrame() }),
   setTool: (t) =>
     set((s) => ({ tool: t, selectedId: null, style: s.toolStyles[t] ?? { ...DEFAULT_STYLE } })),
   setStyle: (patch) =>
     set((s) => {
       const style = { ...s.style, ...patch };
-      return { style, toolStyles: { ...s.toolStyles, [s.tool]: style } };
+      const toolStyles = { ...s.toolStyles, [s.tool]: style };
+      saveToolStyles(toolStyles);
+      return { style, toolStyles };
     }),
   select: (id) => set({ selectedId: id }),
   duplicate: (id) =>
