@@ -25,7 +25,10 @@ pub fn build_control_bar(app: &AppHandle) -> tauri::Result<()> {
     .resizable(false)
     .shadow(false)
     .focused(false)
-    .inner_size(280.0, 80.0)
+    // Generous initial width (the transparent surround is invisible) so a fully-loaded
+    // pill isn't clipped before ControlBar's ResizeObserver refits the window to the
+    // pill's exact width. Too-narrow a start clipped both edges on the first frame.
+    .inner_size(480.0, 80.0)
     .visible(false)
     .build()?;
 
@@ -35,7 +38,7 @@ pub fn build_control_bar(app: &AppHandle) -> tauri::Result<()> {
         let s = m.scale_factor();
         let pos = m.position();
         let size = m.size();
-        let bar_w = (280.0 * s) as i32;
+        let bar_w = (480.0 * s) as i32;
         let bar_h = (80.0 * s) as i32;
         let x = pos.x + (size.width as i32 - bar_w) / 2;
         let y = pos.y + size.height as i32 - bar_h - (60.0 * s) as i32;

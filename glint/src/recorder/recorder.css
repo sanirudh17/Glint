@@ -4,7 +4,11 @@
      capture-excluded window, so — unlike a native OS `title` tooltip, which is its
      own un-excluded window — it never leaks into the recording). */
   position: fixed; left: 50%; bottom: 4px; transform: translateX(-50%);
-  display: inline-flex; align-items: center; gap: 10px;
+  /* max-content (not shrink-to-fit) so the pill always takes its full natural width
+     even when that exceeds the window — otherwise a fixed inline-flex clamps to the
+     window width, the ResizeObserver measures the clamped width, and the window never
+     grows to fit, clipping the pill on BOTH edges (left icons + Stop). */
+  display: inline-flex; width: max-content; align-items: center; gap: 10px;
   background: rgba(20,20,24,0.92); color: #fff;
   padding: 6px 12px; border-radius: 999px;
   border: 1px solid rgba(255,255,255,0.12);
