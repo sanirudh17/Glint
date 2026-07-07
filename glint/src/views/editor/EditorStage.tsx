@@ -261,6 +261,14 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const onDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
     if (!stage) return;
+    // The canvas isn't a focusable element, so a prior click on a toolbar input (the
+    // dim slider, color picker, font-size box) keeps DOM focus on that <input>. The
+    // global Delete/Backspace shortcut ignores keys while an INPUT is focused, so
+    // selecting a shape on the canvas and pressing Delete would silently do nothing
+    // (this is why spotlights couldn't be deleted one-by-one after touching the dim
+    // slider). Drop that lingering focus on any canvas interaction.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body) active.blur();
     // Eyedropper: sample the pixel under the pointer from the base screenshot,
     // set it as the current color, and exit pick mode. No draw, no history. Only in a
     // drawing tool — never in select ("cursor") mode, where the picker is disabled.
