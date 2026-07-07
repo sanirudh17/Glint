@@ -224,13 +224,11 @@ pub const CAM_LABEL: &str = "rec-cam";
 /// bubble already exists.
 pub fn build_cam_bubble(app: &AppHandle, target: crate::recorder::RecordTarget, diameter: f64, movable: bool, shape: &str) -> tauri::Result<Option<(f64, f64, f64)>> {
     if app.get_webview_window(CAM_LABEL).is_some() {
-        log::info!("[rec-cam] build_cam_bubble: REUSING existing window (shape param={shape} ignored)");
         return Ok(None);
     }
     // circle/square are 1:1; rounded/rect show the full webcam frame at 16:9 (the window is
     // shaped so gdigrab bakes the true shape and the live preview matches).
     let bubble_h = if matches!(shape, "rounded" | "rect") { diameter * 9.0 / 16.0 } else { diameter };
-    log::info!("[rec-cam] build_cam_bubble: building shape={shape} size={diameter}x{bubble_h}");
     let win = WebviewWindowBuilder::new(app, CAM_LABEL, WebviewUrl::App("index.html#/rec-cam".into()))
         .title("Glint Camera")
         .decorations(false)

@@ -16,7 +16,6 @@ export function RecCam() {
   const streamRef = useRef<MediaStream | null>(null);
   const mrRef = useRef<MediaRecorder | null>(null);
   const firstChunkRef = useRef(true);
-  const shapeRef = useRef<string>("circle"); // last shape read from settings (for the ready log)
   const [sizeIdx, setSizeIdx] = useState(1);
   const [shape, setShape] = useState<string>("circle");
 
@@ -42,7 +41,7 @@ export function RecCam() {
       const movableOk =
         typeof MediaRecorder !== "undefined" &&
         MediaRecorder.isTypeSupported("video/webm;codecs=vp8");
-      emit("rec-cam-ready", { movableOk, shape: shapeRef.current }).catch(() => {});
+      emit("rec-cam-ready", { movableOk }).catch(() => {});
     };
 
     // Cap at 720p: plenty for the bubble/overlay and keeps the streamed .cam.webm chunks
@@ -58,7 +57,7 @@ export function RecCam() {
       try {
         const s = await invoke<{ webcam_device_id?: string; webcam_shape?: string }>("settings_get_all");
         deviceId = s?.webcam_device_id ?? "";
-        if (s?.webcam_shape) { setShape(s.webcam_shape); shapeRef.current = s.webcam_shape; }
+        if (s?.webcam_shape) setShape(s.webcam_shape);
       } catch {
         deviceId = "";
       }
