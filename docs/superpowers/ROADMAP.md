@@ -353,18 +353,30 @@ capture/library/editor path.
   static **"Starting…"** text, and the **webcam warms up during the countdown** (listener armed
   early, awaited late) to cut perceived start latency. *Shipped — at-screen accepted.*
 
-- **Phase 26 — Editor polish** (multi-region spotlight + four developer wins; front-end only,
-  recorder path untouched). **Multi-region spotlight**: spotlights stay ordinary annotations but a
-  single shared `SpotlightDimLayer` dims the screenshot **once** with N destination-out cut-outs —
-  overlaps no longer double-darken and every region stays bright; the dim slider drives all
-  spotlights together (`setSpotlightDim`). **Per-tool style persistence**: the in-session
-  `toolStyles` map now persists to `localStorage`, so preferred per-tool colors/sizes survive
-  editor reopen + app restart (`.glint` docs unaffected). **Eyedropper** (`i` / StyleBar pipette):
-  pick mode samples a pixel from the base screenshot and sets it as the current color. **Shortcuts
-  cheatsheet** (`?`): a modal listing every editor shortcut from a single static table. **Copy /
-  export at 2×**: an export-bar toggle (persisted) that supersamples Copy / Export / Drag for
-  crisper vector layers (Done stays native). Pure helpers unit-tested; **recorder isolation honored**
-  (0-line diff under `src-tauri` / `src/recorder`). *Shipped — at-screen pending.*
+- **Phase 26 — Editor polish** (multi-region spotlight + developer wins; front-end only, recorder
+  path untouched). **Multi-region spotlight**: spotlights stay ordinary annotations but a single
+  shared `SpotlightDimLayer` dims the screenshot **once** and re-paints the original pixels over each
+  region (all source-over — no destination-out compositing, which had left stale dim on delete);
+  overlaps no longer double-darken and the dim slider drives all spotlights together
+  (`setSpotlightDim`). **Per-tool style persistence**: the in-session `toolStyles` map persists to
+  `localStorage`, so preferred per-tool colors/sizes survive editor reopen + app restart (`.glint`
+  docs unaffected). **Eyedropper** (`i` / StyleBar pipette): samples a pixel from the base screenshot
+  as the current color. **Shortcuts cheatsheet** (`?`). Spotlight style bar shows only shape + dim
+  (no color/stroke); the cursor bar is bare when nothing's selected. (The 1×/2× export toggle was
+  tried then removed — negligible gain on raster screenshots, exports stay native.) Pure helpers
+  unit-tested; **recorder isolation honored** (0-line diff under `src-tauri` / `src/recorder`).
+  *Shipped — at-screen accepted.*
+
+- **Phase 27 — Editor in its own window** (first editor phase to touch Rust). The annotation editor
+  moved from a `/editor` route inside the main window to its **own decorated, resizable OS window**
+  (label `"editor"`, `#/editor`, built off-thread by `editor::window`), so it has room to breathe and
+  the main app is usable alongside it. On open the main window **minimizes to the taskbar** (stays
+  restorable); **Done** hands the image to the HUD then **closes the editor window**. New
+  `capabilities/editor.json` mirrors the main-window permissions; `/editor` moved to a top-level
+  router route; the main window no longer navigates to the editor. Also fixed two editor bugs the
+  window work surfaced: a **phantom 0×0 spotlight** from a click-without-drag (dimmed the whole canvas
+  and couldn't be selected to delete) is now discarded via `discardDraft`, and **Delete** no longer
+  gets swallowed while the dim slider holds focus. *Shipped — at-screen accepted.*
 
 ## Planned
 
