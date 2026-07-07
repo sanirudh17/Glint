@@ -113,6 +113,12 @@ interface EditorState {
   nudge: (id: string, dx: number, dy: number, pushHist?: boolean) => void;
   pushHistory: () => void;
   add: (a: Annotation) => void;
+  /** Discard a just-started draft (a click without a real drag) AND the history
+      entry that onDown pushed for it, so a degenerate ~0-size shape leaves no trace
+      and no wasted undo step. Critical for spotlights: a 0×0 spotlight dims the whole
+      canvas with no bright hole and can't be clicked to delete (its hit area is 0×0),
+      which is what made the dim look permanently "stuck". */
+  discardDraft: (id: string) => void;
   update: (id: string, patch: Partial<Annotation>) => void;
   remove: (id: string) => void;
   /** Replace the whole annotation list in one shot (used by the eraser, which
@@ -251,6 +257,15 @@ export const useEditorStore = create<EditorState>((set) => ({
   pushHistory: () => set((s) => ({ past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [] })),
 
   add: (a) => set((s) => ({ annotations: addAnnotation(s.annotations, a), selectedId: a.id, dirty: true })),
+  // Undo the onDown push+add for a draft that turned out to be a click, not a drag:
+  // drop the annotation AND the single history entry onDown pushed, so it's as if the
+  // gesture never happened (no phantom shape, no dead undo step).
+  discardDraft: (id) =>
+    set((s) => ({
+      annotations: s.annotations.filter((a) => a.id !== id),
+      past: s.past.slice(0, -1),
+      selectedId: s.selectedId === id ? null : s.selectedId,
+    })),
   update: (id, patch) => set((s) => ({ annotations: updateAnnotation(s.annotations, id, patch), dirty: true })),
   remove: (id) =>
     set((s) => ({

@@ -52,7 +52,21 @@ export default function EditorView() {
     };
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
-      if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      // Block single-key shortcuts only while a TEXT-ENTRY field is focused (the
+      // annotation textarea, project name, font-size, chrome title/url) — where a
+      // key means "type a character". Do NOT block for non-text inputs like the
+      // dim/opacity RANGE slider or the COLOR picker: those keep focus after you
+      // drag them, and blocking there is exactly why pressing Delete right after
+      // adjusting the dim slider was silently swallowed (the spotlight wouldn't
+      // delete, so its dim looked "stuck"). Delete-all worked because it's a button
+      // click, not a keyboard shortcut.
+      const tag = target.tagName;
+      const inputType = tag === "INPUT" ? (target as HTMLInputElement).type : "";
+      const isTextEntry =
+        tag === "TEXTAREA" ||
+        (tag === "INPUT" &&
+          !["range", "color", "checkbox", "radio", "button", "submit"].includes(inputType));
+      if (isTextEntry) return;
       // `?` (Shift+/) toggles the shortcut cheatsheet — handle before the tool keys.
       if (e.key === "?") {
         e.preventDefault();

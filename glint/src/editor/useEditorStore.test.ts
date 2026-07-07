@@ -30,6 +30,19 @@ describe("useEditorStore", () => {
     expect(useEditorStore.getState().selectedId).toBe("a");
   });
 
+  it("discardDraft removes the draft AND pops the history entry onDown pushed", () => {
+    const s = useEditorStore.getState();
+    s.pushHistory(); // onDown snapshots the pre-draft state
+    s.add(rect("draft"));
+    expect(useEditorStore.getState().annotations).toHaveLength(1);
+    expect(useEditorStore.getState().past).toHaveLength(1);
+    useEditorStore.getState().discardDraft("draft");
+    // No phantom shape and no wasted undo step remain.
+    expect(useEditorStore.getState().annotations).toHaveLength(0);
+    expect(useEditorStore.getState().past).toHaveLength(0);
+    expect(useEditorStore.getState().selectedId).toBeNull();
+  });
+
   it("undo restores the prior snapshot; redo re-applies it", () => {
     const s = useEditorStore.getState();
     s.pushHistory();

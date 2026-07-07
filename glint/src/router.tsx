@@ -161,6 +161,18 @@ export const router = createHashRouter([
     element: lazyRoute(<OcrPanel />),
   },
   {
+    /**
+     * Normal decorated annotation editor — its OWN standalone, resizable OS window
+     * (built by editor::window), so it has room to breathe and the user can use the
+     * main app alongside it. Sits OUTSIDE AppShell (no titlebar/nav rail — the OS
+     * window chrome + the editor's own toolbars are all it needs). Opened by the
+     * three entry points (HUD Annotate / Library Edit / Open-in-Glint), which set
+     * EditorState in Rust and raise this window. URL: tauri://localhost/#/editor
+     */
+    path: "/editor",
+    element: lazyRoute(<EditorView />),
+  },
+  {
     path: "/",
     element: <AppShell />,
     children: [
@@ -168,7 +180,6 @@ export const router = createHashRouter([
       { path: "home", element: <HomeView /> },
       { path: "library", element: <LibraryView /> },
       { path: "settings", element: <SettingsView /> },
-      { path: "editor", element: <EditorView /> },
     ],
   },
 ]);
