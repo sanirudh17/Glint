@@ -1,4 +1,4 @@
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight, Pipette } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { PALETTE as COLORS } from "../../editor/palette";
 
@@ -23,6 +23,9 @@ export function StyleBar() {
   const tool = useEditorStore((s) => s.tool);
   const eraserSize = useEditorStore((s) => s.eraserSize);
   const setEraserSize = useEditorStore((s) => s.setEraserSize);
+  const setSpotlightDim = useEditorStore((s) => s.setSpotlightDim);
+  const picking = useEditorStore((s) => s.picking);
+  const setPicking = useEditorStore((s) => s.setPicking);
 
   // The bar reflects the SELECTED annotation when there is one — so you can restyle
   // an existing shape (the fill/dashed/etc. controls appear for the selection, not
@@ -55,7 +58,7 @@ export function StyleBar() {
   const applyFillOpacity = (fillOpacity: number) => { setStyle({ fillOpacity }); patchSelected({ fillOpacity }, false); };
   const applyRedactStyle = (redactStyle: "solid" | "pixelate") => { setStyle({ redactStyle }); patchSelected({ redactStyle }); };
   const applyRegion = (region: "rect" | "ellipse") => { setStyle({ region }); patchSelected({ region }); };
-  const applyDim = (fillOpacity: number) => { setStyle({ fillOpacity }); patchSelected({ fillOpacity }, false); };
+  const applyDim = (fillOpacity: number) => { setStyle({ fillOpacity }); setSpotlightDim(fillOpacity); };
 
   const isShape = effType === "rect" || effType === "ellipse";
   const isStroke = isShape || effType === "line" || effType === "arrow";
@@ -66,6 +69,14 @@ export function StyleBar() {
 
   const current = eff.color.toLowerCase();
   const isPreset = COLORS.some((c) => c.toLowerCase() === current);
+
+  // Select ("cursor") is purely for moving/picking shapes — it has no style of its
+  // own. With nothing selected there's nothing to restyle, so show an EMPTY bar (no
+  // colors, no S/M/L). The controls only reappear once a shape is selected, where
+  // they legitimately restyle that shape. Keeps the toolbar row height stable.
+  if (tool === "select" && !selectedAnno) {
+    return <div className="editor-stylebar" role="toolbar" aria-label="Style" />;
+  }
 
   // Eraser has no color/stroke — only a footprint size. Show just that so the
   // S/M/L controls unambiguously mean the eraser radius (not pen thickness).
@@ -92,6 +103,10 @@ export function StyleBar() {
 
   return (
     <div className="editor-stylebar" role="toolbar" aria-label="Style">
+      {/* A spotlight has no color or stroke — it's a dimmed cut-out. Show only its own
+          controls (shape + dim, below); hide the color swatches and S/M/L widths that
+          don't apply to it. */}
+      {!isSpotlight && (
       <div className="editor-swatches">
         {COLORS.map((c) => (
           <button
@@ -117,7 +132,22 @@ export function StyleBar() {
             aria-label="Custom color"
           />
         </label>
+        {/* Eyedropper picks a color for the NEXT annotation, so it only appears with
+            a drawing tool active — not in select ("cursor") mode, where it's a no-op
+            that just confuses. */}
+        {tool !== "select" && (
+          <button
+            className={`editor-swatch editor-eyedrop${picking ? " editor-eyedrop--active" : ""}`}
+            title="Pick a color from the image (I)"
+            aria-label="Eyedropper"
+            onClick={() => setPicking(!picking)}
+          >
+            <Pipette size={14} strokeWidth={1.75} />
+          </button>
+        )}
       </div>
+      )}
+      {!isSpotlight && (
       <div className="editor-widths">
         {WIDTHS.map((w) => (
           <button
@@ -131,6 +161,7 @@ export function StyleBar() {
           </button>
         ))}
       </div>
+      )}
       {isShape && (
         <div className="editor-fillgroup">
           <button

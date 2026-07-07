@@ -235,3 +235,12 @@ export function reorder(list: Annotation[], id: string, dir: "forward" | "backwa
   [out[i], out[j]] = [out[j], out[i]];
   return out;
 }
+
+/** The single dim value the shared spotlight overlay renders at: the selected
+ *  spotlight's opacity if one is selected, else the first spotlight's, else the
+ *  default 0.6. (The StyleBar keeps all spotlights equal, so this is unambiguous.) */
+export function resolveSpotlightDim(annotations: Annotation[], selectedId: string | null): number {
+  const spots = annotations.filter((a): a is BoxAnno => a.type === "spotlight");
+  const sel = spots.find((a) => a.id === selectedId);
+  return (sel ?? spots[0])?.style.fillOpacity ?? 0.6;
+}

@@ -317,3 +317,18 @@ describe("window chrome — setChrome action", () => {
     expect(useEditorStore.getState().past).toEqual([]);
   });
 });
+
+describe("setSpotlightDim", () => {
+  it("sets fillOpacity on every spotlight, leaving other annotations untouched", () => {
+    const s = useEditorStore.getState();
+    s.reset();
+    s.add({ id: "s1", type: "spotlight", z: 0, style: { ...DEFAULT_STYLE, fillOpacity: 0.6, region: "rect" }, x: 0, y: 0, w: 10, h: 10 });
+    s.add({ id: "s2", type: "spotlight", z: 0, style: { ...DEFAULT_STYLE, fillOpacity: 0.6, region: "ellipse" }, x: 5, y: 5, w: 10, h: 10 });
+    s.add({ id: "r1", type: "rect", z: 0, style: { ...DEFAULT_STYLE }, x: 0, y: 0, w: 4, h: 4 });
+    useEditorStore.getState().setSpotlightDim(0.25);
+    const out = useEditorStore.getState().annotations;
+    expect(out.filter((a) => a.type === "spotlight").every((a) => a.style.fillOpacity === 0.25)).toBe(true);
+    // The non-spotlight rect keeps its original DEFAULT_STYLE opacity (1) — untouched.
+    expect(out.find((a) => a.id === "r1")!.style.fillOpacity).toBe(1);
+  });
+});

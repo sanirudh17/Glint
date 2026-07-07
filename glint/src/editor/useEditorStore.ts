@@ -13,6 +13,7 @@ import {
 } from "./model";
 import type { Crop } from "./composition";
 import { GRADIENTS } from "./gradients";
+import { loadToolStyles, saveToolStyles } from "./toolStylePersistence";
 
 /** Non-serializable base image for the live session (5c persists annotations only). */
 export interface EditorBase {
@@ -87,6 +88,8 @@ interface EditorState {
   dirty: boolean;
   /** Eraser footprint radius in image px (tool setting, not part of the doc). */
   eraserSize: number;
+  /** Eyedropper pick mode: the next canvas click samples a pixel color. */
+  picking: boolean;
 
   setBase: (b: EditorBase) => void;
   loadDoc: (
@@ -98,6 +101,9 @@ interface EditorState {
   reset: () => void;
   setTool: (t: ToolId) => void;
   setStyle: (patch: Partial<Style>) => void;
+  /** Set the shared spotlight dim on ALL spotlight annotations at once (the dim is
+      one property of the whole effect since they share a single overlay). */
+  setSpotlightDim: (v: number) => void;
   select: (id: string | null) => void;
   duplicate: (id: string) => void;
   bringForward: (id: string) => void;
@@ -113,6 +119,7 @@ interface EditorState {
       can split/drop several strokes per dab). Marks the doc dirty. */
   setAnnotations: (list: Annotation[]) => void;
   setEraserSize: (n: number) => void;
+  setPicking: (v: boolean) => void;
   clearAll: () => void;
   setCrop: (c: Crop) => void;
   resetCrop: () => void;
@@ -148,7 +155,7 @@ const INITIAL = {
   selectedId: null as string | null,
   tool: "select" as ToolId,
   style: { ...DEFAULT_STYLE },
-  toolStyles: {} as Partial<Record<ToolId, Style>>,
+  toolStyles: loadToolStyles(),
   crop: null as Crop | null,
   frame: freshFrame(),
   past: [] as DocSnapshot[],
@@ -157,6 +164,7 @@ const INITIAL = {
   projectName: null as string | null,
   dirty: false,
   eraserSize: 16,
+  picking: false,
 };
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -171,7 +179,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       annotations: doc?.annotations ?? [],
       crop: doc?.crop ?? null,
       frame: mergeFrame(doc?.frame),
-      toolStyles: {},
+      picking: false,
       past: [],
       future: [],
       selectedId: null,
@@ -182,14 +190,23 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   markSaved: (path, name) => set({ projectPath: path, projectName: name, dirty: false }),
 
-  reset: () => set({ ...INITIAL, style: { ...DEFAULT_STYLE }, toolStyles: {}, frame: freshFrame() }),
+  reset: () => set({ ...INITIAL, style: { ...DEFAULT_STYLE }, toolStyles: loadToolStyles(), frame: freshFrame() }),
   setTool: (t) =>
-    set((s) => ({ tool: t, selectedId: null, style: s.toolStyles[t] ?? { ...DEFAULT_STYLE } })),
+    set((s) => ({ tool: t, selectedId: null, style: s.toolStyles[t] ?? { ...DEFAULT_STYLE }, picking: false })),
   setStyle: (patch) =>
     set((s) => {
       const style = { ...s.style, ...patch };
-      return { style, toolStyles: { ...s.toolStyles, [s.tool]: style } };
+      const toolStyles = { ...s.toolStyles, [s.tool]: style };
+      saveToolStyles(toolStyles);
+      return { style, toolStyles };
     }),
+  setSpotlightDim: (v) =>
+    set((s) => ({
+      annotations: s.annotations.map((a) =>
+        a.type === "spotlight" ? { ...a, style: { ...a.style, fillOpacity: v } } : a,
+      ),
+      dirty: true,
+    })),
   select: (id) => set({ selectedId: id }),
   duplicate: (id) =>
     set((s) => {
@@ -252,6 +269,7 @@ export const useEditorStore = create<EditorState>((set) => ({
     })),
 
   setEraserSize: (n) => set({ eraserSize: n }),
+  setPicking: (v) => set({ picking: v }),
 
   // Wipe every annotation in one gesture (a single undoable step). No-op — and
   // crucially no spurious history entry — when there's nothing to clear. The

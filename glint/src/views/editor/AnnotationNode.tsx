@@ -202,8 +202,6 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
       return (
         <SpotlightRegion
           a={a}
-          baseWidth={baseWidth}
-          baseHeight={baseHeight}
           draggable={draggable}
           onSelect={onSelect}
           onDragStart={onDragStart}
@@ -365,66 +363,45 @@ function RedactRegion({
   );
 }
 
-/** Spotlight: dim the whole canvas except one bright region (rect or ellipse). The
- * dim + hole live in a CACHED group so the destination-out composite is isolated to
- * the group's own buffer (it must not erase the base image beneath). A separate
- * invisible rect over the region provides selection + drag. */
+/** A spotlight annotation is now ONLY an invisible, hittable rect for selection +
+ *  drag/resize/delete. The actual dim + bright cut-out is drawn once for all
+ *  spotlights by <SpotlightDimLayer> (see EditorStage). */
 function SpotlightRegion({
-  a, baseWidth, baseHeight, draggable, onSelect, onDragStart, onChange,
+  a, draggable, onSelect, onDragStart, onChange,
 }: {
   a: BoxAnno;
-  baseWidth: number;
-  baseHeight: number;
   draggable: boolean;
   onSelect: () => void;
   onDragStart: () => void;
   onChange: (patch: Partial<Annotation>) => void;
 }) {
-  const ref = useRef<Konva.Group>(null);
   const x = Math.min(a.x, a.x + a.w);
   const y = Math.min(a.y, a.y + a.h);
   const w = Math.abs(a.w);
   const h = Math.abs(a.h);
-  const dim = a.style.fillOpacity ?? 0.6;
-  const region = a.style.region ?? "rect";
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node) return;
-    node.cache({ x: 0, y: 0, width: baseWidth, height: baseHeight });
-    node.getLayer()?.batchDraw();
-  }, [x, y, w, h, dim, region, baseWidth, baseHeight]);
-
   return (
-    <>
-      <Group ref={ref} listening={false} x={0} y={0}>
-        <Rect x={0} y={0} width={baseWidth} height={baseHeight} fill="#000000" opacity={dim} />
-        {region === "ellipse" ? (
-          <Ellipse
-            x={x + w / 2} y={y + h / 2}
-            radiusX={Math.abs(w / 2)} radiusY={Math.abs(h / 2)}
-            fill="#000000"
-            globalCompositeOperation="destination-out"
-          />
-        ) : (
-          <Rect
-            x={x} y={y} width={w} height={h}
-            fill="#000000"
-            globalCompositeOperation="destination-out"
-          />
-        )}
-      </Group>
-      {/* Invisible (opacity 0) but fully hittable — Konva's hit canvas ignores opacity. */}
-      <Rect
-        id={a.id}
-        x={x} y={y} width={w} height={h}
-        fill="#ffffff" opacity={0}
-        draggable={draggable}
-        onMouseDown={onSelect}
-        onTap={onSelect}
-        onDragStart={onDragStart}
-        onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y(), w, h } as Partial<Annotation>)}
-      />
-    </>
+    // Invisible (opacity 0) but fully hittable — Konva's hit canvas ignores opacity.
+    <Rect
+      id={a.id}
+      x={x} y={y} width={w} height={h}
+      fill="#ffffff" opacity={0}
+      draggable={draggable}
+      onMouseDown={onSelect}
+      onTap={onSelect}
+      onDragStart={onDragStart}
+      onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y(), w, h } as Partial<Annotation>)}
+      // The Transformer resizes by scaling this hit-rect; the dim cut-out lives in a
+      // separate layer that reads w/h from the store, so commit the scale back as new
+      // w/h (and reset the node scale) or the resize would be visual-only and the dim
+      // would never move.
+      onTransformEnd={(e) => {
+        const node = e.target;
+        const nw = Math.max(1, node.width() * node.scaleX());
+        const nh = Math.max(1, node.height() * node.scaleY());
+        node.scaleX(1);
+        node.scaleY(1);
+        onChange({ x: node.x(), y: node.y(), w: nw, h: nh } as Partial<Annotation>);
+      }}
+    />
   );
 }

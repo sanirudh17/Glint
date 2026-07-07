@@ -2,10 +2,12 @@ import { useEffect, useLayoutEffect, useRef, useState, forwardRef } from "react"
 import { Stage, Layer, Group, Rect, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useEditorStore } from "../../editor/useEditorStore";
-import { newId, nextStepNumber, eraseAt, snapAngle, type Annotation, type TextAnno } from "../../editor/model";
+import { newId, nextStepNumber, eraseAt, snapAngle, resolveSpotlightDim, type Annotation, type BoxAnno, type TextAnno } from "../../editor/model";
 import { computeLayout } from "../../editor/composition";
 import { getGradient, konvaGradient } from "../../editor/gradients";
 import { AnnotationNode } from "./AnnotationNode";
+import { SpotlightDimLayer } from "./SpotlightDimLayer";
+import { sampleColorAt } from "../../editor/eyedropper";
 import { CropOverlay } from "./CropOverlay";
 import { WindowChrome } from "./WindowChrome";
 
@@ -58,6 +60,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const pushHistory = useEditorStore((s) => s.pushHistory);
   const setCrop = useEditorStore((s) => s.setCrop);
   const setTool = useEditorStore((s) => s.setTool);
+  const picking = useEditorStore((s) => s.picking);
+  const setPicking = useEditorStore((s) => s.setPicking);
+  const setStyle = useEditorStore((s) => s.setStyle);
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -256,6 +261,24 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const onDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
     if (!stage) return;
+    // The canvas isn't a focusable element, so a prior click on a toolbar input (the
+    // dim slider, color picker, font-size box) keeps DOM focus on that <input>. The
+    // global Delete/Backspace shortcut ignores keys while an INPUT is focused, so
+    // selecting a shape on the canvas and pressing Delete would silently do nothing
+    // (this is why spotlights couldn't be deleted one-by-one after touching the dim
+    // slider). Drop that lingering focus on any canvas interaction.
+    const active = document.activeElement;
+    if (active instanceof HTMLElement && active !== document.body) active.blur();
+    // Eyedropper: sample the pixel under the pointer from the base screenshot,
+    // set it as the current color, and exit pick mode. No draw, no history. Only in a
+    // drawing tool — never in select ("cursor") mode, where the picker is disabled.
+    if (picking && tool !== "select") {
+      const { x, y } = imgPoint(stage);
+      const hex = sampleColorAt(base.image, base.width, base.height, Math.round(x), Math.round(y));
+      if (hex) setStyle({ color: hex });
+      setPicking(false);
+      return;
+    }
     // Crop tool: the DOM CropOverlay drives the interaction (and covers the
     // stage), so the stage itself does nothing.
     if (tool === "crop") return;
@@ -393,7 +416,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         onMouseMove={onMove}
         onMouseUp={onUp}
         onDblClick={onDblClick}
-        style={{ cursor: tool === "select" ? "default" : tool === "eraser" ? eraserCursor : "crosshair" }}
+        style={{ cursor: picking && tool !== "select" ? "crosshair" : tool === "select" ? "default" : tool === "eraser" ? eraserCursor : "crosshair" }}
       >
         {/* Background fill (gradient/solid). Transparent → no rect → alpha in export. */}
         {frame.enabled && frame.background.type !== "transparent" && (
@@ -477,6 +500,13 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
                 }
               : {})}
           >
+            <SpotlightDimLayer
+              regions={annotations.filter((a): a is BoxAnno => a.type === "spotlight")}
+              dim={resolveSpotlightDim(annotations, selectedId)}
+              baseImage={base.image}
+              baseWidth={base.width}
+              baseHeight={base.height}
+            />
             {annotations.map((a) => (
               <AnnotationNode
                 key={a.id}

@@ -1,4 +1,4 @@
-import type { RefObject } from "react";
+import { type RefObject } from "react";
 import type Konva from "konva";
 import { Copy, Download, Share2, Check } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
@@ -9,7 +9,7 @@ import { editorCopy, editorSave, editorFlattenTemp, editorDone, dragOut } from "
 /**
  * Flatten the stage to base64 PNG (no data-url prefix) at the native composition
  * resolution. Reads crop/frame from the store so the pixel-ratio scales the
- * scaled-down stage back to the full framed composition's native pixels.
+ * (fit-to-viewport) stage back up to the full framed composition's native pixels.
  */
 function flatten(stage: Konva.Stage): string {
   const { base, crop, frame } = useEditorStore.getState();
@@ -26,7 +26,7 @@ function flatten(stage: Konva.Stage): string {
   if (tr) { tr.nodes([]); tr.getLayer()?.batchDraw(); }
 
   const layout = computeLayout(base.width, base.height, crop, frame);
-  const pixelRatio = exportPixelRatio(layout, stageW); // → native composition px
+  const pixelRatio = exportPixelRatio(layout, stageW); // native resolution
   let url: string;
   try {
     url = stage.toDataURL({ pixelRatio, mimeType: "image/png" });

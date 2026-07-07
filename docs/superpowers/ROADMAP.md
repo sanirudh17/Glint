@@ -330,9 +330,46 @@ capture/library/editor path.
   **recorder isolation honored** (only `trimModel.ts` + recorder-owned trim UI/`trim.rs` touched).
   *Shipped — at-screen accepted.*
 
+- **Phase 24 — Perf polish + live accent propagation** (make the capture path feel instant and
+  fix cross-window theming). The screenshot **HUD opens ~700–1000 ms sooner** (clipboard write
+  moved off the critical path / made async), the capture overlay + HUD **snap on screen** with no
+  OS show/hide transition, the region selector's **slide-in animation was killed** and it **reveals
+  on first paint** (no stale-frame flash), a **phantom full-screen target** was dropped from Window
+  capture mode, and **Esc dismisses the region selector** (granted hide/show IPC). Background
+  memory shrank via **code-splitting heavy routes**. **Accent/theme now update live in every
+  window** (settings-visual-changed broadcast — live WebView2 windows don't re-read shared
+  localStorage). A dev-server port move off 1420 worked around a Windows WinNAT `EACCES`.
+  *Shipped — at-screen accepted.*
+
+- **Phase 25 — Developer polish** (redact/spotlight editor tools, delayed capture, video presets,
+  recording-start reliability). New **redact** (solid / pixelate) and **spotlight** (dim-except-a-
+  region) annotation tools — additive, safe-default model changes so existing `.glint` docs keep
+  loading. **Delayed capture**: a capture-delay dropdown + three delayed-capture hotkey actions
+  (`begin_delayed_spawned`), with the countdown promoted to a neutral N-parameterized module.
+  **Video resolution + quality presets** threaded through settings → the ffmpeg pipeline. A round
+  of recording-start fixes: **stop losing the first second** (countdown holds past zero on a
+  centered cue until ffmpeg is confirmed live), the control **pill no longer clips** on either edge
+  (a measurement-race fix — refit measures after its async awaits), the arming indicator became a
+  static **"Starting…"** text, and the **webcam warms up during the countdown** (listener armed
+  early, awaited late) to cut perceived start latency. *Shipped — at-screen accepted.*
+
+- **Phase 26 — Editor polish** (multi-region spotlight + four developer wins; front-end only,
+  recorder path untouched). **Multi-region spotlight**: spotlights stay ordinary annotations but a
+  single shared `SpotlightDimLayer` dims the screenshot **once** with N destination-out cut-outs —
+  overlaps no longer double-darken and every region stays bright; the dim slider drives all
+  spotlights together (`setSpotlightDim`). **Per-tool style persistence**: the in-session
+  `toolStyles` map now persists to `localStorage`, so preferred per-tool colors/sizes survive
+  editor reopen + app restart (`.glint` docs unaffected). **Eyedropper** (`i` / StyleBar pipette):
+  pick mode samples a pixel from the base screenshot and sets it as the current color. **Shortcuts
+  cheatsheet** (`?`): a modal listing every editor shortcut from a single static table. **Copy /
+  export at 2×**: an export-bar toggle (persisted) that supersamples Copy / Export / Drag for
+  crisper vector layers (Done stays native). Pure helpers unit-tested; **recorder isolation honored**
+  (0-line diff under `src-tauri` / `src/recorder`). *Shipped — at-screen pending.*
+
 ## Planned
 
-- *(none — trim follow-ups from Phase 20/23 all shipped.)*
+- **Packaging / distribution** — the only remaining phase (installer, code-signing, auto-update,
+  release artifacts). All feature work is complete.
 
 ## Out of scope (project-wide, unchanged)
 Cloud/upload/share-links, teams/collaboration, login/auth, web backend/network calls, scrolling
