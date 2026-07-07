@@ -38,17 +38,12 @@
   font-size: 120px; font-weight: 700; color: #fff; text-shadow: 0 4px 24px rgba(0,0,0,0.6);
   background: transparent; user-select: none;
 }
-/* Post-countdown "arming" hold: a small "Starting…" label shown between the "1" and
-   ffmpeg going live (~1s). Small + gently breathing so it reads as intentional system
-   feedback ("hold, almost live") rather than a stray white circle. */
+/* Post-countdown "arming" hold: a small, static "Starting…" label shown between the
+   "1" and ffmpeg going live (~1s). Plain text (no animation) so it reads as calm
+   system feedback ("hold, almost live") rather than a stray white circle. */
 .rec-countdown-arming {
   font-size: 20px; font-weight: 600; letter-spacing: 0.3px;
   color: rgba(255,255,255,0.85); text-shadow: 0 2px 12px rgba(0,0,0,0.6);
-  animation: rec-arming-pulse 1.3s ease-in-out infinite;
-}
-@keyframes rec-arming-pulse {
-  0%, 100% { opacity: 0.55; }
-  50%      { opacity: 0.95; }
 }
 /* ── Region selector (adjustable, Enter-to-record) ──────────────────────────
    Mirrors the screenshot selection visual language; recorder-owned styles. */
