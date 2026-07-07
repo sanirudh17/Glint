@@ -120,14 +120,19 @@ export function StyleBar() {
             aria-label="Custom color"
           />
         </label>
-        <button
-          className={`editor-swatch editor-eyedrop${picking ? " editor-eyedrop--active" : ""}`}
-          title="Pick a color from the image (I)"
-          aria-label="Eyedropper"
-          onClick={() => setPicking(!picking)}
-        >
-          <Pipette size={14} strokeWidth={1.75} />
-        </button>
+        {/* Eyedropper picks a color for the NEXT annotation, so it only appears with
+            a drawing tool active — not in select ("cursor") mode, where it's a no-op
+            that just confuses. */}
+        {tool !== "select" && (
+          <button
+            className={`editor-swatch editor-eyedrop${picking ? " editor-eyedrop--active" : ""}`}
+            title="Pick a color from the image (I)"
+            aria-label="Eyedropper"
+            onClick={() => setPicking(!picking)}
+          >
+            <Pipette size={14} strokeWidth={1.75} />
+          </button>
+        )}
       </div>
       <div className="editor-widths">
         {WIDTHS.map((w) => (

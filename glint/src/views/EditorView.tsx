@@ -107,10 +107,12 @@ export default function EditorView() {
         return;
       }
       // Eyedropper toggle — intentionally NOT in the `keys` tool map; it toggles
-      // pick mode rather than selecting a tool.
+      // pick mode rather than selecting a tool. Only meaningful with a drawing tool
+      // active (it sets the next annotation's color), so it's a no-op in select mode.
       if (e.key.toLowerCase() === "i") {
-        e.preventDefault();
         const st = useEditorStore.getState();
+        if (st.tool === "select") return;
+        e.preventDefault();
         st.setPicking(!st.picking);
         return;
       }

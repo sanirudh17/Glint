@@ -23,37 +23,46 @@ export function SpotlightDimLayer({
   useEffect(() => {
     const node = ref.current;
     if (!node) return;
-    node.cache({ x: 0, y: 0, width: baseWidth, height: baseHeight });
+    // The Group stays mounted even with zero regions so we can positively CLEAR the
+    // cached dim bitmap — returning null on empty left the last cached frame painted
+    // on the layer (the dim wouldn't disappear after deleting every spotlight).
+    if (regions.length === 0) {
+      node.clearCache();
+    } else {
+      node.cache({ x: 0, y: 0, width: baseWidth, height: baseHeight });
+    }
     node.getLayer()?.batchDraw();
-  }, [sig, dim, baseWidth, baseHeight]);
-
-  if (regions.length === 0) return null;
+  }, [sig, dim, baseWidth, baseHeight, regions.length]);
 
   return (
     <Group ref={ref} listening={false} x={0} y={0}>
-      <Rect x={0} y={0} width={baseWidth} height={baseHeight} fill="#000000" opacity={dim} />
-      {regions.map((a) => {
-        const x = Math.min(a.x, a.x + a.w);
-        const y = Math.min(a.y, a.y + a.h);
-        const w = Math.abs(a.w);
-        const h = Math.abs(a.h);
-        return (a.style.region ?? "rect") === "ellipse" ? (
-          <Ellipse
-            key={a.id}
-            x={x + w / 2} y={y + h / 2}
-            radiusX={w / 2} radiusY={h / 2}
-            fill="#000000"
-            globalCompositeOperation="destination-out"
-          />
-        ) : (
-          <Rect
-            key={a.id}
-            x={x} y={y} width={w} height={h}
-            fill="#000000"
-            globalCompositeOperation="destination-out"
-          />
-        );
-      })}
+      {regions.length > 0 && (
+        <>
+          <Rect x={0} y={0} width={baseWidth} height={baseHeight} fill="#000000" opacity={dim} />
+          {regions.map((a) => {
+            const x = Math.min(a.x, a.x + a.w);
+            const y = Math.min(a.y, a.y + a.h);
+            const w = Math.abs(a.w);
+            const h = Math.abs(a.h);
+            return (a.style.region ?? "rect") === "ellipse" ? (
+              <Ellipse
+                key={a.id}
+                x={x + w / 2} y={y + h / 2}
+                radiusX={w / 2} radiusY={h / 2}
+                fill="#000000"
+                globalCompositeOperation="destination-out"
+              />
+            ) : (
+              <Rect
+                key={a.id}
+                x={x} y={y} width={w} height={h}
+                fill="#000000"
+                globalCompositeOperation="destination-out"
+              />
+            );
+          })}
+        </>
+      )}
     </Group>
   );
 }

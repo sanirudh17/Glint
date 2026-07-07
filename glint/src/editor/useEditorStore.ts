@@ -191,7 +191,7 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   reset: () => set({ ...INITIAL, style: { ...DEFAULT_STYLE }, toolStyles: loadToolStyles(), frame: freshFrame() }),
   setTool: (t) =>
-    set((s) => ({ tool: t, selectedId: null, style: s.toolStyles[t] ?? { ...DEFAULT_STYLE } })),
+    set((s) => ({ tool: t, selectedId: null, style: s.toolStyles[t] ?? { ...DEFAULT_STYLE }, picking: false })),
   setStyle: (patch) =>
     set((s) => {
       const style = { ...s.style, ...patch };

@@ -73,11 +73,11 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
       dragOut(path);
     } catch { pushToast("Couldn't prepare drag"); }
   };
-  // Done hands off to the corner HUD; keep it native (a supersampled handoff image
-  // would be surprising downstream), so force scale 1 regardless of the toggle.
+  // Done hands off to the corner HUD at the chosen export scale (so the handed-off
+  // image matches the 1×/2× the user picked for this image).
   const onDone = withPng(async (png) => {
     await editorDone(png);
-  }, 1);
+  });
 
   return (
     <div className="editor-exportbar">

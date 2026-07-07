@@ -390,6 +390,18 @@ function SpotlightRegion({
       onTap={onSelect}
       onDragStart={onDragStart}
       onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y(), w, h } as Partial<Annotation>)}
+      // The Transformer resizes by scaling this hit-rect; the dim cut-out lives in a
+      // separate layer that reads w/h from the store, so commit the scale back as new
+      // w/h (and reset the node scale) or the resize would be visual-only and the dim
+      // would never move.
+      onTransformEnd={(e) => {
+        const node = e.target;
+        const nw = Math.max(1, node.width() * node.scaleX());
+        const nh = Math.max(1, node.height() * node.scaleY());
+        node.scaleX(1);
+        node.scaleY(1);
+        onChange({ x: node.x(), y: node.y(), w: nw, h: nh } as Partial<Annotation>);
+      }}
     />
   );
 }
