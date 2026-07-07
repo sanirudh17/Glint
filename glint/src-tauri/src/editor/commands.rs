@@ -16,39 +16,37 @@ pub struct EditorSourceDto {
     pub project_path: Option<String>,
 }
 
-/// Show + focus the main window and tell it to navigate to /editor.
+/// Open (or raise) the standalone editor window and put the main app window into the
+/// taskbar, minimized, so the user can restore it anytime and use both side-by-side.
 ///
-/// This relies on the main window being *hidden, never destroyed* (see the
-/// CloseRequested handler in lib.rs, which calls `hide()` instead of closing):
-/// its React app — and the `editor-open` listener in App.tsx — stay mounted, so
-/// the event below always lands on a live listener. If the main window is ever
-/// changed to truly close, this emit would fire into the void and the editor
-/// would silently fail to open.
-///
-/// NOTE on the `editor-open` event: every window (main, HUD, overlay) loads the
-/// same `index.html` and mounts the same `<App/>`, and Tauri's JS `listen()`
-/// receives an event emitted to ANY target — so `emit_to("main", ...)` does NOT
-/// actually stop the HUD/overlay listeners from firing. The real guard against
-/// the window-hijack bug (HUD turning into a mini-annotator; the pre-warmed
-/// overlay navigating to /editor and showing a stuck fullscreen annotator on the
-/// next capture) lives in `App.tsx`: it only navigates when it is the "main"
-/// window. We still `emit_to("main", ...)` here to express intent (main is the
-/// only legitimate consumer).
+/// The editor lives in its OWN decorated window (label "editor"), not the main
+/// window. Building a webview must happen OFF the main thread (a synchronous build on
+/// the main thread deadlocks the event loop), so we spawn: build/raise the editor
+/// window, then minimize main, then `emit_to("editor", "editor-open")`. A freshly
+/// built editor window fetches its source on mount, so that emit is a harmless no-op
+/// for it and a genuine reload trigger for an already-open one (reopen with a new
+/// image). EditorState is already set by the caller before this runs, so the mount
+/// fetch always sees the new source.
 pub(crate) fn open_editor_window(app: &AppHandle) {
-    if let Some(w) = app.get_webview_window("main") {
-        let _ = w.unminimize();
-        let _ = w.show();
-        // Windows won't reliably raise a hidden/background window with show() +
-        // set_focus() alone (the OS foreground lock). A brief always-on-top
-        // toggle forces it to the front; we immediately drop the topmost flag so
-        // the window behaves normally afterward. Without this the editor opens
-        // but stays behind whatever the user was looking at, so it feels like
-        // "Annotate" did nothing.
-        let _ = w.set_always_on_top(true);
-        let _ = w.set_focus();
-        let _ = w.set_always_on_top(false);
-    }
-    let _ = app.emit_to("main", "editor-open", ());
+    use crate::editor::window::{ensure_editor_window, EDITOR_LABEL};
+    let app = app.clone();
+    std::thread::spawn(move || match ensure_editor_window(&app) {
+        Ok(()) => {
+            // Minimize (not hide) the main window so it stays in the taskbar and the
+            // user can un-minimize it whenever they like (best-of-both-worlds).
+            // show() first so a main window that was hidden (e.g. after a capture)
+            // becomes taskbar-visible before it's minimized.
+            if let Some(main) = app.get_webview_window("main") {
+                let _ = main.show();
+                let _ = main.minimize();
+            }
+            let _ = app.emit_to(EDITOR_LABEL, "editor-open", ());
+        }
+        Err(e) => {
+            log::error!("open_editor_window: build failed: {e}");
+            let _ = app.emit("glint-toast", "Couldn't open the editor");
+        }
+    });
 }
 
 /// Set the editor source to a PNG and open/raise the editor window. Shared by the
@@ -261,13 +259,14 @@ pub fn editor_done(
     });
 
     // Building the tray webview must run OFF the main thread (window-build rule). Only
-    // hide the editor if the tray actually came up, so a build failure never strands
-    // the user with no window.
+    // close the editor window if the tray actually came up, so a build failure never
+    // strands the user with no window. The main window is left minimized in the
+    // taskbar (the user restores it from there) — Done doesn't touch it.
     let app2 = app.clone();
     std::thread::spawn(move || match crate::hud::ensure_open(&app2) {
         Ok(()) => {
-            if let Some(win) = app2.get_webview_window("main") {
-                let _ = win.hide();
+            if let Some(win) = app2.get_webview_window(crate::editor::window::EDITOR_LABEL) {
+                let _ = win.close();
             }
         }
         Err(e) => {

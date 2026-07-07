@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { router } from "./router";
 import {
   useAppStore,
@@ -11,7 +10,6 @@ import {
   type VisualSettings,
 } from "./store/useAppStore";
 import { ToastHost } from "./components/ui";
-import { consumePendingExternalOpen } from "./lib/shell";
 
 /** Payload of the `capture-complete` event emitted by tray-core after a crop. */
 type CaptureComplete = {
@@ -27,7 +25,11 @@ type CaptureComplete = {
  * Bootstraps the theme on mount (calls Rust settings_get_all, stamps
  * data-theme onto <html>), then hands off to the router.
  *
- * No greet() demo, no network calls.
+ * The annotation editor is NOT reached from here — it lives in its own OS window
+ * (label "editor", route #/editor, built by editor::window), so this window never
+ * navigates to /editor. That's why there's no `editor-open` navigation below: the
+ * editor window loads #/editor directly and its EditorView fetches the source on
+ * mount (and reloads on `editor-open` for a reopen).
  */
 export default function App() {
   const loadSettings = useAppStore((s) => s.loadSettings);
@@ -44,50 +46,10 @@ export default function App() {
   }, [loadSettings]);
 
   useEffect(() => {
-    // Cold start via "Open in Glint": Rust set the external image into EditorState
-    // and a one-shot pending flag before this webview mounted. Consume it and
-    // navigate; EditorView's mount fetch then loads the image.
-    //
-    // Guard to the MAIN window only. Every window (main, HUD, overlay) mounts the
-    // same <App/>, and PendingOpen is one global flag — without this guard a
-    // pre-warmed overlay/HUD webview could consume the flag and navigate ITSELF
-    // to /editor (showing a fullscreen annotator on the next capture). Only the
-    // main window owns the editor route.
-    let isMain = false;
-    try {
-      isMain = getCurrentWindow().label === "main";
-    } catch {
-      isMain = false; // not in a Tauri window (plain Vite) — nothing to open.
-    }
-    if (!isMain) return;
-    consumePendingExternalOpen()
-      .then((pending) => {
-        if (pending) router.navigate("/editor");
-      })
-      .catch(() => {
-        // Backend not ready (plain Vite) — nothing to open.
-      });
-  }, []);
-
-  useEffect(() => {
-    // Are we the main window? Every window (main, HUD `#/hud`, overlay `#/overlay`)
-    // loads the same index.html and mounts this same <App/> — they differ only by
-    // hash route. Tauri's listen() receives an event emitted to ANY target, so a
-    // listener registered here is live in EVERY window regardless of emit/emit_to.
-    // Anything that navigates the router must therefore run ONLY in the main
-    // window; otherwise the HUD turns into a mini-annotator and the pre-warmed
-    // overlay navigates to /editor (next capture shows a stuck fullscreen
-    // annotator). Toasts are fine in any window (e.g. glint-toast must reach the
-    // HUD's ToastHost for the copy-path hotkey).
-    let isMain = false;
-    try {
-      isMain = getCurrentWindow().label === "main";
-    } catch {
-      isMain = false;
-    }
-
     // Backend events → toasts. Each listen() returns an unlisten promise;
-    // collect them all and tear down on cleanup to avoid leaks.
+    // collect them all and tear down on cleanup to avoid leaks. These are fine in
+    // EVERY window (main, HUD, overlay, editor) — e.g. glint-toast must reach the
+    // HUD's ToastHost for the copy-path hotkey.
     const subs = [
       // Global shortcut events for the non-capture actions (record/settings).
       // Capture hotkeys go straight to capture::begin in Rust and do NOT emit
@@ -109,15 +71,6 @@ export default function App() {
       // Generic backend toast (e.g. capture errors surfaced from tray-core).
       listen<string>("glint-toast", (e) => {
         pushToast(e.payload);
-      }),
-
-      // Editor entry points (HUD Annotate / Library Edit / open-in-editor) emit this.
-      // MAIN WINDOW ONLY — see the isMain note above: navigating any other window
-      // to /editor is exactly the window-hijack bug. The main window is only ever
-      // hidden, never destroyed (lib.rs CloseRequested → hide), so this listener
-      // stays mounted for the whole session.
-      listen("editor-open", () => {
-        if (isMain) router.navigate("/editor");
       }),
 
       // Theme/accent changed in Settings — re-apply in THIS window too. Runs in
