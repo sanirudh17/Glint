@@ -391,27 +391,33 @@ pub fn tray_list(state: State<TrayState>) -> Vec<TrayItem> {
     state.0.lock().unwrap().list()
 }
 
-#[tauri::command]
+// `(async)` so this runs on a worker thread, not the main/UI thread. Decoding the PNG
+// and copying a full-resolution image to the Windows clipboard takes ~0.5–2s; on the
+// main thread that froze the whole HUD until it finished (the "delay when clicking
+// Copy"). The window-building tray actions already run async for the same reason.
+#[tauri::command(async)]
 pub fn tray_copy(state: State<TrayState>, id: u64) -> Result<(), String> {
     let it = tray_item(&state, id)?;
     let (rgba, w, h) = read_rgba(&it.path)?;
     clipboard::copy_image(&rgba, w, h)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tray_copy_path(state: State<TrayState>, id: u64) -> Result<(), String> {
     let it = tray_item(&state, id)?;
     clipboard::copy_text(&it.path)
 }
 
-#[tauri::command]
+#[tauri::command(async)]
 pub fn tray_reveal(state: State<TrayState>, id: u64) -> Result<(), String> {
     let it = tray_item(&state, id)?;
     reveal_in_explorer(&it.path)
 }
 
 /// Save a tray item into the Library (no-op returning its path if already saved).
-#[tauri::command]
+/// `(async)` — re-encoding the image + writing the file/thumbnail + the DB insert are
+/// all blocking work that must stay off the main/UI thread so the HUD stays responsive.
+#[tauri::command(async)]
 pub fn tray_save(app: AppHandle, state: State<TrayState>, id: u64) -> Result<String, String> {
     let it = tray_item(&state, id)?;
     if it.saved {
