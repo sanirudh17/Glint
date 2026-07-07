@@ -48,11 +48,13 @@ with **N** holes.
 - `SpotlightRegion` (per annotation) is reduced to **only** its invisible-but-hittable rect
   (`id={a.id}`, `fill=#fff opacity=0`, draggable) for selection/drag/resize/delete. It no longer
   draws any dim of its own.
-- **Z-order.** `EditorStage` renders `SpotlightDimLayer` **once**, positioned just above the
-  base image and above image-level effects (blur / redact / highlight), and **below** vector
-  marks (arrow / line / rect / ellipse / text / pen / step) so spotlight dims *the screenshot*,
-  not your annotations. The per-annotation spotlight hit-rects render in their normal place in
-  the annotation list (their z-order only affects hit-testing, not the shared dim).
+- **Z-order.** `EditorStage` renders `SpotlightDimLayer` **once**, as the first (bottom) child
+  of the annotations clip group — above the base screenshot (which lives in a separate, lower
+  Konva layer) and **below all annotations**. So the dim affects *the screenshot* while every
+  annotation (vector marks and image-effects alike) renders on top and stays fully visible. This
+  is simpler and more robust than interleaving image-effects vs. marks (which would fracture the
+  user's bring-forward/send-back z-ordering). The per-annotation spotlight hit-rects still render
+  in their normal place in the annotation list (z-order only affects hit-testing).
 - **Shared dim value.** Because there is one overlay, dim is conceptually a single property of
   the whole effect. Each spotlight annotation still carries `style.fillOpacity` (model stays
   uniform), but the StyleBar dim slider, when a spotlight is selected, updates the dim on **all**
