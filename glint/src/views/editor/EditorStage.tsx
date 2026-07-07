@@ -53,6 +53,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const frame = useEditorStore((s) => s.frame);
   const select = useEditorStore((s) => s.select);
   const add = useEditorStore((s) => s.add);
+  const discardDraft = useEditorStore((s) => s.discardDraft);
   const update = useEditorStore((s) => s.update);
   const remove = useEditorStore((s) => s.remove);
   const setAnnotations = useEditorStore((s) => s.setAnnotations);
@@ -369,8 +370,24 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   };
 
   const onUp = () => {
+    const id = draftId.current;
     draftId.current = null;
     erasing.current = false;
+    if (!id) return;
+    // Discard a draft that ended at ~0 size — the gesture was a click, not a drag.
+    // Most important for spotlights: a 0×0 spotlight dims the whole canvas with no
+    // bright hole and can't be selected (0×0 hit area) to delete, so it looks like a
+    // permanently stuck dim. Also cleans up invisible 0-size rects/arrows/etc.
+    const a = useEditorStore.getState().annotations.find((n) => n.id === id);
+    if (!a) return;
+    const MIN = 3; // image px
+    let degenerate = false;
+    if (a.type === "rect" || a.type === "ellipse" || a.type === "blur" || a.type === "redact" || a.type === "spotlight") {
+      degenerate = Math.abs(a.w) < MIN && Math.abs(a.h) < MIN;
+    } else if (a.type === "arrow" || a.type === "line") {
+      degenerate = Math.abs(a.x2 - a.x1) < MIN && Math.abs(a.y2 - a.y1) < MIN;
+    }
+    if (degenerate) discardDraft(id);
   };
 
   // Double-click an existing text annotation (Select tool) to re-edit it.
