@@ -103,6 +103,10 @@ export function StyleBar() {
 
   return (
     <div className="editor-stylebar" role="toolbar" aria-label="Style">
+      {/* A spotlight has no color or stroke — it's a dimmed cut-out. Show only its own
+          controls (shape + dim, below); hide the color swatches and S/M/L widths that
+          don't apply to it. */}
+      {!isSpotlight && (
       <div className="editor-swatches">
         {COLORS.map((c) => (
           <button
@@ -142,6 +146,8 @@ export function StyleBar() {
           </button>
         )}
       </div>
+      )}
+      {!isSpotlight && (
       <div className="editor-widths">
         {WIDTHS.map((w) => (
           <button
@@ -155,6 +161,7 @@ export function StyleBar() {
           </button>
         ))}
       </div>
+      )}
       {isShape && (
         <div className="editor-fillgroup">
           <button

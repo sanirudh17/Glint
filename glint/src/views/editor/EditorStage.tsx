@@ -495,6 +495,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
             <SpotlightDimLayer
               regions={annotations.filter((a): a is BoxAnno => a.type === "spotlight")}
               dim={resolveSpotlightDim(annotations, selectedId)}
+              baseImage={base.image}
               baseWidth={base.width}
               baseHeight={base.height}
             />
