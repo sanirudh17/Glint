@@ -1,17 +1,19 @@
-import type { RefObject } from "react";
+import { useState, type RefObject } from "react";
 import type Konva from "konva";
 import { Copy, Download, Share2, Check } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { useAppStore } from "../../store/useAppStore";
 import { computeLayout, exportPixelRatio } from "../../editor/composition";
+import { scaledPixelRatio, loadExportScale, saveExportScale, type ExportScale } from "../../editor/exportScale";
 import { editorCopy, editorSave, editorFlattenTemp, editorDone, dragOut } from "../../lib/editor";
 
 /**
  * Flatten the stage to base64 PNG (no data-url prefix) at the native composition
- * resolution. Reads crop/frame from the store so the pixel-ratio scales the
- * scaled-down stage back to the full framed composition's native pixels.
+ * resolution times the chosen export scale. Reads crop/frame from the store so the
+ * pixel-ratio scales the scaled-down stage back to the full framed composition's
+ * native pixels; `scale` supersamples on top of that (2× = sharper vector layers).
  */
-function flatten(stage: Konva.Stage): string {
+function flatten(stage: Konva.Stage, scale: ExportScale): string {
   const { base, crop, frame } = useEditorStore.getState();
   if (!base) return "";
 
@@ -26,7 +28,7 @@ function flatten(stage: Konva.Stage): string {
   if (tr) { tr.nodes([]); tr.getLayer()?.batchDraw(); }
 
   const layout = computeLayout(base.width, base.height, crop, frame);
-  const pixelRatio = exportPixelRatio(layout, stageW); // → native composition px
+  const pixelRatio = scaledPixelRatio(exportPixelRatio(layout, stageW), scale); // native × scale
   let url: string;
   try {
     url = stage.toDataURL({ pixelRatio, mimeType: "image/png" });
@@ -43,11 +45,12 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
   // an inline status span — a long "Exported · <filename>" used to wrap inside
   // the toolbar and squash the buttons into a cramped box.
   const pushToast = useAppStore((s) => s.pushToast);
+  const [scale, setScale] = useState<ExportScale>(loadExportScale);
 
-  const withPng = (fn: (png: string) => Promise<void>) => async () => {
+  const withPng = (fn: (png: string) => Promise<void>, s: ExportScale = scale) => async () => {
     const stage = stageRef.current;
     if (!stage || !base) return;
-    const png = flatten(stage);
+    const png = flatten(stage, s);
     if (!png) { pushToast("Couldn't render the image"); return; }
     try { await fn(png); } catch { pushToast("Something went wrong"); }
   };
@@ -63,19 +66,33 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
   const onDrag = async () => {
     const stage = stageRef.current;
     if (!stage || !base) return;
-    const png = flatten(stage);
+    const png = flatten(stage, scale);
     if (!png) { pushToast("Couldn't render the image"); return; }
     try {
       const path = await editorFlattenTemp(png);
       dragOut(path);
     } catch { pushToast("Couldn't prepare drag"); }
   };
+  // Done hands off to the corner HUD; keep it native (a supersampled handoff image
+  // would be surprising downstream), so force scale 1 regardless of the toggle.
   const onDone = withPng(async (png) => {
     await editorDone(png);
-  });
+  }, 1);
 
   return (
     <div className="editor-exportbar">
+      <div className="editor-scale" role="group" aria-label="Export scale">
+        {([1, 2] as ExportScale[]).map((s) => (
+          <button
+            key={s}
+            className={`editor-scale-btn${scale === s ? " editor-scale-btn--active" : ""}`}
+            onClick={() => { setScale(s); saveExportScale(s); }}
+            title={s === 2 ? "Export at 2× (sharper vector layers; larger file)" : "Export at native resolution"}
+          >
+            {s}×
+          </button>
+        ))}
+      </div>
       <button
         className="editor-export-btn"
         // Press-and-drag: the OS drag must start while the mouse button is held,
