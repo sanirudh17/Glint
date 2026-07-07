@@ -603,16 +603,16 @@ pub async fn recorder_audio_check(app: tauri::AppHandle) -> Result<u64, String> 
     std::fs::metadata(&out_str).map(|m| m.len()).map_err(|e| format!("no output: {e}"))
 }
 
-/// Block until the webcam bubble reports its camera is live (`rec-cam-ready`, fired
-/// after getUserMedia resolves — i.e. the user pressed Allow) or failed/denied
-/// (`rec-cam-failed`), or 20s elapse. Called before the countdown so the WebView2
-/// camera-permission prompt is resolved up front and never recorded; bounded so a
-/// stuck prompt or a missing event can't wedge the start.
-///
-/// Returns whether movable-mode recording is supported (the `rec-cam-ready` payload's
-/// `movableOk`, i.e. MediaRecorder/VP8). Defaults `true` on timeout/parse issues; only
-/// consulted for movable recordings.
-async fn wait_for_cam_ready(app: &AppHandle) -> bool {
+/// Register the `rec-cam-ready`/`rec-cam-failed` listeners IMMEDIATELY and return a
+/// future that resolves to whether movable-mode recording is supported (the
+/// `rec-cam-ready` payload's `movableOk`, i.e. MediaRecorder/VP8; defaults `true` on
+/// timeout/parse issues, only consulted for movable recordings). Awaiting is deferred so
+/// the camera warmup can overlap the countdown: arm this before building the bubble (so a
+/// ready event that fires during the 3-2-1 isn't missed), then `.await` the returned
+/// future after the countdown — by then it's almost always already resolved (getUserMedia
+/// resolved, the permission prompt handled up front), so it rarely blocks. Bounded at 20s
+/// so a stuck prompt or a missing event can't wedge the start.
+fn arm_cam_ready(app: &AppHandle) -> impl std::future::Future<Output = bool> {
     use tauri::Listener;
     let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
     let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
@@ -628,14 +628,17 @@ async fn wait_for_cam_ready(app: &AppHandle) -> bool {
     let failed = app.once("rec-cam-failed", move |_| {
         if let Some(t) = txf.lock().unwrap().take() { let _ = t.send(true); }
     });
-    let movable_ok = tokio::time::timeout(std::time::Duration::from_secs(20), rx)
-        .await
-        .ok()
-        .and_then(|r| r.ok())
-        .unwrap_or(true);
-    app.unlisten(ready);
-    app.unlisten(failed);
-    movable_ok
+    let app = app.clone();
+    async move {
+        let movable_ok = tokio::time::timeout(std::time::Duration::from_secs(20), rx)
+            .await
+            .ok()
+            .and_then(|r| r.ok())
+            .unwrap_or(true);
+        app.unlisten(ready);
+        app.unlisten(failed);
+        movable_ok
+    }
 }
 
 /// Start recording. `mode` is "fullscreen" or "region"; region passes x/y/w/h
@@ -760,9 +763,30 @@ pub async fn recorder_start(
     // Bubble's normalized on-screen placement — persisted for movable recordings so the trim
     // overlay starts at the same spot/size.
     let mut cam_placement: Option<(f64, f64, f64)> = None;
+    // Arm the cam-ready listener BEFORE building the bubble (so a ready event that fires
+    // during the countdown isn't missed), then let the camera warm up DURING the 3-2-1
+    // instead of before it — the countdown appears immediately and the ~1-2s getUserMedia
+    // / camera spin-up overlaps the countdown rather than delaying the whole start. Safe:
+    // capture (segment 0) doesn't begin until after the countdown, so the first-run
+    // permission prompt is never recorded.
+    let cam_ready = if want_cam { Some(arm_cam_ready(&app)) } else { None };
     if want_cam {
         cam_placement = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable, &webcam_shape).ok().flatten();
-        let movable_ok = wait_for_cam_ready(&app).await;
+    }
+
+    // 3-2-1 countdown. It is NOT closed here: it stays up (holding on a small "Starting…"
+    // label past zero) until segment 0 is confirmed capturing, then we close it below.
+    // That way the user's "go" moment (the countdown vanishing) coincides with ffmpeg
+    // being genuinely live — so the first action is never lost to ffmpeg's ~1s warmup —
+    // and no dead pre-roll is prepended. The countdown window is excluded from capture,
+    // so it never bleeds into the first frames.
+    let _ = windows::build_countdown(&app);
+    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+
+    // Confirm the camera is live before capture. After the 3s countdown it's almost
+    // always already resolved (warmed up behind the countdown), so this rarely blocks.
+    if let Some(cam_ready) = cam_ready {
+        let movable_ok = cam_ready.await;
         if want_cam_movable && !movable_ok {
             // MediaRecorder/VP8 unsupported here — rebuild the bubble WITHOUT capture
             // exclusion so gdigrab bakes it in and the user still gets a webcam.
@@ -772,15 +796,6 @@ pub async fn recorder_start(
             want_cam_movable = false;
         }
     }
-
-    // 3-2-1 countdown. It is NOT closed here: it stays up (holding on an "arming" dot
-    // past zero) until segment 0 is confirmed capturing, then we close it below. That
-    // way the user's "go" moment (the countdown vanishing) coincides with ffmpeg being
-    // genuinely live — so the first action is never lost to ffmpeg's ~1s warmup — and
-    // no dead pre-roll is prepended. The countdown window is excluded from capture, so
-    // its digit never bleeds into the first frames.
-    let _ = windows::build_countdown(&app);
-    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
 
     let audio_cfg = AudioConfig { system: system.unwrap_or(true), mic: mic.unwrap_or(false) };
     // A source off in the selector starts muted so it can be unmuted live.

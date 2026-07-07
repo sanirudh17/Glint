@@ -28,12 +28,14 @@ export function Countdown() {
     const id = window.setTimeout(() => void getCurrentWindow().close(), 15000);
     return () => window.clearTimeout(id);
   }, []);
-  // n>0: the big 3·2·1 digit. At zero we hold on a SMALL pulsing "arming" dot (not the
-  // full-size digit) until the backend closes us the instant ffmpeg is truly capturing —
-  // subtle enough not to read as a stray white blob, present enough to say "not yet".
+  // n>0: the big 3·2·1 digit. At zero we hold on a small "Starting…" label (not the
+  // full-size digit, and not a bare dot that reads as a stray white blob) until the
+  // backend closes us the instant ffmpeg is truly capturing (~1s). It says "not yet,
+  // hold" so the first action isn't lost to ffmpeg's init, and reads as intentional
+  // feedback rather than a glitch.
   return (
     <div className="rec-countdown">
-      {n > 0 ? n : <span className="rec-countdown-arming" aria-label="Starting recording" />}
+      {n > 0 ? n : <span className="rec-countdown-arming">Starting…</span>}
     </div>
   );
 }
