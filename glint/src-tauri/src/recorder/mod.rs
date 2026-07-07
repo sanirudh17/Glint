@@ -618,10 +618,16 @@ async fn wait_for_cam_ready(app: &AppHandle) -> bool {
     let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
     let txr = tx.clone();
     let ready = app.once("rec-cam-ready", move |e| {
-        let movable_ok = serde_json::from_str::<serde_json::Value>(e.payload())
-            .ok()
+        let payload = serde_json::from_str::<serde_json::Value>(e.payload()).ok();
+        let movable_ok = payload
+            .as_ref()
             .and_then(|v| v.get("movableOk").and_then(|b| b.as_bool()))
             .unwrap_or(true);
+        let shape = payload
+            .as_ref()
+            .and_then(|v| v.get("shape").and_then(|s| s.as_str()))
+            .unwrap_or("?");
+        log::info!("[rec-cam] RecCam read: shape={shape}");
         if let Some(t) = txr.lock().unwrap().take() { let _ = t.send(movable_ok); }
     });
     let txf = tx.clone();
@@ -676,6 +682,7 @@ pub async fn recorder_start(
         let s = state.0.lock().unwrap();
         (s.record_fps, s.record_webcam_movable, s.webcam_shape.clone(), s.record_resolution.clone(), s.record_quality.clone())
     };
+    log::info!("[rec-cam] start read: webcam_shape={webcam_shape}");
 
     // Choose the capture engine once (cached per session): ddagrab (GPU, true 60 fps)
     // when the machine supports it, else the proven gdigrab path. Fixed for the whole
