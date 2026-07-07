@@ -81,16 +81,24 @@ export function ControlBar() {
     const refit = () => {
       cancelAnimationFrame(raf);
       raf = requestAnimationFrame(async () => {
-        const r = el.getBoundingClientRect();
-        // Extra height above the pill reserves room for the hover tooltip (the pill
-        // is anchored to the window's bottom edge; see .rec-bar / .rec-tip in CSS).
-        const TIP_PAD = 34;
-        const cssW = Math.ceil(r.width) + 2, cssH = Math.ceil(r.height) + TIP_PAD;
-        if (cssW <= 2 || cssH <= 2) return;
         try {
           const scale = await win.scaleFactor();
           const pos = await win.outerPosition();
           const size = await win.outerSize();
+          // Measure AFTER the awaits, not before: several refits can be in flight at
+          // once (initial mount when the pill is still small + the refit fired when
+          // the FX/audio toggles load and it grows). Reading the width up front let a
+          // late-resolving stale callback shrink the window back under the now-larger
+          // pill — clipping it on both edges. Re-reading here means whichever callback
+          // lands last still sizes to the pill's CURRENT width.
+          const node = barRef.current;
+          if (!node) return;
+          const r = node.getBoundingClientRect();
+          // Extra height above the pill reserves room for the hover tooltip (the pill
+          // is anchored to the window's bottom edge; see .rec-bar / .rec-tip in CSS).
+          const TIP_PAD = 34;
+          const cssW = Math.ceil(r.width) + 2, cssH = Math.ceil(r.height) + TIP_PAD;
+          if (cssW <= 2 || cssH <= 2) return;
           const newW = Math.round(cssW * scale), newH = Math.round(cssH * scale);
           if (newW === size.width && newH === size.height) return;
           // Keep centered horizontally + keep the bottom edge where it was.

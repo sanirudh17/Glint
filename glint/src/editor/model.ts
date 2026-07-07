@@ -16,6 +16,8 @@ export type ToolId =
   | "pen"
   | "highlight"
   | "blur"
+  | "redact"
+  | "spotlight"
   | "step"
   | "eraser"
   | "crop";
@@ -32,6 +34,10 @@ export interface Style {
   dashed?: boolean;
   /** arrow tool: also draw a head at the start point; default false. */
   arrowStart?: boolean;
+  /** redact tool: "solid" opaque block (default) or "pixelate" mosaic. */
+  redactStyle?: "solid" | "pixelate";
+  /** spotlight tool: bright-region shape. "rect" (default) or "ellipse". */
+  region?: "rect" | "ellipse";
 }
 
 interface Base {
@@ -45,7 +51,7 @@ export interface TwoPointAnno extends Base {
   x1: number; y1: number; x2: number; y2: number;
 }
 export interface BoxAnno extends Base {
-  type: "rect" | "ellipse" | "blur";
+  type: "rect" | "ellipse" | "blur" | "redact" | "spotlight";
   x: number; y: number; w: number; h: number;
 }
 export interface TextAnno extends Base {
@@ -185,6 +191,8 @@ export function duplicateAnnotation(a: Annotation): Annotation {
     case "rect":
     case "ellipse":
     case "blur":
+    case "redact":
+    case "spotlight":
       return { ...(base as BoxAnno), x: a.x + OFF, y: a.y + OFF };
     case "text":
       return { ...(base as TextAnno), x: a.x + OFF, y: a.y + OFF };
@@ -205,6 +213,8 @@ export function nudgeAnnotation(a: Annotation, dx: number, dy: number): Annotati
     case "rect":
     case "ellipse":
     case "blur":
+    case "redact":
+    case "spotlight":
     case "text":
     case "step":
       return { ...a, x: a.x + dx, y: a.y + dy };

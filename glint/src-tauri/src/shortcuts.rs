@@ -37,6 +37,9 @@ fn apply(app: &AppHandle, strict: bool) -> Result<(), String> {
             (h.capture_fullscreen.clone(), "capture_fullscreen"),
             (h.record.clone(), "record"),
             (h.copy_path.clone(), "copy_path"),
+            (h.capture_area_delayed.clone(), "capture_area_delayed"),
+            (h.capture_window_delayed.clone(), "capture_window_delayed"),
+            (h.capture_fullscreen_delayed.clone(), "capture_fullscreen_delayed"),
         ]
     };
 
@@ -64,6 +67,24 @@ fn apply(app: &AppHandle, strict: bool) -> Result<(), String> {
                         }
                         "capture_fullscreen" => {
                             crate::capture::begin_spawned(
+                                handle,
+                                crate::capture::CaptureMode::Fullscreen,
+                            );
+                        }
+                        "capture_area_delayed" => {
+                            crate::capture::begin_delayed_spawned(
+                                handle,
+                                crate::capture::CaptureMode::Area,
+                            );
+                        }
+                        "capture_window_delayed" => {
+                            crate::capture::begin_delayed_spawned(
+                                handle,
+                                crate::capture::CaptureMode::Window,
+                            );
+                        }
+                        "capture_fullscreen_delayed" => {
+                            crate::capture::begin_delayed_spawned(
                                 handle,
                                 crate::capture::CaptureMode::Fullscreen,
                             );

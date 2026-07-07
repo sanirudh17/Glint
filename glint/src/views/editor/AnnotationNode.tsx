@@ -182,6 +182,35 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
         />
       );
     }
+    case "redact": {
+      const a = anno as BoxAnno;
+      return (
+        <RedactRegion
+          a={a}
+          baseImage={baseImage}
+          baseWidth={baseWidth}
+          baseHeight={baseHeight}
+          draggable={draggable}
+          onSelect={onSelect}
+          onDragStart={onDragStart}
+          onChange={onChange}
+        />
+      );
+    }
+    case "spotlight": {
+      const a = anno as BoxAnno;
+      return (
+        <SpotlightRegion
+          a={a}
+          baseWidth={baseWidth}
+          baseHeight={baseHeight}
+          draggable={draggable}
+          onSelect={onSelect}
+          onDragStart={onDragStart}
+          onChange={onChange}
+        />
+      );
+    }
   }
 }
 
@@ -262,5 +291,140 @@ function BlurRegion({
     >
       <KonvaImage image={baseImage} width={baseWidth} height={baseHeight} listening={false} />
     </Group>
+  );
+}
+
+/** Redaction: "solid" paints an opaque block (pixels gone from the export);
+ * "pixelate" is a cached, mosaic'd copy of the base image clipped to a rect. */
+function RedactRegion({
+  a, baseImage, baseWidth, baseHeight, draggable, onSelect, onDragStart, onChange,
+}: {
+  a: BoxAnno;
+  baseImage: HTMLImageElement;
+  baseWidth: number;
+  baseHeight: number;
+  draggable: boolean;
+  onSelect: () => void;
+  onDragStart: () => void;
+  onChange: (patch: Partial<Annotation>) => void;
+}) {
+  const ref = useRef<Konva.Group>(null);
+  const x = Math.min(a.x, a.x + a.w);
+  const y = Math.min(a.y, a.y + a.h);
+  const w = Math.abs(a.w);
+  const h = Math.abs(a.h);
+  const pixelate = a.style.redactStyle === "pixelate";
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node || !pixelate || w < 1 || h < 1) return;
+    node.cache({ x, y, width: w, height: h });
+    node.getLayer()?.batchDraw();
+  }, [x, y, w, h, baseImage, pixelate]);
+
+  if (w < 1 || h < 1) return null;
+
+  if (!pixelate) {
+    // Solid opaque block. The underlying pixels are not present in the export.
+    return (
+      <Rect
+        id={a.id}
+        x={x} y={y} width={w} height={h}
+        fill={a.style.color}
+        draggable={draggable}
+        onMouseDown={onSelect}
+        onTap={onSelect}
+        onDragStart={onDragStart}
+        onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y(), w, h } as Partial<Annotation>)}
+      />
+    );
+  }
+
+  return (
+    <Group
+      id={a.id}
+      ref={ref}
+      draggable={draggable}
+      onMouseDown={onSelect}
+      onTap={onSelect}
+      onDragStart={onDragStart}
+      onDragEnd={(e) =>
+        onChange({ x: x + e.target.x(), y: y + e.target.y(), w, h } as Partial<Annotation>)
+      }
+      x={0}
+      y={0}
+      clipX={x}
+      clipY={y}
+      clipWidth={w}
+      clipHeight={h}
+      filters={[Konva.Filters.Pixelate]}
+      pixelSize={14}
+    >
+      <KonvaImage image={baseImage} width={baseWidth} height={baseHeight} listening={false} />
+    </Group>
+  );
+}
+
+/** Spotlight: dim the whole canvas except one bright region (rect or ellipse). The
+ * dim + hole live in a CACHED group so the destination-out composite is isolated to
+ * the group's own buffer (it must not erase the base image beneath). A separate
+ * invisible rect over the region provides selection + drag. */
+function SpotlightRegion({
+  a, baseWidth, baseHeight, draggable, onSelect, onDragStart, onChange,
+}: {
+  a: BoxAnno;
+  baseWidth: number;
+  baseHeight: number;
+  draggable: boolean;
+  onSelect: () => void;
+  onDragStart: () => void;
+  onChange: (patch: Partial<Annotation>) => void;
+}) {
+  const ref = useRef<Konva.Group>(null);
+  const x = Math.min(a.x, a.x + a.w);
+  const y = Math.min(a.y, a.y + a.h);
+  const w = Math.abs(a.w);
+  const h = Math.abs(a.h);
+  const dim = a.style.fillOpacity ?? 0.6;
+  const region = a.style.region ?? "rect";
+
+  useEffect(() => {
+    const node = ref.current;
+    if (!node) return;
+    node.cache({ x: 0, y: 0, width: baseWidth, height: baseHeight });
+    node.getLayer()?.batchDraw();
+  }, [x, y, w, h, dim, region, baseWidth, baseHeight]);
+
+  return (
+    <>
+      <Group ref={ref} listening={false} x={0} y={0}>
+        <Rect x={0} y={0} width={baseWidth} height={baseHeight} fill="#000000" opacity={dim} />
+        {region === "ellipse" ? (
+          <Ellipse
+            x={x + w / 2} y={y + h / 2}
+            radiusX={Math.abs(w / 2)} radiusY={Math.abs(h / 2)}
+            fill="#000000"
+            globalCompositeOperation="destination-out"
+          />
+        ) : (
+          <Rect
+            x={x} y={y} width={w} height={h}
+            fill="#000000"
+            globalCompositeOperation="destination-out"
+          />
+        )}
+      </Group>
+      {/* Invisible (opacity 0) but fully hittable — Konva's hit canvas ignores opacity. */}
+      <Rect
+        id={a.id}
+        x={x} y={y} width={w} height={h}
+        fill="#ffffff" opacity={0}
+        draggable={draggable}
+        onMouseDown={onSelect}
+        onTap={onSelect}
+        onDragStart={onDragStart}
+        onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y(), w, h } as Partial<Annotation>)}
+      />
+    </>
   );
 }

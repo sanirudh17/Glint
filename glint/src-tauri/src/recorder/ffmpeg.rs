@@ -34,25 +34,49 @@ pub enum VideoEncoder {
     Amf,
 }
 
-/// The `-c:v …` encode tail for `encoder`. Every variant outputs H.264 / yuv420p so the
-/// downstream muxer, segment concat, trim editor, and players are all unchanged. The
-/// `Libx264` tail is byte-identical to the historical inline tail.
-pub fn encoder_args(enc: VideoEncoder) -> Vec<String> {
+/// H.264 quantizer for a quality tier. The same numeric scale (~0–51) works across the
+/// libx264 CRF and the hardware encoders' CQ/QP controls; only the FLAG name differs per
+/// encoder. "high" (21) matches the historical fixed value, so High is a no-op change.
+pub fn quality_cq(quality: &str) -> u32 {
+    match quality {
+        "medium" => 27,
+        "low" => 33,
+        _ => 21, // "high" and any unknown value
+    }
+}
+
+/// The `scale=…` filter for a resolution tier, or None for "original". `-2` keeps the
+/// aspect ratio and rounds width to an even number (H.264 yuv420p requires even dims).
+pub fn scale_filter(resolution: &str) -> Option<String> {
+    match resolution {
+        "1080p" => Some("scale=-2:1080".into()),
+        "720p" => Some("scale=-2:720".into()),
+        _ => None, // "original" and any unknown value
+    }
+}
+
+/// The `-c:v …` encode tail for `encoder` at `quality`. Every variant outputs H.264 /
+/// yuv420p so the downstream muxer, segment concat, trim editor, and players are all
+/// unchanged. `quality` maps to the encoder's own quantizer flag via `quality_cq`.
+pub fn encoder_args(enc: VideoEncoder, quality: &str) -> Vec<String> {
     let s = |x: &str| x.to_string();
+    let q = quality_cq(quality).to_string();
     let mut a = match enc {
-        VideoEncoder::Libx264 => vec![s("-c:v"), s("libx264"), s("-preset"), s("ultrafast")],
-        // p4 = balanced NVENC preset; vbr+cq 21 targets visually-transparent quality with
+        VideoEncoder::Libx264 => {
+            vec![s("-c:v"), s("libx264"), s("-preset"), s("ultrafast"), s("-crf"), q]
+        }
+        // p4 = balanced NVENC preset; vbr+cq targets visually-transparent quality with
         // the GPU picking bitrate. b:v 0 lets cq drive rate control.
         VideoEncoder::Nvenc => vec![
             s("-c:v"), s("h264_nvenc"), s("-preset"), s("p4"),
-            s("-rc"), s("vbr"), s("-cq"), s("21"), s("-b:v"), s("0"),
+            s("-rc"), s("vbr"), s("-cq"), q, s("-b:v"), s("0"),
         ],
         VideoEncoder::Qsv => vec![
-            s("-c:v"), s("h264_qsv"), s("-preset"), s("veryfast"), s("-global_quality"), s("21"),
+            s("-c:v"), s("h264_qsv"), s("-preset"), s("veryfast"), s("-global_quality"), q,
         ],
         VideoEncoder::Amf => vec![
             s("-c:v"), s("h264_amf"), s("-quality"), s("balanced"),
-            s("-rc"), s("cqp"), s("-qp_i"), s("21"), s("-qp_p"), s("21"),
+            s("-rc"), s("cqp"), s("-qp_i"), q.clone(), s("-qp_p"), q,
         ],
     };
     a.extend([s("-pix_fmt"), s("yuv420p")]);
@@ -115,12 +139,15 @@ pub fn build_ffmpeg_args(
     want_audio: bool,
     draw_mouse: bool,
     encoder: VideoEncoder,
+    resolution: &str,
+    quality: &str,
 ) -> Vec<String> {
     let mut a: Vec<String> = vec![
         "-y".into(),
         "-nostats".into(),
         "-loglevel".into(), "error".into(),
     ];
+    let scale = scale_filter(resolution);
 
     // Video input flags + the index of the first audio input. gdigrab is a real input
     // (0) → audio starts at 1. ddagrab is a filter SOURCE (no -i) → audio starts at 0.
@@ -183,14 +210,20 @@ pub fn build_ffmpeg_args(
             if let RecordTarget::Region { x, y, w, h } = target {
                 src.push_str(&format!(":video_size={w}x{h}:offset_x={x}:offset_y={y}"));
             }
-            Some(format!("{src},hwdownload,format=bgra[v]"))
+            let tail = match &scale {
+                Some(sf) => format!("hwdownload,format=bgra,{sf}[v]"),
+                None => "hwdownload,format=bgra[v]".to_string(),
+            };
+            Some(format!("{src},{tail}"))
         }
-        CaptureEngine::Gdigrab => None,
+        // gdigrab video is input 0. With no scaling it auto-maps; with scaling we build an
+        // explicit [0:v]scale[v] chain so the existing filter/map arms tag and map [v].
+        CaptureEngine::Gdigrab => scale.as_ref().map(|sf| format!("[0:v]{sf}[v]")),
     };
 
     // Video codec: the chosen encoder's tail (H.264/yuv420p for every variant → concat-copy
     // safe; the encoder is fixed for the whole recording).
-    a.extend(encoder_args(encoder));
+    a.extend(encoder_args(encoder, quality));
 
     // Audio filter graph producing [aout], or None. Input indices use `audio_base`.
     let audio_fc = audio_graph(audio, silent_pad, audio_base);
@@ -276,12 +309,13 @@ mod tests {
     use crate::recorder::RecordTarget;
 
     #[test]
-    fn encoder_args_libx264_is_unchanged_tail() {
+    fn encoder_args_libx264_has_crf_tail() {
         assert_eq!(
-            encoder_args(VideoEncoder::Libx264),
+            encoder_args(VideoEncoder::Libx264, "high"),
             vec![
                 "-c:v".to_string(), "libx264".into(),
                 "-preset".into(), "ultrafast".into(),
+                "-crf".into(), "21".into(),
                 "-pix_fmt".into(), "yuv420p".into(),
             ]
         );
@@ -294,17 +328,65 @@ mod tests {
             (VideoEncoder::Qsv, "h264_qsv"),
             (VideoEncoder::Amf, "h264_amf"),
         ] {
-            let a = encoder_args(enc);
+            let a = encoder_args(enc, "high");
             assert!(a.windows(2).any(|w| w[0] == "-c:v" && w[1] == name), "{name} -c:v");
             assert!(a.windows(2).any(|w| w[0] == "-pix_fmt" && w[1] == "yuv420p"), "{name} pix_fmt");
         }
     }
 
     #[test]
+    fn quality_cq_maps_tiers() {
+        assert_eq!(quality_cq("high"), 21);
+        assert_eq!(quality_cq("medium"), 27);
+        assert_eq!(quality_cq("low"), 33);
+        assert_eq!(quality_cq("bogus"), 21);
+    }
+
+    #[test]
+    fn encoder_args_threads_quality_value() {
+        let x = encoder_args(VideoEncoder::Libx264, "low");
+        assert!(x.windows(2).any(|w| w[0] == "-crf" && w[1] == "33"), "libx264 crf");
+        let n = encoder_args(VideoEncoder::Nvenc, "medium");
+        assert!(n.windows(2).any(|w| w[0] == "-cq" && w[1] == "27"), "nvenc cq");
+        let q = encoder_args(VideoEncoder::Qsv, "high");
+        assert!(q.windows(2).any(|w| w[0] == "-global_quality" && w[1] == "21"), "qsv gq");
+        let a = encoder_args(VideoEncoder::Amf, "high");
+        assert!(a.windows(2).any(|w| w[0] == "-qp_i" && w[1] == "21"), "amf qp");
+    }
+
+    #[test]
+    fn scale_filter_maps_resolution() {
+        assert_eq!(scale_filter("original"), None);
+        assert_eq!(scale_filter("1080p").as_deref(), Some("scale=-2:1080"));
+        assert_eq!(scale_filter("720p").as_deref(), Some("scale=-2:720"));
+    }
+
+    #[test]
+    fn ddagrab_vchain_includes_scale_when_downscaled() {
+        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, VideoEncoder::Libx264, "720p", "high");
+        let fc = a.iter().position(|t| t == "-filter_complex").map(|i| a[i + 1].clone()).unwrap_or_default();
+        assert!(fc.contains("scale=-2:720"), "filter_complex should scale: {fc}");
+    }
+
+    #[test]
+    fn gdigrab_scale_creates_mapped_vchain() {
+        let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "o.mp4", &[], false, true, VideoEncoder::Libx264, "1080p", "high");
+        let fc = a.iter().position(|t| t == "-filter_complex").map(|i| a[i + 1].clone()).unwrap_or_default();
+        assert!(fc.contains("[0:v]scale=-2:1080[v]"), "gdigrab scale vchain: {fc}");
+        assert!(a.windows(2).any(|w| w[0] == "-map" && w[1] == "[v]"));
+    }
+
+    #[test]
+    fn original_resolution_adds_no_scale() {
+        let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "o.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
+        assert!(!a.iter().any(|t| t.contains("scale=")), "no scale at original");
+    }
+
+    #[test]
     fn ddagrab_nvenc_scopes_d3d11_to_filters_and_adds_cuda() {
         // The display's D3D11 adapter isn't the NVIDIA card on hybrid machines, so NVENC
         // gets its own cuda device and the d3d11 one is scoped to the ddagrab filter graph.
-        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, VideoEncoder::Nvenc);
+        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, VideoEncoder::Nvenc, "original", "high");
         assert!(a.windows(2).any(|w| w[0] == "-init_hw_device" && w[1] == "d3d11va=d3d"));
         assert!(a.windows(2).any(|w| w[0] == "-init_hw_device" && w[1] == "cuda=cu"));
         assert!(a.windows(2).any(|w| w[0] == "-filter_hw_device" && w[1] == "d3d"));
@@ -314,7 +396,7 @@ mod tests {
     #[test]
     fn ddagrab_libx264_keeps_single_unnamed_d3d11_device() {
         // Unchanged historical ddagrab front-end for the CPU encoder (no cuda, no scoping).
-        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, VideoEncoder::Libx264);
+        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
         assert!(a.windows(2).any(|w| w[0] == "-init_hw_device" && w[1] == "d3d11va"));
         assert!(!a.iter().any(|s| s == "cuda=cu"));
         assert!(!a.iter().any(|s| s == "-filter_hw_device"));
@@ -325,15 +407,15 @@ mod tests {
         // gdigrab frames are already CPU-side; NVENC opens its own session with no d3d11 in
         // play, so no -init_hw_device is emitted regardless of encoder.
         for enc in [VideoEncoder::Libx264, VideoEncoder::Nvenc] {
-            let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, enc);
+            let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, enc, "original", "high");
             assert!(!a.iter().any(|s| s == "-init_hw_device"), "{enc:?} should have no hw device");
         }
     }
 
     #[test]
     fn nvenc_encoder_swaps_only_the_codec_tail() {
-        let base = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, VideoEncoder::Libx264);
-        let nv = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, VideoEncoder::Nvenc);
+        let base = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
+        let nv = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 60, "o.mp4", &[], false, true, VideoEncoder::Nvenc, "original", "high");
         assert!(base.windows(2).any(|w| w[0] == "-c:v" && w[1] == "libx264"));
         assert!(nv.windows(2).any(|w| w[0] == "-c:v" && w[1] == "h264_nvenc"));
         // Everything up to -c:v is identical (same capture front-end).
@@ -345,7 +427,7 @@ mod tests {
     fn args_silence_stderr_to_avoid_pipe_backpressure() {
         // The undrained capacity-1 sidecar channel stalls ffmpeg if stderr is chatty;
         // these flags keep it quiet after startup. Guard against a regression.
-        let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false, true, VideoEncoder::Libx264);
+        let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
         assert!(a.iter().any(|s| s == "-nostats"));
         assert!(a.windows(2).any(|w| w[0] == "-loglevel" && w[1] == "error"));
     }
@@ -359,7 +441,7 @@ mod tests {
 
     #[test]
     fn fullscreen_args_have_no_offset() {
-        let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/out.mp4", &[], false, true, VideoEncoder::Libx264);
+        let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/out.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
         assert!(a.contains(&"gdigrab".to_string()));
         assert!(a.contains(&"desktop".to_string()));
         assert!(!a.iter().any(|s| s == "-offset_x"));
@@ -372,8 +454,8 @@ mod tests {
 
     #[test]
     fn framerate_arg_follows_fps() {
-        let a30 = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "out.mp4", &[], false, true, VideoEncoder::Libx264);
-        let a60 = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 60, "out.mp4", &[], false, true, VideoEncoder::Libx264);
+        let a30 = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "out.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
+        let a60 = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 60, "out.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
         let fr = |a: &[String]| a.windows(2).find(|w| w[0] == "-framerate").map(|w| w[1].clone());
         assert_eq!(fr(&a30).as_deref(), Some("30"));
         assert_eq!(fr(&a60).as_deref(), Some("60"));
@@ -381,7 +463,7 @@ mod tests {
 
     #[test]
     fn ddagrab_fullscreen_uses_filter_source_no_gdigrab() {
-        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 60, "C:/o.mp4", &[], false, true, VideoEncoder::Libx264);
+        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 60, "C:/o.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
         // No gdigrab, no "-i desktop"; a d3d11 device is initialized.
         assert!(!a.iter().any(|s| s == "gdigrab"));
         assert!(!a.iter().any(|s| s == "desktop"));
@@ -402,7 +484,7 @@ mod tests {
     #[test]
     fn ddagrab_region_puts_crop_in_the_source() {
         let t = RecordTarget::Region { x: 100, y: 50, w: 640, h: 480 };
-        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &t, 30, "C:/r.mp4", &[], false, true, VideoEncoder::Libx264);
+        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &t, 30, "C:/r.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
         let fc = a.iter().position(|s| s == "-filter_complex").map(|i| a[i + 1].clone()).unwrap();
         assert!(fc.contains("video_size=640x480"));
         assert!(fc.contains("offset_x=100"));
@@ -411,8 +493,8 @@ mod tests {
 
     #[test]
     fn ddagrab_draw_mouse_flag_maps_to_source_option() {
-        let on = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 30, "o.mp4", &[], false, true, VideoEncoder::Libx264);
-        let off = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 30, "o.mp4", &[], false, false, VideoEncoder::Libx264);
+        let on = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 30, "o.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
+        let off = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 30, "o.mp4", &[], false, false, VideoEncoder::Libx264, "original", "high");
         let fc = |a: &[String]| a.iter().position(|s| s == "-filter_complex").map(|i| a[i + 1].clone()).unwrap();
         assert!(fc(&on).contains("draw_mouse=1"));
         assert!(fc(&off).contains("draw_mouse=0"));
@@ -421,7 +503,7 @@ mod tests {
     #[test]
     fn ddagrab_with_audio_combines_v_and_aout_and_shifts_index() {
         // ddagrab has no video input, so the single audio pipe is input 0 → [0:a].
-        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 60, "C:/o.mp4", &[ai(48000)], true, true, VideoEncoder::Libx264);
+        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 60, "C:/o.mp4", &[ai(48000)], true, true, VideoEncoder::Libx264, "original", "high");
         let fc = a.iter().position(|s| s == "-filter_complex").map(|i| a[i + 1].clone()).unwrap();
         assert!(fc.contains("hwdownload,format=bgra[v]"));
         assert!(fc.contains("[0:a]aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[aout]"));
@@ -432,7 +514,7 @@ mod tests {
 
     #[test]
     fn ddagrab_no_audio_still_maps_video() {
-        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false, true, VideoEncoder::Libx264);
+        let a = build_ffmpeg_args(CaptureEngine::Ddagrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
         assert!(a.windows(2).any(|w| w[0] == "-map" && w[1] == "[v]"));
         assert!(!a.iter().any(|s| s == "-c:a"));
     }
@@ -440,7 +522,7 @@ mod tests {
     #[test]
     fn region_args_carry_offset_and_size() {
         let t = RecordTarget::Region { x: 100, y: 50, w: 640, h: 480 };
-        let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &t, 30, "C:/r.mp4", &[], false, true, VideoEncoder::Libx264);
+        let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &t, 30, "C:/r.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
         assert!(a.windows(2).any(|w| w[0] == "-offset_x" && w[1] == "100"));
         assert!(a.windows(2).any(|w| w[0] == "-offset_y" && w[1] == "50"));
         assert!(a.windows(2).any(|w| w[0] == "-video_size" && w[1] == "640x480"));
@@ -448,7 +530,7 @@ mod tests {
 
     #[test]
     fn draw_mouse_off_inserts_flag() {
-        let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/out.mp4", &[], false, false, VideoEncoder::Libx264);
+        let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/out.mp4", &[], false, false, VideoEncoder::Libx264, "original", "high");
         // -draw_mouse 0 is a gdigrab input option: it must appear after "gdigrab"
         // and before the "-i desktop" input.
         let g = a.iter().position(|s| s == "gdigrab").unwrap();
@@ -460,7 +542,7 @@ mod tests {
 
     #[test]
     fn draw_mouse_on_omits_flag() {
-        let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/out.mp4", &[], false, true, VideoEncoder::Libx264);
+        let a = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/out.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
         assert!(!a.iter().any(|s| s == "-draw_mouse"));
     }
 
@@ -474,7 +556,7 @@ mod tests {
     #[test]
     fn no_audio_is_identical_to_silent_video() {
         // No audio wanted → pure video, no aac stream, no filter, no silent pad.
-        let v = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false, true, VideoEncoder::Libx264);
+        let v = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
         assert!(!v.iter().any(|s| s == "-c:a"));
         assert!(!v.iter().any(|s| s == "-filter_complex"));
         assert!(!v.iter().any(|s| s.contains("anullsrc")));
@@ -483,7 +565,7 @@ mod tests {
 
     #[test]
     fn one_source_maps_directly_no_amix() {
-        let v = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000)], true, true, VideoEncoder::Libx264);
+        let v = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000)], true, true, VideoEncoder::Libx264, "original", "high");
         // input 0 = video (desktop), input 1 = the pipe
         assert!(v.windows(2).any(|w| w[0] == "-f" && w[1] == "f32le"));
         assert!(v.windows(2).any(|w| w[0] == "-ar" && w[1] == "48000"));
@@ -499,10 +581,10 @@ mod tests {
     fn mic_gets_voice_eq_system_does_not() {
         const FX: &str = "pan=stereo|c0=c0|c1=c0,highpass=f=80,equalizer=f=200:width_type=o:width=1.2:g=1.5,treble=g=3:f=7500:width_type=q:width=0.7";
         // Single mic source: cleanup inline before the format normalize.
-        let m = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai_mic(48000)], true, true, VideoEncoder::Libx264);
+        let m = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai_mic(48000)], true, true, VideoEncoder::Libx264, "original", "high");
         assert!(m.iter().any(|s| *s == format!("[1:a]aresample=async=1,{FX},aformat=sample_rates=48000:channel_layouts=stereo[aout]")));
         // System (input 1) passes through; mic (input 2) is pre-filtered then mixed.
-        let both = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000), ai_mic(48000)], true, true, VideoEncoder::Libx264);
+        let both = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000), ai_mic(48000)], true, true, VideoEncoder::Libx264, "original", "high");
         assert!(both.iter().any(|s| *s == format!("[2:a]{FX}[m2];[1:a][m2]amix=inputs=2:duration=longest:normalize=0,aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[aout]")));
     }
 
@@ -510,14 +592,14 @@ mod tests {
     fn mic_fx_has_no_body_cut() {
         // Regression guard: the -2 dB @ 400 Hz cut (which thinned the voice) is gone,
         // and the air shelf (which fixes "muffled") is present.
-        let m = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai_mic(48000)], true, true, VideoEncoder::Libx264);
+        let m = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai_mic(48000)], true, true, VideoEncoder::Libx264, "original", "high");
         assert!(!m.iter().any(|s| s.contains("f=400") && s.contains("g=-2")));
         assert!(m.iter().any(|s| s.contains("treble=g=3:f=7500")));
     }
 
     #[test]
     fn two_sources_use_amix() {
-        let v = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000), ai(44100)], true, true, VideoEncoder::Libx264);
+        let v = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000), ai(44100)], true, true, VideoEncoder::Libx264, "original", "high");
         assert!(v.iter().any(|s| s == "[1:a][2:a]amix=inputs=2:duration=longest:normalize=0,aresample=async=1,aformat=sample_rates=48000:channel_layouts=stereo[aout]"));
         assert!(v.windows(2).any(|w| w[0] == "-c:a" && w[1] == "aac"));
         // both rates present as input options
@@ -527,7 +609,7 @@ mod tests {
 
     #[test]
     fn audio_inputs_carry_thread_queue_size() {
-        let v = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000)], true, true, VideoEncoder::Libx264);
+        let v = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[ai(48000)], true, true, VideoEncoder::Libx264, "original", "high");
         assert!(v.windows(2).any(|w| w[0] == "-thread_queue_size" && w[1] == "1024"));
     }
 
@@ -535,7 +617,7 @@ mod tests {
     fn want_audio_with_no_sources_injects_silent_aac() {
         // Audio wanted but no source connected this segment → a silent anullsrc track
         // keeps the segment's stream layout (video + 1 aac) homogeneous for concat-copy.
-        let v = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], true, true, VideoEncoder::Libx264);
+        let v = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], true, true, VideoEncoder::Libx264, "original", "high");
         assert!(v.windows(2).any(|w| w[0] == "-f" && w[1] == "lavfi"));
         assert!(v.iter().any(|s| s == "anullsrc=channel_layout=stereo:sample_rate=48000"));
         assert!(v.iter().any(|s| s == "[1:a]aformat=sample_rates=48000:channel_layouts=stereo[aout]"));
@@ -548,7 +630,7 @@ mod tests {
     #[test]
     fn no_silent_pad_when_audio_not_wanted() {
         // Empty audio + want_audio=false (no audio recording) must stay pure video.
-        let v = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false, true, VideoEncoder::Libx264);
+        let v = build_ffmpeg_args(CaptureEngine::Gdigrab, &RecordTarget::Fullscreen, 30, "C:/o.mp4", &[], false, true, VideoEncoder::Libx264, "original", "high");
         assert!(!v.iter().any(|s| s.contains("anullsrc")));
         assert!(!v.iter().any(|s| s == "-c:a"));
     }

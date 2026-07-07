@@ -7,6 +7,18 @@ const FPS_OPTIONS = [
   { value: "30", label: "30 fps" },
 ];
 
+const RESOLUTION_OPTIONS = [
+  { value: "original", label: "Original" },
+  { value: "1080p",    label: "1080p" },
+  { value: "720p",     label: "720p" },
+];
+
+const VIDEO_QUALITY_OPTIONS = [
+  { value: "high",   label: "High" },
+  { value: "medium", label: "Medium" },
+  { value: "low",    label: "Low" },
+];
+
 // One control for the recorded cursor. Hide + size are folded into a single choice
 // because they're mutually exclusive capture-time states (the pointer either shows
 // at some size, or it's hidden). Maps to the two backend flags on change.
@@ -25,6 +37,8 @@ export function Recording() {
   const setRecordWebcamMovable = useAppStore((s) => s.setRecordWebcamMovable);
   const setRecordFx = useAppStore((s) => s.setRecordFx);
   const setRecordFps = useAppStore((s) => s.setRecordFps);
+  const setRecordResolution = useAppStore((s) => s.setRecordResolution);
+  const setRecordQuality = useAppStore((s) => s.setRecordQuality);
   const setWebcamDevice = useAppStore((s) => s.setWebcamDevice);
 
   // Enumerate cameras. Browsers only reveal device LABELS after camera permission
@@ -78,6 +92,20 @@ export function Recording() {
           value={String(settings?.record_fps ?? 60)}
           options={FPS_OPTIONS}
           onChange={(v) => void setRecordFps(Number(v) as 30 | 60)}
+        />
+      </Field>
+      <Field label="Resolution" hint="Downscale recordings to shrink file size (e.g. for issue attachments).">
+        <Select
+          value={settings?.record_resolution ?? "original"}
+          options={RESOLUTION_OPTIONS}
+          onChange={(v) => void setRecordResolution(v as "original" | "1080p" | "720p")}
+        />
+      </Field>
+      <Field label="Quality" hint="Compression level. Lower quality means smaller files.">
+        <Select
+          value={settings?.record_quality ?? "high"}
+          options={VIDEO_QUALITY_OPTIONS}
+          onChange={(v) => void setRecordQuality(v as "high" | "medium" | "low")}
         />
       </Field>
       <Field label="Video codec" hint="Encoding format for recorded video.">

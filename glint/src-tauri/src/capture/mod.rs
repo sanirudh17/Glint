@@ -99,6 +99,27 @@ pub fn begin_spawned(app: &AppHandle, mode: CaptureMode) {
     std::thread::spawn(move || begin(&app, mode));
 }
 
+/// Delayed capture: show an N-second countdown (N from settings — 3/5/10), then run the
+/// normal capture for `mode`. Off the main thread (building the countdown webview +
+/// sleeping must not block the event loop). The countdown is the immediate visible
+/// feedback; it's closed just before the grab so the digit never lands in the frame.
+pub fn begin_delayed_spawned(app: &AppHandle, mode: CaptureMode) {
+    let app = app.clone();
+    std::thread::spawn(move || {
+        let secs = app
+            .state::<crate::settings::commands::SettingsState>()
+            .0
+            .lock()
+            .unwrap()
+            .capture_delay_secs;
+        let _ = crate::countdown::build(&app, secs);
+        std::thread::sleep(std::time::Duration::from_secs(secs as u64));
+        // Close the digit BEFORE grabbing so it never bleeds into a fullscreen shot.
+        crate::countdown::close(&app);
+        begin(&app, mode);
+    });
+}
+
 /// Entry point from hotkeys / tray. Leaves the main window untouched.
 pub fn begin(app: &AppHandle, mode: CaptureMode) {
     begin_restoring(app, mode, false);

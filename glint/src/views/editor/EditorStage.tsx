@@ -286,6 +286,12 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
       case "blur":
         a = { id, type: tool, z: 0, style: { ...style }, x, y, w: 0, h: 0 };
         break;
+      case "redact":
+        a = { id, type: "redact", z: 0, style: { ...style, color: "#000000", redactStyle: style.redactStyle ?? "solid" }, x, y, w: 0, h: 0 };
+        break;
+      case "spotlight":
+        a = { id, type: "spotlight", z: 0, style: { ...style, fillOpacity: 0.6, region: style.region ?? "rect" }, x, y, w: 0, h: 0 };
+        break;
       case "text":
         // Start empty and open the inline editor immediately so the user just
         // types. A blank text is dropped on commit (see commitEdit).
@@ -332,7 +338,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         nx = s.x2; ny = s.y2;
       }
       update(id, { x2: nx, y2: ny } as Partial<Annotation>);
-    } else if (a.type === "rect" || a.type === "ellipse" || a.type === "blur") {
+    } else if (a.type === "rect" || a.type === "ellipse" || a.type === "blur" || a.type === "redact" || a.type === "spotlight") {
       update(id, { w: x - a.x, h: y - a.y } as Partial<Annotation>);
     } else if (a.type === "pen" || a.type === "highlight") {
       update(id, { points: [...a.points, x, y] } as Partial<Annotation>);

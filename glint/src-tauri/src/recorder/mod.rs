@@ -83,7 +83,7 @@ async fn probe_video_encoder(app: &AppHandle, engine: ffmpeg::CaptureEngine) -> 
         // Reuse the real recording command (same engine, hw-device setup, and encoder tail) so
         // the probe fails exactly when the recording would. Cap it to a handful of frames and
         // redirect the output to a temp file (the output path is the last arg).
-        let mut args = ffmpeg::build_ffmpeg_args(engine, &RecordTarget::Fullscreen, 30, &tmp_str, &[], false, true, enc);
+        let mut args = ffmpeg::build_ffmpeg_args(engine, &RecordTarget::Fullscreen, 30, &tmp_str, &[], false, true, enc, "original", "high");
         let out = args.pop().unwrap();
         args.extend(["-frames:v".to_string(), "8".to_string(), out]);
         let _ = std::fs::remove_file(&tmp);
@@ -156,6 +156,10 @@ pub struct ActiveRecording {
     pub engine: ffmpeg::CaptureEngine,
     /// H.264 encoder chosen once at start; reused for every segment (concat-copy invariant).
     pub encoder: ffmpeg::VideoEncoder,
+    /// Downscale + quality tiers captured once at start; reused for every segment so all
+    /// segments share identical output dimensions/params (the concat `-c copy` invariant).
+    pub resolution: String,
+    pub quality: String,
     pub out_path: String,
     pub width: u32,
     pub height: u32,
@@ -215,6 +219,8 @@ async fn spawn_segment(
     encoder: ffmpeg::VideoEncoder,
     target: RecordTarget,
     fps: u32,
+    resolution: &str,
+    quality: &str,
     path: &str,
     seg_index: usize,
     cfg: AudioConfig,
@@ -284,7 +290,11 @@ async fn spawn_segment(
     // `want_audio` is the recording's intent (system or mic enabled), not how many
     // sources actually connected this segment — so a segment whose sources all failed
     // still gets a silent aac track and stays concat-copy compatible with audio segments.
-    let args = ffmpeg::build_ffmpeg_args(engine, &target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse, encoder);
+    let args = ffmpeg::build_ffmpeg_args(engine, &target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse, encoder, resolution, quality);
+    log::info!(
+        "[rec] segment {seg_index}: engine={engine:?} encoder={encoder:?} fps={fps} resolution={resolution} quality={quality}"
+    );
+    log::info!("[rec-args] ffmpeg {}", args.join(" "));
     let sidecar = app.shell().sidecar("ffmpeg").map_err(|e| format!("sidecar resolve: {e}"))?;
     let (rx_ev, child) = sidecar.args(args).spawn().map_err(|e| format!("ffmpeg spawn: {e}"))?;
 
@@ -593,16 +603,16 @@ pub async fn recorder_audio_check(app: tauri::AppHandle) -> Result<u64, String> 
     std::fs::metadata(&out_str).map(|m| m.len()).map_err(|e| format!("no output: {e}"))
 }
 
-/// Block until the webcam bubble reports its camera is live (`rec-cam-ready`, fired
-/// after getUserMedia resolves — i.e. the user pressed Allow) or failed/denied
-/// (`rec-cam-failed`), or 20s elapse. Called before the countdown so the WebView2
-/// camera-permission prompt is resolved up front and never recorded; bounded so a
-/// stuck prompt or a missing event can't wedge the start.
-///
-/// Returns whether movable-mode recording is supported (the `rec-cam-ready` payload's
-/// `movableOk`, i.e. MediaRecorder/VP8). Defaults `true` on timeout/parse issues; only
-/// consulted for movable recordings.
-async fn wait_for_cam_ready(app: &AppHandle) -> bool {
+/// Register the `rec-cam-ready`/`rec-cam-failed` listeners IMMEDIATELY and return a
+/// future that resolves to whether movable-mode recording is supported (the
+/// `rec-cam-ready` payload's `movableOk`, i.e. MediaRecorder/VP8; defaults `true` on
+/// timeout/parse issues, only consulted for movable recordings). Awaiting is deferred so
+/// the camera warmup can overlap the countdown: arm this before building the bubble (so a
+/// ready event that fires during the 3-2-1 isn't missed), then `.await` the returned
+/// future after the countdown — by then it's almost always already resolved (getUserMedia
+/// resolved, the permission prompt handled up front), so it rarely blocks. Bounded at 20s
+/// so a stuck prompt or a missing event can't wedge the start.
+fn arm_cam_ready(app: &AppHandle) -> impl std::future::Future<Output = bool> {
     use tauri::Listener;
     let (tx, rx) = tokio::sync::oneshot::channel::<bool>();
     let tx = std::sync::Arc::new(std::sync::Mutex::new(Some(tx)));
@@ -618,14 +628,17 @@ async fn wait_for_cam_ready(app: &AppHandle) -> bool {
     let failed = app.once("rec-cam-failed", move |_| {
         if let Some(t) = txf.lock().unwrap().take() { let _ = t.send(true); }
     });
-    let movable_ok = tokio::time::timeout(std::time::Duration::from_secs(20), rx)
-        .await
-        .ok()
-        .and_then(|r| r.ok())
-        .unwrap_or(true);
-    app.unlisten(ready);
-    app.unlisten(failed);
-    movable_ok
+    let app = app.clone();
+    async move {
+        let movable_ok = tokio::time::timeout(std::time::Duration::from_secs(20), rx)
+            .await
+            .ok()
+            .and_then(|r| r.ok())
+            .unwrap_or(true);
+        app.unlisten(ready);
+        app.unlisten(failed);
+        movable_ok
+    }
 }
 
 /// Start recording. `mode` is "fullscreen" or "region"; region passes x/y/w/h
@@ -661,10 +674,10 @@ pub async fn recorder_start(
     // Capture/encode frame rate + movable-webcam default from settings. Reading
     // `record_webcam_movable` here (not only from the selector chip) makes the Settings
     // toggle authoritative — a recording started from anywhere honours it.
-    let (fps, setting_movable, webcam_shape) = {
+    let (fps, setting_movable, webcam_shape, resolution, quality) = {
         let state = app.state::<crate::settings::commands::SettingsState>();
         let s = state.0.lock().unwrap();
-        (s.record_fps, s.record_webcam_movable, s.webcam_shape.clone())
+        (s.record_fps, s.record_webcam_movable, s.webcam_shape.clone(), s.record_resolution.clone(), s.record_quality.clone())
     };
 
     // Choose the capture engine once (cached per session): ddagrab (GPU, true 60 fps)
@@ -750,9 +763,30 @@ pub async fn recorder_start(
     // Bubble's normalized on-screen placement — persisted for movable recordings so the trim
     // overlay starts at the same spot/size.
     let mut cam_placement: Option<(f64, f64, f64)> = None;
+    // Arm the cam-ready listener BEFORE building the bubble (so a ready event that fires
+    // during the countdown isn't missed), then let the camera warm up DURING the 3-2-1
+    // instead of before it — the countdown appears immediately and the ~1-2s getUserMedia
+    // / camera spin-up overlaps the countdown rather than delaying the whole start. Safe:
+    // capture (segment 0) doesn't begin until after the countdown, so the first-run
+    // permission prompt is never recorded.
+    let cam_ready = if want_cam { Some(arm_cam_ready(&app)) } else { None };
     if want_cam {
         cam_placement = windows::build_cam_bubble(&app, target, 170.0, want_cam_movable, &webcam_shape).ok().flatten();
-        let movable_ok = wait_for_cam_ready(&app).await;
+    }
+
+    // 3-2-1 countdown. It is NOT closed here: it stays up (holding on a small "Starting…"
+    // label past zero) until segment 0 is confirmed capturing, then we close it below.
+    // That way the user's "go" moment (the countdown vanishing) coincides with ffmpeg
+    // being genuinely live — so the first action is never lost to ffmpeg's ~1s warmup —
+    // and no dead pre-roll is prepended. The countdown window is excluded from capture,
+    // so it never bleeds into the first frames.
+    let _ = windows::build_countdown(&app);
+    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
+
+    // Confirm the camera is live before capture. After the 3s countdown it's almost
+    // always already resolved (warmed up behind the countdown), so this rarely blocks.
+    if let Some(cam_ready) = cam_ready {
+        let movable_ok = cam_ready.await;
         if want_cam_movable && !movable_ok {
             // MediaRecorder/VP8 unsupported here — rebuild the bubble WITHOUT capture
             // exclusion so gdigrab bakes it in and the user still gets a webcam.
@@ -762,13 +796,6 @@ pub async fn recorder_start(
             want_cam_movable = false;
         }
     }
-
-    // 3-2-1 countdown, then Rust closes it BEFORE capture starts so the digit can
-    // never bleed into the first recorded frames (and a webview that failed to
-    // self-close isn't left orphaned on screen).
-    let _ = windows::build_countdown(&app);
-    tokio::time::sleep(std::time::Duration::from_millis(3000)).await;
-    windows::close_countdown(&app);
 
     let audio_cfg = AudioConfig { system: system.unwrap_or(true), mic: mic.unwrap_or(false) };
     // A source off in the selector starts muted so it can be unmuted live.
@@ -798,6 +825,8 @@ pub async fn recorder_start(
         fps,
         engine,
         encoder,
+        resolution: resolution.clone(),
+        quality: quality.clone(),
         out_path: out_str.clone(),
         width,
         height,
@@ -823,18 +852,19 @@ pub async fn recorder_start(
     // Bring segment 0 up. If a hardware encoder passed the probe but still fails to start a
     // real segment, demote the whole session to libx264 and retry once — the "recording
     // never breaks" guarantee. Later segments inherit the demoted encoder via rec.encoder.
-    let seg0_result = match spawn_segment(&app, engine, encoder, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
+    let seg0_result = match spawn_segment(&app, engine, encoder, target, fps, &resolution, &quality, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
         Ok(s) => Ok(s),
         Err(e) if encoder != ffmpeg::VideoEncoder::Libx264 => {
             log::warn!("segment 0 failed on {encoder:?} ({e}); falling back to libx264");
             encoder = ffmpeg::VideoEncoder::Libx264;
-            spawn_segment(&app, engine, encoder, target, fps, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await
+            spawn_segment(&app, engine, encoder, target, fps, &resolution, &quality, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await
         }
         Err(e) => Err(e),
     };
     let seg0 = match seg0_result {
         Ok(s) => s,
         Err(e) => {
+            windows::close_countdown(&app);
             windows::close_control_bar(&app);
             windows::close_cam_bubble(&app);
             *app.state::<RecorderState>().0.lock().unwrap() = None;
@@ -843,6 +873,9 @@ pub async fn recorder_start(
             return Err(e);
         }
     };
+    // ffmpeg is capturing now — drop the countdown. Its disappearance is the user's
+    // real "go" signal, aligned with genuine capture (see the countdown note above).
+    windows::close_countdown(&app);
 
     // Patch in the running span + accurate per-source availability. Decide under
     // the lock and move `seg0` either into the state or back out, so any teardown
@@ -968,14 +1001,14 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
             // `current.is_none()` also holds during the preliminary start state (seg0
             // not up yet); require a completed span so resume can't run mid-init.
             Some(rec) if rec.current.is_none() && !rec.done.is_empty() => {
-                Some((rec.engine, rec.encoder, rec.target, rec.fps, rec.out_path.clone(), rec.seg_index, rec.audio_cfg, rec.controls.clone()))
+                Some((rec.engine, rec.encoder, rec.target, rec.fps, rec.resolution.clone(), rec.quality.clone(), rec.out_path.clone(), rec.seg_index, rec.audio_cfg, rec.controls.clone()))
             }
             _ => None,
         }
     };
-    let (engine, encoder, target, fps, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
+    let (engine, encoder, target, fps, resolution, quality, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
     let path = segment_path(&out_path, idx);
-    let seg = spawn_segment(&app, engine, encoder, target, fps, &path, idx, cfg, &controls, true).await
+    let seg = spawn_segment(&app, engine, encoder, target, fps, &resolution, &quality, &path, idx, cfg, &controls, true).await
         .inspect_err(|_e| {
             let _ = app.emit("glint-toast", "Couldn't resume recording");
         })?;
