@@ -378,6 +378,20 @@ capture/library/editor path.
   and couldn't be selected to delete) is now discarded via `discardDraft`, and **Delete** no longer
   gets swallowed while the dim slider holds focus. *Shipped — at-screen accepted.*
 
+- **Phase 28 — HUD/editor responsiveness** (Rust threading fix). The post-capture HUD's `Copy` /
+  `Save` / `Copy path` / `Reveal` and the editor's `Copy` / `Export` / `Drag` / `Done` / `Open` /
+  `Save project` were plain (sync) `#[tauri::command]`s, so their blocking work — a full-resolution
+  clipboard copy (~0.5–2s), PNG decode/re-encode, file writes, DB inserts, `.glint` assembly — ran on
+  the **main/UI thread** and froze the window until it finished (the "delay when clicking a HUD/editor
+  button"). Marked them `#[tauri::command(async)]` so they run on a worker thread and the UI stays
+  live (matching the window-building tray actions that were already async, and the capture path that
+  already spawned for its clipboard copy). Also investigated the intermittent **HUD accent-color
+  flash**: a comprehensive per-frame flash trap (armed pre-paint, checking accent bg/border/outline/
+  shadow/gradient across the HUD + overlay) found **no** accent DOM element and a rock-stable
+  accent/theme across two instrumented sessions — ruling out a CSS/theme cause. It didn't reproduce
+  under instrumentation, so rather than ship a guess it's **deferred** (rare, cosmetic, self-reverting;
+  re-trap if it recurs). *Shipped — at-screen accepted.*
+
 ## Planned
 
 - **Packaging / distribution** — the only remaining phase (installer, code-signing, auto-update,

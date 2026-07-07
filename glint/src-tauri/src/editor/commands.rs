@@ -146,8 +146,10 @@ fn decode_png_arg(png_base64: &str) -> Result<Vec<u8>, String> {
         .map_err(|e| e.to_string())
 }
 
-/// Copy the flattened (annotated) image to the clipboard.
-#[tauri::command]
+/// Copy the flattened (annotated) image to the clipboard. `(async)` so the PNG decode
+/// + full-resolution clipboard copy (0.5–2s) runs off the main/UI thread and never
+/// freezes the editor window — same reason the HUD's tray_copy is async.
+#[tauri::command(async)]
 pub fn editor_copy(png_base64: String) -> Result<(), String> {
     let bytes = decode_png_arg(&png_base64)?;
     let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
@@ -156,7 +158,9 @@ pub fn editor_copy(png_base64: String) -> Result<(), String> {
 }
 
 /// Save the flattened image as a NEW capture in the Library (never overwrites).
-#[tauri::command]
+/// `(async)` — decode + write + thumbnail + DB insert are all blocking work kept off
+/// the main/UI thread so the editor stays responsive.
+#[tauri::command(async)]
 pub fn editor_save(app: AppHandle, db: State<crate::Db>, png_base64: String) -> Result<String, String> {
     let bytes = decode_png_arg(&png_base64)?;
     let dir = crate::settings::locations::save_dir(&app, crate::settings::locations::SaveKind::Screenshot);
@@ -192,7 +196,8 @@ pub fn editor_save(app: AppHandle, db: State<crate::Db>, png_base64: String) -> 
 }
 
 /// Write the flattened image to a temp file and return its path (for drag-out).
-#[tauri::command]
+/// `(async)` — decode + file write off the main/UI thread.
+#[tauri::command(async)]
 pub fn editor_flatten_temp(app: AppHandle, png_base64: String) -> Result<String, String> {
     let bytes = decode_png_arg(&png_base64)?;
     let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
@@ -209,7 +214,9 @@ pub fn editor_flatten_temp(app: AppHandle, png_base64: String) -> Result<String,
 /// "Done": flatten result → make it the current capture result + open the bottom-left
 /// HUD, then hide the editor. Reuses the post-capture HUD (crate::hud) and
 /// LastCaptureState — the same surfaces `editor_open_from_last` already uses.
-#[tauri::command]
+// `(async)` — the decode + temp-file write + tray push all happen before the HUD is
+// built, and must stay off the main/UI thread so "Done" doesn't freeze the editor.
+#[tauri::command(async)]
 pub fn editor_done(
     app: AppHandle,
     last: State<crate::capture::LastCaptureState>,
@@ -283,7 +290,9 @@ pub fn editor_done(
 /// the opaque `doc` (annotations + crop + frame) and the destination path (chosen
 /// via the OS dialog). The base image is read from EditorState, so its bytes never
 /// cross the IPC bridge as part of this call.
-#[tauri::command]
+/// `(async)` — assembling the `.glint` (which embeds the full base image) + writing it
+/// is blocking I/O kept off the main/UI thread.
+#[tauri::command(async)]
 pub fn project_save(
     app: AppHandle,
     ed: State<EditorState>,
@@ -316,7 +325,9 @@ pub fn project_save(
 
 /// Open a `.glint` file into the editor: parse it, set EditorState (origin
 /// "project", carrying the opaque doc + path), then show/focus the editor window.
-#[tauri::command]
+/// `(async)` — reading + parsing a `.glint` (with its embedded image) is blocking I/O
+/// kept off the main/UI thread.
+#[tauri::command(async)]
 pub fn project_open(app: AppHandle, ed: State<EditorState>, path: String) -> Result<(), String> {
     let text = std::fs::read_to_string(&path)
         .map_err(|_| "Couldn't open this project — the file could not be read.".to_string())?;
