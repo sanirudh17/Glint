@@ -23,6 +23,7 @@ export function StyleBar() {
   const tool = useEditorStore((s) => s.tool);
   const eraserSize = useEditorStore((s) => s.eraserSize);
   const setEraserSize = useEditorStore((s) => s.setEraserSize);
+  const setSpotlightDim = useEditorStore((s) => s.setSpotlightDim);
 
   // The bar reflects the SELECTED annotation when there is one — so you can restyle
   // an existing shape (the fill/dashed/etc. controls appear for the selection, not
@@ -55,7 +56,7 @@ export function StyleBar() {
   const applyFillOpacity = (fillOpacity: number) => { setStyle({ fillOpacity }); patchSelected({ fillOpacity }, false); };
   const applyRedactStyle = (redactStyle: "solid" | "pixelate") => { setStyle({ redactStyle }); patchSelected({ redactStyle }); };
   const applyRegion = (region: "rect" | "ellipse") => { setStyle({ region }); patchSelected({ region }); };
-  const applyDim = (fillOpacity: number) => { setStyle({ fillOpacity }); patchSelected({ fillOpacity }, false); };
+  const applyDim = (fillOpacity: number) => { setStyle({ fillOpacity }); setSpotlightDim(fillOpacity); };
 
   const isShape = effType === "rect" || effType === "ellipse";
   const isStroke = isShape || effType === "line" || effType === "arrow";

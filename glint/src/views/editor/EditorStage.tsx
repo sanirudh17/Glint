@@ -2,10 +2,11 @@ import { useEffect, useLayoutEffect, useRef, useState, forwardRef } from "react"
 import { Stage, Layer, Group, Rect, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
 import { useEditorStore } from "../../editor/useEditorStore";
-import { newId, nextStepNumber, eraseAt, snapAngle, type Annotation, type TextAnno } from "../../editor/model";
+import { newId, nextStepNumber, eraseAt, snapAngle, resolveSpotlightDim, type Annotation, type BoxAnno, type TextAnno } from "../../editor/model";
 import { computeLayout } from "../../editor/composition";
 import { getGradient, konvaGradient } from "../../editor/gradients";
 import { AnnotationNode } from "./AnnotationNode";
+import { SpotlightDimLayer } from "./SpotlightDimLayer";
 import { CropOverlay } from "./CropOverlay";
 import { WindowChrome } from "./WindowChrome";
 
@@ -477,6 +478,12 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
                 }
               : {})}
           >
+            <SpotlightDimLayer
+              regions={annotations.filter((a): a is BoxAnno => a.type === "spotlight")}
+              dim={resolveSpotlightDim(annotations, selectedId)}
+              baseWidth={base.width}
+              baseHeight={base.height}
+            />
             {annotations.map((a) => (
               <AnnotationNode
                 key={a.id}

@@ -99,6 +99,9 @@ interface EditorState {
   reset: () => void;
   setTool: (t: ToolId) => void;
   setStyle: (patch: Partial<Style>) => void;
+  /** Set the shared spotlight dim on ALL spotlight annotations at once (the dim is
+      one property of the whole effect since they share a single overlay). */
+  setSpotlightDim: (v: number) => void;
   select: (id: string | null) => void;
   duplicate: (id: string) => void;
   bringForward: (id: string) => void;
@@ -192,6 +195,13 @@ export const useEditorStore = create<EditorState>((set) => ({
       saveToolStyles(toolStyles);
       return { style, toolStyles };
     }),
+  setSpotlightDim: (v) =>
+    set((s) => ({
+      annotations: s.annotations.map((a) =>
+        a.type === "spotlight" ? { ...a, style: { ...a.style, fillOpacity: v } } : a,
+      ),
+      dirty: true,
+    })),
   select: (id) => set({ selectedId: id }),
   duplicate: (id) =>
     set((s) => {

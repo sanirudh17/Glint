@@ -10,6 +10,7 @@ import {
   duplicateAnnotation,
   nudgeAnnotation,
   reorder,
+  resolveSpotlightDim,
   type Annotation,
   type BoxAnno,
   type TwoPointAnno,
@@ -191,5 +192,22 @@ describe("reorder", () => {
     const list = [rect("a"), rect("b")];
     expect(reorder(list, "a", "backward")).toBe(list);
     expect(reorder(list, "b", "forward")).toBe(list);
+  });
+});
+
+describe("resolveSpotlightDim", () => {
+  const spot = (id: string, dim: number): Annotation => ({
+    id, type: "spotlight", z: 0,
+    style: { ...DEFAULT_STYLE, fillOpacity: dim, region: "rect" },
+    x: 0, y: 0, w: 10, h: 10,
+  });
+  it("defaults to 0.6 when there are no spotlights", () => {
+    expect(resolveSpotlightDim([], null)).toBe(0.6);
+  });
+  it("uses the selected spotlight's fillOpacity", () => {
+    expect(resolveSpotlightDim([spot("a", 0.3), spot("b", 0.8)], "b")).toBe(0.8);
+  });
+  it("falls back to the first spotlight when none is selected", () => {
+    expect(resolveSpotlightDim([spot("a", 0.4)], null)).toBe(0.4);
   });
 });
