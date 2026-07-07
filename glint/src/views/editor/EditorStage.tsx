@@ -262,8 +262,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     const stage = e.target.getStage();
     if (!stage) return;
     // Eyedropper: sample the pixel under the pointer from the base screenshot,
-    // set it as the current color, and exit pick mode. No draw, no history.
-    if (picking) {
+    // set it as the current color, and exit pick mode. No draw, no history. Only in a
+    // drawing tool — never in select ("cursor") mode, where the picker is disabled.
+    if (picking && tool !== "select") {
       const { x, y } = imgPoint(stage);
       const hex = sampleColorAt(base.image, base.width, base.height, Math.round(x), Math.round(y));
       if (hex) setStyle({ color: hex });
@@ -407,7 +408,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         onMouseMove={onMove}
         onMouseUp={onUp}
         onDblClick={onDblClick}
-        style={{ cursor: picking ? "crosshair" : tool === "select" ? "default" : tool === "eraser" ? eraserCursor : "crosshair" }}
+        style={{ cursor: picking && tool !== "select" ? "crosshair" : tool === "select" ? "default" : tool === "eraser" ? eraserCursor : "crosshair" }}
       >
         {/* Background fill (gradient/solid). Transparent → no rect → alpha in export. */}
         {frame.enabled && frame.background.type !== "transparent" && (

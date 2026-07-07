@@ -179,6 +179,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       annotations: doc?.annotations ?? [],
       crop: doc?.crop ?? null,
       frame: mergeFrame(doc?.frame),
+      picking: false,
       past: [],
       future: [],
       selectedId: null,
