@@ -88,6 +88,8 @@ interface EditorState {
   dirty: boolean;
   /** Eraser footprint radius in image px (tool setting, not part of the doc). */
   eraserSize: number;
+  /** Eyedropper pick mode: the next canvas click samples a pixel color. */
+  picking: boolean;
 
   setBase: (b: EditorBase) => void;
   loadDoc: (
@@ -117,6 +119,7 @@ interface EditorState {
       can split/drop several strokes per dab). Marks the doc dirty. */
   setAnnotations: (list: Annotation[]) => void;
   setEraserSize: (n: number) => void;
+  setPicking: (v: boolean) => void;
   clearAll: () => void;
   setCrop: (c: Crop) => void;
   resetCrop: () => void;
@@ -161,6 +164,7 @@ const INITIAL = {
   projectName: null as string | null,
   dirty: false,
   eraserSize: 16,
+  picking: false,
 };
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -264,6 +268,7 @@ export const useEditorStore = create<EditorState>((set) => ({
     })),
 
   setEraserSize: (n) => set({ eraserSize: n }),
+  setPicking: (v) => set({ picking: v }),
 
   // Wipe every annotation in one gesture (a single undoable step). No-op — and
   // crucially no spurious history entry — when there's nothing to clear. The

@@ -62,6 +62,14 @@
   margin: 0; padding: 0; border: none;
   opacity: 0; cursor: pointer;
 }
+/* Eyedropper toggle: a swatch-sized button showing the pipette glyph; the accent
+   ring marks active pick mode. */
+.editor-eyedrop {
+  display: inline-flex; align-items: center; justify-content: center;
+  background: transparent; box-shadow: none; color: var(--text-dim);
+}
+.editor-eyedrop:hover { color: var(--text); }
+.editor-eyedrop--active { border-color: var(--accent); color: var(--text); }
 .editor-width {
   display: inline-flex; align-items: center; justify-content: center;
   box-sizing: border-box; flex: none; padding: 0;

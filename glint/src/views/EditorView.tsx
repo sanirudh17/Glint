@@ -93,6 +93,18 @@ export default function EditorView() {
       // Single-key tool shortcuts must not fire on modifier combos, or e.g.
       // Ctrl+Shift+S would select Step and Ctrl+C would select Crop.
       if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (e.key === "Escape") {
+        useEditorStore.getState().setPicking(false);
+        return;
+      }
+      // Eyedropper toggle — intentionally NOT in the `keys` tool map; it toggles
+      // pick mode rather than selecting a tool.
+      if (e.key.toLowerCase() === "i") {
+        e.preventDefault();
+        const st = useEditorStore.getState();
+        st.setPicking(!st.picking);
+        return;
+      }
       const t = keys[e.key.toLowerCase()];
       // No-op when the tool is already active — avoids a needless store update
       // (and selection clear) on a repeated tool key, e.g. "c" mid-crop.

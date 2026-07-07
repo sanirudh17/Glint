@@ -7,6 +7,7 @@ import { computeLayout } from "../../editor/composition";
 import { getGradient, konvaGradient } from "../../editor/gradients";
 import { AnnotationNode } from "./AnnotationNode";
 import { SpotlightDimLayer } from "./SpotlightDimLayer";
+import { sampleColorAt } from "../../editor/eyedropper";
 import { CropOverlay } from "./CropOverlay";
 import { WindowChrome } from "./WindowChrome";
 
@@ -59,6 +60,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const pushHistory = useEditorStore((s) => s.pushHistory);
   const setCrop = useEditorStore((s) => s.setCrop);
   const setTool = useEditorStore((s) => s.setTool);
+  const picking = useEditorStore((s) => s.picking);
+  const setPicking = useEditorStore((s) => s.setPicking);
+  const setStyle = useEditorStore((s) => s.setStyle);
 
   const wrapRef = useRef<HTMLDivElement>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -257,6 +261,15 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const onDown = (e: Konva.KonvaEventObject<MouseEvent>) => {
     const stage = e.target.getStage();
     if (!stage) return;
+    // Eyedropper: sample the pixel under the pointer from the base screenshot,
+    // set it as the current color, and exit pick mode. No draw, no history.
+    if (picking) {
+      const { x, y } = imgPoint(stage);
+      const hex = sampleColorAt(base.image, base.width, base.height, Math.round(x), Math.round(y));
+      if (hex) setStyle({ color: hex });
+      setPicking(false);
+      return;
+    }
     // Crop tool: the DOM CropOverlay drives the interaction (and covers the
     // stage), so the stage itself does nothing.
     if (tool === "crop") return;
@@ -394,7 +407,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         onMouseMove={onMove}
         onMouseUp={onUp}
         onDblClick={onDblClick}
-        style={{ cursor: tool === "select" ? "default" : tool === "eraser" ? eraserCursor : "crosshair" }}
+        style={{ cursor: picking ? "crosshair" : tool === "select" ? "default" : tool === "eraser" ? eraserCursor : "crosshair" }}
       >
         {/* Background fill (gradient/solid). Transparent → no rect → alpha in export. */}
         {frame.enabled && frame.background.type !== "transparent" && (

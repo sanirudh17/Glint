@@ -1,4 +1,4 @@
-import { ArrowLeftRight } from "lucide-react";
+import { ArrowLeftRight, Pipette } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { PALETTE as COLORS } from "../../editor/palette";
 
@@ -24,6 +24,8 @@ export function StyleBar() {
   const eraserSize = useEditorStore((s) => s.eraserSize);
   const setEraserSize = useEditorStore((s) => s.setEraserSize);
   const setSpotlightDim = useEditorStore((s) => s.setSpotlightDim);
+  const picking = useEditorStore((s) => s.picking);
+  const setPicking = useEditorStore((s) => s.setPicking);
 
   // The bar reflects the SELECTED annotation when there is one — so you can restyle
   // an existing shape (the fill/dashed/etc. controls appear for the selection, not
@@ -118,6 +120,14 @@ export function StyleBar() {
             aria-label="Custom color"
           />
         </label>
+        <button
+          className={`editor-swatch editor-eyedrop${picking ? " editor-eyedrop--active" : ""}`}
+          title="Pick a color from the image (I)"
+          aria-label="Eyedropper"
+          onClick={() => setPicking(!picking)}
+        >
+          <Pipette size={14} strokeWidth={1.75} />
+        </button>
       </div>
       <div className="editor-widths">
         {WIDTHS.map((w) => (
