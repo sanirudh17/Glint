@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -12,6 +12,7 @@ import { StyleBar } from "./editor/StyleBar";
 import { ExportBar } from "./editor/ExportBar";
 import { ProjectBar } from "./editor/ProjectBar";
 import { FramePanel } from "./editor/FramePanel";
+import { ShortcutCheatsheet } from "./editor/ShortcutCheatsheet";
 import type { ToolId } from "../editor/model";
 import "./editor/editor.css";
 
@@ -22,6 +23,7 @@ export default function EditorView() {
   const stageRef = useRef<Konva.Stage>(null);
   // Timestamp of the last arrow-key nudge, for history coalescing.
   const lastNudge = useRef(0);
+  const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
 
   const setTool = useEditorStore((s) => s.setTool);
   const undo = useEditorStore((s) => s.undo);
@@ -51,6 +53,12 @@ export default function EditorView() {
     const onKey = (e: KeyboardEvent) => {
       const target = e.target as HTMLElement;
       if (target.tagName === "INPUT" || target.tagName === "TEXTAREA") return;
+      // `?` (Shift+/) toggles the shortcut cheatsheet — handle before the tool keys.
+      if (e.key === "?") {
+        e.preventDefault();
+        setCheatsheetOpen((v) => !v);
+        return;
+      }
       if ((e.ctrlKey || e.metaKey) && !e.shiftKey && e.key.toLowerCase() === "s") {
         e.preventDefault();
         window.dispatchEvent(new CustomEvent("glint:save-project"));
@@ -94,6 +102,7 @@ export default function EditorView() {
       // Ctrl+Shift+S would select Step and Ctrl+C would select Crop.
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (e.key === "Escape") {
+        setCheatsheetOpen(false);
         useEditorStore.getState().setPicking(false);
         return;
       }
@@ -202,6 +211,7 @@ export default function EditorView() {
         <EditorStage ref={stageRef} />
         {frameEnabled && <FramePanel />}
       </div>
+      <ShortcutCheatsheet open={cheatsheetOpen} onClose={() => setCheatsheetOpen(false)} />
     </div>
   );
 }
