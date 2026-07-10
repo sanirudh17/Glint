@@ -118,10 +118,16 @@ export function RegionSelect() {
   // clear any drawn region, drop the confirm latch, and re-seed the chips from the latest
   // settings — so every open is a clean slate with no leftover selection or stale frame.
   useEffect(() => {
-    const p = listen("rec-select-reset", () => {
+    const p = listen("rec-select-reset", async () => {
       confirmed.current = false;
       drag.current = null;
       setRect(null);
+      // This window is PRE-WARMED and reused, so its store still holds the settings
+      // it loaded at prewarm — changes made since (e.g. toggling Movable webcam in the
+      // main window's Settings) never reached this window's store. Pull the latest from
+      // the backend (Rust's live copy + SQLite) before seeding so every open reflects
+      // the current defaults. Falls back to last-known settings if the refresh fails.
+      try { await useAppStore.getState().loadSettings(); } catch { /* keep last-known */ }
       const s = useAppStore.getState().settings;
       if (s) applySeed(s);
     });
