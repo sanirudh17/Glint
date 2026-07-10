@@ -37,13 +37,29 @@
 }
 
 /*
- * Section eyebrow: monospace .label class (defined in global.css) with
- * a hairline border-bottom — same structural device as Home view.
+ * Section header row: monospace eyebrow (.label, from global.css) on the left, a
+ * live capture count on the right, over a shared hairline — same structural
+ * device as Home, now with a count for information scent.
  */
-.library-section-label {
-  display: block;
+.library-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--s3);
   padding-bottom: var(--s3);
   border-bottom: 1px solid var(--border);
+}
+.library-section-label {
+  display: block;
+}
+/* Count — monospace, tabular figures so it never jitters as numbers change. */
+.library-count {
+  font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, "Consolas", monospace;
+  font-size: var(--fz-xs);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--ls-label);
+  color: var(--text-faint);
+  flex-shrink: 0;
 }
 
 /* ─── Filter bar ──────────────────────────────────────────────────────── */
@@ -58,15 +74,31 @@
   gap: var(--s3);
 }
 
-/* Search input — same visual DNA as .g-select (bg-elev, 1px border, r1) */
-.library-search {
+/* Search field wrapper — holds the leading magnifier icon over the input. */
+.library-search-wrap {
+  position: relative;
   flex: 1;
   min-width: 0;
+  display: flex;
+  align-items: center;
+}
+.library-search-icon {
+  position: absolute;
+  left: var(--s3);
+  color: var(--text-faint);
+  pointer-events: none;
+}
+
+/* Search input — same visual DNA as .g-select (bg-elev, 1px border), rounded to
+   match the app's button/control language; leaves room for the leading icon. */
+.library-search {
+  width: 100%;
+  min-width: 0;
   height: 34px;
-  padding: 0 var(--s3);
+  padding: 0 var(--s3) 0 var(--s6);
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: var(--r1);
+  border-radius: var(--r2);
   color: var(--text);
   font-family: inherit;
   font-size: var(--fz-md);
@@ -144,8 +176,13 @@
   cursor: grab;
   transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
-.cap-card:hover { border-color: var(--border-strong); }
-.cap-card:active { cursor: grabbing; }
+/* Subtle tactile lift on hover — reads as "pick me up / drag me". */
+.cap-card:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+.cap-card:active { cursor: grabbing; transform: none; }
+@media (prefers-reduced-motion: reduce) {
+  .cap-card { transition: border-color var(--dur) var(--ease); }
+  .cap-card:hover { transform: none; }
+}
 
 .cap-thumb {
   position: relative;
@@ -175,10 +212,22 @@
 
 .cap-meta {
   display: flex;
-  align-items: baseline;
+  align-items: center;
   justify-content: space-between;
   gap: var(--s2);
   padding: var(--s2) var(--s3);
+}
+/* Kind glyph + title/dims group — kind is shown by icon shape, not colour. */
+.cap-name {
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  min-width: 0;
+  flex: 1 1 auto;
+}
+.cap-kind {
+  color: var(--text-faint);
+  flex-shrink: 0;
 }
 .cap-dims {
   font-family: var(--ff-mono, ui-monospace, monospace);

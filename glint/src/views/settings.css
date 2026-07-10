@@ -3,7 +3,7 @@
  *
  * Two-column layout: a fixed left sub-nav + a scrollable right content panel.
  * Left nav uses the same monospace eyebrow + hairline rule as Home/Library.
- * Active nav item: 2px left accent bar + bg-elev2 fill — quiet, not loud.
+ * Active nav item: accent-tinted fill + accent label — quiet, not loud.
  *
  * Aesthetic note: the signature element here is the accent swatch row —
  * small pills with a thin border and a white checkmark on selection.
@@ -43,13 +43,15 @@
   gap: 2px;
 }
 
-/* Each nav item is a full-width button */
+/* Each nav item is a full-width button: [icon · label]. The icon inherits the
+   item's colour (text-dim → accent when active) so no separate active rule. */
 .settings-nav-item {
   display: flex;
   align-items: center;
+  gap: var(--s2);
   width: 100%;
   padding: var(--s2) var(--s3);
-  border-radius: var(--r1);
+  border-radius: var(--r2);
   font-size: var(--fz-sm);
   font-weight: var(--fw-normal);
   color: var(--text-dim);
@@ -60,9 +62,10 @@
   transition:
     color var(--dur) var(--ease),
     background var(--dur) var(--ease);
-  /* Left 2px accent bar — hidden until active */
-  box-shadow: inset 2px 0 0 transparent;
-  position: relative;
+}
+
+.settings-nav-item > svg {
+  flex-shrink: 0;
 }
 
 .settings-nav-item:hover {
@@ -74,8 +77,6 @@
   color: var(--accent);
   background: var(--accent-subtle);
   font-weight: var(--fw-medium);
-  /* The 2px left bar is the active signal — accent, not a heavy indicator */
-  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .settings-nav-item--active:hover {
@@ -285,19 +286,20 @@
 .settings-panel .g-section.settings-section--wide { max-width: 880px; }
 
 .settings-hotkey-help {
-  margin-bottom: 14px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: rgba(120, 140, 255, 0.08);
-  font-size: 12.5px;
-  line-height: 1.5;
+  margin-bottom: var(--s4);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r2);
+  /* Accent-tinted so it follows the chosen accent instead of a fixed periwinkle. */
+  background: var(--accent-subtle);
+  font-size: var(--fz-sm);
+  line-height: var(--lh-base);
 }
 .settings-hotkey-help strong { display: block; margin-bottom: 6px; }
 .settings-hotkey-help ol { margin: 0 0 6px; padding-left: 18px; }
 .settings-hotkey-help p { margin: 0; opacity: 0.8; }
 
 .settings-hotkey-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 0; }
-.settings-hotkey-row.is-capturing { outline: 2px solid var(--accent, #5b7cfa); outline-offset: 4px; border-radius: 6px; }
+.settings-hotkey-row.is-capturing { outline: 2px solid var(--accent, #5b7cfa); outline-offset: 4px; border-radius: var(--r-btn); }
 .settings-hotkey-label { flex: 0 0 150px; }
 .settings-hotkey-keys { flex: 1 1 auto; display: inline-flex; align-items: center; gap: 4px; }
 .settings-hotkey-listening { opacity: 0.75; font-style: italic; }
@@ -306,7 +308,7 @@
 .settings-hotkey-actions { display: inline-flex; align-items: center; gap: 8px; margin-left: auto; }
 .settings-hotkey-flash { font-size: 11.5px; color: var(--accent, #5b7cfa); }
 .settings-hotkey-btn {
-  padding: 3px 12px; border-radius: 6px; border: 1px solid rgba(128,128,128,0.35);
+  padding: 3px 12px; border-radius: var(--r-btn); border: 1px solid var(--border-strong);
   background: transparent; color: inherit; font-size: 12px; cursor: pointer;
 }
 .settings-hotkey-btn:hover { background: rgba(128,128,128,0.14); }
@@ -321,7 +323,7 @@
 .settings-folder-control { display: flex; flex-direction: column; gap: 8px; }
 .settings-folder-path {
   font-size: 12px; opacity: 0.85; word-break: break-all;
-  padding: 6px 8px; border-radius: 6px; background: rgba(128,128,128,0.1);
+  padding: 6px 8px; border-radius: var(--r2); background: var(--bg-elev2);
 }
 .settings-folder-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .settings-folder-actions .settings-hotkey-btn { display: inline-flex; align-items: center; gap: 5px; }

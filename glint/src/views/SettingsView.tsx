@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { SlidersHorizontal, Crop, Video, Save, Keyboard, Palette, HardDrive } from "lucide-react";
 import { General }    from "./settings/General";
 import { Capture }    from "./settings/Capture";
 import { Recording }  from "./settings/Recording";
@@ -23,16 +24,17 @@ type SectionId =
 interface NavItem {
   id: SectionId;
   label: string;
+  icon: React.ComponentType<{ size?: number; strokeWidth?: number }>;
 }
 
 const NAV_ITEMS: NavItem[] = [
-  { id: "general",    label: "General" },
-  { id: "capture",    label: "Capture" },
-  { id: "recording",  label: "Recording" },
-  { id: "autosave",   label: "Auto-save" },
-  { id: "hotkeys",    label: "Hotkeys" },
-  { id: "appearance", label: "Appearance" },
-  { id: "storage",    label: "Storage" },
+  { id: "general",    label: "General",    icon: SlidersHorizontal },
+  { id: "capture",    label: "Capture",    icon: Crop },
+  { id: "recording",  label: "Recording",  icon: Video },
+  { id: "autosave",   label: "Auto-save",  icon: Save },
+  { id: "hotkeys",    label: "Hotkeys",    icon: Keyboard },
+  { id: "appearance", label: "Appearance", icon: Palette },
+  { id: "storage",    label: "Storage",    icon: HardDrive },
 ];
 
 // ─── Section panel map ────────────────────────────────────────────────────────
@@ -58,7 +60,7 @@ export default function SettingsView() {
       <nav className="settings-nav" aria-label="Settings sections">
         <span className="label settings-nav-eyebrow">Settings</span>
         <ul className="settings-nav-list" role="list">
-          {NAV_ITEMS.map(({ id, label }) => (
+          {NAV_ITEMS.map(({ id, label, icon: Icon }) => (
             <li key={id}>
               <button
                 type="button"
@@ -71,7 +73,8 @@ export default function SettingsView() {
                 aria-current={active === id ? "page" : undefined}
                 onClick={() => setActive(id)}
               >
-                {label}
+                <Icon size={15} strokeWidth={1.75} />
+                <span>{label}</span>
               </button>
             </li>
           ))}

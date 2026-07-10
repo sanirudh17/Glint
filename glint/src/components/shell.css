@@ -121,10 +121,15 @@
   width: var(--nav-w-expanded);
 }
 
-/* The toggle is always last; pin it to the bottom. Targets the outer element in
-   both states (the tooltip wrapper while collapsed, the bare button expanded). */
-.g-nav-rail > :last-child {
+/* Footer holds the toggle, pinned to the bottom. When expanded, a hairline marks
+   it as a utility control distinct from the nav destinations above; collapsed, the
+   icon rail stays clean (no orphaned dash). */
+.g-nav-foot {
   margin-top: auto;
+}
+.g-nav-rail--expanded .g-nav-foot {
+  border-top: 1px solid var(--border);
+  padding-top: var(--s2);
 }
 
 /* Tooltip wrapper (present only while collapsed) spans the rail so its NavLink
@@ -176,6 +181,8 @@
   background: var(--bg-elev2);
 }
 
+/* Active = accent-tinted fill + accent icon/label; the fill is the indicator
+   (no left bar — it read as a detached sliver at the window edge). */
 .g-nav-item--active {
   color: var(--accent);
   background: var(--accent-subtle);
@@ -194,25 +201,6 @@
 .g-nav-rail--expanded .g-nav-label {
   max-width: 140px;
   opacity: 1;
-}
-
-/*
- * 3px left-edge indicator bar on active nav items. The item's left edge is inset
- * by the rail's padding, so the bar is pulled back by that amount to sit flush at
- * the window's left edge (the rail is the leftmost column). Not clipped — the rail
- * keeps overflow visible for tooltips.
- */
-.g-nav-item--active::before {
-  content: "";
-  position: absolute;
-  left: calc(-1 * var(--s2)); /* flush to rail's left edge */
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 18px;
-  border-radius: 0 2px 2px 0;
-  background: var(--accent);
-  pointer-events: none;
 }
 
 @media (prefers-reduced-motion: reduce) {

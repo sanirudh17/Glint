@@ -21,6 +21,9 @@
 
 /* New-capture action row */
 .home-actions { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
+/* "Open Project" (reopen existing work) is a different category from the five
+   capture actions — push it to the right so the grouping reads intentionally. */
+.home-actions > :last-child { margin-left: auto; }
 
 /* Recent header row: eyebrow left, View-all link right */
 .home-rowhead { display: flex; align-items: center; justify-content: space-between; }

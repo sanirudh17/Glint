@@ -58,7 +58,9 @@ export function NavRail() {
       <NavItem to="/library" label="Library" icon={<Images size={16} strokeWidth={1.75} />} expanded={expanded} />
       <NavItem to="/settings" label="Settings" icon={<Settings size={16} strokeWidth={1.75} />} expanded={expanded} />
 
-      <ToggleItem expanded={expanded} onClick={toggle} />
+      <div className="g-nav-foot">
+        <ToggleItem expanded={expanded} onClick={toggle} />
+      </div>
     </nav>
   );
 }

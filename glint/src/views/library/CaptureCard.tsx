@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ExternalLink, FolderOpen, Copy, Pencil, Pin, Trash2, Play, Scissors, ScanText, Tag } from "lucide-react";
+import { ExternalLink, FolderOpen, Copy, Pencil, Pin, Trash2, Play, Scissors, ScanText, Tag, Image as ImageIcon, Video } from "lucide-react";
 import type { CaptureItem } from "../../lib/captures";
 import { openCapture, revealCapture, copyCapture, copyCapturePath, deleteCapture, renameCapture, dragOut } from "../../lib/captures";
 import { openTrim } from "../../lib/trim";
@@ -75,25 +75,30 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
       </div>
 
       <div className="cap-meta">
-        {renaming ? (
-          <input
-            className="cap-rename-input"
-            autoFocus
-            value={draft}
-            placeholder="Name this capture…"
-            onChange={(e) => setDraft(e.currentTarget.value)}
-            onPointerDown={(e) => e.stopPropagation()}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") e.currentTarget.blur();
-              else if (e.key === "Escape") { cancelRef.current = true; e.currentTarget.blur(); }
-            }}
-            onBlur={() => void finishRename()}
-          />
-        ) : (
-          <span className="cap-dims" title={item.title ?? undefined}>
-            {item.title ? item.title : item.width && item.height ? `${item.width}×${item.height}` : "—"}
-          </span>
-        )}
+        <span className="cap-name">
+          {isRecording
+            ? <Video className="cap-kind" size={13} strokeWidth={1.75} aria-label="Recording" />
+            : <ImageIcon className="cap-kind" size={13} strokeWidth={1.75} aria-label="Screenshot" />}
+          {renaming ? (
+            <input
+              className="cap-rename-input"
+              autoFocus
+              value={draft}
+              placeholder="Name this capture…"
+              onChange={(e) => setDraft(e.currentTarget.value)}
+              onPointerDown={(e) => e.stopPropagation()}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") e.currentTarget.blur();
+                else if (e.key === "Escape") { cancelRef.current = true; e.currentTarget.blur(); }
+              }}
+              onBlur={() => void finishRename()}
+            />
+          ) : (
+            <span className="cap-dims" title={item.title ?? undefined}>
+              {item.title ? item.title : item.width && item.height ? `${item.width}×${item.height}` : "—"}
+            </span>
+          )}
+        </span>
         <span className="cap-when">{when(item.created_at)}</span>
       </div>
 
