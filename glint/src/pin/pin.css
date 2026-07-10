@@ -94,7 +94,7 @@
   border: 1px solid var(--border-strong, #3a3a44);
   background: transparent;
   color: inherit;
-  border-radius: 4px;
+  border-radius: var(--r-btn);
   padding: 2px 6px;
   cursor: pointer;
   font-size: 12px;

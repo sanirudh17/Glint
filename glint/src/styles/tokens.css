@@ -24,6 +24,8 @@
   --r1: 4px;
   --r2: 8px;
   --r3: 12px;
+  /* Button radius — rounded-rectangle, applied to all pressable buttons */
+  --r-btn: 8px;
 
   /* Type scale — optical, not computed */
   --fz-xs: 11px;
