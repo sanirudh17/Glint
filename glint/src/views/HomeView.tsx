@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, ScanText, RotateCcw, ArrowRight } from "lucide-react";
 import { Button, EmptyState } from "../components/ui";
 import { useAppStore } from "../store/useAppStore";
@@ -29,6 +30,14 @@ export default function HomeView() {
   useEffect(() => { reloadRecent(); }, [reloadRecent]);
   useEffect(() => {
     const p = listen("capture-saved", () => reloadRecent());
+    return () => { p.then((un) => un()); };
+  }, [reloadRecent]);
+  // Reconcile on window focus — listCaptures prunes captures whose file was deleted
+  // externally, so returning to Glint clears any that vanished in the background.
+  useEffect(() => {
+    const p = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused) reloadRecent();
+    });
     return () => { p.then((un) => un()); };
   }, [reloadRecent]);
 

@@ -170,6 +170,34 @@ pub fn soft_delete(conn: &Connection, id: i64) -> rusqlite::Result<()> {
     Ok(())
 }
 
+/// Split live capture rows (newest-first, as `list_captures` returns them) into the
+/// ones to show and the ids of the ones whose file has vanished. Walks in order,
+/// keeping rows whose file still exists (up to `cap` of them) and collecting the ids
+/// of rows whose file is gone — the caller soft-deletes those so a capture deleted in
+/// Explorer / the system self-heals out of the Library instead of lingering as a
+/// broken row. `exists` is injected (not a hard-coded fs call) so this stays pure and
+/// unit-testable. Stops once `cap` survivors are found, so a limited request (Home
+/// previews only a few) never stats the whole library.
+pub fn reconcile_rows<F: Fn(&str) -> bool>(
+    rows: Vec<CaptureRow>,
+    cap: usize,
+    exists: F,
+) -> (Vec<CaptureRow>, Vec<i64>) {
+    let mut survivors = Vec::new();
+    let mut missing = Vec::new();
+    for r in rows {
+        if survivors.len() >= cap {
+            break;
+        }
+        if exists(&r.path) {
+            survivors.push(r);
+        } else {
+            missing.push(r.id);
+        }
+    }
+    (survivors, missing)
+}
+
 pub fn capture_path(conn: &Connection, id: i64) -> rusqlite::Result<Option<String>> {
     ensure_captures_table(conn)?;
     let mut stmt = conn.prepare("SELECT path FROM captures WHERE id = ?1 AND deleted_at IS NULL")?;
@@ -234,6 +262,49 @@ mod tests {
         let c = mem();
         let id = insert_capture(&c, &sample("/y.png", 100)).unwrap();
         assert_eq!(capture_path(&c, id).unwrap(), Some("/y.png".to_string()));
+    }
+
+    fn row(id: i64, path: &str) -> CaptureRow {
+        CaptureRow {
+            id,
+            kind: "screenshot".into(),
+            path: path.into(),
+            thumb_path: None,
+            width: None,
+            height: None,
+            bytes: None,
+            created_at: id,
+            title: None,
+        }
+    }
+
+    #[test]
+    fn reconcile_keeps_present_files_and_flags_missing() {
+        let rows = vec![row(1, "/keep-a.png"), row(2, "/gone.png"), row(3, "/keep-b.png")];
+        let (survivors, missing) = reconcile_rows(rows, usize::MAX, |p| p != "/gone.png");
+        assert_eq!(
+            survivors.iter().map(|r| r.path.as_str()).collect::<Vec<_>>(),
+            vec!["/keep-a.png", "/keep-b.png"],
+        );
+        assert_eq!(missing, vec![2]);
+    }
+
+    #[test]
+    fn reconcile_stops_after_cap_survivors() {
+        // With cap=2 and all files present, the 3rd row is never inspected.
+        let rows = vec![row(1, "/a.png"), row(2, "/b.png"), row(3, "/c.png")];
+        let (survivors, missing) = reconcile_rows(rows, 2, |_| true);
+        assert_eq!(survivors.len(), 2);
+        assert!(missing.is_empty());
+    }
+
+    #[test]
+    fn reconcile_fills_cap_past_missing_rows() {
+        // A missing row doesn't consume a survivor slot: cap=2 still yields 2 present files.
+        let rows = vec![row(1, "/gone.png"), row(2, "/a.png"), row(3, "/b.png")];
+        let (survivors, missing) = reconcile_rows(rows, 2, |p| p != "/gone.png");
+        assert_eq!(survivors.iter().map(|r| r.id).collect::<Vec<_>>(), vec![2, 3]);
+        assert_eq!(missing, vec![1]);
     }
 
     #[test]

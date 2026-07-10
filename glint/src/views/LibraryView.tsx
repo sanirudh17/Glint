@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { Images, Search } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { EmptyState, Select } from "../components/ui";
 import { listCaptures, type CaptureItem } from "../lib/captures";
 import { CaptureCard } from "./library/CaptureCard";
@@ -27,6 +28,16 @@ export default function LibraryView() {
   // Refresh when a new capture is saved (or one is deleted elsewhere).
   useEffect(() => {
     const p = listen("capture-saved", () => reload());
+    return () => { p.then((un) => un()); };
+  }, [reload]);
+
+  // Reconcile on window focus: listCaptures prunes captures whose file was deleted
+  // in Explorer/the system, so tabbing back to Glint clears any that vanished while
+  // it was in the background — no stale rows that error when clicked.
+  useEffect(() => {
+    const p = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused) reload();
+    });
     return () => { p.then((un) => un()); };
   }, [reload]);
 
