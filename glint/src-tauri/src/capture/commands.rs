@@ -573,18 +573,40 @@ pub struct CaptureListItem {
 }
 
 /// List (non-deleted) captures, newest first — id/metadata + the thumbnail's PATH (the
-/// frontend resolves it to an asset URL). Does NO file I/O and holds the DB lock only for
-/// the metadata query, so load time no longer scales with the number/size of thumbnails.
-/// `limit` caps the result — Home previews only the few most recent.
-#[tauri::command]
+/// frontend resolves it to an asset URL). `limit` caps the result — Home previews only
+/// the few most recent.
+///
+/// Reconcile-on-load: each returned capture's file is stat'd, and any whose file has
+/// vanished (deleted/moved in Explorer or the system) is soft-deleted here and omitted,
+/// so the Library self-heals instead of showing rows that error with "no longer on disk"
+/// the moment you click them. Async (runs off the UI thread) because statting files is
+/// blocking I/O — a sync command would freeze the window; walking stops after `limit`
+/// survivors so a small Home request never stats the whole library.
+#[tauri::command(async)]
 pub fn captures_list(db: State<crate::Db>, limit: Option<usize>) -> Result<Vec<CaptureListItem>, String> {
+    // Snapshot the live rows (lock held only for the query).
     let rows = {
         let conn = db.0.lock().unwrap();
         crate::db::list_captures(&conn).map_err(|e| e.to_string())?
     };
-    let items = rows
+
+    // Split into survivors (file present) + ids whose file is gone — off the lock.
+    let (survivors, missing) = crate::db::reconcile_rows(
+        rows,
+        limit.unwrap_or(usize::MAX),
+        |p| std::path::Path::new(p).exists(),
+    );
+
+    // Prune the vanished rows so they never reappear (brief lock, best-effort).
+    if !missing.is_empty() {
+        let conn = db.0.lock().unwrap();
+        for id in missing {
+            let _ = crate::db::soft_delete(&conn, id);
+        }
+    }
+
+    let items = survivors
         .into_iter()
-        .take(limit.unwrap_or(usize::MAX))
         .map(|r| CaptureListItem {
             id: r.id,
             kind: r.kind,
