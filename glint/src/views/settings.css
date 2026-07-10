@@ -3,7 +3,7 @@
  *
  * Two-column layout: a fixed left sub-nav + a scrollable right content panel.
  * Left nav uses the same monospace eyebrow + hairline rule as Home/Library.
- * Active nav item: 2px left accent bar + bg-elev2 fill — quiet, not loud.
+ * Active nav item: accent-tinted fill + accent label — quiet, not loud.
  *
  * Aesthetic note: the signature element here is the accent swatch row —
  * small pills with a thin border and a white checkmark on selection.
@@ -51,7 +51,7 @@
   gap: var(--s2);
   width: 100%;
   padding: var(--s2) var(--s3);
-  border-radius: var(--r1);
+  border-radius: var(--r2);
   font-size: var(--fz-sm);
   font-weight: var(--fw-normal);
   color: var(--text-dim);
@@ -62,9 +62,6 @@
   transition:
     color var(--dur) var(--ease),
     background var(--dur) var(--ease);
-  /* Left 2px accent bar — hidden until active */
-  box-shadow: inset 2px 0 0 transparent;
-  position: relative;
 }
 
 .settings-nav-item > svg {
@@ -80,8 +77,6 @@
   color: var(--accent);
   background: var(--accent-subtle);
   font-weight: var(--fw-medium);
-  /* The 2px left bar is the active signal — accent, not a heavy indicator */
-  box-shadow: inset 2px 0 0 var(--accent);
 }
 
 .settings-nav-item--active:hover {
