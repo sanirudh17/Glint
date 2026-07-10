@@ -106,7 +106,10 @@
   display: flex;
   flex-direction: column;
   align-items: stretch;
-  padding: var(--s3) var(--s2);
+  /* Top padding drops the first item so its row aligns with the content views'
+     first row (they all start at var(--s7)); bottom keeps the toggle near the
+     edge. */
+  padding: var(--s6) var(--s2) var(--s3);
   gap: var(--s1);
   background: var(--bg-elev);
   border-right: 1px solid var(--border);
