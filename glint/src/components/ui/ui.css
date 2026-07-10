@@ -261,7 +261,7 @@
   padding: 0 var(--s7) 0 var(--s3);
   background: var(--bg-elev);
   border: 1px solid var(--border);
-  border-radius: var(--r1);
+  border-radius: var(--r2);
   color: var(--text);
   font-family: inherit;
   font-size: var(--fz-md);

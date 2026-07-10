@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Images } from "lucide-react";
+import { Images, Search } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { EmptyState, Select } from "../components/ui";
 import { listCaptures, type CaptureItem } from "../lib/captures";
@@ -42,14 +42,17 @@ export default function LibraryView() {
       <section className="library-section" aria-label="Library controls">
         <span className="label library-section-label" id="lib-label">Library</span>
         <div className="library-bar" role="search" aria-label="Filter captures">
-          <input
-            className="library-search"
-            type="search"
-            placeholder="Search by name or date…"
-            value={search}
-            onChange={(e) => setSearch(e.currentTarget.value)}
-            aria-label="Search captures by name or date"
-          />
+          <div className="library-search-wrap">
+            <Search className="library-search-icon" size={15} strokeWidth={1.75} aria-hidden="true" />
+            <input
+              className="library-search"
+              type="search"
+              placeholder="Search by name or date…"
+              value={search}
+              onChange={(e) => setSearch(e.currentTarget.value)}
+              aria-label="Search captures by name or date"
+            />
+          </div>
           <Select value={kind} options={KIND_OPTIONS} onChange={setKind} />
         </div>
       </section>
