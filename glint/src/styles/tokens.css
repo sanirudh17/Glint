@@ -64,8 +64,9 @@
   --danger:        #E5544B;
   --danger-subtle: rgba(229, 84, 75, 0.10);
 
-  /* Nav rail width */
+  /* Nav rail width — collapsed (icon rail) and expanded (icon + label) */
   --nav-w: 52px;
+  --nav-w-expanded: 200px;
   /* Titlebar height (Tauri custom titlebar) */
   --titlebar-h: 36px;
 

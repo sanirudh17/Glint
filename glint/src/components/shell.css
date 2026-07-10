@@ -95,45 +95,68 @@
 }
 
 /* ─── Nav rail ───────────────────────────────────────────────────────── */
+/*
+ * Collapses to a 52px icon rail or expands to a 200px icon+label rail. The
+ * width animates in one horizontal motion; the content area (flex:1) reflows in
+ * step, so the whole thing reads as a single horizontal slide, not a jump.
+ */
 .g-nav-rail {
   width: var(--nav-w);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  align-items: center;
-  padding: var(--s3) 0;
+  align-items: stretch;
+  padding: var(--s3) var(--s2);
   gap: var(--s1);
   background: var(--bg-elev);
   border-right: 1px solid var(--border);
+  transition: width var(--dur-slow) var(--ease);
   /* No overflow:hidden — nav-item tooltips open rightward and must escape the rail. */
 }
 
+.g-nav-rail--expanded {
+  width: var(--nav-w-expanded);
+}
+
+/* The toggle is always last; pin it to the bottom. Targets the outer element in
+   both states (the tooltip wrapper while collapsed, the bare button expanded). */
+.g-nav-rail > :last-child {
+  margin-top: auto;
+}
+
+/* Tooltip wrapper (present only while collapsed) spans the rail so its NavLink
+   fills the full width, exactly like the un-wrapped expanded links. */
+.g-nav-rail .g-tooltip-root {
+  width: 100%;
+}
+
 /*
- * Nav items: 36×36 rounded targets, centered in the 52px rail.
- * Active state = accent icon + accent-subtle fill + a 3px left-edge bar.
- *
- * The bar is a ::before pseudo-element, absolutely positioned relative to the
- * item and offset left into the gap so it sits flush against the rail's left
- * edge (see .g-nav-item--active::before). The sliver that lands at the window's
- * left edge is clipped by the viewport, giving a clean flush indicator without
- * needing overflow:hidden on the rail.
+ * Nav items: full-width rows of [icon · label]. Collapsed, the rail is narrow so
+ * only the icon shows and the label holds at max-width:0; expanded, the label
+ * reveals. Active state = accent icon + accent-subtle fill + a 3px left-edge bar.
  */
 .g-nav-item {
   position: relative;
-  display: inline-flex;
+  display: flex;
   align-items: center;
-  justify-content: center;
-  width: 36px;
+  gap: var(--s3);
+  width: 100%;
   height: 36px;
+  padding: 0 var(--s2);
   border-radius: var(--r2);
   border: none;
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
   text-decoration: none;
+  white-space: nowrap;
   transition:
     color var(--dur) var(--ease),
     background var(--dur) var(--ease);
+}
+
+/* Icon never shrinks as the rail narrows; only the label collapses. */
+.g-nav-item > svg {
   flex-shrink: 0;
 }
 
@@ -147,16 +170,31 @@
   background: var(--accent-subtle);
 }
 
+/* Revealed label — max-width + opacity animate in sync with the rail width, so
+   the text slides open with the rail rather than popping in. */
+.g-nav-label {
+  overflow: hidden;
+  max-width: 0;
+  opacity: 0;
+  transition:
+    max-width var(--dur-slow) var(--ease),
+    opacity var(--dur-slow) var(--ease);
+}
+.g-nav-rail--expanded .g-nav-label {
+  max-width: 140px;
+  opacity: 1;
+}
+
 /*
- * 3px left-edge indicator bar on active nav items.
- * Uses a pseudo-element absolutely positioned relative to the rail
- * (not the item) by stretching into the 8px gap between item left edge
- * and rail left edge. Width = 3px, centered on item height.
+ * 3px left-edge indicator bar on active nav items. The item's left edge is inset
+ * by the rail's padding, so the bar is pulled back by that amount to sit flush at
+ * the window's left edge (the rail is the leftmost column). Not clipped — the rail
+ * keeps overflow visible for tooltips.
  */
 .g-nav-item--active::before {
   content: "";
   position: absolute;
-  left: calc(-1 * ((var(--nav-w) - 36px) / 2) - 1px); /* flush to rail left border */
+  left: calc(-1 * var(--s2)); /* flush to rail's left edge */
   top: 50%;
   transform: translateY(-50%);
   width: 3px;
@@ -164,6 +202,13 @@
   border-radius: 0 2px 2px 0;
   background: var(--accent);
   pointer-events: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .g-nav-rail,
+  .g-nav-label {
+    transition: none;
+  }
 }
 
 /* ─── Content area ───────────────────────────────────────────────────── */
