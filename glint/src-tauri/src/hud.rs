@@ -73,7 +73,29 @@ pub fn ensure_open(app: &AppHandle) -> tauri::Result<()> {
         log::warn!("hud: no primary monitor; using default window position");
     }
 
-    win.show()?;
+    // Paint handshake: reveal only after the frontend has painted its first frame
+    // (`hud-ready`), so WebView2 never flashes its unpainted first frame on this cold
+    // build (a brief accent-tinted flash seen only on the first capture; warm reuses
+    // never rebuild). 800 ms fallback guarantees the window still shows if the event is
+    // missed. Mirrors `build_region_selector`, but NEVER set_focus — the HUD is focus-less
+    // by design (it must not steal focus from the app the user is about to drag into).
+    use tauri::Listener;
+    use std::sync::atomic::{AtomicBool, Ordering};
+    let shown = std::sync::Arc::new(AtomicBool::new(false));
+    {
+        let win = win.clone();
+        let shown = shown.clone();
+        app.once("hud-ready", move |_| {
+            if !shown.swap(true, Ordering::SeqCst) { let _ = win.show(); }
+        });
+    }
+    {
+        let win = win.clone();
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(std::time::Duration::from_millis(800)).await;
+            if !shown.swap(true, Ordering::SeqCst) { let _ = win.show(); }
+        });
+    }
     Ok(())
 }
 
