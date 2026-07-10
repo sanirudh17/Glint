@@ -40,7 +40,16 @@ export default function LibraryView() {
   return (
     <div className="library-view">
       <section className="library-section" aria-label="Library controls">
-        <span className="label library-section-label" id="lib-label">Library</span>
+        <div className="library-head">
+          <span className="label library-section-label" id="lib-label">Library</span>
+          {captures.length > 0 && (
+            <span className="library-count">
+              {visible.length === captures.length
+                ? `${captures.length} ${captures.length === 1 ? "capture" : "captures"}`
+                : `${visible.length} of ${captures.length}`}
+            </span>
+          )}
+        </div>
         <div className="library-bar" role="search" aria-label="Filter captures">
           <div className="library-search-wrap">
             <Search className="library-search-icon" size={15} strokeWidth={1.75} aria-hidden="true" />

@@ -43,10 +43,12 @@
   gap: 2px;
 }
 
-/* Each nav item is a full-width button */
+/* Each nav item is a full-width button: [icon · label]. The icon inherits the
+   item's colour (text-dim → accent when active) so no separate active rule. */
 .settings-nav-item {
   display: flex;
   align-items: center;
+  gap: var(--s2);
   width: 100%;
   padding: var(--s2) var(--s3);
   border-radius: var(--r1);
@@ -63,6 +65,10 @@
   /* Left 2px accent bar — hidden until active */
   box-shadow: inset 2px 0 0 transparent;
   position: relative;
+}
+
+.settings-nav-item > svg {
+  flex-shrink: 0;
 }
 
 .settings-nav-item:hover {
