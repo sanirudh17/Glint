@@ -17,7 +17,7 @@
   align-items: center;
   gap: var(--s2);
   border: 1px solid var(--border);
-  border-radius: var(--r1);
+  border-radius: var(--r-btn);
   background: transparent;
   color: var(--text);
   font-family: inherit;
@@ -100,7 +100,7 @@
   width: 30px;
   height: 30px;
   border: 1px solid transparent;
-  border-radius: var(--r1);
+  border-radius: var(--r-btn);
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;

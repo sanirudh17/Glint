@@ -45,7 +45,7 @@
 .trim-transport, .trim-actions { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
 .trim-spacer { flex: 1; }
 .trim-time, .trim-out { opacity: 0.85; font-variant-numeric: tabular-nums; }
-.trim-iconbtn, .trim-btn { background: #1b1d27; color: #e8e8ee; border: 1px solid rgba(255,255,255,0.12); border-radius: 7px; padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.trim-iconbtn, .trim-btn { background: #1b1d27; color: #e8e8ee; border: 1px solid rgba(255,255,255,0.12); border-radius: var(--r-btn); padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
 .trim-iconbtn:disabled, .trim-btn:disabled { opacity: 0.4; cursor: default; }
 .trim-btn--primary { background: var(--accent); border-color: var(--accent); }
 .trim-track { position: relative; height: 56px; margin: 0 12px 4px; background: #14151c; border-radius: 8px; overflow: hidden; cursor: ew-resize; touch-action: none; }
@@ -69,7 +69,7 @@
   min-width: 30px; height: 26px; padding: 0 6px;
   font-size: 11px; font-variant-numeric: tabular-nums;
   color: var(--text-dim); background: var(--bg-elev, rgba(128,128,128,.12));
-  border: 1px solid var(--border); border-radius: var(--r1, 4px); cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--r-btn); cursor: pointer;
 }
 .trim-speedbtn--on { color: var(--text); border-color: var(--accent); background: var(--accent-subtle, rgba(91,124,250,.16)); }
 .trim-speedbtn:disabled { opacity: .45; cursor: default; }
@@ -101,7 +101,7 @@
 .trim-fade-btn {
   width: 20px; height: 20px; line-height: 1; font-size: 13px;
   color: var(--text); background: var(--bg-elev, rgba(128,128,128,.12));
-  border: 1px solid var(--border); border-radius: var(--r1, 4px); cursor: pointer;
+  border: 1px solid var(--border); border-radius: var(--r-btn); cursor: pointer;
 }
 .trim-fade-btn:disabled { opacity: .4; cursor: default; }
 .trim-fade-val { min-width: 26px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text); }
@@ -115,7 +115,7 @@
   display: inline-flex; align-items: center; gap: 6px; flex: none;
   height: 30px; padding: 0 10px; box-sizing: border-box;
   background: #1b1d27; color: #e8e8ee;
-  border: 1px solid rgba(255,255,255,0.12); border-radius: 7px;
+  border: 1px solid rgba(255,255,255,0.12); border-radius: var(--r-btn);
   cursor: grab; user-select: none; -webkit-user-select: none;
   touch-action: none; /* pointer drag must not be hijacked by the strip's horizontal scroll */
   transition: border-color 120ms var(--ease, ease), background 120ms var(--ease, ease);

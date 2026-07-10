@@ -102,6 +102,7 @@ export const useAppStore = create<AppState>((set, get) => ({
     let record_system_audio = rustSettings.record_system_audio;
     let record_microphone = rustSettings.record_microphone;
     let record_webcam = rustSettings.record_webcam;
+    let record_webcam_movable = rustSettings.record_webcam_movable;
     try {
       const dbTheme = await readSetting<Theme>("theme");
       if (dbTheme) theme = dbTheme;
@@ -121,6 +122,8 @@ export const useAppStore = create<AppState>((set, get) => ({
       if (dbRecordMic !== null) record_microphone = dbRecordMic;
       const dbRecordWebcam = await readSetting<boolean>("record_webcam");
       if (dbRecordWebcam !== null) record_webcam = dbRecordWebcam;
+      const dbRecordWebcamMovable = await readSetting<boolean>("record_webcam_movable");
+      if (dbRecordWebcamMovable !== null) record_webcam_movable = dbRecordWebcamMovable;
       const dbWebcamShape = await readSetting<Settings["webcam_shape"]>("webcam_shape");
       if (dbWebcamShape) rustSettings.webcam_shape = dbWebcamShape;
       // Recording FX defaults — override the Rust defaults with persisted values.
@@ -134,7 +137,7 @@ export const useAppStore = create<AppState>((set, get) => ({
       // plugin-sql unavailable (e.g. plain Vite dev server) — use Rust defaults.
     }
 
-    const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy, open_in_editor, explorer_menu_enabled, record_system_audio, record_microphone, record_webcam };
+    const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy, open_in_editor, explorer_menu_enabled, record_system_audio, record_microphone, record_webcam, record_webcam_movable };
     set({ settings: merged });
     applyTheme(theme);
     applyAccent(accent);

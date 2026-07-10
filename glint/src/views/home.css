@@ -1,74 +1,38 @@
 /*
- * Glint — Home view styles
- *
- * Three regions in calm vertical rhythm.
- * All values from tokens.css. Never hardcoded.
+ * Glint — Home view (Concept A "Quiet launcher")
+ * Minimal, uncrowded. All values from tokens.css.
  */
 
-/* ─── Layout ─────────────────────────────────────────────────────────── */
 .home-view {
   display: flex;
   flex-direction: column;
   gap: var(--s6);
-  padding: var(--s7) var(--s7);
+  padding: var(--s7);
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
 }
 
-/* ─── Sections ────────────────────────────────────────────────────────── */
-.home-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s4);
-}
+.home-section { display: flex; flex-direction: column; gap: var(--s4); }
+.home-section--grow { flex: 1 0 auto; }
 
-/* The "recent captures" region expands to fill available space. Use grow-only
-   (shrink:0, basis:auto) so it never shrinks below its content — otherwise the
-   thumbnail cards overflow downward and overlap the sections beneath it (they
-   sat on top of the Recent Projects rows, hiding their names). The page itself
-   scrolls (.home-view overflow-y:auto) when content exceeds the viewport. */
-.home-section--grow {
-  flex: 1 0 auto;
-}
+/* Eyebrow — mono uppercase label (see .label in global.css). No hairline rule. */
+.home-eyebrow { display: block; }
 
-/*
- * Section labels — monospace eyebrows in .label class (defined in global.css).
- * Hairline rule below them encodes section boundaries without decorative weight.
- */
-.home-section-label {
-  display: block;
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--border);
-}
+/* New-capture action row */
+.home-actions { display: flex; flex-wrap: wrap; gap: var(--s2); align-items: center; }
 
-/* ─── Quick-start row ─────────────────────────────────────────────────── */
-.home-quickstart {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--s2);
-  align-items: center;
+/* Recent header row: eyebrow left, View-all link right */
+.home-rowhead { display: flex; align-items: center; justify-content: space-between; }
+.home-viewall {
+  display: inline-flex; align-items: center; gap: var(--s1);
+  border: none; background: transparent; cursor: pointer;
+  color: var(--accent); font-size: var(--fz-sm); font-weight: var(--fw-medium);
+  padding: 0; transition: color var(--dur) var(--ease);
 }
+.home-viewall:hover { color: var(--accent-hover); }
 
-/* ─── Empty state wrapper ─────────────────────────────────────────────── */
-/*
- * Centers the EmptyState within the grow region.
- * Uses a flex container so it vertically centres even when
- * the panel is tall.
- */
-.home-empty-wrap {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  border: 1px solid var(--border);
-  border-radius: var(--r2);
-  min-height: 160px;
-}
-
-/* ─── Recent-captures grid ────────────────────────────────────────────── */
-/* Dashboard preview of the latest captures. Reuses .cap-card from library.css;
-   the page itself scrolls, so the grid doesn't need its own scroll region. */
+/* Recent grid — responsive auto-fill, ~two rows on a normal window */
 .home-recent-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
@@ -76,81 +40,22 @@
   align-content: start;
 }
 
-/* ─── Hotkeys card ────────────────────────────────────────────────────── */
-.home-hotkeys-list {
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  /* Row spacing comes from each row's vertical padding + 1px dividers below. */
+/* Empty state wrapper — centered in the grow region */
+.home-empty-wrap {
+  flex: 1; display: flex; align-items: center; justify-content: center;
+  border: 1px solid var(--border); border-radius: var(--r2); min-height: 160px;
 }
 
-.home-hotkey-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: var(--s2) 0;
-  border-bottom: 1px solid var(--border);
+/* Resume chips — subtle, conditional */
+.home-resume { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.home-resume-chip {
+  display: inline-flex; align-items: center; gap: var(--s2);
+  padding: var(--s2) var(--s3);
+  border: 1px solid var(--border); border-radius: var(--r-btn);
+  background: var(--bg-elev); color: var(--text-dim); cursor: pointer;
+  font-size: var(--fz-sm); max-width: 260px;
+  transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-
-/* Remove the divider on the last row */
-.home-hotkey-row:last-child {
-  border-bottom: none;
-  padding-bottom: 0;
-}
-
-/* First row: no top padding needed (card already has padding) */
-.home-hotkey-row:first-child {
-  padding-top: 0;
-}
-
-.home-hotkey-label {
-  font-size: var(--fz-sm);
-  color: var(--text-dim);
-  line-height: var(--lh-tight);
-}
-
-/* The group of kbd chips for one shortcut */
-.home-hotkey-keys {
-  display: flex;
-  align-items: center;
-  gap: var(--s1);
-  flex-shrink: 0;
-}
-
-/* ─── <kbd> chips ─────────────────────────────────────────────────────── */
-/*
- * Token-driven: 1px border (--border), --bg-elev2 background,
- * monospace font for the capture-tool DNA nod.
- * Deliberately small — reference, not dominant.
- */
-.home-kbd {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1px var(--s2);
-  background: var(--bg-elev2);
-  border: 1px solid var(--border-strong);
-  border-radius: var(--r1);
-  font-family: "Cascadia Code", "JetBrains Mono", ui-monospace, "Consolas", monospace;
-  font-size: var(--fz-xs);
-  font-weight: var(--fw-normal);
-  color: var(--text-dim);
-  line-height: 1.6;
-  min-width: 20px;
-  text-align: center;
-  /* Bottom border slightly darker — simulates key relief without a shadow */
-  border-bottom-color: var(--border-strong);
-}
-
-/* ─── Recent projects list ────────────────────────────────────────────── */
-.home-projects { display: flex; flex-direction: column; gap: var(--s1); list-style: none; margin: 0; padding: 0; }
-.home-project {
-  display: flex; align-items: center; gap: var(--s2);
-  width: 100%; padding: var(--s2) var(--s3);
-  border: 1px solid var(--border); border-radius: var(--r1);
-  background: var(--bg-elev); color: var(--text); cursor: pointer; text-align: left;
-  transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
-}
-.home-project:hover { border-color: var(--border-strong); }
-.home-project-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.home-project--stale { opacity: 0.5; }
+.home-resume-chip:hover { border-color: var(--border-strong); color: var(--text); }
+.home-resume-chip--stale { opacity: 0.5; }
+.home-resume-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

@@ -26,13 +26,13 @@
 .rec-dot--paused { background: #f5a623; animation: none; }
 @keyframes rec-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
 .rec-time { font-variant-numeric: tabular-nums; min-width: 44px; }
-.rec-pause { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
+.rec-pause { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: var(--r-btn); background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
 .rec-pause:hover { background: rgba(255,255,255,0.24); }
 .rec-pause:disabled { opacity: 0.5; cursor: default; }
-.rec-atog { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
+.rec-atog { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: var(--r-btn); background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
 .rec-atog:hover { background: rgba(255,255,255,0.24); }
 .rec-atog--off { background: rgba(255,255,255,0.06); color: rgba(255,255,255,0.5); }
-.rec-stop { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: 6px; background: #ff3b30; color: #fff; cursor: pointer; }
+.rec-stop { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: var(--r-btn); background: #ff3b30; color: #fff; cursor: pointer; }
 .rec-countdown {
   width: 100vw; height: 100vh; display: flex; align-items: center; justify-content: center;
   font-size: 120px; font-weight: 700; color: #fff; text-shadow: 0 4px 24px rgba(0,0,0,0.6);
@@ -88,7 +88,7 @@
 .rec-sel-fullbtn {
   pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   height: 34px; padding: 0 18px; box-sizing: border-box; white-space: nowrap;
-  background: var(--accent); color: #fff; border: none; border-radius: 8px;
+  background: var(--accent); color: #fff; border: none; border-radius: var(--r-btn);
   font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .rec-sel-fullbtn:hover { background: var(--accent-hover); }
@@ -99,7 +99,7 @@
   pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   width: 140px; height: 34px; padding: 0 12px; box-sizing: border-box; white-space: nowrap;
   background: rgba(20,22,30,0.72); color: #fff; border: 1px solid rgba(255,255,255,0.16);
-  border-radius: 8px; font-size: 12px; font-weight: 500;
+  border-radius: var(--r-btn); font-size: 12px; font-weight: 500;
   cursor: pointer; transition: background 120ms var(--ease, ease), border-color 120ms var(--ease, ease);
 }
 .rec-sel-chip:hover { background: rgba(44,48,60,0.82); }

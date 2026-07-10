@@ -181,7 +181,7 @@
   justify-content: center;
   width: 34px;
   height: 34px;
-  border-radius: 8px;
+  border-radius: var(--r-btn);
   border: 1px solid transparent;
   background: transparent;
   color: rgba(255, 255, 255, 0.82);
