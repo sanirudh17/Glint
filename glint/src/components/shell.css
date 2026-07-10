@@ -121,10 +121,15 @@
   width: var(--nav-w-expanded);
 }
 
-/* The toggle is always last; pin it to the bottom. Targets the outer element in
-   both states (the tooltip wrapper while collapsed, the bare button expanded). */
-.g-nav-rail > :last-child {
+/* Footer holds the toggle, pinned to the bottom. When expanded, a hairline marks
+   it as a utility control distinct from the nav destinations above; collapsed, the
+   icon rail stays clean (no orphaned dash). */
+.g-nav-foot {
   margin-top: auto;
+}
+.g-nav-rail--expanded .g-nav-foot {
+  border-top: 1px solid var(--border);
+  padding-top: var(--s2);
 }
 
 /* Tooltip wrapper (present only while collapsed) spans the rail so its NavLink
