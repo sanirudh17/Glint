@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
-import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, FileText, ScanText } from "lucide-react";
-import { Button, Card, EmptyState } from "../components/ui";
+import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, ScanText, RotateCcw, ArrowRight } from "lucide-react";
+import { Button, EmptyState } from "../components/ui";
 import { useAppStore } from "../store/useAppStore";
 import { startCapture } from "../lib/captureIpc";
 import { captureText } from "../lib/ocr";
@@ -11,62 +12,27 @@ import { getRecentProjects, openProject, pickOpenPath, pushRecentProject, type R
 import { CaptureCard } from "./library/CaptureCard";
 import "./home.css";
 
-/** How many of the most recent captures the dashboard previews. */
-const RECENT_LIMIT = 6;
-
-/** Human-readable labels for each hotkey action key. */
-const HOTKEY_LABELS: Record<string, string> = {
-  capture_area:       "Capture area",
-  capture_window:     "Capture window",
-  capture_fullscreen: "Capture fullscreen",
-  record:             "Record",
-  copy_path:          "Copy path",
-};
-
-/** Order for display in the hotkeys card. */
-const HOTKEY_ORDER = [
-  "capture_area",
-  "capture_window",
-  "capture_fullscreen",
-  "record",
-  "copy_path",
-];
-
-/**
- * Format a raw hotkey string like "CmdOrCtrl+Shift+1" into
- * an array of displayable key chips: ["Ctrl", "Shift", "1"].
- */
-function parseHotkey(raw: string): string[] {
-  return raw
-    .replace(/CmdOrCtrl/g, "Ctrl")
-    .replace(/CommandOrControl/g, "Ctrl")
-    .replace(/Command/g, "Cmd")
-    .split("+")
-    .map((k) => k.trim())
-    .filter(Boolean);
-}
+/** Recent captures previewed on the dashboard (newest first). */
+const RECENT_LIMIT = 10;
+/** Recent .glint projects offered in the conditional Resume row. */
+const RESUME_LIMIT = 3;
 
 export default function HomeView() {
-  // Atomic selectors: each returns a stable reference. A single selector
-  // returning a new object `{...}` re-runs getSnapshot to a fresh value every
-  // render, which under Zustand v5's Object.is equality is an infinite loop.
-  const settings = useAppStore((s) => s.settings);
   const pushToast = useAppStore((s) => s.pushToast);
+  const navigate = useNavigate();
 
-  // Recent-captures preview — newest first, capped at RECENT_LIMIT.
+  // Recent captures — newest first, capped.
   const [recent, setRecent] = useState<CaptureItem[]>([]);
   const reloadRecent = useCallback(() => {
-    listCaptures(RECENT_LIMIT)
-      .then(setRecent)
-      .catch(() => setRecent([]));
+    listCaptures(RECENT_LIMIT).then(setRecent).catch(() => setRecent([]));
   }, []);
   useEffect(() => { reloadRecent(); }, [reloadRecent]);
-  // Refresh when a capture is saved (or deleted from a card here / in the Library).
   useEffect(() => {
     const p = listen("capture-saved", () => reloadRecent());
     return () => { p.then((un) => un()); };
   }, [reloadRecent]);
 
+  // Recent projects — drives the conditional Resume row.
   const [projects, setProjects] = useState<RecentProject[]>([]);
   const reloadProjects = useCallback(() => {
     getRecentProjects().then(setProjects).catch(() => setProjects([]));
@@ -76,172 +42,80 @@ export default function HomeView() {
   const onOpenProject = useCallback(async () => {
     const path = await pickOpenPath();
     if (!path) return;
-    try {
-      await openProject(path);
-      await pushRecentProject(path);
-    } catch {
-      pushToast("Couldn't open the project");
-    }
+    try { await openProject(path); await pushRecentProject(path); }
+    catch { pushToast("Couldn't open the project"); }
   }, [pushToast]);
 
   const onOpenRecent = useCallback(async (p: RecentProject) => {
     if (!p.exists) { pushToast("That project file is no longer on disk"); reloadProjects(); return; }
-    try {
-      await openProject(p.path);
-      await pushRecentProject(p.path);
-    } catch {
-      pushToast("Couldn't open the project");
-    }
+    try { await openProject(p.path); await pushRecentProject(p.path); }
+    catch { pushToast("Couldn't open the project"); }
   }, [pushToast, reloadProjects]);
 
-  // The tray's capture items call capture::begin directly now; only the
-  // not-yet-built actions still emit "tray-action" (e.g. record → Phase 6).
+  // Not-yet-built tray actions still emit "tray-action" (e.g. some record paths).
   useEffect(() => {
     const unlisten = listen<string>("tray-action", (event) => {
-      const msg: Record<string, string> = {
-        record: "Recording arrives in a later phase",
-      };
+      const msg: Record<string, string> = { record: "Recording arrives in a later phase" };
       pushToast(msg[event.payload] ?? "That action arrives in a later phase");
     });
-
-    return () => {
-      unlisten.then((f) => f());
-    };
+    return () => { unlisten.then((f) => f()); };
   }, [pushToast]);
+
+  const resumable = projects.slice(0, RESUME_LIMIT);
 
   return (
     <div className="home-view">
-      {/* ── Quick-start ─────────────────────────────────────── */}
-      <section className="home-section" aria-labelledby="qs-label">
-        <span className="label home-section-label" id="qs-label">
-          Quick start
-        </span>
-        <div className="home-quickstart">
-          <Button
-            variant="primary"
-            size="md"
-            icon={Crop}
-            onClick={() => startCapture("area")}
-          >
-            Capture Area
-          </Button>
-          <Button
-            variant="subtle"
-            size="md"
-            icon={AppWindow}
-            onClick={() => startCapture("window")}
-          >
-            Capture Window
-          </Button>
-          <Button
-            variant="subtle"
-            size="md"
-            icon={Monitor}
-            onClick={() => startCapture("fullscreen")}
-          >
-            Capture Fullscreen
-          </Button>
-          <Button
-            variant="subtle"
-            size="md"
-            icon={ScanText}
-            onClick={() => captureText()}
-          >
-            Capture Text
-          </Button>
-          <Button
-            variant="subtle"
-            size="md"
-            icon={Video}
-            onClick={() => invoke("recorder_open_region_selector")}
-          >
-            Record
-          </Button>
-          <Button
-            variant="subtle"
-            size="md"
-            icon={FolderOpen}
-            onClick={onOpenProject}
-          >
-            Open Project
-          </Button>
+      {/* ── New capture ─────────────────────────────────────── */}
+      <section className="home-section" aria-labelledby="nc-label">
+        <span className="label home-eyebrow" id="nc-label">New capture</span>
+        <div className="home-actions">
+          <Button variant="primary" size="md" icon={Crop} onClick={() => startCapture("area")}>Capture Area</Button>
+          <Button variant="subtle" size="md" icon={AppWindow} onClick={() => startCapture("window")}>Window</Button>
+          <Button variant="subtle" size="md" icon={Monitor} onClick={() => startCapture("fullscreen")}>Fullscreen</Button>
+          <Button variant="subtle" size="md" icon={Video} onClick={() => invoke("recorder_open_region_selector")}>Record</Button>
+          <Button variant="subtle" size="md" icon={ScanText} onClick={() => captureText()}>Capture Text</Button>
+          <Button variant="ghost" size="md" icon={FolderOpen} onClick={onOpenProject}>Open Project</Button>
         </div>
       </section>
 
-      {/* ── Recent captures ─────────────────────────────────── */}
+      {/* ── Recent ──────────────────────────────────────────── */}
       <section className="home-section home-section--grow" aria-labelledby="rc-label">
-        <span className="label home-section-label" id="rc-label">
-          Recent captures
-        </span>
+        <div className="home-rowhead">
+          <span className="label home-eyebrow" id="rc-label">Recent</span>
+          {recent.length > 0 && (
+            <button className="home-viewall" onClick={() => navigate("/library")}>
+              View all in Library <ArrowRight size={13} strokeWidth={1.75} />
+            </button>
+          )}
+        </div>
         {recent.length === 0 ? (
           <div className="home-empty-wrap">
-            <EmptyState
-              icon={ImageOff}
-              title="No captures yet"
-              hint="Your screenshots and recordings will appear here."
-            />
+            <EmptyState icon={ImageOff} title="No captures yet" hint="Your screenshots and recordings will appear here." />
           </div>
         ) : (
           <div className="home-recent-grid" role="list" aria-label="Recent captures">
-            {recent.map((c) => (
-              <CaptureCard key={c.id} item={c} onChanged={reloadRecent} />
-            ))}
+            {recent.map((c) => (<CaptureCard key={c.id} item={c} onChanged={reloadRecent} />))}
           </div>
         )}
       </section>
 
-      {/* ── Recent projects ─────────────────────────────────── */}
-      {projects.length > 0 && (
-        <section className="home-section" aria-labelledby="rp-label">
-          <span className="label home-section-label" id="rp-label">
-            Recent projects
-          </span>
-          <ul className="home-projects" role="list">
-            {projects.map((p) => (
-              <li key={p.path}>
-                <button
-                  className={`home-project${p.exists ? "" : " home-project--stale"}`}
-                  onClick={() => onOpenRecent(p)}
-                  title={p.exists ? p.path : `${p.path} (missing)`}
-                >
-                  <FileText size={16} strokeWidth={1.75} />
-                  <span className="home-project-name">{p.name}</span>
-                </button>
-              </li>
+      {/* ── Resume (conditional) ────────────────────────────── */}
+      {resumable.length > 0 && (
+        <section className="home-section" aria-labelledby="rs-label">
+          <span className="label home-eyebrow" id="rs-label">Resume</span>
+          <div className="home-resume" role="list">
+            {resumable.map((p) => (
+              <button
+                key={p.path}
+                className={`home-resume-chip${p.exists ? "" : " home-resume-chip--stale"}`}
+                onClick={() => onOpenRecent(p)}
+                title={p.exists ? p.path : `${p.path} (missing)`}
+              >
+                <RotateCcw size={14} strokeWidth={1.75} />
+                <span className="home-resume-name">{p.name}</span>
+              </button>
             ))}
-          </ul>
-        </section>
-      )}
-
-      {/* ── Hotkeys ─────────────────────────────────────────── */}
-      {settings !== null && (
-        <section className="home-section" aria-labelledby="hk-label">
-          <span className="label home-section-label" id="hk-label">
-            Keyboard shortcuts
-          </span>
-          <Card>
-            <ul className="home-hotkeys-list" role="list">
-              {HOTKEY_ORDER.map((key) => {
-                const raw = settings.hotkeys[key];
-                if (!raw) return null;
-                const chips = parseHotkey(raw);
-                return (
-                  <li key={key} className="home-hotkey-row">
-                    <span className="home-hotkey-label">
-                      {HOTKEY_LABELS[key] ?? key}
-                    </span>
-                    <span className="home-hotkey-keys" aria-label={raw}>
-                      {chips.map((chip, i) => (
-                        <kbd key={i} className="home-kbd">
-                          {chip}
-                        </kbd>
-                      ))}
-                    </span>
-                  </li>
-                );
-              })}
-            </ul>
-          </Card>
+          </div>
         </section>
       )}
     </div>
