@@ -13,7 +13,7 @@ import { CaptureCard } from "./library/CaptureCard";
 import "./home.css";
 
 /** Recent captures previewed on the dashboard (newest first). */
-const RECENT_LIMIT = 10;
+const RECENT_LIMIT = 8;
 /** Recent .glint projects offered in the conditional Resume row. */
 const RESUME_LIMIT = 3;
 
