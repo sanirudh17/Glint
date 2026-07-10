@@ -80,7 +80,7 @@ function NavItem({ to, label, icon, expanded }: NavItemProps) {
         isActive ? "g-nav-item g-nav-item--active" : "g-nav-item"
       }
     >
-      {icon}
+      <span className="g-nav-icon">{icon}</span>
       <span className="g-nav-label">{label}</span>
     </NavLink>
   );
@@ -100,9 +100,11 @@ function ToggleItem({ expanded, onClick }: { expanded: boolean; onClick: () => v
       aria-expanded={expanded}
       onClick={onClick}
     >
-      {expanded
-        ? <ChevronsLeft size={16} strokeWidth={1.75} />
-        : <ChevronsRight size={16} strokeWidth={1.75} />}
+      <span className="g-nav-icon">
+        {expanded
+          ? <ChevronsLeft size={16} strokeWidth={1.75} />
+          : <ChevronsRight size={16} strokeWidth={1.75} />}
+      </span>
       <span className="g-nav-label">{label}</span>
     </button>
   );
