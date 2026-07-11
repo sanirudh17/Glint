@@ -1,6 +1,7 @@
-import { useEffect, useLayoutEffect, useRef, useState, forwardRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, forwardRef } from "react";
 import { Stage, Layer, Group, Rect, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
+import { Minus, Plus, Maximize2 } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { newId, nextStepNumber, eraseAt, snapAngle, resolveSpotlightDim, type Annotation, type BoxAnno, type TextAnno } from "../../editor/model";
 import { computeLayout } from "../../editor/composition";
@@ -15,6 +16,13 @@ function fitScale(boxW: number, boxH: number, imgW: number, imgH: number): numbe
   if (!imgW || !imgH) return 1;
   return Math.min(boxW / imgW, boxH / imgH, 1);
 }
+
+// User zoom bounds + step. `zoom` is either "fit" (auto-fit to the viewport, the
+// existing behaviour, and responsive to window resize) or an absolute scale.
+const MIN_ZOOM = 0.1;
+const MAX_ZOOM = 8;
+const ZOOM_STEP = 1.2;
+const clampZoom = (z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z));
 
 /** Trace a rounded-rect path (clamped radius) for a Group clipFunc. */
 function roundedRectPath(ctx: Konva.Context, x: number, y: number, w: number, h: number, r: number) {
@@ -65,11 +73,20 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const setPicking = useEditorStore((s) => s.setPicking);
   const setStyle = useEditorStore((s) => s.setStyle);
 
-  const wrapRef = useRef<HTMLDivElement>(null);
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const stageWrapRef = useRef<HTMLDivElement>(null);
   const trRef = useRef<Konva.Transformer>(null);
   const layerRef = useRef<Konva.Layer>(null);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
+
+  // Zoom: "fit" (auto-fit, responsive) or an absolute scale. A pending anchor lets a
+  // zoom keep a chosen point (cursor for wheel, viewport centre for buttons) fixed by
+  // adjusting scroll after the new size lays out. scaleRef mirrors the effective scale
+  // so the once-attached wheel/key listeners read the current value.
+  const [zoom, setZoom] = useState<number | "fit">("fit");
+  const anchorRef = useRef<{ clientX: number; clientY: number; fx: number; fy: number } | null>(null);
+  const scaleRef = useRef(1);
   const draftId = useRef<string | null>(null);
   // Eraser drag state: whether a wipe gesture is active, and whether it has
   // already pushed a single history entry (so erasing several shapes in one drag
@@ -93,16 +110,123 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const layout = base ? computeLayout(base.width, base.height, crop, frame) : null;
   const compW = layout?.compositionW ?? 1;
   const compH = layout?.compositionH ?? 1;
-  const scale = layout ? fitScale(box.w, box.h, compW, compH) : 1;
+  // "fit" resolves against the current viewport (responsive); an absolute zoom is used
+  // as-is. Everything downstream (drawing math, overlays, eraser cursor) uses `scale`,
+  // so introducing user zoom is just a change to this one value.
+  const fit = layout ? fitScale(box.w, box.h, compW, compH) : 1;
+  const scale = zoom === "fit" ? fit : clampZoom(zoom);
+  scaleRef.current = scale;
 
+  // Measure the scroller's CONTENT box (client size minus its padding) so "fit"
+  // resolves against the true visible area and never itself introduces a scrollbar.
+  // Re-runs on `base` because the scroller only exists in the non-empty return.
   useLayoutEffect(() => {
-    const el = wrapRef.current;
+    const el = scrollRef.current;
     if (!el) return;
-    const ro = new ResizeObserver(() => setBox({ w: el.clientWidth, h: el.clientHeight }));
+    const measure = () => {
+      const cs = getComputedStyle(el);
+      const px = parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+      const py = parseFloat(cs.paddingTop) + parseFloat(cs.paddingBottom);
+      setBox({ w: el.clientWidth - px, h: el.clientHeight - py });
+    };
+    const ro = new ResizeObserver(measure);
     ro.observe(el);
-    setBox({ w: el.clientWidth, h: el.clientHeight });
+    measure();
     return () => ro.disconnect();
+  }, [base]);
+
+  // Reset to auto-fit whenever a new image loads (or crop/frame recomposes the size
+  // enough to warrant it) — a fresh capture should open framed to the viewport.
+  useEffect(() => {
+    setZoom("fit");
+  }, [base]);
+
+  // Zoom to an absolute scale while keeping the content point under (clientX,clientY)
+  // fixed. We record the point as a fraction of the scaled content (stage-wrap); the
+  // fraction is scale-invariant, so after the new size lays out we scroll so that same
+  // fraction lands back under the cursor (see the [scale] effect below).
+  const zoomToAbs = useCallback((next: number, clientX: number, clientY: number) => {
+    const wrap = stageWrapRef.current;
+    if (wrap) {
+      const rect = wrap.getBoundingClientRect();
+      const fx = rect.width ? Math.min(1, Math.max(0, (clientX - rect.left) / rect.width)) : 0.5;
+      const fy = rect.height ? Math.min(1, Math.max(0, (clientY - rect.top) / rect.height)) : 0.5;
+      anchorRef.current = { clientX, clientY, fx, fy };
+    }
+    setZoom(clampZoom(next));
   }, []);
+
+  // Zoom anchored at the viewport centre (for the toolbar +/− buttons and keyboard).
+  const zoomAtCenter = useCallback(
+    (next: number) => {
+      const s = scrollRef.current;
+      if (!s) {
+        setZoom(clampZoom(next));
+        return;
+      }
+      const r = s.getBoundingClientRect();
+      zoomToAbs(next, r.left + r.width / 2, r.top + r.height / 2);
+    },
+    [zoomToAbs],
+  );
+
+  // After a zoom relays out the stage, nudge scroll so the recorded anchor fraction
+  // sits back under its original cursor point. No-op when the content is smaller than
+  // the viewport (centred by margin, scroll clamps to 0).
+  useLayoutEffect(() => {
+    const a = anchorRef.current;
+    const wrap = stageWrapRef.current;
+    const scroller = scrollRef.current;
+    if (!a || !wrap || !scroller) return;
+    anchorRef.current = null;
+    const rect = wrap.getBoundingClientRect();
+    const curX = rect.left + a.fx * rect.width;
+    const curY = rect.top + a.fy * rect.height;
+    scroller.scrollLeft += curX - a.clientX;
+    scroller.scrollTop += curY - a.clientY;
+  }, [scale]);
+
+  // Ctrl/Cmd + wheel = zoom at cursor; a plain wheel scrolls (pans) as usual. Attached
+  // natively with passive:false so preventDefault stops the page/zoom gesture.
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      if (!(e.ctrlKey || e.metaKey)) return;
+      e.preventDefault();
+      const factor = e.deltaY < 0 ? ZOOM_STEP : 1 / ZOOM_STEP;
+      zoomToAbs(scaleRef.current * factor, e.clientX, e.clientY);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [zoomToAbs, base]);
+
+  // Ctrl/Cmd +/−/0 keyboard zoom. Ignored while a text-entry field is focused (so it
+  // doesn't hijack typing) and only on the bare modifier (no alt/shift).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (!(e.ctrlKey || e.metaKey) || e.altKey || e.shiftKey) return;
+      const target = e.target as HTMLElement;
+      const tag = target.tagName;
+      const inputType = tag === "INPUT" ? (target as HTMLInputElement).type : "";
+      const isTextEntry =
+        tag === "TEXTAREA" ||
+        (tag === "INPUT" && !["range", "color", "checkbox", "radio", "button", "submit"].includes(inputType));
+      if (isTextEntry) return;
+      if (e.key === "=" || e.key === "+") {
+        e.preventDefault();
+        zoomAtCenter(scaleRef.current * ZOOM_STEP);
+      } else if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        zoomAtCenter(scaleRef.current / ZOOM_STEP);
+      } else if (e.key === "0") {
+        e.preventDefault();
+        setZoom("fit");
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [zoomAtCenter]);
 
   // Attach the Transformer to the selected node (select tool only, and never to
   // a node that's currently being text-edited — its handles would float around
@@ -168,7 +292,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     setEditingId(null);
   };
 
-  if (!base || !layout) return <div className="editor-canvas" ref={wrapRef} />;
+  if (!base || !layout) return <div className="editor-canvas" />;
 
   const stageW = Math.max(1, Math.round(compW * scale));
   const stageH = Math.max(1, Math.round(compH * scale));
@@ -214,14 +338,17 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   // checker is CSS on the wrapper (never in the Konva canvas), so export stays alpha.
   const showChecker = frame.enabled && frame.background.type === "transparent";
 
-  // Pointer position in image (unscaled) coordinates. Inverts the layer offset:
-  // screen → composition (÷scale) → image (subtract content offset, add crop origin).
+  // Pointer position in image (unscaled) coordinates. The stage is rendered at natural
+  // resolution (scaleX/scaleY = 1) and zoomed purely via a CSS transform on its wrapper
+  // (see the render), so getPointerPosition already returns composition coordinates —
+  // Konva compensates for the wrapper's CSS scale (rect.width / clientWidth). Just shift
+  // by the content offset (cropX→contentX) to reach image space.
   const imgPoint = (stage: Konva.Stage) => {
     const p = stage.getPointerPosition();
     if (!p) return { x: 0, y: 0 };
     return {
-      x: p.x / scale - layout.contentX + layout.cropX,
-      y: p.y / scale - layout.contentY + layout.cropY,
+      x: p.x - layout.contentX + layout.cropX,
+      y: p.y - layout.contentY + layout.cropY,
     };
   };
 
@@ -415,20 +542,33 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     return `url("data:image/svg+xml,${encodeURIComponent(svg)}") ${c} ${c}, crosshair`;
   })();
 
+  const zoomPct = Math.round(scale * 100);
+
   return (
-    <div className="editor-canvas" ref={wrapRef}>
+    <div className="editor-canvas">
+      {/* The scroller: fits the stage to its content box, or pans it when zoomed in
+          past the viewport. Ctrl+wheel zooms (native listener); a plain wheel pans. */}
+      <div className="editor-scroll" ref={scrollRef}>
       {/* A relative box exactly the size of the stage, so the absolutely-
-          positioned crop overlay shares the stage's origin and bounds. */}
+          positioned crop overlay shares the stage's origin and bounds. margin:auto
+          centres it while it's smaller than the viewport. */}
       <div
+        ref={stageWrapRef}
         className={`editor-stage-wrap${showChecker ? " editor-stage-wrap--checker" : ""}`}
         style={{ width: stageW, height: stageH }}
       >
+      {/* Zoom is a CSS transform on this wrapper, NOT a Konva scale: the stage below is
+          drawn once at natural resolution and this transform scales the finished canvas
+          on the GPU. Zooming therefore never reallocates or repaints the Konva canvas
+          (which grew — and lagged — quadratically when the stage itself was scaled). The
+          pin clips the natural-size (untransformed) layout box so it can't inflate the
+          scroller; the scaled canvas visually fills the wrapper. */}
+      <div className="editor-stage-pin">
+      <div className="editor-stage-scale" style={{ width: compW, height: compH, transform: `scale(${scale})` }}>
       <Stage
         ref={ref}
-        width={stageW}
-        height={stageH}
-        scaleX={scale}
-        scaleY={scale}
+        width={compW}
+        height={compH}
         onMouseDown={onDown}
         onMouseMove={onMove}
         onMouseUp={onUp}
@@ -551,6 +691,8 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
           />
         </Layer>
       </Stage>
+      </div>
+      </div>
 
         {tool === "crop" && (
           <CropOverlay
@@ -566,6 +708,46 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
             onCancel={() => setTool("select")}
           />
         )}
+      </div>
+      </div>
+
+      {/* Floating zoom cluster (bottom-right). − / percentage-to-100% / + / fit. */}
+      <div className="editor-zoombar" role="group" aria-label="Zoom">
+        <button
+          className="editor-zoom-btn"
+          onClick={() => zoomAtCenter(scaleRef.current / ZOOM_STEP)}
+          disabled={scale <= MIN_ZOOM}
+          title="Zoom out"
+          aria-label="Zoom out"
+        >
+          <Minus size={15} strokeWidth={2} />
+        </button>
+        <button
+          className="editor-zoom-val"
+          onClick={() => zoomAtCenter(1)}
+          title="Reset to 100%"
+          aria-label={`Zoom ${zoomPct} percent, reset to 100%`}
+        >
+          {zoomPct}%
+        </button>
+        <button
+          className="editor-zoom-btn"
+          onClick={() => zoomAtCenter(scaleRef.current * ZOOM_STEP)}
+          disabled={scale >= MAX_ZOOM}
+          title="Zoom in"
+          aria-label="Zoom in"
+        >
+          <Plus size={15} strokeWidth={2} />
+        </button>
+        <button
+          className={`editor-zoom-btn${zoom === "fit" ? " editor-zoom-btn--active" : ""}`}
+          onClick={() => setZoom("fit")}
+          title="Fit to window"
+          aria-label="Fit to window"
+          aria-pressed={zoom === "fit"}
+        >
+          <Maximize2 size={14} strokeWidth={2} />
+        </button>
       </div>
 
       {editing && editBox && (

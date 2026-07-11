@@ -94,9 +94,22 @@ export async function pushRecentProject(path: string): Promise<void> {
   await persistSetting(RECENT_KEY, next);
 }
 
-/** Read the recent list and resolve each path's basename + on-disk status. */
+/**
+ * Read the recent list, resolve each path's basename + on-disk status, and prune the
+ * entries whose `.glint` has been deleted on disk — re-persisting the trimmed list so
+ * the Resume row self-heals (two-way delete-sync, mirroring the Library capture
+ * reconcile). Only survivors are returned, so a project deleted in Explorer disappears
+ * from Home on the next load/focus instead of lingering as a dead "not on disk" chip.
+ */
 export async function getRecentProjects(): Promise<RecentProject[]> {
   const list = (await readSetting<string[]>(RECENT_KEY)) ?? [];
   if (list.length === 0) return [];
-  return invoke<RecentProject[]>("projects_resolve", { paths: list });
+  const resolved = await invoke<RecentProject[]>("projects_resolve", { paths: list });
+  const live = resolved.filter((p) => p.exists);
+  // Re-persist only when something was actually pruned, to avoid a needless write on
+  // every load. Preserve the original order (projects_resolve keeps input order).
+  if (live.length !== resolved.length) {
+    await persistSetting(RECENT_KEY, live.map((p) => p.path));
+  }
+  return live;
 }

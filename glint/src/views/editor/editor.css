@@ -11,14 +11,22 @@
   display: flex;
 }
 .editor-canvas {
+  position: relative;
   flex: 1;
   min-height: 0;
   display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--s5);
   background: var(--bg);
   overflow: hidden;
+}
+/* Scrolls the stage when zoomed past the viewport; centres it (margin:auto on the
+   wrap) while it still fits. Padding gives the fitted stage breathing room and is
+   subtracted from the measured "fit" box so it never itself triggers a scrollbar. */
+.editor-scroll {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: auto;
+  padding: var(--s5);
 }
 .editor-empty {
   height: 100%;
@@ -106,6 +114,7 @@
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .editor-tool:hover { background: var(--bg-elev2); color: var(--text); }
+.editor-tool:active:not(:disabled) { background: var(--bg-elev3); }
 .editor-tool--active { background: var(--accent-subtle); color: var(--accent); }
 .editor-tool:disabled { opacity: 0.35; cursor: default; }
 .editor-tool:disabled:hover { background: transparent; color: var(--text-dim); }
@@ -165,10 +174,68 @@
 .editor-export-btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
 .editor-export-btn--primary:hover { background: var(--accent-hover); }
 
+/* ── Zoom cluster (floating, bottom-right of the canvas) ─────────────────── */
+.editor-zoombar {
+  position: absolute;
+  right: var(--s4);
+  bottom: var(--s4);
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--bg-elev2);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.35);
+  z-index: 5;
+}
+.editor-zoom-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border: none;
+  border-radius: var(--r1);
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.editor-zoom-btn:hover:not(:disabled) { background: var(--bg-elev3); color: var(--text); }
+.editor-zoom-btn:active:not(:disabled) { background: var(--border); }
+.editor-zoom-btn:disabled { opacity: 0.4; cursor: default; }
+.editor-zoom-btn--active { color: var(--accent); background: var(--accent-subtle); }
+.editor-zoom-btn--active:hover:not(:disabled) { background: var(--accent-subtle); color: var(--accent); }
+.editor-zoom-val {
+  min-width: 46px;
+  height: 26px;
+  padding: 0 var(--s1);
+  border: none;
+  border-radius: var(--r1);
+  background: transparent;
+  color: var(--text-dim);
+  font-size: var(--fz-sm);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+.editor-zoom-val:hover { background: var(--bg-elev3); color: var(--text); }
+
 /* ── Crop overlay ────────────────────────────────────────────────────────── */
 /* Wrapper sized to the stage box (dimensions set inline) so the absolutely-
    positioned crop overlay shares the stage's origin and bounds. */
-.editor-stage-wrap { position: relative; }
+/* flex:none so the spacer keeps its true (stageW) width instead of shrinking to the
+   flex container — shrinking killed horizontal scroll and pinned zoomed content left.
+   margin:auto still centres it when the image is smaller than the viewport, and when it
+   overflows the auto margins collapse to 0 so both edges stay reachable by scrolling. */
+.editor-stage-wrap { position: relative; flex: none; margin: auto; }
+/* Clips the natural-size (untransformed) stage-scale layout box to the wrapper so it
+   can't inflate the scroller; the CSS-scaled canvas visually fills the wrapper. */
+.editor-stage-pin { position: absolute; inset: 0; overflow: hidden; }
+/* Holds the natural-resolution Konva stage and applies the zoom as a GPU transform.
+   transform-origin top-left so the scaled canvas fills from the wrapper's origin. */
+.editor-stage-scale { position: absolute; top: 0; left: 0; transform-origin: top left; }
 /* Transparency checkerboard shown behind a transparent-background frame. Fixed
    neutral grays (not theme tokens) on purpose — a transparency checker is a
    universal convention that should read the same in any theme. Visible only

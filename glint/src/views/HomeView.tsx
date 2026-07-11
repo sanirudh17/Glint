@@ -32,21 +32,22 @@ export default function HomeView() {
     const p = listen("capture-saved", () => reloadRecent());
     return () => { p.then((un) => un()); };
   }, [reloadRecent]);
-  // Reconcile on window focus — listCaptures prunes captures whose file was deleted
-  // externally, so returning to Glint clears any that vanished in the background.
-  useEffect(() => {
-    const p = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
-      if (focused) reloadRecent();
-    });
-    return () => { p.then((un) => un()); };
-  }, [reloadRecent]);
-
   // Recent projects — drives the conditional Resume row.
   const [projects, setProjects] = useState<RecentProject[]>([]);
   const reloadProjects = useCallback(() => {
     getRecentProjects().then(setProjects).catch(() => setProjects([]));
   }, []);
   useEffect(() => { reloadProjects(); }, [reloadProjects]);
+
+  // Reconcile on window focus — both listCaptures and getRecentProjects prune entries
+  // whose file was deleted externally, so returning to Glint clears any capture OR
+  // project that vanished on disk in the background instead of leaving a dead row/chip.
+  useEffect(() => {
+    const p = getCurrentWindow().onFocusChanged(({ payload: focused }) => {
+      if (focused) { reloadRecent(); reloadProjects(); }
+    });
+    return () => { p.then((un) => un()); };
+  }, [reloadRecent, reloadProjects]);
 
   const onOpenProject = useCallback(async () => {
     const path = await pickOpenPath();
