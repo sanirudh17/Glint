@@ -33,17 +33,24 @@ export function TrayCard({ item, onChanged }: { item: TrayItem; onChanged: () =>
 
   const onAction = useCallback(
     async (a: HudAction) => {
+      // Show feedback IMMEDIATELY, before awaiting the backend. The commands are async
+      // (worker-thread) but still take real time — clipboard encode, file IO, OCR can
+      // run up to ~1s — and gating the status line behind the await made every button
+      // feel like it lagged a beat. Flash optimistically, run the command, and correct
+      // to an error only if it actually fails.
       try {
         switch (a) {
-          case "copy": await trayCopy(item.id); flash("Copied to clipboard"); break;
-          case "copy-path": await trayCopyPath(item.id); flash("Path copied"); break;
+          case "copy": flash("Copied to clipboard"); await trayCopy(item.id); break;
+          case "copy-path": flash("Path copied"); await trayCopyPath(item.id); break;
           case "save":
-            if (saved) { await trayReveal(item.id); flash("Revealed in folder"); }
-            else { await traySave(item.id); setSaved(true); flash("Saved to Library"); }
+            if (saved) { flash("Revealed in folder"); await trayReveal(item.id); }
+            else { flash("Saved to Library"); await traySave(item.id); setSaved(true); }
             break;
           case "annotate": await trayAnnotate(item.id); break;
-          case "extract-text": await trayExtractText(item.id); flash("Text extracted"); break;
-          case "pin": await trayPin(item.id); flash("Pinned"); break;
+          // OCR is genuinely slow, so a truthful two-step: acknowledge on press, then
+          // confirm when the text is actually out.
+          case "extract-text": flash("Extracting text…"); await trayExtractText(item.id); flash("Text extracted"); break;
+          case "pin": flash("Pinned"); await trayPin(item.id); break;
           case "dismiss": await trayDismiss(item.id); onChanged(); break;
         }
       } catch {

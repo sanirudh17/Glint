@@ -72,6 +72,12 @@ pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
 
     win.show()?;
     win.set_focus()?;
+    // Force the crosshair NOW. A window shown under a stationary mouse keeps the OS
+    // arrow until the pointer moves, because Windows only re-evaluates the CSS cursor on
+    // WM_SETCURSOR (i.e. movement) — so the overlay's `cursor: crosshair` looked laggy on
+    // press. Setting the native cursor calls SetCursor immediately; the CSS cursor then
+    // takes over seamlessly (also crosshair) once the mouse moves.
+    let _ = win.set_cursor_icon(tauri::CursorIcon::Crosshair);
     Ok(())
 }
 
