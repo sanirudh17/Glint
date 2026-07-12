@@ -17,8 +17,9 @@ const ASPECTS = ["auto", "1:1", "16:9", "4:3"] as const;
 /**
  * Right-docked frame controls: background type (solid/gradient/transparent),
  * the matching color/gradient picker, padding/radius/shadow sliders, an aspect
- * preset selector, and Reset affordances. Frame styling is live (not undoable);
- * crop is reset here too since this panel is the natural home for it.
+ * preset selector, and Reset affordances. Each control checkpoints history at the
+ * start of its gesture (slider pointer-down, discrete click, text focus) so undo
+ * backs out one gesture at a time; crop is reset here too.
  */
 export function FramePanel() {
   const frame = useEditorStore((s) => s.frame);
@@ -27,6 +28,7 @@ export function FramePanel() {
   const resetFrame = useEditorStore((s) => s.resetFrame);
   const crop = useEditorStore((s) => s.crop);
   const resetCrop = useEditorStore((s) => s.resetCrop);
+  const pushHistory = useEditorStore((s) => s.pushHistory);
   const bg = frame.background;
   const chrome = frame.chrome;
 
@@ -42,7 +44,8 @@ export function FramePanel() {
             <button
               key={t}
               className={`frame-seg-btn${bg.type === t ? " is-active" : ""}`}
-              onClick={() =>
+              onClick={() => {
+                if (bg.type !== t) pushHistory();
                 setFrame({
                   background:
                     t === "solid"
@@ -50,8 +53,8 @@ export function FramePanel() {
                       : t === "gradient"
                         ? { type: "gradient", gradientId: GRADIENTS[0].id }
                         : { type: "transparent" },
-                })
-              }
+                });
+              }}
             >
               {t}
             </button>
@@ -68,10 +71,18 @@ export function FramePanel() {
               style={{ background: c }}
               title={c}
               aria-label={`Background ${c}`}
-              onClick={() => setFrame({ background: { type: "solid", color: c } })}
+              onClick={() => {
+                if (bg.color.toLowerCase() !== c.toLowerCase()) pushHistory();
+                setFrame({ background: { type: "solid", color: c } });
+              }}
             />
           ))}
-          <label className="editor-swatch editor-swatch--custom" style={{ background: bg.color }} title="Custom color">
+          <label
+            className="editor-swatch editor-swatch--custom"
+            style={{ background: bg.color }}
+            title="Custom color"
+            onPointerDown={() => pushHistory()}
+          >
             <input
               type="color"
               value={bg.color}
@@ -91,7 +102,10 @@ export function FramePanel() {
               aria-label={g.label}
               className={`frame-grad${bg.gradientId === g.id ? " is-active" : ""}`}
               style={{ background: `linear-gradient(135deg, ${g.stops[0].color}, ${g.stops[g.stops.length - 1].color})` }}
-              onClick={() => setFrame({ background: { type: "gradient", gradientId: g.id } })}
+              onClick={() => {
+                if (bg.gradientId !== g.id) pushHistory();
+                setFrame({ background: { type: "gradient", gradientId: g.id } });
+              }}
             />
           ))}
         </div>
@@ -104,7 +118,10 @@ export function FramePanel() {
             <button
               key={st}
               className={`frame-seg-btn${chrome.style === st ? " is-active" : ""}`}
-              onClick={() => setChrome({ style: st })}
+              onClick={() => {
+                if (chrome.style !== st) pushHistory();
+                setChrome({ style: st });
+              }}
             >
               {st}
             </button>
@@ -121,7 +138,10 @@ export function FramePanel() {
                 <button
                   key={th}
                   className={`frame-seg-btn${chrome.theme === th ? " is-active" : ""}`}
-                  onClick={() => setChrome({ theme: th })}
+                  onClick={() => {
+                    if (chrome.theme !== th) pushHistory();
+                    setChrome({ theme: th });
+                  }}
                 >
                   {th}
                 </button>
@@ -137,7 +157,10 @@ export function FramePanel() {
                   key={val}
                   className={`frame-seg-btn${chrome.buttons === val ? " is-active" : ""}`}
                   style={{ textTransform: "none" }}
-                  onClick={() => setChrome({ buttons: val })}
+                  onClick={() => {
+                    if (chrome.buttons !== val) pushHistory();
+                    setChrome({ buttons: val });
+                  }}
                 >
                   {label}
                 </button>
@@ -153,6 +176,7 @@ export function FramePanel() {
                 type="text"
                 value={chrome.title}
                 placeholder="Window title"
+                onFocus={() => pushHistory()}
                 onChange={(e) => setChrome({ title: e.currentTarget.value })}
                 aria-label="Window title"
               />
@@ -167,6 +191,7 @@ export function FramePanel() {
                 type="text"
                 value={chrome.url}
                 placeholder="example.com"
+                onFocus={() => pushHistory()}
                 onChange={(e) => setChrome({ url: e.currentTarget.value })}
                 aria-label="Address bar URL"
               />
@@ -175,9 +200,9 @@ export function FramePanel() {
         </>
       )}
 
-      <Slider label="Padding" value={frame.padding} onChange={(v) => setFrame({ padding: v })} />
-      <Slider label="Radius" value={frame.radius} onChange={(v) => setFrame({ radius: v })} />
-      <Slider label="Shadow" value={frame.shadow} onChange={(v) => setFrame({ shadow: v })} />
+      <Slider label="Padding" value={frame.padding} onPointerDown={pushHistory} onChange={(v) => setFrame({ padding: v })} />
+      <Slider label="Radius" value={frame.radius} onPointerDown={pushHistory} onChange={(v) => setFrame({ radius: v })} />
+      <Slider label="Shadow" value={frame.shadow} onPointerDown={pushHistory} onChange={(v) => setFrame({ shadow: v })} />
 
       <div className="frame-row">
         <span className="frame-labelrow">
@@ -189,7 +214,10 @@ export function FramePanel() {
             <button
               key={a}
               className={`frame-seg-btn${frame.aspect === a ? " is-active" : ""}`}
-              onClick={() => setFrame({ aspect: a })}
+              onClick={() => {
+                if (frame.aspect !== a) pushHistory();
+                setFrame({ aspect: a });
+              }}
             >
               {a}
             </button>
@@ -256,17 +284,26 @@ function Slider({
   min = 0,
   max = 100,
   onChange,
+  onPointerDown,
 }: {
   label: string;
   value: number;
   min?: number;
   max?: number;
   onChange: (v: number) => void;
+  onPointerDown?: () => void;
 }) {
   return (
     <label className="frame-slider">
       <span className="frame-label">{label}</span>
-      <input type="range" min={min} max={max} value={value} onChange={(e) => onChange(Number(e.currentTarget.value))} />
+      <input
+        type="range"
+        min={min}
+        max={max}
+        value={value}
+        onPointerDown={onPointerDown}
+        onChange={(e) => onChange(Number(e.currentTarget.value))}
+      />
     </label>
   );
 }
