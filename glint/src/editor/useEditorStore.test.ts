@@ -200,6 +200,27 @@ describe("useEditorStore — composition", () => {
     s.undo();
     expect(useEditorStore.getState().frame.enabled).toBe(false);
   });
+
+  it("setCornerRadius sets the value without pushing history; undo/redo restore it", () => {
+    const s = useEditorStore.getState();
+    s.setCornerRadius(30);
+    expect(useEditorStore.getState().cornerRadius).toBe(30);
+    expect(useEditorStore.getState().past).toEqual([]); // the UI checkpoints, not the setter
+    s.pushHistory();
+    s.setCornerRadius(70);
+    s.undo();
+    expect(useEditorStore.getState().cornerRadius).toBe(30);
+    s.redo();
+    expect(useEditorStore.getState().cornerRadius).toBe(70);
+  });
+
+  it("loadDoc hydrates cornerRadius (defaults to 0 for legacy docs)", () => {
+    const s = useEditorStore.getState();
+    s.loadDoc(fakeBase(), { annotations: [], crop: null, frame: DEFAULT_FRAME } as never, null);
+    expect(useEditorStore.getState().cornerRadius).toBe(0);
+    s.loadDoc(fakeBase(), { annotations: [], crop: null, frame: DEFAULT_FRAME, cornerRadius: 45 } as never, null);
+    expect(useEditorStore.getState().cornerRadius).toBe(45);
+  });
 });
 
 describe("loadDoc", () => {
