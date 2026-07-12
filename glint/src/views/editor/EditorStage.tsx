@@ -59,6 +59,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const selectedId = useEditorStore((s) => s.selectedId);
   const crop = useEditorStore((s) => s.crop);
   const frame = useEditorStore((s) => s.frame);
+  const cornerRadius = useEditorStore((s) => s.cornerRadius);
   const select = useEditorStore((s) => s.select);
   const add = useEditorStore((s) => s.add);
   const discardDraft = useEditorStore((s) => s.discardDraft);
@@ -306,11 +307,17 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   // to Phase 5a (strokes that bleed a hair past the edge render as they did before).
   const clipContent = frame.enabled || crop !== null;
 
-  // Frame visuals (no-op when the frame is off: r=0, no shadow → plain image).
-  // radius is a 0–100 percentage → resolve to px against the content box so the
-  // slider reaches full roundness at any capture size (roundedRectPath / the card
-  // Rect / WindowChrome all clamp the result to their own half-extents).
-  const r = frame.enabled && layout ? resolveRadiusPx(frame.radius, layout.contentW, layout.contentH) : 0;
+  // Corner rounding of the image clip. Both radii are 0–100 percentages resolved to
+  // px against the content box (roundedRectPath / the card Rect / WindowChrome all
+  // clamp to their own half-extents). Frame ON → the frame's card radius governs (a
+  // rounded card on its background). Frame OFF → the standalone cornerRadius rounds
+  // the raw screenshot; with no background behind the corners they export transparent
+  // (trimmed). Frame off + cornerRadius 0 → r 0 → plain image, byte-identical.
+  const r = !layout
+    ? 0
+    : frame.enabled
+      ? resolveRadiusPx(frame.radius, layout.contentW, layout.contentH)
+      : resolveRadiusPx(cornerRadius, layout.contentW, layout.contentH);
   // Window-chrome card geometry: the shadow-casting card spans the chrome bar +
   // image; the bar sits chromeH above the image. chromeH is 0 when chrome is off.
   const chromeH = layout.chromeH;
@@ -335,11 +342,13 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         })()
       : {};
 
-  // A transparent frame leaves the padding/corner area see-through; show a
-  // checkerboard behind the (transparent) canvas so it's unmistakably "this will
-  // export with alpha" — not a flat backdrop and not the same as frame-off. The
-  // checker is CSS on the wrapper (never in the Konva canvas), so export stays alpha.
-  const showChecker = frame.enabled && frame.background.type === "transparent";
+  // A transparent frame — OR a frame-off image with trimmed (rounded) corners —
+  // leaves see-through area; show a checkerboard behind the canvas so it's
+  // unmistakably "this will export with alpha". The checker is CSS on the wrapper
+  // (never in the Konva canvas), so export stays alpha.
+  const showChecker =
+    (frame.enabled && frame.background.type === "transparent") ||
+    (!frame.enabled && cornerRadius > 0);
 
   // Pointer position in image (unscaled) coordinates. The stage is rendered at natural
   // resolution (scaleX/scaleY = 1) and zoomed purely via a CSS transform on its wrapper
