@@ -176,7 +176,7 @@ export function FramePanel() {
       )}
 
       <Slider label="Padding" value={frame.padding} onChange={(v) => setFrame({ padding: v })} />
-      <Slider label="Radius" value={frame.radius} min={0} max={48} onChange={(v) => setFrame({ radius: v })} />
+      <Slider label="Radius" value={frame.radius} onChange={(v) => setFrame({ radius: v })} />
       <Slider label="Shadow" value={frame.shadow} onChange={(v) => setFrame({ shadow: v })} />
 
       <div className="frame-row">

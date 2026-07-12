@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { computeLayout, exportPixelRatio, normalizeRect, type FrameLayoutInput } from "./composition";
+import { computeLayout, exportPixelRatio, normalizeRect, resolveRadiusPx, type FrameLayoutInput } from "./composition";
 
 const off: FrameLayoutInput = { enabled: false, padding: 0, radius: 0, shadow: 0, aspect: "auto" };
 const on = (over: Partial<FrameLayoutInput> = {}): FrameLayoutInput =>
@@ -85,5 +85,20 @@ describe("composition", () => {
 
   it("normalizeRect folds a negative (up-left) drag", () => {
     expect(normalizeRect({ x: 100, y: 100, w: -40, h: -20 })).toEqual({ x: 60, y: 80, w: 40, h: 20 });
+  });
+
+  it("resolveRadiusPx: 100% fully rounds the short axis on any size", () => {
+    expect(resolveRadiusPx(100, 1920, 1080)).toBe(540); // half the shorter edge → semicircle
+    expect(resolveRadiusPx(100, 400, 400)).toBe(200);
+  });
+
+  it("resolveRadiusPx scales with the shorter edge (size-independent look)", () => {
+    expect(resolveRadiusPx(50, 1000, 2000)).toBe(250); // 0.5 * 0.5 * min(1000,2000)
+    expect(resolveRadiusPx(0, 1920, 1080)).toBe(0);
+  });
+
+  it("resolveRadiusPx clamps out-of-range percentages", () => {
+    expect(resolveRadiusPx(150, 400, 400)).toBe(200); // >100 clamps to full
+    expect(resolveRadiusPx(-20, 400, 400)).toBe(0); // <0 clamps to none
   });
 });

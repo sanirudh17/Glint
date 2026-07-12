@@ -4,7 +4,7 @@ import type Konva from "konva";
 import { Minus, Plus, Maximize2 } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { newId, nextStepNumber, eraseAt, snapAngle, resolveSpotlightDim, type Annotation, type BoxAnno, type TextAnno } from "../../editor/model";
-import { computeLayout } from "../../editor/composition";
+import { computeLayout, resolveRadiusPx } from "../../editor/composition";
 import { getGradient, konvaGradient } from "../../editor/gradients";
 import { AnnotationNode } from "./AnnotationNode";
 import { SpotlightDimLayer } from "./SpotlightDimLayer";
@@ -307,7 +307,10 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const clipContent = frame.enabled || crop !== null;
 
   // Frame visuals (no-op when the frame is off: r=0, no shadow → plain image).
-  const r = frame.enabled ? frame.radius : 0;
+  // radius is a 0–100 percentage → resolve to px against the content box so the
+  // slider reaches full roundness at any capture size (roundedRectPath / the card
+  // Rect / WindowChrome all clamp the result to their own half-extents).
+  const r = frame.enabled && layout ? resolveRadiusPx(frame.radius, layout.contentW, layout.contentH) : 0;
   // Window-chrome card geometry: the shadow-casting card spans the chrome bar +
   // image; the bar sits chromeH above the image. chromeH is 0 when chrome is off.
   const chromeH = layout.chromeH;

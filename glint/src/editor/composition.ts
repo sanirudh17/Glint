@@ -13,7 +13,7 @@ export type AspectId = "auto" | "1:1" | "16:9" | "4:3";
 export interface FrameLayoutInput {
   enabled: boolean;
   padding: number; // 0–100
-  radius: number;
+  radius: number; // 0–100 (percent of half the shorter content edge; 100 = fully rounded)
   shadow: number;
   aspect: AspectId;
   /** Only the layout-relevant chrome field; theme/title/url are visual-only. Optional so
@@ -103,4 +103,16 @@ export function computeLayout(
 /** Pixel ratio that flattens the scaled-down stage back to native composition pixels. */
 export function exportPixelRatio(layout: Layout, stageW: number): number {
   return stageW > 0 ? layout.compositionW / stageW : 1;
+}
+
+/**
+ * Resolve the corner radius (stored as a 0–100 percentage) to native composition
+ * pixels: a fraction of half the shorter content edge. So 100 = fully rounded (a
+ * semicircle on the short axis — pill/circle) and the same slider value reads
+ * consistently whether the screenshot is small or 4K, instead of a fixed px value
+ * that looked like almost nothing on a large capture. Clamped to [0,100].
+ */
+export function resolveRadiusPx(radiusPct: number, contentW: number, contentH: number): number {
+  const pct = Math.max(0, Math.min(100, radiusPct));
+  return (pct / 100) * 0.5 * Math.min(contentW, contentH);
 }
