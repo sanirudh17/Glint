@@ -169,6 +169,37 @@ describe("useEditorStore — composition", () => {
     expect(st.crop).toBeNull();
     expect(st.frame.shadow).toBe(DEFAULT_FRAME.shadow);
   });
+
+  it("resetFrame is undoable and no-ops when already default", () => {
+    const s = useEditorStore.getState();
+    s.resetFrame(); // frame already default → records no history
+    expect(useEditorStore.getState().past).toHaveLength(0);
+    s.setFrame({ padding: 88 });
+    s.resetFrame();
+    expect(useEditorStore.getState().frame.padding).toBe(DEFAULT_FRAME.padding);
+    s.undo();
+    expect(useEditorStore.getState().frame.padding).toBe(88);
+  });
+
+  it("resetCrop is undoable and no-ops when there is no crop", () => {
+    const s = useEditorStore.getState();
+    s.resetCrop(); // crop already null → records no history
+    expect(useEditorStore.getState().past).toHaveLength(0);
+    s.setCrop({ x: 0, y: 0, w: 10, h: 10 });
+    s.resetCrop();
+    expect(useEditorStore.getState().crop).toBeNull();
+    s.undo();
+    expect(useEditorStore.getState().crop).toEqual({ x: 0, y: 0, w: 10, h: 10 });
+  });
+
+  it("toggleFrame is undoable", () => {
+    const s = useEditorStore.getState();
+    expect(useEditorStore.getState().frame.enabled).toBe(false);
+    s.toggleFrame();
+    expect(useEditorStore.getState().frame.enabled).toBe(true);
+    s.undo();
+    expect(useEditorStore.getState().frame.enabled).toBe(false);
+  });
 });
 
 describe("loadDoc", () => {

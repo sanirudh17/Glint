@@ -306,7 +306,8 @@ export const useEditorStore = create<EditorState>((set) => ({
   // Crop is structural → part of the undo snapshot. Callers pushHistory() before
   // setCrop so the prior crop can be undone.
   setCrop: (c) => set({ crop: c, dirty: true }),
-  resetCrop: () => set({ crop: null, dirty: true }),
+  resetCrop: () =>
+    set((s) => (s.crop === null ? s : { past: [...s.past, snapshot(s)], future: [], crop: null, dirty: true })),
 
   // Frame styling is live tweak state (like the style bar) — never in history.
   setFrame: (patch) => set((s) => ({ frame: { ...s.frame, ...patch }, dirty: true })),
@@ -326,8 +327,19 @@ export const useEditorStore = create<EditorState>((set) => ({
         dirty: true,
       };
     }),
-  toggleFrame: (on) => set((s) => ({ frame: { ...s.frame, enabled: on ?? !s.frame.enabled }, dirty: true })),
-  resetFrame: () => set({ frame: freshFrame(), dirty: true }),
+  toggleFrame: (on) =>
+    set((s) => {
+      const enabled = on ?? !s.frame.enabled;
+      if (enabled === s.frame.enabled) return s; // no-op → no dead undo step
+      return { past: [...s.past, snapshot(s)], future: [], frame: { ...s.frame, enabled }, dirty: true };
+    }),
+  resetFrame: () =>
+    set((s) => {
+      const fresh = freshFrame();
+      // Already default → no change and no dead undo step.
+      if (JSON.stringify(s.frame) === JSON.stringify(fresh)) return s;
+      return { past: [...s.past, snapshot(s)], future: [], frame: fresh, dirty: true };
+    }),
 
   undo: () =>
     set((s) =>
