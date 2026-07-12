@@ -143,6 +143,32 @@ describe("useEditorStore — composition", () => {
     s.setFrame({ padding: 99 });
     expect(useEditorStore.getState().past).toEqual([]);
   });
+
+  it("undo restores frame changes; redo re-applies them", () => {
+    const s = useEditorStore.getState();
+    s.setFrame({ padding: 20 });
+    s.pushHistory(); // checkpoint at padding 20 (as a slider pointer-down would)
+    s.setFrame({ padding: 80 });
+    expect(useEditorStore.getState().frame.padding).toBe(80);
+    s.undo();
+    expect(useEditorStore.getState().frame.padding).toBe(20);
+    s.redo();
+    expect(useEditorStore.getState().frame.padding).toBe(80);
+  });
+
+  it("one undo step restores frame, crop, and annotations together", () => {
+    const s = useEditorStore.getState();
+    s.add(rect("a"));
+    s.pushHistory(); // checkpoint: [a], crop null, default frame
+    s.setFrame({ shadow: 90 });
+    s.setCrop({ x: 0, y: 0, w: 10, h: 10 });
+    s.add(rect("b"));
+    s.undo();
+    const st = useEditorStore.getState();
+    expect(st.annotations.map((a) => a.id)).toEqual(["a"]);
+    expect(st.crop).toBeNull();
+    expect(st.frame.shadow).toBe(DEFAULT_FRAME.shadow);
+  });
 });
 
 describe("loadDoc", () => {

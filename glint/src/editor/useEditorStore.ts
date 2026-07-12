@@ -51,8 +51,8 @@ export interface FrameConfig {
   chrome: WindowChrome;
 }
 
-/** One step of undo/redo history: annotations + the structural crop together. */
-interface DocSnapshot { annotations: Annotation[]; crop: Crop | null }
+/** One step of undo/redo history: annotations + the structural crop + the frame together. */
+interface DocSnapshot { annotations: Annotation[]; crop: Crop | null; frame: FrameConfig }
 
 /** The serializable editor document persisted to / loaded from a `.glint` file. */
 export interface SerializedDoc {
@@ -173,6 +173,13 @@ const INITIAL = {
   picking: false,
 };
 
+/** The full reversible doc state for one undo/redo step (annotations + crop + frame). */
+const snapshot = (s: EditorState): DocSnapshot => ({
+  annotations: s.annotations,
+  crop: s.crop,
+  frame: s.frame,
+});
+
 export const useEditorStore = create<EditorState>((set) => ({
   ...INITIAL,
   style: { ...DEFAULT_STYLE },
@@ -220,7 +227,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       if (!a) return s;
       const copy = duplicateAnnotation(a);
       return {
-        past: [...s.past, { annotations: s.annotations, crop: s.crop }],
+        past: [...s.past, snapshot(s)],
         future: [],
         annotations: [...s.annotations, copy],
         selectedId: copy.id,
@@ -232,14 +239,14 @@ export const useEditorStore = create<EditorState>((set) => ({
       const next = reorder(s.annotations, id, "forward");
       return next === s.annotations
         ? s
-        : { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: next, dirty: true };
+        : { past: [...s.past, snapshot(s)], future: [], annotations: next, dirty: true };
     }),
   sendBackward: (id) =>
     set((s) => {
       const next = reorder(s.annotations, id, "backward");
       return next === s.annotations
         ? s
-        : { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: next, dirty: true };
+        : { past: [...s.past, snapshot(s)], future: [], annotations: next, dirty: true };
     }),
   nudge: (id, dx, dy, pushHist = true) =>
     set((s) => {
@@ -248,13 +255,13 @@ export const useEditorStore = create<EditorState>((set) => ({
       const next = [...s.annotations];
       next[idx] = nudgeAnnotation(next[idx], dx, dy);
       return pushHist
-        ? { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: next, dirty: true }
+        ? { past: [...s.past, snapshot(s)], future: [], annotations: next, dirty: true }
         : { annotations: next, dirty: true };
     }),
 
   // Snapshot the current doc (annotations + crop) so the next gesture can be
   // undone. Clears redo.
-  pushHistory: () => set((s) => ({ past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [] })),
+  pushHistory: () => set((s) => ({ past: [...s.past, snapshot(s)], future: [] })),
 
   add: (a) => set((s) => ({ annotations: addAnnotation(s.annotations, a), selectedId: a.id, dirty: true })),
   // Undo the onDown push+add for a draft that turned out to be a click, not a drag:
@@ -292,7 +299,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   clearAll: () =>
     set((s) =>
       s.annotations.length
-        ? { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: [], selectedId: null, dirty: true }
+        ? { past: [...s.past, snapshot(s)], future: [], annotations: [], selectedId: null, dirty: true }
         : s,
     ),
 
@@ -328,7 +335,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         ? {
             ...s.past[s.past.length - 1],
             past: s.past.slice(0, -1),
-            future: [{ annotations: s.annotations, crop: s.crop }, ...s.future],
+            future: [snapshot(s), ...s.future],
             selectedId: null,
             dirty: true,
           }
@@ -340,7 +347,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         ? {
             ...s.future[0],
             future: s.future.slice(1),
-            past: [...s.past, { annotations: s.annotations, crop: s.crop }],
+            past: [...s.past, snapshot(s)],
             selectedId: null,
             dirty: true,
           }
