@@ -293,6 +293,7 @@
 .editor-frame-slot {
   display: flex;
   align-items: center;
+  gap: var(--s2); /* match the Export bar's inter-button spacing (Frame ↔ Corners) */
   padding: 0 var(--s2);
 }
 

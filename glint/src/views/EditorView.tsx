@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Frame as FrameIcon, Squircle } from "lucide-react";
+import { Frame as FrameIcon, SquareRoundCorner } from "lucide-react";
 import { useEditorStore } from "../editor/useEditorStore";
 import type { SerializedDoc } from "../editor/useEditorStore";
 import { getEditorSource } from "../lib/editor";
@@ -230,7 +230,7 @@ export default function EditorView() {
               title="Round the image corners (trims to transparent on export)"
               aria-pressed={cornersOpen}
             >
-              <Squircle size={16} strokeWidth={1.75} /> Corners
+              <SquareRoundCorner size={16} strokeWidth={1.75} /> Corners
             </button>
           )}
         </div>
