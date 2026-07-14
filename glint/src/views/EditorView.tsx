@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Frame as FrameIcon } from "lucide-react";
+import { Frame as FrameIcon, SquareRoundCorner } from "lucide-react";
 import { useEditorStore } from "../editor/useEditorStore";
 import type { SerializedDoc } from "../editor/useEditorStore";
 import { getEditorSource } from "../lib/editor";
@@ -12,6 +12,7 @@ import { StyleBar } from "./editor/StyleBar";
 import { ExportBar } from "./editor/ExportBar";
 import { ProjectBar } from "./editor/ProjectBar";
 import { FramePanel } from "./editor/FramePanel";
+import { CornersPanel } from "./editor/CornersPanel";
 import { ShortcutCheatsheet } from "./editor/ShortcutCheatsheet";
 import type { ToolId } from "../editor/model";
 import "./editor/editor.css";
@@ -24,6 +25,7 @@ export default function EditorView() {
   // Timestamp of the last arrow-key nudge, for history coalescing.
   const lastNudge = useRef(0);
   const [cheatsheetOpen, setCheatsheetOpen] = useState(false);
+  const [cornersOpen, setCornersOpen] = useState(false);
 
   const setTool = useEditorStore((s) => s.setTool);
   const undo = useEditorStore((s) => s.undo);
@@ -219,6 +221,18 @@ export default function EditorView() {
           >
             <FrameIcon size={16} strokeWidth={1.75} /> Frame
           </button>
+          {/* Corners is the standalone round-and-trim control; with the decorative
+              Frame on, its Radius governs rounding instead, so hide Corners then. */}
+          {!frameEnabled && (
+            <button
+              className={`editor-export-btn${cornersOpen ? " editor-export-btn--primary" : ""}`}
+              onClick={() => setCornersOpen((v) => !v)}
+              title="Round the image corners (trims to transparent on export)"
+              aria-pressed={cornersOpen}
+            >
+              <SquareRoundCorner size={16} strokeWidth={1.75} /> Corners
+            </button>
+          )}
         </div>
         <ExportBar stageRef={stageRef} />
       </div>
@@ -226,6 +240,7 @@ export default function EditorView() {
         <ToolRail />
         <EditorStage ref={stageRef} />
         {frameEnabled && <FramePanel />}
+        {!frameEnabled && cornersOpen && <CornersPanel />}
       </div>
       <ShortcutCheatsheet open={cheatsheetOpen} onClose={() => setCheatsheetOpen(false)} />
     </div>

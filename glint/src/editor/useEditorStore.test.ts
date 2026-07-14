@@ -143,6 +143,84 @@ describe("useEditorStore — composition", () => {
     s.setFrame({ padding: 99 });
     expect(useEditorStore.getState().past).toEqual([]);
   });
+
+  it("undo restores frame changes; redo re-applies them", () => {
+    const s = useEditorStore.getState();
+    s.setFrame({ padding: 20 });
+    s.pushHistory(); // checkpoint at padding 20 (as a slider pointer-down would)
+    s.setFrame({ padding: 80 });
+    expect(useEditorStore.getState().frame.padding).toBe(80);
+    s.undo();
+    expect(useEditorStore.getState().frame.padding).toBe(20);
+    s.redo();
+    expect(useEditorStore.getState().frame.padding).toBe(80);
+  });
+
+  it("one undo step restores frame, crop, and annotations together", () => {
+    const s = useEditorStore.getState();
+    s.add(rect("a"));
+    s.pushHistory(); // checkpoint: [a], crop null, default frame
+    s.setFrame({ shadow: 90 });
+    s.setCrop({ x: 0, y: 0, w: 10, h: 10 });
+    s.add(rect("b"));
+    s.undo();
+    const st = useEditorStore.getState();
+    expect(st.annotations.map((a) => a.id)).toEqual(["a"]);
+    expect(st.crop).toBeNull();
+    expect(st.frame.shadow).toBe(DEFAULT_FRAME.shadow);
+  });
+
+  it("resetFrame is undoable and no-ops when already default", () => {
+    const s = useEditorStore.getState();
+    s.resetFrame(); // frame already default → records no history
+    expect(useEditorStore.getState().past).toHaveLength(0);
+    s.setFrame({ padding: 88 });
+    s.resetFrame();
+    expect(useEditorStore.getState().frame.padding).toBe(DEFAULT_FRAME.padding);
+    s.undo();
+    expect(useEditorStore.getState().frame.padding).toBe(88);
+  });
+
+  it("resetCrop is undoable and no-ops when there is no crop", () => {
+    const s = useEditorStore.getState();
+    s.resetCrop(); // crop already null → records no history
+    expect(useEditorStore.getState().past).toHaveLength(0);
+    s.setCrop({ x: 0, y: 0, w: 10, h: 10 });
+    s.resetCrop();
+    expect(useEditorStore.getState().crop).toBeNull();
+    s.undo();
+    expect(useEditorStore.getState().crop).toEqual({ x: 0, y: 0, w: 10, h: 10 });
+  });
+
+  it("toggleFrame is undoable", () => {
+    const s = useEditorStore.getState();
+    expect(useEditorStore.getState().frame.enabled).toBe(false);
+    s.toggleFrame();
+    expect(useEditorStore.getState().frame.enabled).toBe(true);
+    s.undo();
+    expect(useEditorStore.getState().frame.enabled).toBe(false);
+  });
+
+  it("setCornerRadius sets the value without pushing history; undo/redo restore it", () => {
+    const s = useEditorStore.getState();
+    s.setCornerRadius(30);
+    expect(useEditorStore.getState().cornerRadius).toBe(30);
+    expect(useEditorStore.getState().past).toEqual([]); // the UI checkpoints, not the setter
+    s.pushHistory();
+    s.setCornerRadius(70);
+    s.undo();
+    expect(useEditorStore.getState().cornerRadius).toBe(30);
+    s.redo();
+    expect(useEditorStore.getState().cornerRadius).toBe(70);
+  });
+
+  it("loadDoc hydrates cornerRadius (defaults to 0 for legacy docs)", () => {
+    const s = useEditorStore.getState();
+    s.loadDoc(fakeBase(), { annotations: [], crop: null, frame: DEFAULT_FRAME } as never, null);
+    expect(useEditorStore.getState().cornerRadius).toBe(0);
+    s.loadDoc(fakeBase(), { annotations: [], crop: null, frame: DEFAULT_FRAME, cornerRadius: 45 } as never, null);
+    expect(useEditorStore.getState().cornerRadius).toBe(45);
+  });
 });
 
 describe("loadDoc", () => {

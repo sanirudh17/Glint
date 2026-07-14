@@ -293,6 +293,7 @@
 .editor-frame-slot {
   display: flex;
   align-items: center;
+  gap: var(--s2); /* match the Export bar's inter-button spacing (Frame ↔ Corners) */
   padding: 0 var(--s2);
 }
 
@@ -326,6 +327,14 @@
 }
 /* Label + an inline info affordance on the same line. */
 .frame-labelrow { display: inline-flex; align-items: center; gap: 6px; }
+
+/* Small explanatory note (e.g. the Corners panel). */
+.frame-note {
+  margin: -2px 0 4px;
+  font-size: var(--fz-xs);
+  line-height: 1.4;
+  color: var(--text-dim);
+}
 
 /* Hover-reveal info icon (replaces always-on hint paragraphs). */
 .frame-info {

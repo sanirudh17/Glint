@@ -51,14 +51,17 @@ export interface FrameConfig {
   chrome: WindowChrome;
 }
 
-/** One step of undo/redo history: annotations + the structural crop together. */
-interface DocSnapshot { annotations: Annotation[]; crop: Crop | null }
+/** One step of undo/redo history: annotations + crop + frame + the standalone corner trim. */
+interface DocSnapshot { annotations: Annotation[]; crop: Crop | null; frame: FrameConfig; cornerRadius: number }
 
 /** The serializable editor document persisted to / loaded from a `.glint` file. */
 export interface SerializedDoc {
   annotations: Annotation[];
   crop: Crop | null;
   frame: FrameConfig;
+  /** Standalone image corner rounding (0–100 %); trims the screenshot's corners to
+      transparent on export, independent of the decorative frame. Optional for legacy docs. */
+  cornerRadius?: number;
 }
 
 export const DEFAULT_FRAME: FrameConfig = {
@@ -81,6 +84,9 @@ interface EditorState {
   toolStyles: Partial<Record<ToolId, Style>>;
   crop: Crop | null;
   frame: FrameConfig;
+  /** Standalone image corner rounding (0–100 %) — rounds + trims the screenshot,
+      no frame decoration. Governs the image clip when the frame is off. */
+  cornerRadius: number;
   past: DocSnapshot[];
   future: DocSnapshot[];
   projectPath: string | null;
@@ -133,6 +139,9 @@ interface EditorState {
   setChrome: (patch: Partial<WindowChrome>) => void;
   toggleFrame: (on?: boolean) => void;
   resetFrame: () => void;
+  /** Set the standalone image corner radius (0–100 %). History-free — the UI
+      checkpoints on the slider's pointer-down, like the frame sliders. */
+  setCornerRadius: (v: number) => void;
   undo: () => void;
   redo: () => void;
 }
@@ -164,6 +173,7 @@ const INITIAL = {
   toolStyles: loadToolStyles(),
   crop: null as Crop | null,
   frame: freshFrame(),
+  cornerRadius: 0,
   past: [] as DocSnapshot[],
   future: [] as DocSnapshot[],
   projectPath: null as string | null,
@@ -172,6 +182,14 @@ const INITIAL = {
   eraserSize: 16,
   picking: false,
 };
+
+/** The full reversible doc state for one undo/redo step (annotations + crop + frame). */
+const snapshot = (s: EditorState): DocSnapshot => ({
+  annotations: s.annotations,
+  crop: s.crop,
+  frame: s.frame,
+  cornerRadius: s.cornerRadius,
+});
 
 export const useEditorStore = create<EditorState>((set) => ({
   ...INITIAL,
@@ -185,6 +203,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       annotations: doc?.annotations ?? [],
       crop: doc?.crop ?? null,
       frame: mergeFrame(doc?.frame),
+      cornerRadius: doc?.cornerRadius ?? 0,
       picking: false,
       past: [],
       future: [],
@@ -220,7 +239,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       if (!a) return s;
       const copy = duplicateAnnotation(a);
       return {
-        past: [...s.past, { annotations: s.annotations, crop: s.crop }],
+        past: [...s.past, snapshot(s)],
         future: [],
         annotations: [...s.annotations, copy],
         selectedId: copy.id,
@@ -232,14 +251,14 @@ export const useEditorStore = create<EditorState>((set) => ({
       const next = reorder(s.annotations, id, "forward");
       return next === s.annotations
         ? s
-        : { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: next, dirty: true };
+        : { past: [...s.past, snapshot(s)], future: [], annotations: next, dirty: true };
     }),
   sendBackward: (id) =>
     set((s) => {
       const next = reorder(s.annotations, id, "backward");
       return next === s.annotations
         ? s
-        : { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: next, dirty: true };
+        : { past: [...s.past, snapshot(s)], future: [], annotations: next, dirty: true };
     }),
   nudge: (id, dx, dy, pushHist = true) =>
     set((s) => {
@@ -248,13 +267,13 @@ export const useEditorStore = create<EditorState>((set) => ({
       const next = [...s.annotations];
       next[idx] = nudgeAnnotation(next[idx], dx, dy);
       return pushHist
-        ? { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: next, dirty: true }
+        ? { past: [...s.past, snapshot(s)], future: [], annotations: next, dirty: true }
         : { annotations: next, dirty: true };
     }),
 
   // Snapshot the current doc (annotations + crop) so the next gesture can be
   // undone. Clears redo.
-  pushHistory: () => set((s) => ({ past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [] })),
+  pushHistory: () => set((s) => ({ past: [...s.past, snapshot(s)], future: [] })),
 
   add: (a) => set((s) => ({ annotations: addAnnotation(s.annotations, a), selectedId: a.id, dirty: true })),
   // Undo the onDown push+add for a draft that turned out to be a click, not a drag:
@@ -292,14 +311,15 @@ export const useEditorStore = create<EditorState>((set) => ({
   clearAll: () =>
     set((s) =>
       s.annotations.length
-        ? { past: [...s.past, { annotations: s.annotations, crop: s.crop }], future: [], annotations: [], selectedId: null, dirty: true }
+        ? { past: [...s.past, snapshot(s)], future: [], annotations: [], selectedId: null, dirty: true }
         : s,
     ),
 
   // Crop is structural → part of the undo snapshot. Callers pushHistory() before
   // setCrop so the prior crop can be undone.
   setCrop: (c) => set({ crop: c, dirty: true }),
-  resetCrop: () => set({ crop: null, dirty: true }),
+  resetCrop: () =>
+    set((s) => (s.crop === null ? s : { past: [...s.past, snapshot(s)], future: [], crop: null, dirty: true })),
 
   // Frame styling is live tweak state (like the style bar) — never in history.
   setFrame: (patch) => set((s) => ({ frame: { ...s.frame, ...patch }, dirty: true })),
@@ -319,8 +339,23 @@ export const useEditorStore = create<EditorState>((set) => ({
         dirty: true,
       };
     }),
-  toggleFrame: (on) => set((s) => ({ frame: { ...s.frame, enabled: on ?? !s.frame.enabled }, dirty: true })),
-  resetFrame: () => set({ frame: freshFrame(), dirty: true }),
+  toggleFrame: (on) =>
+    set((s) => {
+      const enabled = on ?? !s.frame.enabled;
+      if (enabled === s.frame.enabled) return s; // no-op → no dead undo step
+      return { past: [...s.past, snapshot(s)], future: [], frame: { ...s.frame, enabled }, dirty: true };
+    }),
+  resetFrame: () =>
+    set((s) => {
+      const fresh = freshFrame();
+      // Already default → no change and no dead undo step.
+      if (JSON.stringify(s.frame) === JSON.stringify(fresh)) return s;
+      return { past: [...s.past, snapshot(s)], future: [], frame: fresh, dirty: true };
+    }),
+
+  // Standalone image corner trim. History-free (the Corners slider checkpoints on
+  // pointer-down); cornerRadius rides in the undo snapshot so undo restores it.
+  setCornerRadius: (v) => set({ cornerRadius: v, dirty: true }),
 
   undo: () =>
     set((s) =>
@@ -328,7 +363,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         ? {
             ...s.past[s.past.length - 1],
             past: s.past.slice(0, -1),
-            future: [{ annotations: s.annotations, crop: s.crop }, ...s.future],
+            future: [snapshot(s), ...s.future],
             selectedId: null,
             dirty: true,
           }
@@ -340,7 +375,7 @@ export const useEditorStore = create<EditorState>((set) => ({
         ? {
             ...s.future[0],
             future: s.future.slice(1),
-            past: [...s.past, { annotations: s.annotations, crop: s.crop }],
+            past: [...s.past, snapshot(s)],
             selectedId: null,
             dirty: true,
           }
