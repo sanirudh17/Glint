@@ -432,6 +432,10 @@ capture/library/editor path.
   and build. The v0.1.0 installer is attached to a GitHub **Release** so users can download and run
   it without cloning. Dev scaffolding (the original build prompt + `spike/`) dropped from the public
   tree. *Shipped.*
+  - **v0.1.1** — app-icon refresh (a cleaner, brighter neon capture-marquee on the deep-black tile,
+    previewed live via a throwaway dev session before shipping). Version bumped across
+    `tauri.conf.json`/`Cargo.toml`/`package.json`; rebuilt installers attached to a new GitHub
+    Release. *Shipped.*
 
 ## Planned
 
