@@ -245,6 +245,12 @@
   align-items: flex-start;
   gap: 8px;
   padding: 6px;
+  /* Kill DOM selection across the overlay: the drag-out gesture (pointer-down +
+     move on a card) would otherwise start a text/range selection, painting the
+     accent-colored ::selection highlight over the thumbnail. The drag still
+     worked, but the card flashed accent-tinted. Mirrors the old .hud-root. */
+  user-select: none;
+  -webkit-user-select: none;
 }
 .tray-stack {
   display: flex;
