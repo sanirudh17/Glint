@@ -423,10 +423,20 @@ capture/library/editor path.
   preserved, not redrawn); regenerated via `tauri icon` across `.ico`/`.icns`/PNGs/Square logos.
   *Shipped — at-screen accepted.*
 
+- **Phase 30 — Packaging & Distribution** (public release). The app is bundled into Windows
+  installers via `tauri build` (`targets: "all"` → NSIS `.exe` + WiX `.msi`, sidecars ffmpeg/
+  ffprobe + the Tesseract runtime bundled in). The repository is published to GitHub
+  ([sanirudh17/Glint](https://github.com/sanirudh17/Glint), public, default branch `main`) with a
+  comprehensive feature README, an MIT `LICENSE`, and a `scripts/fetch-ffmpeg.ps1` companion to
+  the existing `fetch-tesseract.ps1` so a fresh clone can populate the git-ignored ~100MB sidecars
+  and build. The v0.1.0 installer is attached to a GitHub **Release** so users can download and run
+  it without cloning. Dev scaffolding (the original build prompt + `spike/`) dropped from the public
+  tree. *Shipped.*
+
 ## Planned
 
-- **Packaging / distribution** — the only remaining phase (installer, code-signing, auto-update,
-  release artifacts). All feature work is complete.
+- *(none — all planned phases complete. Future ideas: installer code-signing to clear SmartScreen,
+  and auto-update.)*
 
 ## Out of scope (project-wide, unchanged)
 Cloud/upload/share-links, teams/collaboration, login/auth, web backend/network calls, scrolling
