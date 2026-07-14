@@ -392,6 +392,37 @@ capture/library/editor path.
   under instrumentation, so rather than ship a guess it's **deferred** (rare, cosmetic, self-reverting;
   re-trap if it recurs). *Shipped — at-screen accepted.*
 
+- **Phase 29 — App-wide UI/UX pass** (the last UI-focused phase before packaging; five
+  sub-phases plus a new app icon, each `--no-ff` merged into `master`). Guiding principle:
+  *subtraction, not accretion* — colours/type/tokens (accent `#5B7CFA`, near-black substrate,
+  no glow/gradient) kept throughout. **29a — Foundations + Dashboard:** one global
+  `--r-btn: 8px` token repointed across every rectangular pressable button (circular/window-
+  control buttons left alone); Home restructured to Concept A "quiet launcher" — a New-capture
+  action row (Capture Area primary + Window/Fullscreen/Record/Capture Text + a ghost Open
+  Project) over a responsive `auto-fill` Recent grid and a conditional Resume-projects chip row;
+  the Keyboard-shortcuts card removed (it duplicated Settings → Hotkeys). **29b — Sidebar:**
+  the nav rail is now expandable/collapsible via a bottom chevron toggle, animating **width**
+  in one smooth horizontal motion (labels always in the DOM, faded via opacity + `nowrap` to
+  kill reflow jank; tooltips disabled when expanded); state persisted to `localStorage`.
+  **29c — Library/Settings/Home polish:** look-only spacing, grid rhythm, hover finish, and
+  `--r-btn` on card + panel buttons — no behaviour change. **29d — Library ↔ filesystem
+  delete-sync:** the OS→Library direction is fixed — `captures_list` reconciles on load/focus
+  (off-lock `Path::exists` per row → `soft_delete` the missing ones) so files deleted in
+  Explorer no longer leave ghost rows, with a live watcher for already-open windows. **29e —
+  Annotator zoom/fit:** scroll-to-zoom centered on the cursor, drag-pan, a bottom-right zoom
+  control (`− <pct>% + · Fit · 100%`) and `Ctrl +/-/0/1` keybinds, all drawing routed through
+  scale/position-aware pointer math (no-lag CSS-transform zoom); toolbar visuals polished.
+  **App icon:** the default Tauri icon replaced everywhere (taskbar, Task Manager, Explorer
+  "Open with" / "Open in Glint") with a **neon capture-marquee** mark — a deep near-black
+  (`#060608`) rounded tile holding the app's own selection overlay (glowing periwinkle `#5B7CFA`
+  frame + corner handles + crosshair). After several iterations (charcoal-lift variants were
+  tried and rejected) the final call is a very dark tile that stands out on the grey Windows
+  taskbar by being *darker* than the bar (like neighbouring dark app tiles), with a subtle inner
+  rim-light so the rounded silhouette stays crisp on any bar tone, plus a brightened/​saturated
+  marquee so the neon reads at 24–32px. Enhancement is pixel-level on the source render (glow
+  preserved, not redrawn); regenerated via `tauri icon` across `.ico`/`.icns`/PNGs/Square logos.
+  *Shipped — at-screen accepted.*
+
 ## Planned
 
 - **Packaging / distribution** — the only remaining phase (installer, code-signing, auto-update,
