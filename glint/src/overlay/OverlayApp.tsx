@@ -16,7 +16,14 @@
  */
 import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
-import { getOverlayData, cancelCapture, resetCaptureLatch, type OverlayData } from "../lib/captureIpc";
+import {
+  getOverlayData,
+  loadOverlayFrame,
+  signalOverlayReady,
+  cancelCapture,
+  resetCaptureLatch,
+  type OverlayData,
+} from "../lib/captureIpc";
 import { SelectionLayer } from "./SelectionLayer";
 import { FullscreenMode } from "./FullscreenMode";
 import { WindowMode } from "./WindowMode";
@@ -50,15 +57,23 @@ export function OverlayApp() {
     getOverlayData(monitorId).then(setData).catch(() => {});
   }, [monitorId]);
 
-  // Each capture, the backend repositions+shows this window and emits
-  // `overlay-refresh`. Re-arm the single-capture latch, drop the previous frame,
-  // and load the new frozen screenshot. A real failure here means a stuck overlay,
-  // so cancel in that case.
+  // Each capture, the backend repositions this window (still HIDDEN) and emits
+  // `overlay-refresh`, then waits for our `overlay-ready` before showing. So here
+  // we fetch AND decode the new frozen frame while hidden, paint it, then signal
+  // ready — the backend's show() only has to composite the already-decoded image
+  // (no ~1s cold-idle repaint stall). A real failure means a stuck overlay, so
+  // cancel; the backend also has a timeout fallback so it never hangs hidden.
   useEffect(() => {
-    const un = listen("overlay-refresh", () => {
+    const un = listen("overlay-refresh", async () => {
       resetCaptureLatch();
       setData(null);
-      getOverlayData(monitorId).then(setData).catch(() => cancelCapture());
+      try {
+        const { data: frame, fetchMs, decodeMs } = await loadOverlayFrame(monitorId);
+        setData(frame);
+        void signalOverlayReady(fetchMs, decodeMs);
+      } catch {
+        cancelCapture();
+      }
     });
     return () => { un.then((f) => f()); };
   }, [monitorId]);
@@ -97,6 +112,8 @@ export function OverlayApp() {
           monitorId={monitorId}
           scale={data.scale}
           imageDataUrl={data.imageDataUrl}
+          cursorX={data.cursorX}
+          cursorY={data.cursorY}
         />
       )}
       {data.mode === "fullscreen" && (

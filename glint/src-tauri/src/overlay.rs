@@ -4,7 +4,17 @@
 //! frozen frame (the `overlay-refresh` event), and shows it. On commit/cancel it
 //! is HIDDEN, not closed, so the next capture pays no webview-creation cost.
 
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use std::sync::mpsc;
+use std::time::{Duration, Instant};
+use tauri::{
+    AppHandle, Emitter, Listener, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
+};
+
+/// How long the backend waits for the overlay's `overlay-ready` (fetched+decoded)
+/// before showing anyway. Warm captures signal in a few tens of ms; the cap
+/// guarantees we never regress to a long blank-hidden delay if the signal is slow
+/// or absent (e.g. a freshly built window whose listener isn't up yet).
+const READY_TIMEOUT: Duration = Duration::from_millis(300);
 
 pub const OVERLAY_PREFIX: &str = "overlay-";
 
@@ -65,10 +75,35 @@ pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
         log::warn!("overlay: no primary monitor; using default window geometry");
     }
 
+    // Plan A — decode-then-show. Instead of showing immediately and letting the
+    // (idle-throttled) webview wake + fetch + decode a multi-MB PNG on the visible
+    // critical path (the ~1s cold-idle freeze + flash), we ask the overlay to fetch
+    // AND decode the new frozen frame while it is STILL HIDDEN, and wait for its
+    // `overlay-ready` before showing. show() then only composites an already-decoded
+    // image. This runs on a spawned capture thread (see capture::begin_spawned), so
+    // the bounded wait never blocks the main event loop that delivers the signal.
+    let (tx, rx) = mpsc::channel::<String>();
+    let ready_id = app.once("overlay-ready", move |ev| {
+        let _ = tx.send(ev.payload().to_string());
+    });
+
+    let waited = Instant::now();
     // Tell the (already-mounted) overlay app to load the new frozen frame. The
     // mount-time fetch only covers the on-demand fallback build; a reused window
     // is already mounted, so this event is what refreshes it each capture.
     let _ = app.emit_to(label.as_str(), "overlay-refresh", ());
+
+    match rx.recv_timeout(READY_TIMEOUT) {
+        Ok(payload) => log::info!(
+            "overlay ready {payload} [perf] refresh→ready: {}ms",
+            waited.elapsed().as_millis()
+        ),
+        Err(_) => log::warn!(
+            "overlay ready TIMEOUT after {}ms — showing anyway [perf]",
+            waited.elapsed().as_millis()
+        ),
+    }
+    app.unlisten(ready_id);
 
     win.show()?;
     win.set_focus()?;

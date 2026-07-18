@@ -24,6 +24,13 @@ pub struct OverlayData {
     pub mode: String,
     pub image_data_url: String,
     pub windows: Vec<WindowRectDto>,
+    /// Cursor position in the overlay's logical/CSS px space at the moment the
+    /// overlay loads, or None if the OS position couldn't be read. The webview
+    /// cannot discover this itself — a stationary pointer generates no
+    /// WM_MOUSEMOVE, so without it the loupe stays hidden until the user moves
+    /// the mouse. Best-effort: None just restores the move-to-reveal behavior.
+    pub cursor_x: Option<f64>,
+    pub cursor_y: Option<f64>,
 }
 
 /// Returns the frozen screenshot + metadata the overlay UI needs to render.
@@ -35,6 +42,7 @@ pub struct OverlayData {
 #[tauri::command(async)]
 pub fn capture_overlay_data(
     _monitor_id: u32,
+    app: AppHandle,
     state: State<CaptureState>,
 ) -> Result<OverlayData, String> {
     let guard = state.0.lock().unwrap();
@@ -63,6 +71,27 @@ pub fn capture_overlay_data(
             h: w.h as f64 / session.scale,
         })
         .collect();
+    // Where the mouse is RIGHT NOW, in the overlay's coordinate space, so the loupe
+    // renders correctly placed on the first paint instead of waiting for a move.
+    // Every step is best-effort — a failure degrades to "appears on first move".
+    let (cursor_x, cursor_y) = match app.cursor_position() {
+        Ok(p) => {
+            let (ox, oy) = app
+                .primary_monitor()
+                .ok()
+                .flatten()
+                .map(|m| (m.position().x, m.position().y))
+                .unwrap_or((0, 0));
+            let (lx, ly) =
+                crate::capture::geometry::global_to_overlay_logical(p.x, p.y, ox, oy, session.scale);
+            (Some(lx), Some(ly))
+        }
+        Err(e) => {
+            log::warn!("overlay: cursor position unavailable ({e}); loupe will appear on first move");
+            (None, None)
+        }
+    };
+
     Ok(OverlayData {
         width: session.image.width,
         height: session.image.height,
@@ -70,6 +99,8 @@ pub fn capture_overlay_data(
         mode: session.mode.as_str().to_string(),
         image_data_url: format!("data:image/png;base64,{b64}"),
         windows,
+        cursor_x,
+        cursor_y,
     })
 }
 

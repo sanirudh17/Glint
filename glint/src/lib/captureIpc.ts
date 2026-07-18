@@ -8,6 +8,8 @@
  * Local-first: no network. Only @tauri-apps/api imports.
  */
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
+import { loadFrameWith, decodeDataUrl, type LoadedFrame } from "../overlay/overlayFrame";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -26,6 +28,14 @@ export type OverlayData = {
   imageDataUrl: string;
   /** Window rects in logical/CSS px. */
   windows: WindowRect[];
+  /**
+   * Cursor position (logical/CSS px) when the overlay loaded, or null if the OS
+   * position couldn't be read. Lets the loupe render on the first paint — a
+   * stationary pointer fires no pointermove, so the webview has no other way to
+   * know where the mouse is. Mapped from snake_case `cursor_x`/`cursor_y`.
+   */
+  cursorX: number | null;
+  cursorY: number | null;
 };
 
 // ─── Raw backend shape (snake_case) ──────────────────────────────────────────
@@ -37,9 +47,30 @@ interface RawOverlayData {
   mode: CaptureMode;
   image_data_url: string;
   windows: WindowRect[];
+  cursor_x: number | null;
+  cursor_y: number | null;
 }
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
+
+/**
+ * Fetch AND decode the frozen frame for the given monitor (Plan A: "decode-then-
+ * show"). The decode runs while the overlay window is still hidden, so showing it
+ * only has to composite an already-decoded image — killing the ~1s cold-idle
+ * repaint stall. Returns timings for the [perf] confirmation log.
+ */
+export function loadOverlayFrame(monitorId: number): Promise<LoadedFrame<OverlayData>> {
+  return loadFrameWith(() => getOverlayData(monitorId), decodeDataUrl);
+}
+
+/**
+ * Tell the backend the overlay has fetched + decoded the new frozen frame and is
+ * ready to be shown. Carries the fetch/decode timings for the [perf] log. Errors
+ * are swallowed — a missing signal just means the backend shows on its timeout.
+ */
+export function signalOverlayReady(fetchMs: number, decodeMs: number): Promise<void> {
+  return emit("overlay-ready", { fetchMs, decodeMs }).catch(() => {});
+}
 
 /**
  * Fetch the frozen screenshot and window list for the given monitor.
@@ -56,6 +87,8 @@ export async function getOverlayData(monitorId: number): Promise<OverlayData> {
     mode: d.mode,
     imageDataUrl: d.image_data_url,
     windows: d.windows,
+    cursorX: d.cursor_x,
+    cursorY: d.cursor_y,
   };
 }
 

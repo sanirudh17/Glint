@@ -16,6 +16,26 @@ pub fn logical_to_physical(r: LogicalRect, scale: f64) -> PixelRect {
     }
 }
 
+/// Map a GLOBAL physical cursor position (what the OS reports) into the overlay's
+/// own logical/CSS px space — the same space as `clientX`/`clientY` in the webview.
+///
+/// The overlay is positioned at the monitor origin, so subtract that origin first
+/// and only then divide by the scale factor. Doing it in the other order is wrong
+/// on any multi-monitor / non-100%-DPI setup.
+pub fn global_to_overlay_logical(
+    global_x: f64,
+    global_y: f64,
+    origin_x: i32,
+    origin_y: i32,
+    scale: f64,
+) -> (f64, f64) {
+    let s = if scale > 0.0 { scale } else { 1.0 };
+    (
+        (global_x - origin_x as f64) / s,
+        (global_y - origin_y as f64) / s,
+    )
+}
+
 /// Clamp to image bounds; return None for a zero-area result.
 pub fn clamp_rect(r: PixelRect, img_w: u32, img_h: u32) -> Option<PixelRect> {
     if r.x >= img_w || r.y >= img_h { return None; }
@@ -68,6 +88,28 @@ mod tests {
     fn logical_to_physical_identity_at_scale_one() {
         let p = logical_to_physical(LogicalRect { x: 3.0, y: 4.0, w: 5.0, h: 6.0 }, 1.0);
         assert_eq!(p, PixelRect { x: 3, y: 4, w: 5, h: 6 });
+    }
+
+    #[test]
+    fn cursor_maps_to_overlay_logical_space() {
+        // Primary monitor at the origin, 100% DPI — pass-through.
+        assert_eq!(global_to_overlay_logical(640.0, 360.0, 0, 0, 1.0), (640.0, 360.0));
+        // 150% DPI: physical 960,540 is logical 640,360.
+        assert_eq!(global_to_overlay_logical(960.0, 540.0, 0, 0, 1.5), (640.0, 360.0));
+    }
+
+    #[test]
+    fn cursor_subtracts_monitor_origin_before_scaling() {
+        // A secondary monitor starting at x=1920: the origin must come off FIRST,
+        // otherwise the loupe lands at the wrong spot on any scaled second display.
+        let (x, y) = global_to_overlay_logical(2880.0, 540.0, 1920, 0, 2.0);
+        assert_eq!((x, y), (480.0, 270.0));
+    }
+
+    #[test]
+    fn cursor_survives_a_bogus_scale() {
+        // Never divide by zero — fall back to 1.0 rather than emitting inf/NaN.
+        assert_eq!(global_to_overlay_logical(10.0, 20.0, 0, 0, 0.0), (10.0, 20.0));
     }
 
     #[test]
