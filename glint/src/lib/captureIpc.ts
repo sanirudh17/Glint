@@ -8,6 +8,8 @@
  * Local-first: no network. Only @tauri-apps/api imports.
  */
 import { invoke } from "@tauri-apps/api/core";
+import { emit } from "@tauri-apps/api/event";
+import { loadFrameWith, decodeDataUrl, type LoadedFrame } from "../overlay/overlayFrame";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -40,6 +42,25 @@ interface RawOverlayData {
 }
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
+
+/**
+ * Fetch AND decode the frozen frame for the given monitor (Plan A: "decode-then-
+ * show"). The decode runs while the overlay window is still hidden, so showing it
+ * only has to composite an already-decoded image — killing the ~1s cold-idle
+ * repaint stall. Returns timings for the [perf] confirmation log.
+ */
+export function loadOverlayFrame(monitorId: number): Promise<LoadedFrame<OverlayData>> {
+  return loadFrameWith(() => getOverlayData(monitorId), decodeDataUrl);
+}
+
+/**
+ * Tell the backend the overlay has fetched + decoded the new frozen frame and is
+ * ready to be shown. Carries the fetch/decode timings for the [perf] log. Errors
+ * are swallowed — a missing signal just means the backend shows on its timeout.
+ */
+export function signalOverlayReady(fetchMs: number, decodeMs: number): Promise<void> {
+  return emit("overlay-ready", { fetchMs, decodeMs }).catch(() => {});
+}
 
 /**
  * Fetch the frozen screenshot and window list for the given monitor.
