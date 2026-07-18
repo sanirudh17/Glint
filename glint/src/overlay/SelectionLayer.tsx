@@ -28,6 +28,7 @@ import { commitCapture } from "../lib/captureIpc";
 import { Crosshair } from "./Crosshair";
 import { DimensionsBadge } from "./DimensionsBadge";
 import { Loupe } from "./Loupe";
+import { seedCursor, isLoupeVisible, type Point } from "./loupeVisibility";
 
 // ─── Handle descriptors ───────────────────────────────────────────────────────
 
@@ -71,19 +72,35 @@ export function SelectionLayer({
   monitorId,
   scale,
   imageDataUrl,
+  cursorX,
+  cursorY,
 }: {
   monitorId: number;
   scale: number;
   imageDataUrl: string;
+  /** Backend-supplied cursor position — see loupeVisibility.ts for why. */
+  cursorX: number | null;
+  cursorY: number | null;
 }) {
   const [rect, setRect] = useState<Rect | null>(null);
   const drag = useRef<DragMode | null>(null);
   const layerRef = useRef<HTMLDivElement>(null);
 
   // ── Loupe state: frozen bitmap (decoded once), live cursor, interaction flag ──
+  //
+  // The cursor is SEEDED from the backend rather than starting null: the overlay
+  // is shown under a stationary mouse, which fires no pointermove, so a null start
+  // left the loupe invisible until the user jiggled the mouse (it only looked
+  // intermittent because an incidental twitch usually supplied that move).
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
-  const [cursor, setCursor] = useState<{ x: number; y: number } | null>(null);
+  const [cursor, setCursor] = useState<Point | null>(() => seedCursor(cursorX, cursorY));
   const [interacting, setInteracting] = useState(false);
+
+  // Re-seed when a reused overlay window loads a new frozen frame (the window is
+  // pre-warmed and reused across captures, so mount-time state alone is stale).
+  useEffect(() => {
+    setCursor(seedCursor(cursorX, cursorY));
+  }, [cursorX, cursorY]);
 
   // Decode the frozen image into an ImageBitmap once — the loupe samples it.
   useEffect(() => {
@@ -250,8 +267,13 @@ export function SelectionLayer({
       {/* ── Loupe: pixel-peeping magnifier + hex readout (Task 11) ──────────────
           Visible while aiming (no selection yet) or during an active drag —
           hidden once a selection is settled so it doesn't obscure the result. */}
-      {cursor && bitmap && (rect === null || interacting) && (
-        <Loupe bitmap={bitmap} cx={cursor.x} cy={cursor.y} scale={scale} />
+      {isLoupeVisible({
+        cursor,
+        hasBitmap: bitmap !== null,
+        hasRect: rect !== null,
+        interacting,
+      }) && (
+        <Loupe bitmap={bitmap!} cx={cursor!.x} cy={cursor!.y} scale={scale} />
       )}
     </div>
   );

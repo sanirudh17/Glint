@@ -28,6 +28,14 @@ export type OverlayData = {
   imageDataUrl: string;
   /** Window rects in logical/CSS px. */
   windows: WindowRect[];
+  /**
+   * Cursor position (logical/CSS px) when the overlay loaded, or null if the OS
+   * position couldn't be read. Lets the loupe render on the first paint — a
+   * stationary pointer fires no pointermove, so the webview has no other way to
+   * know where the mouse is. Mapped from snake_case `cursor_x`/`cursor_y`.
+   */
+  cursorX: number | null;
+  cursorY: number | null;
 };
 
 // ─── Raw backend shape (snake_case) ──────────────────────────────────────────
@@ -39,6 +47,8 @@ interface RawOverlayData {
   mode: CaptureMode;
   image_data_url: string;
   windows: WindowRect[];
+  cursor_x: number | null;
+  cursor_y: number | null;
 }
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
@@ -77,6 +87,8 @@ export async function getOverlayData(monitorId: number): Promise<OverlayData> {
     mode: d.mode,
     imageDataUrl: d.image_data_url,
     windows: d.windows,
+    cursorX: d.cursor_x,
+    cursorY: d.cursor_y,
   };
 }
 

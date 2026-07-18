@@ -112,6 +112,8 @@ export function OverlayApp() {
           monitorId={monitorId}
           scale={data.scale}
           imageDataUrl={data.imageDataUrl}
+          cursorX={data.cursorX}
+          cursorY={data.cursorY}
         />
       )}
       {data.mode === "fullscreen" && (
