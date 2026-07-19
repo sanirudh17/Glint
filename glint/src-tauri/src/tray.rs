@@ -32,6 +32,12 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
         &quit,
     ])?;
 
+    // NOTE: this is the app's ONLY tray icon. `tauri.conf.json` must not also declare
+    // `app.trayIcon` — Tauri would build a second, menu-less icon from `icons/icon.png`
+    // at startup and Windows would show two Glint entries in the notification area (both
+    // vanishing together on quit, since they share this process). The config copy also
+    // looked wrong: Windows downscales the 512px master itself, where the embedded .ico
+    // used below carries hand-tuned 16/32px frames. Guarded by `config_declares_no_tray_icon`.
     TrayIconBuilder::with_id("glint-tray")
         .icon(app.default_window_icon().unwrap().clone())
         .tooltip("Glint")
@@ -86,4 +92,26 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
         })
         .build(app)?;
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    /// Regression guard: two tray icons appeared in the notification area because
+    /// `tauri.conf.json` declared `app.trayIcon` *and* `build()` above created one.
+    /// The programmatic tray is the real one (it owns the menu and click handlers),
+    /// so the config must stay silent about the tray.
+    #[test]
+    fn config_declares_no_tray_icon() {
+        let raw = std::fs::read_to_string(
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tauri.conf.json"),
+        )
+        .expect("tauri.conf.json is readable");
+        let cfg: serde_json::Value = serde_json::from_str(&raw).expect("tauri.conf.json is valid JSON");
+
+        assert!(
+            cfg["app"].get("trayIcon").is_none(),
+            "tauri.conf.json declares app.trayIcon; that builds a SECOND tray icon \
+             alongside the one in tray.rs. Remove it — the tray lives in tray.rs."
+        );
+    }
 }
