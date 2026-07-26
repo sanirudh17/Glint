@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SlidersHorizontal, Crop, Video, Save, Keyboard, Palette, HardDrive } from "lucide-react";
+import { SlidersHorizontal, Crop, Video, Save, Keyboard, Palette, HardDrive, RefreshCw } from "lucide-react";
 import { General }    from "./settings/General";
 import { Capture }    from "./settings/Capture";
 import { Recording }  from "./settings/Recording";
@@ -7,6 +7,7 @@ import { AutoSave }   from "./settings/AutoSave";
 import { Hotkeys }    from "./settings/Hotkeys";
 import { Appearance } from "./settings/Appearance";
 import { Storage }    from "./settings/Storage";
+import { Updates }    from "./settings/Updates";
 import "./settings.css";
 
 
@@ -19,7 +20,8 @@ type SectionId =
   | "autosave"
   | "hotkeys"
   | "appearance"
-  | "storage";
+  | "storage"
+  | "updates";
 
 interface NavItem {
   id: SectionId;
@@ -35,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "hotkeys",    label: "Hotkeys",    icon: Keyboard },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "storage",    label: "Storage",    icon: HardDrive },
+  { id: "updates",    label: "Updates",    icon: RefreshCw },
 ];
 
 // ─── Section panel map ────────────────────────────────────────────────────────
@@ -47,6 +50,7 @@ const PANELS: Record<SectionId, React.ReactNode> = {
   hotkeys:    <Hotkeys />,
   appearance: <Appearance />,
   storage:    <Storage />,
+  updates:    <Updates />,
 };
 
 // ─── View ─────────────────────────────────────────────────────────────────────

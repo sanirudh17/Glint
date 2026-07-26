@@ -10,6 +10,7 @@ import {
   type VisualSettings,
 } from "./store/useAppStore";
 import { ToastHost } from "./components/ui";
+import { UpdateGate } from "./update/UpdateGate";
 
 /** Payload of the `capture-complete` event emitted by tray-core after a crop. */
 type CaptureComplete = {
@@ -93,6 +94,7 @@ export default function App() {
     <>
       <RouterProvider router={router} />
       <ToastHost />
+      <UpdateGate />
     </>
   );
 }

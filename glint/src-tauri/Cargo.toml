@@ -55,4 +55,9 @@ windows = { version = "0.62", features = [
     "Win32_Graphics_Dwm",
 ] }
 raw-window-handle = "0.6"
+# In-app updater: fetch the latest GitHub release installer and launch it. A tiny
+# blocking HTTP client with bundled rustls TLS + webpki roots (no OpenSSL / system
+# cert store) and automatic redirect-following (GitHub asset URLs 302 to a CDN).
+# The download runs on a spawned thread, so a blocking client is the right shape.
+ureq = "2"
 
