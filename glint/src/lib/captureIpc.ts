@@ -73,6 +73,17 @@ export function signalOverlayReady(fetchMs: number, decodeMs: number): Promise<v
 }
 
 /**
+ * Tell the backend the overlay has painted its cleared (transparent) state and is
+ * safe to hide. The backend waits for this before `win.hide()` so the hidden
+ * window never keeps this capture's frozen frame to flash on the next cold show
+ * (see overlay.rs `teardown_all`). Errors are swallowed — a missing signal just
+ * means the backend hides on its short timeout.
+ */
+export function signalOverlayCleared(): Promise<void> {
+  return emit("overlay-cleared", {}).catch(() => {});
+}
+
+/**
  * Fetch the frozen screenshot and window list for the given monitor.
  * Maps `image_data_url` → `imageDataUrl` so TypeScript callers use camelCase.
  *

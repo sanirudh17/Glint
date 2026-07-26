@@ -20,10 +20,12 @@ import {
   getOverlayData,
   loadOverlayFrame,
   signalOverlayReady,
+  signalOverlayCleared,
   cancelCapture,
   resetCaptureLatch,
   type OverlayData,
 } from "../lib/captureIpc";
+import { nextPaint } from "./nextPaint";
 import { SelectionLayer } from "./SelectionLayer";
 import { FullscreenMode } from "./FullscreenMode";
 import { WindowMode } from "./WindowMode";
@@ -77,6 +79,22 @@ export function OverlayApp() {
     });
     return () => { un.then((f) => f()); };
   }, [monitorId]);
+
+  // Clear-before-hide handshake (see overlay.rs `teardown_all`). On every capture
+  // exit the backend emits `overlay-clear` and waits for our `overlay-cleared`
+  // before hiding this reused window. We drop the frozen frame (→ transparent
+  // empty state) and only ack once that has actually PAINTED — so the hidden
+  // window's retained GPU surface is transparent, not this capture's screenshot.
+  // Without it, a cold show after a long idle briefly composites the stale frame
+  // (the "flash of a previous screen" bug). Mirror of the decode-before-show wait.
+  useEffect(() => {
+    const un = listen("overlay-clear", async () => {
+      setData(null);
+      await nextPaint();
+      void signalOverlayCleared();
+    });
+    return () => { un.then((f) => f()); };
+  }, []);
 
   // Global Esc handler — cancel the capture from any mode.
   useEffect(() => {

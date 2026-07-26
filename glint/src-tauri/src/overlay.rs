@@ -16,6 +16,12 @@ use tauri::{
 /// or absent (e.g. a freshly built window whose listener isn't up yet).
 const READY_TIMEOUT: Duration = Duration::from_millis(300);
 
+/// How long we wait for a VISIBLE overlay to paint its cleared (transparent) state
+/// before hiding it (see `teardown_all`). The webview is warm at this point (the
+/// user just interacted with it), so the ack lands in ~1–2 frames; the cap only
+/// guards against a wedged webview so teardown never hangs.
+const CLEAR_TIMEOUT: Duration = Duration::from_millis(200);
+
 pub const OVERLAY_PREFIX: &str = "overlay-";
 
 fn build(app: &AppHandle, label: &str, monitor_id: u32) -> tauri::Result<WebviewWindow> {
@@ -118,6 +124,26 @@ pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
 
 /// Hide every overlay window (kept alive for reuse — never closed). Always called
 /// on every capture exit path so no visible click-blocking overlay is left behind.
+///
+/// Before hiding a VISIBLE overlay we clear it to its transparent empty state and
+/// wait for that to actually PAINT (the `overlay-clear` → `overlay-cleared`
+/// handshake). A hidden GPU window keeps its last-painted pixels; the last thing
+/// this overlay painted is the frozen screenshot of the capture just finished, so
+/// without the clear the NEXT capture after a long idle — when the throttled
+/// webview only repaints AFTER show() — briefly composites that stale frame. That
+/// is the "flash of a previous screen" bug. Leaving a transparent surface means a
+/// cold show reveals the live desktop for a frame (indistinguishable from the
+/// fresh frozen frame), never a different old screen. Mirror of the
+/// decode-before-show wait in `open_for_monitor`.
+///
+/// Non-blocking: the clear→ack→hide for a visible overlay runs on a short-lived
+/// worker thread. It MUST NOT run inline, because `capture_commit`/`capture_cancel`
+/// are sync commands (they execute on the main event-loop thread), and that thread
+/// has to stay free to deliver the `overlay-cleared` event — waiting on it inline
+/// would deadlock. Deferring the hide by the ~1–2 frames the paint takes is
+/// invisible (the overlay is transparent by then; the HUD opens ~200ms later).
+/// Single-monitor today: at most one overlay is ever visible, so the un-scoped
+/// `overlay-cleared` can't be crossed with another overlay's ack.
 pub fn teardown_all(app: &AppHandle) {
     let labels: Vec<String> = app
         .webview_windows()
@@ -127,7 +153,31 @@ pub fn teardown_all(app: &AppHandle) {
         .collect();
     for label in labels {
         if let Some(win) = app.get_webview_window(&label) {
-            let _ = win.hide();
+            // A never-shown pre-warmed window (or one already hidden) has no stale
+            // frame to clear — hide it inline, no wait, no worker. This is also the
+            // capture-START teardown, which must stay instant.
+            if win.is_visible().unwrap_or(false) {
+                let app = app.clone();
+                let label = label.clone();
+                std::thread::spawn(move || clear_then_hide(&app, &label));
+            } else {
+                let _ = win.hide();
+            }
         }
+    }
+}
+
+/// Clear a visible overlay to transparent, wait (bounded) for that to paint, then
+/// hide it. Runs on a worker thread (see `teardown_all`).
+fn clear_then_hide(app: &AppHandle, label: &str) {
+    let (tx, rx) = mpsc::channel::<()>();
+    let cleared_id = app.once("overlay-cleared", move |_| {
+        let _ = tx.send(());
+    });
+    let _ = app.emit_to(label, "overlay-clear", ());
+    let _ = rx.recv_timeout(CLEAR_TIMEOUT);
+    app.unlisten(cleared_id);
+    if let Some(win) = app.get_webview_window(label) {
+        let _ = win.hide();
     }
 }
