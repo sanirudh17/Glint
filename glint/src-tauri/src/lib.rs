@@ -14,6 +14,7 @@ mod settings;
 mod shell_integration;
 mod shortcuts;
 mod tray;
+mod updater;
 mod window;
 
 use capture::commands::{
@@ -247,6 +248,8 @@ pub fn run() {
             autostart_get,
             autostart_set,
             window_set_taskbar,
+            updater::app_version,
+            updater::update_install,
             capture_overlay_data,
             capture_commit,
             capture_cancel,
