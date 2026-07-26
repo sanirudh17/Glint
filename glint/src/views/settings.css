@@ -327,3 +327,79 @@
 }
 .settings-folder-actions { display: flex; gap: 8px; flex-wrap: wrap; }
 .settings-folder-actions .settings-hotkey-btn { display: inline-flex; align-items: center; gap: 5px; }
+
+/* ── Updates panel ──────────────────────────────────────────────────────────── */
+/* Framed current-version row with a compact "Check now" beside it — same bg-elev
+ * card language as the Storage paths, so the panel reads like its siblings. */
+.settings-update-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s3) var(--s4);
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+}
+.settings-update-version { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.settings-update-eyebrow {
+  font-size: var(--fz-xs);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-label);
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+.settings-update-value {
+  font-size: var(--fz-lg);
+  font-weight: var(--fw-semi);
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
+  line-height: var(--lh-tight);
+}
+
+/* Compound selector so the accent fill can't be cancelled by .settings-hotkey-btn. */
+.settings-update-check { display: inline-flex; align-items: center; gap: 6px; white-space: nowrap; }
+.settings-hotkey-btn.settings-update-check:disabled { opacity: 0.55; cursor: default; background: transparent; }
+
+.settings-update-spin { animation: settings-update-spin 0.9s linear infinite; }
+@keyframes settings-update-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .settings-update-spin { animation: none; } }
+
+/* Status line — only present once a check/install has something to report. */
+.settings-update-note {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--fz-sm);
+  color: var(--text-dim);
+  line-height: var(--lh-base);
+}
+.settings-update-note--ok > svg { color: var(--accent); flex: none; }
+.settings-update-note--error { color: var(--danger); }
+.settings-update-note--error > svg { flex: none; }
+
+/* Accent-tinted callout for an available update — mirrors .settings-hotkey-help. */
+.settings-update-callout {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s4);
+  padding: var(--s3) var(--s4);
+  border-radius: var(--r2);
+  background: var(--accent-subtle);
+}
+.settings-update-callout-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.settings-update-callout-title { font-size: var(--fz-md); font-weight: var(--fw-semi); color: var(--text); }
+.settings-update-callout-sub { font-size: var(--fz-xs); color: var(--text-dim); }
+.settings-hotkey-btn.settings-update-install {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+  background: var(--accent);
+  color: var(--accent-fg);
+  border-color: transparent;
+}
+.settings-hotkey-btn.settings-update-install:hover { background: var(--accent-hover); }
+
+.settings-update-progress { display: flex; flex-direction: column; gap: 6px; max-width: 420px; }
