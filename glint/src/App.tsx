@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import { router } from "./router";
@@ -35,25 +35,15 @@ type CaptureComplete = {
 export default function App() {
   const loadSettings = useAppStore((s) => s.loadSettings);
   const pushToast = useAppStore((s) => s.pushToast);
-  const settings = useAppStore((s) => s.settings);
-
-  // Boot veil: render NOTHING until settings (theme + accent) are ACTUALLY hydrated
-  // — gated on the store value, not a timer. This is the hard guarantee against the
-  // pink→green flash: the localStorage mirror can hold a stale accent, and any UI
-  // painted before the DB read completes flashes that stale color first. The dark
-  // veil is indistinguishable from the not-yet-painted window; the first real frame
-  // already carries the correct accent. The cap exists ONLY for environments with
-  // no backend at all (plain-Vite dev): it must be generous, because a cold SQLite
-  // open can legitimately take several hundred ms — lifting early is exactly what
-  // caused the flash this gate exists to prevent.
-  const [capExpired, setCapExpired] = useState(false);
 
   useEffect(() => {
-    const cap = window.setTimeout(() => setCapExpired(true), 2500);
+    // Hydrate settings from the DB (single async invoke, ~10ms). The head script
+    // in index.html already applied the localStorage mirror before first paint, so
+    // the first frame is already close; this just heals any stale localStorage
+    // (pink→green) without a visible transition (loadSettings disables .ready).
     loadSettings().catch(() => {
-      /* backend missing (plain Vite) — the cap lifts the veil */
+      /* backend missing (plain Vite) — keep localStorage theme */
     });
-    return () => window.clearTimeout(cap);
   }, [loadSettings]);
 
   useEffect(() => {
@@ -99,10 +89,6 @@ export default function App() {
       subs.forEach((p) => p.then((fn) => fn()));
     };
   }, [pushToast]);
-
-  if (!settings && !capExpired) {
-    return <div className="boot-veil" aria-hidden="true" />;
-  }
 
   return (
     <>
