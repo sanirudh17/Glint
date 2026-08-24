@@ -195,8 +195,11 @@
   justify-content: center;
   width: 26px;
   height: 26px;
+  padding: 0;
+  line-height: 1;
+  box-sizing: border-box;
   border: none;
-  border-radius: var(--r1);
+  border-radius: 50%;
   background: transparent;
   color: var(--text-dim);
   cursor: pointer;

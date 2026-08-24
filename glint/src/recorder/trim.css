@@ -45,7 +45,7 @@
 .trim-transport, .trim-actions { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
 .trim-spacer { flex: 1; }
 .trim-time, .trim-out { opacity: 0.85; font-variant-numeric: tabular-nums; }
-.trim-iconbtn, .trim-btn { background: #1b1d27; color: #e8e8ee; border: 1px solid rgba(255,255,255,0.12); border-radius: var(--r-btn); padding: 6px 10px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; line-height: 1; text-align: center; }
+.trim-iconbtn, .trim-btn { background: #1b1d27; color: #e8e8ee; border: 1px solid rgba(255,255,255,0.12); border-radius: var(--r-btn); padding: 6px 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; line-height: 1; text-align: center; min-width: 72px; box-sizing: border-box; }
 .trim-iconbtn:disabled, .trim-btn:disabled { opacity: 0.4; cursor: default; }
 .trim-btn--primary { background: var(--accent); border-color: var(--accent); }
 .trim-track { position: relative; height: 56px; margin: 0 12px 4px; background: #14151c; border-radius: 8px; overflow: hidden; cursor: ew-resize; touch-action: none; }
