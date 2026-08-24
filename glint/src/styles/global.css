@@ -30,7 +30,7 @@ html {
 }
 
 body {
-  background: var(--bg);
+  background: var(--bg, #0C0D0F);
   color: var(--text);
   font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
                "Segoe UI Variable Text", "Segoe UI", sans-serif;
@@ -78,6 +78,7 @@ button {
   font-family: inherit;
   font-size: var(--fz-md);
   font-weight: var(--fw-medium);
+  line-height: 1;
   cursor: pointer;
   border: none;
   background: none;

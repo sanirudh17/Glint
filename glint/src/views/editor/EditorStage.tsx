@@ -525,15 +525,32 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     if (!id) return;
     const stage = e.target.getStage();
     if (!stage) return;
-    const pt = imgPoint(stage);
-    if (!pt) return;
-    let { x, y } = pt;
-    // Clamp to image bounds with a 0.5px inset when near the border.
-    // Drawing exactly on the 0/width edge made the clipped layer thrash
-    // (the shape sits on the clip boundary) → visible stutter.
+    let pt = imgPoint(stage);
+    let x: number, y: number;
+    if (!pt) {
+      // Pointer is outside the stage container (e.g. dragged below the window
+      // or exactly on the OS border where getPointerPosition is null). Fall back
+      // to the DOM event's client coords so the shape follows the cursor to the
+      // edge naturally instead of freezing.
+      const evt = e.evt as MouseEvent;
+      const container = stage.container();
+      const rect = container.getBoundingClientRect();
+      const sx = rect.width ? stage.width() / rect.width : 1;
+      const sy = rect.height ? stage.height / rect.height : 1;
+      const rawX = (evt.clientX - rect.left) * sx;
+      const rawY = (evt.clientY - rect.top) * sy;
+      x = rawX - layout.contentX + layout.cropX;
+      y = rawY - layout.contentY + layout.cropY;
+    } else {
+      x = pt.x; y = pt.y;
+    }
+    // Clamp to image bounds exactly — no inset. The shape should touch the
+    // screenshot border naturally; the previous 0.5px inset made it look like
+    // it "stops at a distance above the border". Transformer skipping and
+    // perfectDrawEnabled already prevent the thrash at the clip boundary.
     if (base) {
-      x = Math.max(0.5, Math.min(base.width - 0.5, x));
-      y = Math.max(0.5, Math.min(base.height - 0.5, y));
+      x = Math.max(0, Math.min(base.width, x));
+      y = Math.max(0, Math.min(base.height, y));
     }
     const a = useEditorStore.getState().annotations.find((n) => n.id === id);
     if (!a) return;

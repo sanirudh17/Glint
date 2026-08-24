@@ -10,6 +10,8 @@
 
 /* ─── Global (theme-independent) ──────────────────────────────────────── */
 :root {
+  /* Default substrate before JS sets data-theme — prevents white flash */
+  --bg: #0C0D0F;
   /* Spacing — 4-pt grid */
   --s1: 4px;
   --s2: 8px;

@@ -35,6 +35,7 @@ pub fn ensure_editor_window(app: &AppHandle) -> tauri::Result<()> {
         .center()
         .focused(true)
         .visible(true)
+        .background_color(tauri::window::Color(12, 13, 15, 255))
         .build()?;
     // Kill OS open transition so editor snaps in instantly, not fading.
     // The dark substrate (index.html inline var(--bg,#0C0D0F) + --bg set early)
