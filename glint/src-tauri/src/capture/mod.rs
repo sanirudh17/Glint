@@ -248,6 +248,7 @@ pub(crate) fn toast(app: &AppHandle, msg: &str) {
 pub(crate) fn restore_main_window(app: &AppHandle) {
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.show();
+        let _ = win.unminimize();
         let _ = win.set_focus();
     }
 }
