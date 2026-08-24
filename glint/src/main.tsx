@@ -1,5 +1,6 @@
 import React from "react";
 import ReactDOM from "react-dom/client";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import "./styles/global.css";
 import App from "./App";
 import { applyTheme, applyAccent, THEME_STORAGE_KEY, ACCENT_STORAGE_KEY, type Theme } from "./store/useAppStore";
@@ -57,3 +58,18 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <App />
   </React.StrictMode>,
 );
+
+// Reveal the main window on the very first painted animation frame.
+// Because Rust seeds window.__GLINT_BOOT__ and background_color, the window snaps onto screen
+// 100% fully painted, themed, and rendered — with 0s black screen, 0s white screen, and 0s flash.
+try {
+  const win = getCurrentWindow();
+  if (win.label === "main") {
+    requestAnimationFrame(() => {
+      void win.show();
+      void win.setFocus();
+    });
+  }
+} catch {
+  /* not running under Tauri (plain Vite) */
+}

@@ -1,7 +1,6 @@
 import { useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { router } from "./router";
 import {
   useAppStore,

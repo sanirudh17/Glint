@@ -168,6 +168,12 @@ pub fn run() {
                     r#"window.__GLINT_BOOT__ = {{ theme: "{theme_str}", accent: "{accent}" }};"#
                 );
 
+                let bg_color = if theme_str == "light" {
+                    tauri::window::Color(246, 247, 249, 255)
+                } else {
+                    tauri::window::Color(12, 13, 15, 255)
+                };
+
                 let builder = tauri::WebviewWindowBuilder::new(
                     app,
                     "main",
@@ -180,14 +186,27 @@ pub fn run() {
                 .transparent(false)
                 .resizable(true)
                 .center()
-                .visible(true)
+                .visible(false)
                 .skip_taskbar(!show_in_taskbar)
-                .initialization_script(&init_script);
+                .initialization_script(&init_script)
+                .background_color(bg_color);
 
                 if let Ok(win) = builder.build() {
                     // Kill OS open/show transition so the main window snaps in instantly on cold start.
                     crate::window::disable_transitions(&win);
                 }
+
+                // Safety valve: ensure the main window is shown even if webview script fails.
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                    if let Some(win) = h.get_webview_window("main") {
+                        if !win.is_visible().unwrap_or(true) {
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                    }
+                });
             }
 
             // Self-heal the Explorer "Open in Glint" verb: if enabled (default true)
