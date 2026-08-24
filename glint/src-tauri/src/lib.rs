@@ -226,26 +226,27 @@ pub fn run() {
                 }
             }
 
-            // Pre-warm background windows and sidecars once the main window is up and settled (1.5s after launch).
-            // Staggered so startup has zero webview contention, but opening Editor,
+            // Pre-warm background windows and sidecars right after the main window is up (300ms after launch).
+            // Staggered by 150ms so startup has zero webview contention, but opening Editor,
             // Trim, Overlay, or Region Selector is instantaneous on the very first click.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(1500));
+                    std::thread::sleep(std::time::Duration::from_millis(300));
                     crate::editor::window::prewarm(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    std::thread::sleep(std::time::Duration::from_millis(150));
                     crate::recorder::windows::prewarm_trim_window(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(250));
-                    crate::overlay::prewarm(&h, 0);
-                    std::thread::sleep(std::time::Duration::from_millis(250));
-                    crate::recorder::windows::prewarm_region_selector(&h);
+                    std::thread::sleep(std::time::Duration::from_millis(150));
                     // Pre-warm ffprobe sidecar in OS disk cache and antivirus scanner
                     if let Ok(cmd) = h.shell().sidecar("ffprobe") {
                         tauri::async_runtime::spawn(async move {
                             let _ = cmd.args(["-version"]).output().await;
                         });
                     }
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    crate::overlay::prewarm(&h, 0);
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    crate::recorder::windows::prewarm_region_selector(&h);
                 });
             }
 

@@ -14,12 +14,13 @@ const RecCam = lazy(() => import("./recorder/RecCam").then((m) => ({ default: m.
 const FxOverlay = lazy(() => import("./recorder/FxOverlay").then((m) => ({ default: m.FxOverlay })));
 import "./components/shell.css";
 
+import EditorView from "./views/EditorView";
+import { TrimView } from "./recorder/TrimView";
+
 // Heavy, on-demand routes are code-split so their JS (Konva in the editor, the trim
 // timeline/video, etc.) is NOT loaded into every window's renderer.
 const LibraryView = lazy(() => import("./views/LibraryView"));
 const SettingsView = lazy(() => import("./views/SettingsView"));
-const EditorView = lazy(() => import("./views/EditorView"));
-const TrimView = lazy(() => import("./recorder/TrimView").then((m) => ({ default: m.TrimView })));
 const OcrPanel = lazy(() => import("./ocr/OcrPanel").then((m) => ({ default: m.OcrPanel })));
 
 /** Suspense wrapper for a lazily-loaded route element. Fallback is empty — the chunk loads
@@ -93,7 +94,7 @@ export const router = createHashRouter([
      * is the sole root. URL: tauri://localhost/#/rec-trim
      */
     path: "/rec-trim",
-    element: lazyRoute(<TrimView />),
+    element: <TrimView />,
   },
   {
     /**
@@ -114,7 +115,7 @@ export const router = createHashRouter([
      * EditorState in Rust and raise this window. URL: tauri://localhost/#/editor
      */
     path: "/editor",
-    element: lazyRoute(<EditorView />),
+    element: <EditorView />,
   },
   {
     path: "/",
