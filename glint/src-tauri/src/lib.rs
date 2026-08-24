@@ -17,6 +17,7 @@ mod tray;
 mod updater;
 mod window;
 use tauri::{Emitter, Manager};
+use tauri_plugin_shell::ShellExt;
 use capture::commands::{
     capture_cancel, capture_commit, capture_copy, capture_copy_path, capture_delete, capture_open,
     capture_overlay_data, capture_rename, capture_reveal, captures_list, drag_blank_icon, reveal_path,
@@ -225,20 +226,26 @@ pub fn run() {
                 }
             }
 
-            // Pre-warm background windows once the main window is up and settled (2s after launch).
-            // Staggered by 300ms so startup has zero webview contention, but opening Editor,
+            // Pre-warm background windows and sidecars once the main window is up and settled (1.5s after launch).
+            // Staggered so startup has zero webview contention, but opening Editor,
             // Trim, Overlay, or Region Selector is instantaneous on the very first click.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(2000));
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
                     crate::editor::window::prewarm(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    std::thread::sleep(std::time::Duration::from_millis(250));
                     crate::recorder::windows::prewarm_trim_window(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    std::thread::sleep(std::time::Duration::from_millis(250));
                     crate::overlay::prewarm(&h, 0);
-                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    std::thread::sleep(std::time::Duration::from_millis(250));
                     crate::recorder::windows::prewarm_region_selector(&h);
+                    // Pre-warm ffprobe sidecar in OS disk cache and antivirus scanner
+                    if let Ok(cmd) = h.shell().sidecar("ffprobe") {
+                        tauri::async_runtime::spawn(async move {
+                            let _ = cmd.args(["-version"]).output().await;
+                        });
+                    }
                 });
             }
 
@@ -266,25 +273,11 @@ pub fn run() {
                 let label = window.label().to_string();
                 if label == "main" {
                     api.prevent_close();
-                    // Taskbar preview bug: a hidden window's DWM thumbnail is a
-                    // white placeholder with the app icon. If the window is in the
-                    // taskbar (show_in_taskbar=true), minimize so the thumbnail
-                    // stays as the last-painted frame (or minimized icon state).
-                    // If it's not in the taskbar, hide is fine (no preview).
-                    let show_in_taskbar = window
-                        .try_state::<SettingsState>()
-                        .map(|s| s.0.lock().unwrap().show_in_taskbar)
-                        .unwrap_or(true);
-                    if show_in_taskbar {
-                        let _ = window.minimize();
-                    } else {
-                        let _ = window.hide();
-                    }
+                    // Close to tray: hide the window so it is removed from the screen and taskbar.
+                    // The app continues running in the background system tray.
+                    let _ = window.hide();
                     // Drop any in-memory editing source when the main window is
-                    // dismissed so a capture's pixels don't linger past the
-                    // session. Invisible to an open editor (its base lives in the
-                    // frontend store); the next entry point repopulates this.
-                    use tauri::Manager;
+                    // dismissed so a capture's pixels don't linger past the session.
                     if let Some(ed) = window.try_state::<crate::editor::EditorState>() {
                         *ed.0.lock().unwrap() = None;
                     }

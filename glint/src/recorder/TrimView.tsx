@@ -436,6 +436,8 @@ export function TrimView() {
             className="trim-video"
             src={src}
             preload="auto"
+            onLoadedData={() => setMediaReady(true)}
+            onLoadedMetadata={() => setMediaReady(true)}
             onCanPlay={() => setMediaReady(true)}
             onSeeked={onSeeked}
             onPlay={() => setPlaying(true)}
