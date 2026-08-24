@@ -5,15 +5,14 @@ import App from "./App";
 import { applyTheme, applyAccent, THEME_STORAGE_KEY, ACCENT_STORAGE_KEY, type Theme } from "./store/useAppStore";
 
 // Apply the persisted theme + accent SYNCHRONOUSLY, before React's first paint, so the
-// app never flashes the tokens.css default periwinkle accent while loadSettings() does
-// its async SQLite round-trip. localStorage is shared across all Glint windows (one
-// origin), so every window — main, HUD, overlay, selector — boots to the user's colors.
-// loadSettings() later re-applies the same values from the DB (no visible change).
+// app never flashes any default accent while loadSettings() does its async SQLite round-trip.
+// Rust's initialization_script passes window.__GLINT_BOOT__ directly from SQLite glint.db.
 try {
-  const storedTheme = localStorage.getItem(THEME_STORAGE_KEY);
-  applyTheme((storedTheme as Theme | null) ?? "dark");
-  const storedAccent = localStorage.getItem(ACCENT_STORAGE_KEY);
-  if (storedAccent) applyAccent(storedAccent);
+  const boot = (window as unknown as { __GLINT_BOOT__?: { theme?: string; accent?: string } }).__GLINT_BOOT__;
+  const initialTheme = (boot?.theme as Theme | undefined) ?? (localStorage.getItem(THEME_STORAGE_KEY) as Theme | null) ?? "dark";
+  applyTheme(initialTheme);
+  const initialAccent = boot?.accent ?? localStorage.getItem(ACCENT_STORAGE_KEY) ?? "#2BAAAD";
+  if (initialAccent) applyAccent(initialAccent);
 } catch {
   document.documentElement.dataset.theme = "dark";
 }

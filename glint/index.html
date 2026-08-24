@@ -46,12 +46,21 @@
             "#d4870a": { hover: "#E0951A", subtle: "rgba(212, 135, 10, 0.12)" },
             "#d95f76": { hover: "#E4708A", subtle: "rgba(217, 95, 118, 0.12)" },
           };
-          var storedTheme = null;
-          var storedAccent = null;
-          try {
-            storedTheme = localStorage.getItem(THEME_KEY);
-            storedAccent = localStorage.getItem(ACCENT_KEY);
-          } catch (e) {}
+          var boot = window.__GLINT_BOOT__;
+          var storedTheme = (boot && boot.theme) || null;
+          var storedAccent = (boot && boot.accent) || null;
+          if (!storedTheme || !storedAccent) {
+            try {
+              if (!storedTheme) storedTheme = localStorage.getItem(THEME_KEY);
+              if (!storedAccent) storedAccent = localStorage.getItem(ACCENT_KEY);
+            } catch (e) {}
+          }
+          if (storedTheme) {
+            try { localStorage.setItem(THEME_KEY, storedTheme); } catch (e) {}
+          }
+          if (storedAccent) {
+            try { localStorage.setItem(ACCENT_KEY, storedAccent); } catch (e) {}
+          }
 
           var theme = storedTheme || "dark";
           if (theme === "system") {

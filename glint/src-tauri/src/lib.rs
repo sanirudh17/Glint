@@ -150,16 +150,42 @@ pub fn run() {
             // registering earlier would arm the built-in defaults and ignore the user's keys.
             shortcuts::register(app.handle())?;
 
-            // Apply the persisted taskbar preference to the main window.
+            // Build the main window dynamically seeded with the persisted SQLite theme and accent.
+            // This guarantees window.__GLINT_BOOT__ is already populated before ANY HTML, CSS, or JS runs.
             {
                 let state = app.state::<SettingsState>();
-                let show = state.0.lock().unwrap().show_in_taskbar;
-                if let Some(win) = app.get_webview_window("main") {
-                    let _ = win.set_skip_taskbar(!show);
-                    // Kill the OS open/show transition so the main window snaps
-                    // in instantly on cold start (no fade/scale). Persistent for
-                    // the window's lifetime, so every later show() (tray restore,
-                    // capture restore) is also instantaneous.
+                let (theme_str, accent, show_in_taskbar) = {
+                    let s = state.0.lock().unwrap();
+                    let t = match s.theme {
+                        crate::settings::Theme::Dark => "dark",
+                        crate::settings::Theme::Light => "light",
+                        crate::settings::Theme::System => "system",
+                    };
+                    (t, s.accent.clone(), s.show_in_taskbar)
+                };
+
+                let init_script = format!(
+                    r#"window.__GLINT_BOOT__ = {{ theme: "{theme_str}", accent: "{accent}" }};"#
+                );
+
+                let builder = tauri::WebviewWindowBuilder::new(
+                    app,
+                    "main",
+                    tauri::WebviewUrl::default(),
+                )
+                .title("Glint")
+                .inner_size(1100.0, 720.0)
+                .min_inner_size(880.0, 560.0)
+                .decorations(false)
+                .transparent(false)
+                .resizable(true)
+                .center()
+                .visible(true)
+                .skip_taskbar(!show_in_taskbar)
+                .initialization_script(&init_script);
+
+                if let Ok(win) = builder.build() {
+                    // Kill OS open/show transition so the main window snaps in instantly on cold start.
                     crate::window::disable_transitions(&win);
                 }
             }

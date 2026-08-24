@@ -10,22 +10,7 @@
     "frontendDist": "../dist"
   },
   "app": {
-    "windows": [
-      {
-        "title": "Glint",
-        "label": "main",
-        "width": 1100,
-        "height": 720,
-        "minWidth": 880,
-        "minHeight": 560,
-        "decorations": false,
-        "transparent": false,
-        "resizable": true,
-        "center": true,
-        "visible": true,
-        "backgroundColor": "#0C0D0F"
-      }
-    ],
+    "windows": [],
     "security": {
       "csp": null,
       "assetProtocol": {

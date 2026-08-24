@@ -57,10 +57,10 @@
   --dur:       140ms;
   --dur-slow:  240ms;
 
-  /* Accent — periwinkle-blue, applied sparingly */
-  --accent:        #5B7CFA;
-  --accent-hover:  #6D8BFA;
-  --accent-subtle: rgba(91, 124, 250, 0.12);
+  /* Accent */
+  --accent:        #2BAAAD;
+  --accent-hover:  #3DBBBF;
+  --accent-subtle: rgba(43, 170, 173, 0.12);
 
   /* Danger */
   --danger:        #E5544B;
