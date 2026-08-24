@@ -16,7 +16,7 @@ mod shortcuts;
 mod tray;
 mod updater;
 mod window;
-
+use tauri::{Emitter, Manager};
 use capture::commands::{
     capture_cancel, capture_commit, capture_copy, capture_copy_path, capture_delete, capture_open,
     capture_overlay_data, capture_rename, capture_reveal, captures_list, drag_blank_icon, reveal_path,
@@ -225,14 +225,19 @@ pub fn run() {
                 }
             }
 
-            // Pre-warm the capture overlay and region selector when completely idle (8s after launch).
-            // Zero webview contention during startup.
+            // Pre-warm background windows once the main window is up and settled (2s after launch).
+            // Staggered by 300ms so startup has zero webview contention, but opening Editor,
+            // Trim, Overlay, or Region Selector is instantaneous on the very first click.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(8000));
+                    std::thread::sleep(std::time::Duration::from_millis(2000));
+                    crate::editor::window::prewarm(&h);
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    crate::recorder::windows::prewarm_trim_window(&h);
+                    std::thread::sleep(std::time::Duration::from_millis(300));
                     crate::overlay::prewarm(&h, 0);
-                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    std::thread::sleep(std::time::Duration::from_millis(300));
                     crate::recorder::windows::prewarm_region_selector(&h);
                 });
             }
@@ -283,14 +288,18 @@ pub fn run() {
                     if let Some(ed) = window.try_state::<crate::editor::EditorState>() {
                         *ed.0.lock().unwrap() = None;
                     }
-                } else if label == crate::editor::window::EDITOR_LABEL
-                    || label == crate::recorder::windows::TRIM_LABEL
-                {
-                    // Keep the editor + trim webviews ALIVE: hide instead of destroy.
-                    // They are pre-mounted, so the next open shows instantly with zero
-                    // cold-build delay; reopening always re-targets + reloads first.
+                } else if label == crate::editor::window::EDITOR_LABEL {
+                    // Keep the editor webview ALIVE: hide instead of destroy.
+                    // Notify frontend so it clears any displayed image from memory.
                     api.prevent_close();
                     let _ = window.hide();
+                    let _ = window.emit("editor-close", ());
+                } else if label == crate::recorder::windows::TRIM_LABEL {
+                    // Keep the trim webview ALIVE: hide instead of destroy.
+                    // Notify frontend so it resets the video player.
+                    api.prevent_close();
+                    let _ = window.hide();
+                    let _ = window.emit("rec-trim-close", ());
                 }
             }
             // Drop a pin's in-memory bytes when its window is destroyed (any

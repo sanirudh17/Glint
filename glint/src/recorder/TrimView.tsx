@@ -122,16 +122,21 @@ export function TrimView() {
   );
 
   // Load (or reload) the trim target. Runs on mount AND on `rec-trim-reload` — the
+  // Load (or reload) the trim target. Runs on mount AND on `rec-trim-reload` — the
   // window is pre-warmed hidden at startup and REUSED across opens, so Rust retargets
   // RecorderTrimState and emits this event instead of rebuilding the webview. Each run
   // resets the full edit state for the new recording.
   const loadTarget = useCallback(() => {
+    setSrc(null);
+    setTarget(null);
+    setProbe(null);
     setWaveform(null);
     setCam(null);
     setCamSrc(null);
     setErr(null);
     setExporting(null);
     setMediaReady(false);
+    setEdit({ clips: [], fadeIn: 0, fadeOut: 0 });
     trimTarget().then(async (t) => {
       if (!t) { setErr("No recording to trim."); return; }
       setTarget(t);
@@ -178,6 +183,21 @@ export function TrimView() {
     const un = listen("rec-trim-reload", () => { void loadTarget(); });
     return () => { un.then((f) => f()).catch(() => {}); };
   }, [loadTarget]);
+
+  // When closed/hidden, wipe previous video and media state from DOM buffer.
+  useEffect(() => {
+    const un = listen("rec-trim-close", () => {
+      setSrc(null);
+      setTarget(null);
+      setProbe(null);
+      setWaveform(null);
+      setCam(null);
+      setCamSrc(null);
+      setMediaReady(false);
+      setEdit({ clips: [], fadeIn: 0, fadeOut: 0 });
+    });
+    return () => { un.then((f) => f()).catch(() => {}); };
+  }, []);
 
   useEffect(() => {
     const un = listen<number>("rec-trim-progress", (e) => setExporting(Math.round(e.payload)));

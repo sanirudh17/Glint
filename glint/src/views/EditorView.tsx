@@ -191,17 +191,13 @@ export default function EditorView() {
     return () => cancelAnimationFrame(r);
   }, [base]);
 
-  // Reopen path: project_open emits editor-open after setting EditorState; if we
+  // Reopen path: project_open / editor_open emits editor-open after setting EditorState; if we
   // are already on /editor the route won't remount, so reload here.
   useEffect(() => {
-    // Reload when a project is opened while the editor is ALREADY mounted (the
-    // route doesn't remount). On a cold open the editor-open event fires before
-    // this listener subscribes, so only the mount effect loads — no double-load.
-    // Track the in-flight reload's canceller so unmount (or a new editor-open)
-    // can abort a pending image load — otherwise its alive guard stays true and
-    // loadDoc could repopulate the store after reset() has cleared it.
     let cancelReload: (() => void) | null = null;
     const p = listen("editor-open", () => {
+      // 1. Immediately wipe any previous image and annotations so there is zero stale preview flash.
+      reset();
       cancelReload?.();
       cancelReload = loadFromSource();
     });
@@ -209,15 +205,22 @@ export default function EditorView() {
       cancelReload?.();
       p.then((un) => un());
     };
-  }, [loadFromSource]);
+  }, [loadFromSource, reset]);
+
+  // When the editor window is hidden/closed, immediately wipe store state so no image
+  // lingers in the webview canvas buffer while idle.
+  useEffect(() => {
+    const un = listen("editor-close", () => {
+      reset();
+    });
+    return () => {
+      un.then((f) => f()).catch(() => {});
+    };
+  }, [reset]);
 
   if (!base) {
-    return (
-      <div className="editor-empty">
-        <span className="label">Editor</span>
-        <p>Take a capture and choose Annotate, or open one from the Library.</p>
-      </div>
-    );
+    // Solid dark substrate while loading the next image — zero placeholder flash.
+    return <div className="editor-view" style={{ background: "var(--bg)" }} />;
   }
 
   return (
