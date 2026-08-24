@@ -218,11 +218,6 @@ export default function EditorView() {
     };
   }, [reset]);
 
-  if (!base) {
-    // Solid dark substrate while loading the next image — zero placeholder flash.
-    return <div className="editor-view" style={{ background: "var(--bg)" }} />;
-  }
-
   return (
     <div className="editor-view">
       <div className="editor-topbar">
@@ -234,6 +229,7 @@ export default function EditorView() {
             onClick={() => toggleFrame()}
             title="Frame & background"
             aria-pressed={frameEnabled}
+            disabled={!base}
           >
             <FrameIcon size={16} strokeWidth={1.75} /> Frame
           </button>
@@ -245,6 +241,7 @@ export default function EditorView() {
               onClick={() => setCornersOpen((v) => !v)}
               title="Round the image corners (trims to transparent on export)"
               aria-pressed={cornersOpen}
+              disabled={!base}
             >
               <SquareRoundCorner size={16} strokeWidth={1.75} /> Corners
             </button>
@@ -254,7 +251,11 @@ export default function EditorView() {
       </div>
       <div className="editor-main">
         <ToolRail />
-        <EditorStage ref={stageRef} />
+        {base ? (
+          <EditorStage ref={stageRef} />
+        ) : (
+          <div className="editor-stage" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }} />
+        )}
         {frameEnabled && <FramePanel />}
         {!frameEnabled && cornersOpen && <CornersPanel />}
       </div>

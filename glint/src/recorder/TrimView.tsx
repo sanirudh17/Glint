@@ -138,7 +138,7 @@ export function TrimView() {
     setMediaReady(false);
     setEdit({ clips: [], fadeIn: 0, fadeOut: 0 });
     trimTarget().then(async (t) => {
-      if (!t) { setErr("No recording to trim."); return; }
+      if (!t) { return; }
       setTarget(t);
       setSrc(convertFileSrc(t.path));
       try {
