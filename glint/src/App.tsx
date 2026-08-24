@@ -35,35 +35,24 @@ type CaptureComplete = {
 export default function App() {
   const loadSettings = useAppStore((s) => s.loadSettings);
   const pushToast = useAppStore((s) => s.pushToast);
+  const settings = useAppStore((s) => s.settings);
 
-  // Boot veil: render NOTHING until settings (theme + accent) are hydrated from
-  // the DB. This is the hard guarantee against the pink→green flash: the stale
-  // localStorage mirror may hold an old accent, so any UI rendered before the DB
-  // read completes can flash the wrong color. A dark veil matching the window
-  // background is indistinguishable from the not-yet-painted window, and the first
-  // real frame the user sees is already styled with the correct accent. The veil
-  // lifts on hydration OR after a short cap (plain-Vite dev without the backend).
-  const [booted, setBooted] = useState(false);
+  // Boot veil: render NOTHING until settings (theme + accent) are ACTUALLY hydrated
+  // — gated on the store value, not a timer. This is the hard guarantee against the
+  // pink→green flash: the localStorage mirror can hold a stale accent, and any UI
+  // painted before the DB read completes flashes that stale color first. The dark
+  // veil is indistinguishable from the not-yet-painted window; the first real frame
+  // already carries the correct accent. The cap exists ONLY for environments with
+  // no backend at all (plain-Vite dev): it must be generous, because a cold SQLite
+  // open can legitimately take several hundred ms — lifting early is exactly what
+  // caused the flash this gate exists to prevent.
+  const [capExpired, setCapExpired] = useState(false);
 
   useEffect(() => {
-    let done = false;
-    const finish = () => {
-      if (!done) {
-        done = true;
-        setBooted(true);
-      }
-    };
-    // Cap: never block boot more than 400ms (backend missing / slow disk).
-    const cap = window.setTimeout(finish, 400);
-    loadSettings()
-      .catch(() => {
-        // Backend not ready (e.g., running plain Vite without Tauri) — the cap
-        // lifts the veil and main.tsx's pre-paint fallback theme applies.
-      })
-      .finally(() => {
-        window.clearTimeout(cap);
-        finish();
-      });
+    const cap = window.setTimeout(() => setCapExpired(true), 2500);
+    loadSettings().catch(() => {
+      /* backend missing (plain Vite) — the cap lifts the veil */
+    });
     return () => window.clearTimeout(cap);
   }, [loadSettings]);
 
@@ -111,7 +100,7 @@ export default function App() {
     };
   }, [pushToast]);
 
-  if (!booted) {
+  if (!settings && !capExpired) {
     return <div className="boot-veil" aria-hidden="true" />;
   }
 

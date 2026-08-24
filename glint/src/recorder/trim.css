@@ -42,6 +42,11 @@
   padding: 16px;
   color: #ff8585;
 }
+/* Boot gate: while the video's first frame is decoding, keep every child mounted
+   (the <video> must stay in the DOM to load) but invisible — the window itself is
+   already open on its dark substrate, and transport/timeline/waveform/video then
+   appear TOGETHER instead of the visualizer popping in before the picture. */
+.trim-root.is-booting > * { visibility: hidden; }
 .trim-transport, .trim-actions { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
 .trim-spacer { flex: 1; }
 .trim-time, .trim-out { opacity: 0.85; font-variant-numeric: tabular-nums; }

@@ -34,6 +34,13 @@ export function TrimView() {
   const [src, setSrc] = useState<string | null>(null);
   const [probe, setProbe] = useState<ProbeResult | null>(null);
   const [err, setErr] = useState<string | null>(null);
+  // First-paint gate: the window opens instantly, but its contents stay hidden
+  // until the video's first frame is actually decodable (onCanPlay). Without this
+  // the chrome/timeline/waveform pop in BEFORE the video on a cold first open,
+  // which reads as "loads the visualizer and then the video". Everything then
+  // appears together, once. A safety timeout covers pathological media that never
+  // reaches canplay so the UI can never stay hidden.
+  const [mediaReady, setMediaReady] = useState(false);
   type EditState = { clips: Clip[]; fadeIn: number; fadeOut: number };
   const [edit, setEdit] = useState<EditState>({ clips: [], fadeIn: 0, fadeOut: 0 });
   const [undoStack, setUndoStack] = useState<EditState[]>([]);
@@ -124,6 +131,7 @@ export function TrimView() {
     setCamSrc(null);
     setErr(null);
     setExporting(null);
+    setMediaReady(false);
     trimTarget().then(async (t) => {
       if (!t) { setErr("No recording to trim."); return; }
       setTarget(t);
@@ -155,6 +163,14 @@ export function TrimView() {
   useEffect(() => {
     void loadTarget();
   }, [loadTarget]);
+
+  // Safety valve: if the video never reaches canplay (corrupt file edge cases),
+  // reveal the UI anyway after a grace period so it can't stay blank.
+  useEffect(() => {
+    if (mediaReady) return;
+    const t = window.setTimeout(() => setMediaReady(true), 3000);
+    return () => window.clearTimeout(t);
+  }, [mediaReady]);
 
   // Reopen path: the window already exists (pre-warmed / previously opened), so Rust
   // re-stashes the target and asks us to reload it in place — instant, no rebuild.
@@ -387,8 +403,12 @@ export function TrimView() {
 
   if (err) return <div className="trim-root"><div className="trim-error">{err}</div></div>;
 
+  // Contents stay mounted (the <video> must be in the DOM to load/decode) but
+  // invisible until its first frame is ready — then everything appears together.
+  const booting = !mediaReady;
+
   return (
-    <div className="trim-root">
+    <div className={`trim-root${booting ? " is-booting" : ""}`}>
       <div className="trim-stage">
         {src && (
           <video
@@ -396,6 +416,7 @@ export function TrimView() {
             className="trim-video"
             src={src}
             preload="auto"
+            onCanPlay={() => setMediaReady(true)}
             onSeeked={onSeeked}
             onPlay={() => setPlaying(true)}
             onPause={() => setPlaying(false)}
