@@ -155,6 +155,11 @@ pub fn run() {
                 let show = app.state::<SettingsState>().0.lock().unwrap().show_in_taskbar;
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.set_skip_taskbar(!show);
+                    // Kill the OS open/show transition so the main window snaps
+                    // in instantly on cold start (no fade/scale). Persistent for
+                    // the window's lifetime, so every later show() (tray restore,
+                    // capture restore) is also instantaneous.
+                    crate::window::disable_transitions(&win);
                 }
             }
 
@@ -177,16 +182,20 @@ pub fn run() {
             // Pre-warm the focus-taking transient webviews (hidden) so the first use
             // doesn't pay the webview-creation cost — the dominant source of the open
             // delay: the capture OVERLAY and the recording region SELECTOR. Both are safe
-            // to keep alive and reuse because they take focus on show; the HUD is NOT
-            // pre-warmed/reused (it must stay focus-less, and a hidden focus-less WebView2
-            // stops repainting after a few cycles). Off-thread + delayed so it never
-            // blocks startup.
+            // to keep alive and reuse because they take focus on show. The HUD is now
+            // also pre-warmed (hidden but alive) so its first capture doesn't pay a
+            // cold build cost while the system is under load — the main source of the
+            // "HUD fails to appear under load" bug. A pre-warmed hidden HUD still
+            // warms the renderer; it is positioned + shown only when a capture lands.
+            // Off-thread + delayed so it never blocks startup.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
                     std::thread::sleep(std::time::Duration::from_millis(500));
                     crate::overlay::prewarm(&h, 0);
                     crate::recorder::windows::prewarm_region_selector(&h);
+                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    crate::hud::prewarm(&h);
                 });
             }
 
@@ -213,7 +222,20 @@ pub fn run() {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
                 if window.label() == "main" {
                     api.prevent_close();
-                    let _ = window.hide();
+                    // Taskbar preview bug: a hidden window's DWM thumbnail is a
+                    // white placeholder with the app icon. If the window is in the
+                    // taskbar (show_in_taskbar=true), minimize so the thumbnail
+                    // stays as the last-painted frame (or minimized icon state).
+                    // If it's not in the taskbar, hide is fine (no preview).
+                    let show_in_taskbar = window
+                        .try_state::<SettingsState>()
+                        .map(|s| s.0.lock().unwrap().show_in_taskbar)
+                        .unwrap_or(true);
+                    if show_in_taskbar {
+                        let _ = window.minimize();
+                    } else {
+                        let _ = window.hide();
+                    }
                     // Drop any in-memory editing source when the window is
                     // dismissed so a capture's pixels don't linger past the
                     // session. Invisible to an open editor (its base lives in the

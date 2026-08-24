@@ -83,7 +83,7 @@
   box-sizing: border-box; flex: none; padding: 0;
   width: 28px; height: 24px; border-radius: var(--r-btn);
   border: 1px solid var(--border); background: transparent;
-  color: var(--text-dim); cursor: pointer; font-size: var(--fz-xs);
+  color: var(--text-dim); cursor: pointer; font-size: var(--fz-xs); line-height: 1; text-align: center;
 }
 .editor-width--active { border-color: var(--accent); color: var(--text); }
 /* Word-labelled toggles (e.g. Solid / Pixel) need room to breathe — the fixed
@@ -93,7 +93,7 @@
   box-sizing: border-box; flex: none;
   height: 24px; padding: 0 10px; border-radius: var(--r-btn);
   border: 1px solid var(--border); background: transparent;
-  color: var(--text-dim); cursor: pointer; font-size: var(--fz-xs); white-space: nowrap;
+  color: var(--text-dim); cursor: pointer; font-size: var(--fz-xs); white-space: nowrap; line-height: 1; text-align: center;
 }
 .editor-toggle--active { border-color: var(--accent); color: var(--text); }
 .editor-fillgroup { display: inline-flex; align-items: center; gap: 6px; }
@@ -110,7 +110,7 @@
 .editor-tool {
   display: inline-flex; align-items: center; justify-content: center;
   width: 36px; height: 36px; border-radius: var(--r-btn);
-  border: none; background: transparent; color: var(--text-dim); cursor: pointer;
+  border: none; background: transparent; color: var(--text-dim); cursor: pointer; line-height: 1;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .editor-tool:hover { background: var(--bg-elev2); color: var(--text); }
@@ -164,10 +164,10 @@
 }
 .editor-status { font-size: var(--fz-xs); color: var(--text-dim); margin-right: var(--s2); }
 .editor-export-btn {
-  display: inline-flex; align-items: center; gap: var(--s2);
+  display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
   height: 30px; padding: 0 var(--s3);
   border: 1px solid var(--border); border-radius: var(--r-btn);
-  background: var(--bg); color: var(--text); cursor: pointer; font-size: var(--fz-sm);
+  background: var(--bg); color: var(--text); cursor: pointer; font-size: var(--fz-sm); line-height: 1; text-align: center;
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .editor-export-btn:hover { border-color: var(--border-strong); }

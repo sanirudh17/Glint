@@ -31,6 +31,8 @@ fn is_real_modifier(tok: &str) -> bool {
 }
 
 /// Known non-modifier main keys (matches the frontend mapper's output tokens).
+/// Includes navigation keys from the Typr-proven list so every codeToKeyToken
+/// output is accepted.
 fn is_valid_key(tok: &str) -> bool {
     let u = tok.to_ascii_uppercase();
     if u.len() == 1 {
@@ -47,6 +49,7 @@ fn is_valid_key(tok: &str) -> bool {
     matches!(
         u.as_str(),
         "SPACE" | "TAB" | "ENTER" | "UP" | "DOWN" | "LEFT" | "RIGHT"
+            | "HOME" | "END" | "PAGEUP" | "PAGEDOWN" | "INSERT" | "DELETE"
             | "-" | "=" | "," | "." | "/" | "\\" | ";" | "'" | "[" | "]" | "`"
     )
 }

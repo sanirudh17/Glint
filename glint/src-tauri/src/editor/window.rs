@@ -27,13 +27,27 @@ pub fn ensure_editor_window(app: &AppHandle) -> tauri::Result<()> {
     }
 
     let url = WebviewUrl::App("index.html#/editor".into());
-    WebviewWindowBuilder::new(app, EDITOR_LABEL, url)
+    let win = WebviewWindowBuilder::new(app, EDITOR_LABEL, url)
         .title("Glint")
         .inner_size(1180.0, 780.0)
         .min_inner_size(760.0, 540.0)
         .resizable(true)
         .center()
         .focused(true)
+        .visible(false)
         .build()?;
+    // Kill OS open transition so editor snaps in instantly, not fading.
+    crate::window::disable_transitions(&win);
+    // Show only after a short yield so the webview has started painting
+    // the dark substrate (index.html inline #0C0D0F) instead of flashing
+    // white before the JS/CSS load. The editor's image then streams in
+    // via EditorView's getEditorSource; the window is already visible
+    // by then, so no white flash at any point.
+    let w = win.clone();
+    std::thread::spawn(move || {
+        std::thread::sleep(std::time::Duration::from_millis(60));
+        let _ = w.show();
+        let _ = w.set_focus();
+    });
     Ok(())
 }

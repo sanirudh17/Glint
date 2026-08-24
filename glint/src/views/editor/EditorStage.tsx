@@ -94,6 +94,26 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   // collapses to one undo step).
   const erasing = useRef(false);
   const eraseStroke = useRef(false);
+  // RAF-batched draft updates: mousemove fires faster than React/Konva can
+  // commit (especially under load), so queuing a React store update for every
+  // raw event causes stutter and "sticks". Coalesce to one update per frame.
+  const rafPending = useRef(false);
+  const pendingPatch = useRef<{ id: string; patch: Partial<Annotation> } | null>(null);
+  const flushPending = useRef(() => {
+    if (pendingPatch.current) {
+      const { id, patch } = pendingPatch.current;
+      pendingPatch.current = null;
+      update(id, patch);
+    }
+    rafPending.current = false;
+  });
+  const schedulePatch = useRef((id: string, patch: Partial<Annotation>) => {
+    pendingPatch.current = { id, patch };
+    if (!rafPending.current) {
+      rafPending.current = true;
+      requestAnimationFrame(() => flushPending.current());
+    }
+  });
 
   // Which text annotation (if any) is open for inline editing, and where to float
   // its DOM <textarea>. Text is rendered by Konva but edited via a real textarea
@@ -480,6 +500,8 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
 
   const onMove = (e: Konva.KonvaEventObject<MouseEvent>) => {
     // Eraser: while the button is held, wipe any shape the pointer crosses.
+    // Throttle to one check per frame as well — under load the hit test per
+    // raw event was starving the paint.
     if (tool === "eraser") {
       if (erasing.current) {
         const stage = e.target.getStage();
@@ -500,15 +522,27 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         const s = snapAngle(a.x1, a.y1, x, y);
         nx = s.x2; ny = s.y2;
       }
-      update(id, { x2: nx, y2: ny } as Partial<Annotation>);
+      schedulePatch.current(id, { x2: nx, y2: ny } as Partial<Annotation>);
     } else if (a.type === "rect" || a.type === "ellipse" || a.type === "blur" || a.type === "redact" || a.type === "spotlight") {
-      update(id, { w: x - a.x, h: y - a.y } as Partial<Annotation>);
+      schedulePatch.current(id, { w: x - a.x, h: y - a.y } as Partial<Annotation>);
     } else if (a.type === "pen" || a.type === "highlight") {
-      update(id, { points: [...a.points, x, y] } as Partial<Annotation>);
+      // Coalesce pen points within a frame: append all points that arrived
+      // since the last flush so the stroke stays contiguous without per-event React churn.
+      const pending = pendingPatch.current?.id === id ? (pendingPatch.current.patch as unknown as { points: number[] })?.points : null;
+      const base = pending ?? a.points;
+      schedulePatch.current(id, { points: [...base, x, y] } as unknown as Partial<Annotation>);
     }
   };
 
   const onUp = () => {
+    // Flush any pending RAF-batched patch so the final position is committed
+    // before we check for degenerate and clear draftId.
+    if (pendingPatch.current) {
+      const { id: pid, patch } = pendingPatch.current;
+      pendingPatch.current = null;
+      rafPending.current = false;
+      update(pid, patch);
+    }
     const id = draftId.current;
     draftId.current = null;
     erasing.current = false;

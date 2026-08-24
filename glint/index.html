@@ -4,6 +4,96 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Glint</title>
+    <style>
+      /* Prevent white flash before webview paints. Use CSS var so light theme
+         can resolve correctly once JS sets --bg; fallback is the dark substrate. */
+      html, body { background: var(--bg, #0C0D0F); margin: 0; }
+      /* Gate transitions until the app has applied its real theme/accent.
+         Without this, the first paint with the default tokens then the
+         switch to the user's accent animates (pink/blue → user color). */
+      html:not(.ready) * { transition: none !important; animation: none !important; }
+    </style>
+    <script>
+      (function () {
+        try {
+          var hash = window.location.hash || "";
+          var isTransient =
+            hash.indexOf("#/overlay") === 0 ||
+            hash.indexOf("#/hud") === 0 ||
+            hash.indexOf("#/pin") === 0 ||
+            hash.indexOf("#/rec-") === 0 ||
+            hash.indexOf("#/rec-trim") === 0;
+          if (isTransient) {
+            document.documentElement.style.background = "transparent";
+            var setBodyTransparent = function () {
+              if (document.body) document.body.style.background = "transparent";
+              else requestAnimationFrame(setBodyTransparent);
+            };
+            setBodyTransparent();
+          }
+          // Apply persisted theme + accent synchronously, before first paint,
+          // so there is no flash from the tokens.css default (periwinkle) to
+          // the user's color (e.g. green). Mirrors main.tsx but runs even
+          // earlier — in the <head>, before any CSS file is fetched.
+          var THEME_KEY = "glint.theme";
+          var ACCENT_KEY = "glint.accent";
+          var palette = {
+            "#5b7cfa": { hover: "#6D8BFA", subtle: "rgba(91, 124, 250, 0.12)" },
+            "#2baaad": { hover: "#3DBBBF", subtle: "rgba(43, 170, 173, 0.12)" },
+            "#7c6efa": { hover: "#8F83FB", subtle: "rgba(124, 110, 250, 0.12)" },
+            "#d4870a": { hover: "#E0951A", subtle: "rgba(212, 135, 10, 0.12)" },
+            "#d95f76": { hover: "#E4708A", subtle: "rgba(217, 95, 118, 0.12)" },
+          };
+          var storedTheme = null;
+          var storedAccent = null;
+          try {
+            storedTheme = localStorage.getItem(THEME_KEY);
+            storedAccent = localStorage.getItem(ACCENT_KEY);
+          } catch (e) {}
+          if (storedTheme) {
+            var resolved =
+              storedTheme === "system"
+                ? (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
+                : storedTheme;
+            document.documentElement.setAttribute("data-theme", resolved);
+            document.documentElement.style.setProperty("--bg", resolved === "light" ? "#F6F7F9" : "#0C0D0F");
+            if (!isTransient) {
+              // Ensure html background follows the resolved theme immediately
+              // (style block uses var(--bg), so setting --bg is enough).
+            }
+          } else {
+            document.documentElement.setAttribute("data-theme", "dark");
+            document.documentElement.style.setProperty("--bg", "#0C0D0F");
+          }
+          if (storedAccent) {
+            var key = storedAccent.toLowerCase();
+            var entry = palette[key];
+            var root = document.documentElement;
+            if (entry) {
+              root.style.setProperty("--accent", storedAccent);
+              root.style.setProperty("--accent-hover", entry.hover);
+              root.style.setProperty("--accent-subtle", entry.subtle);
+            } else {
+              root.style.setProperty("--accent", storedAccent);
+              try {
+                var hex = storedAccent.replace("#", "");
+                if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
+                var r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
+                if (!isNaN(r)) {
+                  root.style.setProperty("--accent-subtle", "rgba("+r+","+g+","+b+",0.12)");
+                  root.style.setProperty("--accent-hover", storedAccent);
+                }
+              } catch (e2) {}
+            }
+          }
+          requestAnimationFrame(function () {
+            requestAnimationFrame(function () {
+              document.documentElement.classList.add("ready");
+            });
+          });
+        } catch (e) {}
+      })();
+    </script>
   </head>
 
   <body>

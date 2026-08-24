@@ -24,6 +24,8 @@ try {
 // which would otherwise flood that transparency with a solid dark-blue veil until
 // the frozen screenshot finishes decoding. Force the document transparent on those
 // routes — runs synchronously before React's first paint, so there's no flash.
+// Also handled in index.html's head script for an even earlier override
+// (before any CSS loads), but repeat here for hash changes and as a safety net.
 {
   const hash = window.location.hash;
   if (
@@ -35,11 +37,24 @@ try {
     hash.startsWith("#/rec-select") ||
     hash.startsWith("#/rec-hud") ||
     hash.startsWith("#/rec-cam") ||
-    hash.startsWith("#/rec-fx")
+    hash.startsWith("#/rec-fx") ||
+    hash.startsWith("#/rec-trim")
   ) {
     document.documentElement.style.background = "transparent";
     document.body.style.background = "transparent";
+  } else {
+    // Non-transient windows: ensure the dark substrate is set even if the
+    // head script was bypassed (e.g. hard reload). The index.html inline
+    // style already paints #0C0D0F, this just keeps --bg consistent.
+    if (!document.documentElement.dataset.theme) {
+      document.documentElement.dataset.theme = "dark";
+    }
   }
+  // Lift the transition gate after the first paint has used the correct
+  // colors (the head script also does this; double-safe).
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => document.documentElement.classList.add("ready"));
+  });
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

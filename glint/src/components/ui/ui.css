@@ -15,6 +15,7 @@
 .g-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: var(--s2);
   border: 1px solid var(--border);
   border-radius: var(--r-btn);
@@ -22,6 +23,7 @@
   color: var(--text);
   font-family: inherit;
   font-weight: var(--fw-medium);
+  line-height: 1;
   cursor: pointer;
   transition:
     background var(--dur) var(--ease),
@@ -31,6 +33,7 @@
   white-space: nowrap;
   user-select: none;
 }
+.g-btn > span { line-height: 1; display: inline-flex; align-items: center; }
 
 .g-btn:disabled {
   opacity: 0.38;

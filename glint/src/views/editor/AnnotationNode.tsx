@@ -79,13 +79,33 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
     }
     case "rect": {
       const a = anno as BoxAnno;
+      // Normalize negative drags (dragging left/up creates negative w/h).
+      // Without this the rect draws with negative width, hit area breaks,
+      // and resize stutters. Mirrors Blur/Redact/Spotlight normalization.
+      const x = Math.min(a.x, a.x + a.w);
+      const y = Math.min(a.y, a.y + a.h);
+      const w = Math.abs(a.w);
+      const h = Math.abs(a.h);
       return (
         <Rect
           {...common}
-          x={a.x} y={a.y} width={a.w} height={a.h}
+          x={x} y={y} width={w} height={h}
           stroke={a.style.color} strokeWidth={a.style.strokeWidth}
           dash={a.style.dashed ? DASH : undefined}
           fill={a.style.fill ? hexToRgba(a.style.fill, a.style.fillOpacity ?? 1) : undefined}
+          // Normalize drag offset for normalized rects
+          onDragEnd={(e) => {
+            const node = e.target;
+            onChange({ x: node.x(), y: node.y(), w, h } as Partial<Annotation>);
+          }}
+          onTransformEnd={(e) => {
+            const node = e.target;
+            const nw = Math.max(1, node.width() * node.scaleX());
+            const nh = Math.max(1, node.height() * node.scaleY());
+            node.scaleX(1);
+            node.scaleY(1);
+            onChange({ x: node.x(), y: node.y(), w: nw, h: nh } as Partial<Annotation>);
+          }}
         />
       );
     }

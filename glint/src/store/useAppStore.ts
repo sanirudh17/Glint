@@ -422,6 +422,8 @@ export const ACCENT_PALETTE: AccentEntry[] = [
  * Apply an accent hex by finding the closest palette entry and writing
  * --accent / --accent-hover / --accent-subtle onto the root element.
  * Falls back to raw hex with computed variants if not in the palette.
+ * Always sets all three vars so a switch from e.g. Rose never leaves a
+ * stale pink subtle wash behind (the “pink flash” bug).
  */
 export function applyAccent(hex: string): void {
   try { localStorage.setItem(ACCENT_STORAGE_KEY, hex); } catch { /* no storage → skip */ }
@@ -434,8 +436,27 @@ export function applyAccent(hex: string): void {
     root.setProperty("--accent-hover", entry.hover);
     root.setProperty("--accent-subtle", entry.subtle);
   } else {
-    // Unknown hex (e.g. migrated from a future phase's freeform picker):
-    // apply it as-is; hover/subtle fall back to their tokens.css defaults.
     root.setProperty("--accent", hex);
+    // Derive hover/subtle from the raw hex so we never keep a stale pink
+    // wash from a previous palette entry. Hover: same hex (or lighten later);
+    // subtle: 12% alpha wash.
+    try {
+      let h = hex.replace("#", "").trim();
+      if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
+      const r = parseInt(h.slice(0, 2), 16);
+      const g = parseInt(h.slice(2, 4), 16);
+      const b = parseInt(h.slice(4, 6), 16);
+      if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) {
+        root.setProperty("--accent-hover", hex);
+        root.setProperty("--accent-subtle", `rgba(${r}, ${g}, ${b}, 0.12)`);
+      }
+    } catch { /* ignore */ }
   }
+  // Mark the document as having applied its real accent so the
+  // html:not(.ready) transition gate in index.html can lift.
+  try {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => document.documentElement.classList.add("ready"));
+    });
+  } catch { /* no raf */ }
 }
