@@ -220,36 +220,6 @@ pub fn run() {
                 }
             }
 
-            // Main-window reveal handshake: the window is built INVISIBLE so the
-            // user never sees an empty/black frame while WebView2 boots and (in dev)
-            // Vite serves its module graph. The frontend emits `main-ready` after its
-            // first real paint (theme+accent applied, boot veil lifted, double-rAF),
-            // and only then do we show + focus — the window pops in fully formed.
-            // A 4s fallback guarantees the app can never be left invisible if the
-            // frontend fails to boot.
-            {
-                use tauri::Listener;
-                let h = app.handle().clone();
-                app.once("main-ready", move |_| {
-                    if let Some(win) = h.get_webview_window("main") {
-                        let _ = win.show();
-                        let _ = win.unminimize();
-                        let _ = win.set_focus();
-                    }
-                });
-                let h2 = app.handle().clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(4000));
-                    if let Some(win) = h2.get_webview_window("main") {
-                        if !win.is_visible().unwrap_or(true) {
-                            log::warn!("main-ready never arrived; force-showing main window");
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                        }
-                    }
-                });
-            }
-
             log::info!("Glint started");
             Ok(())
         })

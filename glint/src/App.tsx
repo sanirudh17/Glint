@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { RouterProvider } from "react-router-dom";
-import { emit, listen } from "@tauri-apps/api/event";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { listen } from "@tauri-apps/api/event";
 import { router } from "./router";
 import {
   useAppStore,
@@ -56,33 +55,6 @@ export default function App() {
     });
     return () => window.clearTimeout(cap);
   }, [loadSettings]);
-
-  // Reveal handshake: once settings are hydrated and the first REAL frame has
-  // painted (double-rAF), tell Rust to show the main window. Until then the
-  // window stays invisible, so the user never sees an empty/black boot frame —
-  // the app pops in fully rendered with the correct theme + accent. Other
-  // windows (editor/trim/hud/overlay) mount this same component but must NOT
-  // trigger the main window's reveal.
-  useEffect(() => {
-    if (!settings && !capExpired) return;
-    let cancelled = false;
-    const r = requestAnimationFrame(() =>
-      requestAnimationFrame(() => {
-        if (cancelled) return;
-        try {
-          if (getCurrentWindow().label === "main") {
-            void emit("main-ready").catch(() => {});
-          }
-        } catch {
-          /* not running under Tauri (plain Vite) */
-        }
-      }),
-    );
-    return () => {
-      cancelled = true;
-      cancelAnimationFrame(r);
-    };
-  }, [settings, capExpired]);
 
   useEffect(() => {
     // Backend events → toasts. Each listen() returns an unlisten promise;
