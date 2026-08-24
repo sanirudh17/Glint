@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
-import { listen } from "@tauri-apps/api/event";
+import { emit, listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Frame as FrameIcon, SquareRoundCorner } from "lucide-react";
 import { useEditorStore } from "../editor/useEditorStore";
@@ -177,6 +177,19 @@ export default function EditorView() {
       reset();
     };
   }, [loadFromSource, reset]);
+
+  // Editor-ready handshake: tell Rust the window has painted its first frame
+  // so a cold build (visible:false) can be shown without flashing white.
+  // Mirrors HUD's hud-ready. Double-rAF ensures React has committed + painted.
+  useEffect(() => {
+    if (!base) return;
+    const r = requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        emit("editor-ready").catch(() => {});
+      });
+    });
+    return () => cancelAnimationFrame(r);
+  }, [base]);
 
   // Reopen path: project_open emits editor-open after setting EditorState; if we
   // are already on /editor the route won't remount, so reload here.

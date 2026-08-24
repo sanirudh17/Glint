@@ -38,16 +38,30 @@ pub fn ensure_editor_window(app: &AppHandle) -> tauri::Result<()> {
         .build()?;
     // Kill OS open transition so editor snaps in instantly, not fading.
     crate::window::disable_transitions(&win);
-    // Show only after a short yield so the webview has started painting
-    // the dark substrate (index.html inline #0C0D0F) instead of flashing
-    // white before the JS/CSS load. The editor's image then streams in
-    // via EditorView's getEditorSource; the window is already visible
-    // by then, so no white flash at any point.
-    let w = win.clone();
-    std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(60));
-        let _ = w.show();
-        let _ = w.set_focus();
-    });
+    // Paint handshake: keep hidden until the frontend has decoded the image
+    // and painted its first frame (editor-ready), so a cold build never
+    // flashes its unpainted white placeholder for ~1s. 1200ms fallback
+    // guarantees show even if the event is missed (e.g. plain Vite).
+    {
+        use std::sync::mpsc;
+        use std::time::Duration;
+        use tauri::Listener;
+        let app2 = app.clone();
+        let w2 = win.clone();
+        std::thread::spawn(move || {
+            let (tx, rx) = mpsc::channel::<()>();
+            let handler = app2.once("editor-ready", move |_| {
+                let _ = tx.send(());
+            });
+            let _ = rx.recv_timeout(Duration::from_millis(1200));
+            app2.unlisten(handler);
+            let _ = w2.show();
+            let _ = w2.set_focus();
+            // Brief always-on-top toggle to force foreground on Windows
+            // (OS foreground lock can otherwise keep it behind).
+            let _ = w2.set_always_on_top(true);
+            let _ = w2.set_always_on_top(false);
+        });
+    }
     Ok(())
 }

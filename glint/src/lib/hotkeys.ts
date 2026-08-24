@@ -39,7 +39,10 @@ function modifiersFromEvent(e: KeyboardEvent): string[] {
   const altGraph =
     typeof e.getModifierState === "function" ? e.getModifierState("AltGraph") : false;
   const mods: string[] = [];
-  if (e.ctrlKey || altGraph) mods.push("Ctrl");
+  // Use CmdOrCtrl for Ctrl so the accelerator matches Glint's defaults
+  // (CmdOrCtrl+Shift+1) and Typr's proven cross-platform handling.
+  // toChips normalizes CmdOrCtrl -> Ctrl for display.
+  if (e.ctrlKey || altGraph) mods.push("CmdOrCtrl");
   if (e.altKey || altGraph) mods.push("Alt");
   if (e.shiftKey) mods.push("Shift");
   if (e.metaKey) mods.push("Super");

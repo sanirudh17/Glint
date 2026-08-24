@@ -82,8 +82,15 @@ button {
   border: none;
   background: none;
   color: inherit;
+  line-height: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  vertical-align: middle;
   transition: opacity var(--dur) var(--ease);
 }
+button > span, button > div { line-height: 1; }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 
 /* ─── Focus ring ─────────────────────────────────────────────────────── */

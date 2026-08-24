@@ -34,15 +34,15 @@ function evAltGraph(code: string, key = "a"): KeyboardEvent {
 
 describe("keyEventToAccelerator", () => {
   it("maps letters with modifiers", () => {
-    expect(keyEventToAccelerator(ev("KeyA", { ctrlKey: true }, { key: "A" }))).toBe("Ctrl+A");
+    expect(keyEventToAccelerator(ev("KeyA", { ctrlKey: true }, { key: "A" }))).toBe("CmdOrCtrl+A");
     expect(keyEventToAccelerator(ev("KeyC", { ctrlKey: true, shiftKey: true }, { key: "C" }))).toBe(
-      "Ctrl+Shift+C",
+      "CmdOrCtrl+Shift+C",
     );
   });
   it("maps digits (row and numpad) to the bare digit", () => {
     expect(
       keyEventToAccelerator(ev("Digit1", { ctrlKey: true, shiftKey: true }, { key: "1" })),
-    ).toBe("Ctrl+Shift+1");
+    ).toBe("CmdOrCtrl+Shift+1");
     expect(keyEventToAccelerator(ev("Numpad5", { altKey: true }, { key: "5" }))).toBe("Alt+5");
   });
   it("maps Super (Win) modifier and F-keys", () => {
@@ -50,7 +50,7 @@ describe("keyEventToAccelerator", () => {
     expect(keyEventToAccelerator(ev("F12", { altKey: true }, { key: "F12" }))).toBe("Alt+F12");
   });
   it("maps punctuation via code", () => {
-    expect(keyEventToAccelerator(ev("Slash", { ctrlKey: true }, { key: "/" }))).toBe("Ctrl+/");
+    expect(keyEventToAccelerator(ev("Slash", { ctrlKey: true }, { key: "/" }))).toBe("CmdOrCtrl+/");
     expect(keyEventToAccelerator(ev("Minus", { altKey: true }, { key: "-" }))).toBe("Alt+-");
   });
   it("returns null when only modifiers are held", () => {
@@ -61,8 +61,8 @@ describe("keyEventToAccelerator", () => {
   });
   it("handles Ctrl+Alt via AltGraph (Windows layout)", () => {
     // Ctrl+Alt+H where H has an AltGr character: browser reports AltGraph true, ctrl/alt false.
-    expect(keyEventToAccelerator(evAltGraph("KeyH", "h"))).toBe("Ctrl+Alt+H");
-    expect(keyEventToAccelerator(evAltGraph("KeyQ", "q"))).toBe("Ctrl+Alt+Q");
+    expect(keyEventToAccelerator(evAltGraph("KeyH", "h"))).toBe("CmdOrCtrl+Alt+H");
+    expect(keyEventToAccelerator(evAltGraph("KeyQ", "q"))).toBe("CmdOrCtrl+Alt+Q");
     // Ctrl+Alt+Shift via AltGraph+Shift
     expect(
       keyEventToAccelerator({
@@ -74,14 +74,14 @@ describe("keyEventToAccelerator", () => {
         metaKey: false,
         getModifierState: (k: string) => k === "AltGraph",
       } as unknown as KeyboardEvent),
-    ).toBe("Ctrl+Alt+Shift+H");
+    ).toBe("CmdOrCtrl+Alt+Shift+H");
   });
   it("maps all 26 letters with Ctrl+Alt", () => {
     for (let i = 0; i < 26; i++) {
       const code = `Key${String.fromCharCode(65 + i)}`;
       const letter = String.fromCharCode(65 + i);
       expect(keyEventToAccelerator(ev(code, { ctrlKey: true, altKey: true }, { key: letter }))).toBe(
-        `Ctrl+Alt+${letter}`,
+        `CmdOrCtrl+Alt+${letter}`,
       );
     }
   });
@@ -108,7 +108,7 @@ describe("keyEventToAccelerator", () => {
         const wantMods = new Set(
           Object.entries(combo)
             .filter(([, v]) => v)
-            .map(([k]) => (k === "ctrlKey" ? "Ctrl" : k === "altKey" ? "Alt" : k === "shiftKey" ? "Shift" : "Super")),
+            .map(([k]) => (k === "ctrlKey" ? "CmdOrCtrl" : k === "altKey" ? "Alt" : k === "shiftKey" ? "Shift" : "Super")),
         );
         expect(gotMods).toEqual(wantMods);
       }
@@ -118,7 +118,7 @@ describe("keyEventToAccelerator", () => {
     expect(keyEventToAccelerator(ev("KeyA", {}, { key: "a" }))).toBe("A");
   });
   it("handles navigation keys", () => {
-    expect(keyEventToAccelerator(ev("Home", { ctrlKey: true }, { key: "Home" }))).toBe("Ctrl+Home");
+    expect(keyEventToAccelerator(ev("Home", { ctrlKey: true }, { key: "Home" }))).toBe("CmdOrCtrl+Home");
     expect(keyEventToAccelerator(ev("Delete", { altKey: true }, { key: "Delete" }))).toBe(
       "Alt+Delete",
     );

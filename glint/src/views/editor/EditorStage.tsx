@@ -251,8 +251,12 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
 
   // Attach the Transformer to the selected node (select tool only, and never to
   // a node that's currently being text-edited — its handles would float around
-  // the hidden node).
+  // the hidden node). Skip entirely while a draft is in progress: the draft's
+  // per-frame store updates would otherwise thrash the transformer (especially
+  // near the image border where the clipped layer's bounds are tight), causing
+  // the "sticks near border" lag.
   useEffect(() => {
+    if (draftId.current) return;
     const tr = trRef.current;
     const layer = layerRef.current;
     if (!tr || !layer) return;
@@ -263,7 +267,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
       tr.nodes([]);
     }
     tr.getLayer()?.batchDraw();
-  }, [selectedId, tool, annotations, editingId]);
+  }, [selectedId, tool, editingId]);
 
   // Position the editing textarea over the text node's on-screen location.
   // Recomputed when the edit target, its origin, font size, or the scale change
@@ -513,7 +517,14 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     if (!id) return;
     const stage = e.target.getStage();
     if (!stage) return;
-    const { x, y } = imgPoint(stage);
+    let { x, y } = imgPoint(stage);
+    // Clamp to image bounds with a 0.5px inset when near the border.
+    // Drawing exactly on the 0/width edge made the clipped layer thrash
+    // (the shape sits on the clip boundary) → visible stutter.
+    if (base) {
+      x = Math.max(0.5, Math.min(base.width - 0.5, x));
+      y = Math.max(0.5, Math.min(base.height - 0.5, y));
+    }
     const a = useEditorStore.getState().annotations.find((n) => n.id === id);
     if (!a) return;
     if (a.type === "arrow" || a.type === "line") {

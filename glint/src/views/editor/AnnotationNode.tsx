@@ -81,7 +81,7 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
       const a = anno as BoxAnno;
       // Normalize negative drags (dragging left/up creates negative w/h).
       // Without this the rect draws with negative width, hit area breaks,
-      // and resize stutters. Mirrors Blur/Redact/Spotlight normalization.
+      // and resize stutters near the image border. Mirrors Blur/Redact/Spotlight.
       const x = Math.min(a.x, a.x + a.w);
       const y = Math.min(a.y, a.y + a.h);
       const w = Math.abs(a.w);
@@ -93,6 +93,9 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
           stroke={a.style.color} strokeWidth={a.style.strokeWidth}
           dash={a.style.dashed ? DASH : undefined}
           fill={a.style.fill ? hexToRgba(a.style.fill, a.style.fillOpacity ?? 1) : undefined}
+          perfectDrawEnabled={false}
+          shadowForStrokeEnabled={false}
+          hitStrokeWidth={Math.max(8, a.style.strokeWidth * 1.5)}
           // Normalize drag offset for normalized rects
           onDragEnd={(e) => {
             const node = e.target;
