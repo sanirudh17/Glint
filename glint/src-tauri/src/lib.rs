@@ -150,9 +150,13 @@ pub fn run() {
             // registering earlier would arm the built-in defaults and ignore the user's keys.
             shortcuts::register(app.handle())?;
 
-            // Apply the persisted taskbar preference to the main window.
+            // Apply the persisted taskbar preference and visual settings to the main window.
             {
-                let show = app.state::<SettingsState>().0.lock().unwrap().show_in_taskbar;
+                let state = app.state::<SettingsState>();
+                let (show, theme, accent) = {
+                    let s = state.0.lock().unwrap();
+                    (s.show_in_taskbar, s.theme.clone(), s.accent.clone())
+                };
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.set_skip_taskbar(!show);
                     // Kill the OS open/show transition so the main window snaps
@@ -160,6 +164,27 @@ pub fn run() {
                     // the window's lifetime, so every later show() (tray restore,
                     // capture restore) is also instantaneous.
                     crate::window::disable_transitions(&win);
+                    let theme_str = match theme {
+                        crate::settings::Theme::Dark => "dark",
+                        crate::settings::Theme::Light => "light",
+                        crate::settings::Theme::System => "system",
+                    };
+                    let eval_script = format!(
+                        r##"(() => {{
+                            try {{
+                                localStorage.setItem("glint.theme", "{theme_str}");
+                                localStorage.setItem("glint.accent", "{accent}");
+                                var t = "{theme_str}";
+                                if (t === "system") {{
+                                    t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+                                }}
+                                document.documentElement.setAttribute("data-theme", t);
+                                document.documentElement.style.setProperty("--bg", t === "light" ? "#F6F7F9" : "#0C0D0F");
+                                document.documentElement.style.setProperty("--accent", "{accent}");
+                            }} catch (e) {{}}
+                        }})()"##
+                    );
+                    let _ = win.eval(&eval_script);
                 }
             }
 
@@ -184,22 +209,21 @@ pub fn run() {
             // capture OVERLAY, recording region SELECTOR, HUD, the annotation EDITOR
             // and the TRIM window. The editor/trim are reused across opens (hide on
             // close, retarget + reload on open), so every open after launch is instant.
-            // Off-thread + STAGGERED: each build claims the main thread for a few
-            // hundred ms, so spacing them keeps that thread responsive for boot-time
-            // IPC (settings_get_all) instead of black-veiling the main window behind
-            // a burst of window builds.
+            // DELAYED TO IDLE: Keep startup 100% free of webview contention so the
+            // main window renders its first frame in <100ms. Then stagger background
+            // prewarming gently.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(600));
+                    std::thread::sleep(std::time::Duration::from_millis(3500));
                     crate::overlay::prewarm(&h, 0);
-                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    std::thread::sleep(std::time::Duration::from_millis(400));
                     crate::recorder::windows::prewarm_region_selector(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    std::thread::sleep(std::time::Duration::from_millis(400));
                     crate::hud::prewarm(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    std::thread::sleep(std::time::Duration::from_millis(400));
                     crate::editor::window::prewarm(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(250));
+                    std::thread::sleep(std::time::Duration::from_millis(400));
                     crate::recorder::windows::prewarm_trim_window(&h);
                 });
             }

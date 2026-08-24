@@ -249,7 +249,7 @@
   font-size: var(--fz-xs);
   color: var(--text);
   background: var(--bg-elev2, rgba(128, 128, 128, 0.12));
-  border: 1px solid var(--accent, #5b7cfa);
+  border: 1px solid var(--accent);
   border-radius: var(--r1, 4px);
   padding: 1px 6px;
   outline: none;
@@ -285,4 +285,4 @@
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .cap-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
-.cap-btn--danger:hover { background: var(--danger-subtle, rgba(217,95,118,0.18)); color: var(--danger, #d95f76); }
+.cap-btn--danger:hover { background: var(--danger-subtle); color: var(--danger); }

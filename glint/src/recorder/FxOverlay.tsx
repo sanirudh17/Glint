@@ -108,7 +108,8 @@ export function FxOverlay() {
         const { x, y } = toCanvasXY(rp.x, rp.y, originX, originY);
         const rad = rippleRadius(age, RIPPLE_MS, 36 * scale);
         ctx.globalAlpha = rippleAlpha(age, RIPPLE_MS);
-        ctx.strokeStyle = rp.button === "right" ? "#ffb454" : "#5b7cfa";
+        const computedAccent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+        ctx.strokeStyle = rp.button === "right" ? "#ffb454" : (computedAccent || "#5b7cfa");
         ctx.lineWidth = 3 * scale;
         ctx.beginPath(); ctx.arc(x + offX, y + offY, rad, 0, Math.PI * 2); ctx.stroke();
         ctx.globalAlpha = 1;

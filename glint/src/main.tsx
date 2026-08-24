@@ -50,11 +50,7 @@ try {
       document.documentElement.dataset.theme = "dark";
     }
   }
-  // Lift the transition gate after the first paint has used the correct
-  // colors (the head script also does this; double-safe).
-  requestAnimationFrame(() => {
-    requestAnimationFrame(() => document.documentElement.classList.add("ready"));
-  });
+
 }
 
 ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(

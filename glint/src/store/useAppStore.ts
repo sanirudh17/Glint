@@ -90,17 +90,19 @@ export const useAppStore = create<AppState>((set, get) => ({
     // ONE round-trip. The Rust SettingsState is hydrated from the SQLite `settings`
     // table SYNCHRONOUSLY at startup (settings::hydrate::hydrate_from_db →
     // apply_update, which accepts every persisted key), so `settings_get_all` already
-    // carries the persisted values for theme/accent/hotkeys/all toggles. The old code
-    // re-read ~20 keys one-by-one over the plugin-sql bridge here — on a cold start
-    // that serialized queue (plus the plugin's lazy DB open) held the boot veil up
-    // for over a second while adding zero information.
+    // carries the persisted values for theme/accent/hotkeys/all toggles.
     const merged = await invoke<Settings>("settings_get_all");
     set({ settings: merged });
     // Stamp the real values + refresh the localStorage mirrors (applyTheme/
-    // applyAccent write them), so the next launch's pre-paint head script starts on
-    // the correct colors before this command ever runs.
+    // applyAccent write them), so the next launch starts on the correct colors.
     applyTheme(merged.theme);
     applyAccent(merged.accent);
+    // Lift transitions gate cleanly after settings are applied and painted
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        document.documentElement.classList.add("ready");
+      });
+    });
   },
 
   setTheme: async (theme: Theme) => {
@@ -405,7 +407,10 @@ export function applyAccent(hex: string): void {
       const g = parseInt(h.slice(2, 4), 16);
       const b = parseInt(h.slice(4, 6), 16);
       if (!Number.isNaN(r) && !Number.isNaN(g) && !Number.isNaN(b)) {
-        root.setProperty("--accent-hover", hex);
+        const hr = Math.min(255, Math.round(r + (255 - r) * 0.12));
+        const hg = Math.min(255, Math.round(g + (255 - g) * 0.12));
+        const hb = Math.min(255, Math.round(b + (255 - b) * 0.12));
+        root.setProperty("--accent-hover", `rgb(${hr}, ${hg}, ${hb})`);
         root.setProperty("--accent-subtle", `rgba(${r}, ${g}, ${b}, 0.12)`);
       }
     } catch { /* ignore */ }

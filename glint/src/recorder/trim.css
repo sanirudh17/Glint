@@ -77,7 +77,7 @@
   border: 1px solid var(--border); border-radius: var(--r-btn); cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center; text-align: center;
 }
-.trim-speedbtn--on { color: var(--text); border-color: var(--accent); background: var(--accent-subtle, rgba(91,124,250,.16)); }
+.trim-speedbtn--on { color: var(--text); border-color: var(--accent); background: var(--accent-subtle); }
 .trim-speedbtn:disabled { opacity: .45; cursor: default; }
 
 /* Webcam overlay control (actions row) */

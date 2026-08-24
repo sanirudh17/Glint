@@ -8,6 +8,13 @@
   padding: 0;
 }
 
+/* Gate all transitions and animations until settings are hydrated and the first frame has painted */
+html:not(.ready) *,
+:root:not(.ready) * {
+  transition: none !important;
+  animation: none !important;
+}
+
 /* ─── Font ────────────────────────────────────────────────────────────── */
 /*
  * No remote font loading at runtime. Inter is the system font on many

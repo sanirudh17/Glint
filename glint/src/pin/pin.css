@@ -99,7 +99,7 @@
   cursor: pointer;
   font-size: 12px;
 }
-.pin-opacity-btn--active { background: var(--accent, #5b7cfa); border-color: var(--accent, #5b7cfa); color: #fff; }
+.pin-opacity-btn--active { background: var(--accent); border-color: var(--accent); color: #fff; }
 
 /* Inline confirmation flash. */
 .pin-flash {

@@ -5,13 +5,14 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Glint</title>
     <style>
-      /* Prevent white flash before webview paints. Use CSS var so light theme
-         can resolve correctly once JS sets --bg; fallback is the dark substrate. */
+      /* Prevent white flash before webview paints. */
       html, body { background: var(--bg, #0C0D0F); margin: 0; }
-      /* Gate transitions until the app has applied its real theme/accent.
-         Without this, the first paint with the default tokens then the
-         switch to the user's accent animates (pink/blue → user color). */
-      html:not(.ready) * { transition: none !important; animation: none !important; }
+      /* Gate transitions until settings are fully hydrated and first frame is rendered.
+         Without this, color switches animate visibly on startup. */
+      html:not(.ready) *, :root:not(.ready) * {
+        transition: none !important;
+        animation: none !important;
+      }
     </style>
     <script>
       (function () {
@@ -35,10 +36,7 @@
             };
             setBodyTransparent();
           }
-          // Apply persisted theme + accent synchronously, before first paint,
-          // so there is no flash from the tokens.css default (periwinkle) to
-          // the user's color (e.g. green). Mirrors main.tsx but runs even
-          // earlier — in the <head>, before any CSS file is fetched.
+
           var THEME_KEY = "glint.theme";
           var ACCENT_KEY = "glint.accent";
           var palette = {
@@ -54,21 +52,14 @@
             storedTheme = localStorage.getItem(THEME_KEY);
             storedAccent = localStorage.getItem(ACCENT_KEY);
           } catch (e) {}
-          if (storedTheme) {
-            var resolved =
-              storedTheme === "system"
-                ? (window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light")
-                : storedTheme;
-            document.documentElement.setAttribute("data-theme", resolved);
-            document.documentElement.style.setProperty("--bg", resolved === "light" ? "#F6F7F9" : "#0C0D0F");
-            if (!isTransient) {
-              // Ensure html background follows the resolved theme immediately
-              // (style block uses var(--bg), so setting --bg is enough).
-            }
-          } else {
-            document.documentElement.setAttribute("data-theme", "dark");
-            document.documentElement.style.setProperty("--bg", "#0C0D0F");
+
+          var theme = storedTheme || "dark";
+          if (theme === "system") {
+            theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
           }
+          document.documentElement.setAttribute("data-theme", theme);
+          document.documentElement.style.setProperty("--bg", theme === "light" ? "#F6F7F9" : "#0C0D0F");
+
           if (storedAccent) {
             var key = storedAccent.toLowerCase();
             var entry = palette[key];
@@ -80,21 +71,21 @@
             } else {
               root.style.setProperty("--accent", storedAccent);
               try {
-                var hex = storedAccent.replace("#", "");
+                var hex = storedAccent.replace("#", "").trim();
                 if (hex.length === 3) hex = hex[0]+hex[0]+hex[1]+hex[1]+hex[2]+hex[2];
-                var r = parseInt(hex.slice(0,2),16), g = parseInt(hex.slice(2,4),16), b = parseInt(hex.slice(4,6),16);
-                if (!isNaN(r)) {
-                  root.style.setProperty("--accent-subtle", "rgba("+r+","+g+","+b+",0.12)");
-                  root.style.setProperty("--accent-hover", storedAccent);
+                var r = parseInt(hex.slice(0, 2), 16);
+                var g = parseInt(hex.slice(2, 4), 16);
+                var b = parseInt(hex.slice(4, 6), 16);
+                if (!isNaN(r) && !isNaN(g) && !isNaN(b)) {
+                  var hr = Math.min(255, Math.round(r + (255 - r) * 0.12));
+                  var hg = Math.min(255, Math.round(g + (255 - g) * 0.12));
+                  var hb = Math.min(255, Math.round(b + (255 - b) * 0.12));
+                  root.style.setProperty("--accent-hover", "rgb(" + hr + "," + hg + "," + hb + ")");
+                  root.style.setProperty("--accent-subtle", "rgba(" + r + "," + g + "," + b + ",0.12)");
                 }
               } catch (e2) {}
             }
           }
-          requestAnimationFrame(function () {
-            requestAnimationFrame(function () {
-              document.documentElement.classList.add("ready");
-            });
-          });
         } catch (e) {}
       })();
     </script>

@@ -76,8 +76,9 @@ export function Loupe({ bitmap, cx, cy, scale }: LoupeProps) {
     ctx.strokeStyle = "rgba(255,255,255,0.9)";
     ctx.lineWidth = 1;
     ctx.strokeRect(cell + 0.5, cell + 0.5, ZOOM - 1, ZOOM - 1);
-    // Accent ring just outside the centre cell (hard-coded: canvas can't read CSS vars).
-    ctx.strokeStyle = "#5B7CFA";
+    // Accent ring just outside the centre cell
+    const computedAccent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim();
+    ctx.strokeStyle = computedAccent || "#5B7CFA";
     ctx.lineWidth = 1;
     ctx.strokeRect(cell - 0.5, cell - 0.5, ZOOM + 1, ZOOM + 1);
 

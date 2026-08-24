@@ -28,7 +28,7 @@
   border-radius: 12px;
   overflow: hidden;
   background: rgba(16, 18, 24, 0.92);
-  border: 1px solid color-mix(in srgb, var(--accent, #5B7CFA) 22%, rgba(255, 255, 255, 0.08));
+  border: 1px solid color-mix(in srgb, var(--accent) 22%, rgba(255, 255, 255, 0.08));
   box-shadow: 0 14px 38px -14px rgba(0, 0, 0, 0.78);
   cursor: grab;
   animation: hud-rise 240ms cubic-bezier(0.22, 1, 0.36, 1) both;
@@ -66,7 +66,7 @@
   z-index: 3;
   width: 9px;
   height: 9px;
-  border: 1.5px solid var(--accent, #5B7CFA);
+  border: 1.5px solid var(--accent);
   opacity: 0.92;
   pointer-events: none;
   transition: opacity 150ms var(--ease, ease);
@@ -227,7 +227,7 @@
 /* ── Quality floor ────────────────────────────────────────────────────────── */
 .hud-btn:focus-visible,
 .hud-close:focus-visible {
-  outline: 2px solid var(--accent, #5B7CFA);
+  outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
 
