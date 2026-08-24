@@ -378,10 +378,12 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   // resolution (scaleX/scaleY = 1) and zoomed purely via a CSS transform on its wrapper
   // (see the render), so getPointerPosition already returns composition coordinates —
   // Konva compensates for the wrapper's CSS scale (rect.width / clientWidth). Just shift
-  // by the content offset (cropX→contentX) to reach image space.
-  const imgPoint = (stage: Konva.Stage) => {
+  // by the content offset (cropX→contentX) to reach image space. Returns null when
+  // the pointer is outside the stage (e.g. exactly on the window border) — callers
+  // should ignore the move to avoid the “sticks at 0,0” jump that caused border lag.
+  const imgPoint = (stage: Konva.Stage): { x: number; y: number } | null => {
     const p = stage.getPointerPosition();
-    if (!p) return { x: 0, y: 0 };
+    if (!p) return null;
     return {
       x: p.x - layout.contentX + layout.cropX,
       y: p.y - layout.contentY + layout.cropY,
@@ -408,8 +410,10 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   // the pointer is directly over (shapes have no partial state). History is pushed
   // once per gesture so a drag-wipe collapses to a single undo.
   const eraseAtPointer = (stage: Konva.Stage) => {
+    const pt = imgPoint(stage);
+    if (!pt) return;
+    const { x, y } = pt;
     const cur = useEditorStore.getState().annotations;
-    const { x, y } = imgPoint(stage);
     const hitId = annoIdAt(stage, new Set(cur.map((a) => a.id)));
     let dropId: string | null = null;
     if (hitId) {
@@ -437,7 +441,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     // set it as the current color, and exit pick mode. No draw, no history. Only in a
     // drawing tool — never in select ("cursor") mode, where the picker is disabled.
     if (picking && tool !== "select") {
-      const { x, y } = imgPoint(stage);
+      const pt = imgPoint(stage);
+      if (!pt) return;
+      const { x, y } = pt;
       const hex = sampleColorAt(base.image, base.width, base.height, Math.round(x), Math.round(y));
       if (hex) setStyle({ color: hex });
       setPicking(false);
@@ -458,7 +464,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
       if (e.target === stage) select(null);
       return;
     }
-    const { x, y } = imgPoint(stage);
+    const pt0 = imgPoint(stage);
+    if (!pt0) return;
+    const { x, y } = pt0;
     pushHistory();
     const id = newId();
     draftId.current = id;
@@ -517,7 +525,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     if (!id) return;
     const stage = e.target.getStage();
     if (!stage) return;
-    let { x, y } = imgPoint(stage);
+    const pt = imgPoint(stage);
+    if (!pt) return;
+    let { x, y } = pt;
     // Clamp to image bounds with a 0.5px inset when near the border.
     // Drawing exactly on the 0/width edge made the clipped layer thrash
     // (the shape sits on the clip boundary) → visible stutter.
