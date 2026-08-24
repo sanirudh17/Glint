@@ -298,8 +298,15 @@
 .settings-hotkey-help ol { margin: 0 0 6px; padding-left: 18px; }
 .settings-hotkey-help p { margin: 0; opacity: 0.8; }
 
-.settings-hotkey-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 0; }
-.settings-hotkey-row.is-capturing { outline: 2px solid var(--accent, #5b7cfa); outline-offset: 4px; border-radius: var(--r-btn); }
+.settings-hotkey-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 0; border: 1px solid transparent; border-radius: var(--r2); transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.settings-hotkey-row.is-capturing {
+  background: var(--accent-subtle);
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+  margin: 2px -8px;
+  padding: 8px;
+  outline: none;
+}
 .settings-hotkey-label { flex: 0 0 150px; }
 .settings-hotkey-keys { flex: 1 1 auto; display: inline-flex; align-items: center; gap: 4px; }
 .settings-hotkey-listening { opacity: 0.75; font-style: italic; }
