@@ -1,7 +1,7 @@
 import { create } from "zustand";
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
-import { persistSetting, readSetting, saveSetting, setHotkey as setHotkeyIpc, resetHotkeys as resetHotkeysIpc, setSaveDir as setSaveDirIpc, windowSetTaskbar } from "../lib/ipc";
+import { persistSetting, saveSetting, setHotkey as setHotkeyIpc, resetHotkeys as resetHotkeysIpc, setSaveDir as setSaveDirIpc, windowSetTaskbar } from "../lib/ipc";
 import { registerExplorerMenu, unregisterExplorerMenu } from "../lib/shell";
 
 export type Theme = "dark" | "light" | "system";
@@ -87,67 +87,20 @@ export const useAppStore = create<AppState>((set, get) => ({
   toasts: [],
 
   loadSettings: async () => {
-    // 1. Get Rust defaults (validates shape, provides hotkeys).
-    const rustSettings = await invoke<Settings>("settings_get_all");
-
-    // 2. Override persisted keys from SQLite — these are the source of truth
-    //    for settings that must survive a full app restart.
-    //    Wrapped in try/catch so a missing plugin (plain-Vite preview) doesn't crash.
-    let theme = rustSettings.theme;
-    let accent = rustSettings.accent;
-    let auto_save = rustSettings.auto_save;
-    let auto_copy = rustSettings.auto_copy;
-    let open_in_editor = rustSettings.open_in_editor;
-    let explorer_menu_enabled = rustSettings.explorer_menu_enabled;
-    let record_system_audio = rustSettings.record_system_audio;
-    let record_microphone = rustSettings.record_microphone;
-    let record_webcam = rustSettings.record_webcam;
-    let record_webcam_movable = rustSettings.record_webcam_movable;
-    try {
-      const dbTheme = await readSetting<Theme>("theme");
-      if (dbTheme) theme = dbTheme;
-      const dbAccent = await readSetting<string>("accent");
-      if (dbAccent) accent = dbAccent;
-      const dbAutoSave = await readSetting<boolean>("auto_save");
-      if (dbAutoSave !== null) auto_save = dbAutoSave;
-      const dbAutoCopy = await readSetting<boolean>("auto_copy");
-      if (dbAutoCopy !== null) auto_copy = dbAutoCopy;
-      const dbOpenInEditor = await readSetting<boolean>("open_in_editor");
-      if (dbOpenInEditor !== null) open_in_editor = dbOpenInEditor;
-      const dbExplorerMenu = await readSetting<boolean>("explorer_menu_enabled");
-      if (dbExplorerMenu !== null) explorer_menu_enabled = dbExplorerMenu;
-      const dbRecordSystem = await readSetting<boolean>("record_system_audio");
-      if (dbRecordSystem !== null) record_system_audio = dbRecordSystem;
-      const dbRecordMic = await readSetting<boolean>("record_microphone");
-      if (dbRecordMic !== null) record_microphone = dbRecordMic;
-      const dbRecordWebcam = await readSetting<boolean>("record_webcam");
-      if (dbRecordWebcam !== null) record_webcam = dbRecordWebcam;
-      const dbRecordWebcamMovable = await readSetting<boolean>("record_webcam_movable");
-      if (dbRecordWebcamMovable !== null) record_webcam_movable = dbRecordWebcamMovable;
-      const dbWebcamShape = await readSetting<Settings["webcam_shape"]>("webcam_shape");
-      if (dbWebcamShape) rustSettings.webcam_shape = dbWebcamShape;
-      // Recording FX defaults — override the Rust defaults with persisted values.
-      for (const k of ["record_click_viz", "record_keystrokes", "record_cursor_spotlight", "record_cursor_hide"] as const) {
-        const v = await readSetting<boolean>(k);
-        if (v !== null) rustSettings[k] = v;
-      }
-      const dbCursorSize = await readSetting<CursorSize>("record_cursor_size");
-      if (dbCursorSize !== null) rustSettings.record_cursor_size = dbCursorSize;
-    } catch {
-      // plugin-sql unavailable (e.g. plain Vite dev server) — use Rust defaults.
-    }
-
-    const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy, open_in_editor, explorer_menu_enabled, record_system_audio, record_microphone, record_webcam, record_webcam_movable };
+    // ONE round-trip. The Rust SettingsState is hydrated from the SQLite `settings`
+    // table SYNCHRONOUSLY at startup (settings::hydrate::hydrate_from_db →
+    // apply_update, which accepts every persisted key), so `settings_get_all` already
+    // carries the persisted values for theme/accent/hotkeys/all toggles. The old code
+    // re-read ~20 keys one-by-one over the plugin-sql bridge here — on a cold start
+    // that serialized queue (plus the plugin's lazy DB open) held the boot veil up
+    // for over a second while adding zero information.
+    const merged = await invoke<Settings>("settings_get_all");
     set({ settings: merged });
-    // Prevent pink→green flash: DB value may differ from localStorage head value (pink). Disable transitions, apply, then re-enable.
-    try { document.documentElement.classList.remove("ready"); } catch {}
-    applyTheme(theme);
-    applyAccent(accent);
-    try {
-      requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.add("ready")));
-    } catch {}
-    // Sync localStorage mirrors are already updated by applyTheme/applyAccent
-    try { localStorage.setItem(THEME_STORAGE_KEY, theme); localStorage.setItem(ACCENT_STORAGE_KEY, accent); } catch {}
+    // Stamp the real values + refresh the localStorage mirrors (applyTheme/
+    // applyAccent write them), so the next launch's pre-paint head script starts on
+    // the correct colors before this command ever runs.
+    applyTheme(merged.theme);
+    applyAccent(merged.accent);
   },
 
   setTheme: async (theme: Theme) => {

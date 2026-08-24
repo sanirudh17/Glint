@@ -2,10 +2,11 @@
  * Glint IPC helpers — thin wrappers around Tauri invoke() and plugin-sql.
  * All network-free; calls go only to the local Rust backend or the local SQLite DB.
  *
- * Settings persistence uses the JS-side plugin-sql (not Rust invoke): the frontend
- * writes directly to the `settings` table via persistSetting/readSetting, and hydrates
- * from it on load. The Rust SettingsState holds the validated in-memory copy for the
- * current session but is NOT hydrated from disk on startup.
+ * Settings persistence: the frontend writes through saveSetting() (Rust live copy)
+ * AND persistSetting() (plugin-sql → `settings` table). At startup Rust hydrates the
+ * live SettingsState from that same table synchronously (settings::hydrate), so
+ * settings_get_all already returns persisted values — boot needs exactly one invoke
+ * and must NOT re-read rows over plugin-sql (that queue cost >1s of boot veil).
  */
 import { invoke } from "@tauri-apps/api/core";
 import Database from "@tauri-apps/plugin-sql";
