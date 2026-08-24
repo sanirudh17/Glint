@@ -164,21 +164,6 @@ pub fn run() {
                 }
             }
 
-            // Safety valve: ensure the main window is revealed even if the frontend
-            // encounters an unexpected error.
-            {
-                let h = app.handle().clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(2500));
-                    if let Some(win) = h.get_webview_window("main") {
-                        if !win.is_visible().unwrap_or(true) {
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                        }
-                    }
-                });
-            }
-
             // Self-heal the Explorer "Open in Glint" verb: if enabled (default true)
             // and not already registered for THIS exe path, (re)register. HKCU-only,
             // no admin. Startup never removes — the Settings toggle drives removal.

@@ -27,28 +27,9 @@ export default function App() {
 
   useEffect(() => {
     // Hydrate settings from the DB (single async invoke, ~10ms).
-    loadSettings()
-      .catch(() => {
-        /* backend missing (plain Vite) — keep localStorage theme */
-      })
-      .finally(() => {
-        // Once the true theme and accent are applied and the DOM has painted,
-        // reveal the main window. This guarantees zero black frame and zero color splash:
-        // the window pops in instantly fully formed with its final UI.
-        requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            try {
-              const win = getCurrentWindow();
-              if (win.label === "main") {
-                void win.show();
-                void win.setFocus();
-              }
-            } catch {
-              /* not running under Tauri (plain Vite) */
-            }
-          });
-        });
-      });
+    loadSettings().catch(() => {
+      /* backend missing (plain Vite) — keep localStorage theme */
+    });
   }, [loadSettings]);
 
   useEffect(() => {
