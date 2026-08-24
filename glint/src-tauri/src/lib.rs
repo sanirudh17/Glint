@@ -184,17 +184,22 @@ pub fn run() {
             // capture OVERLAY, recording region SELECTOR, HUD, the annotation EDITOR
             // and the TRIM window. The editor/trim are reused across opens (hide on
             // close, retarget + reload on open), so every open after launch is instant.
-            // Off-thread + staggered so it never blocks startup.
+            // Off-thread + STAGGERED: each build claims the main thread for a few
+            // hundred ms, so spacing them keeps that thread responsive for boot-time
+            // IPC (settings_get_all) instead of black-veiling the main window behind
+            // a burst of window builds.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(500));
+                    std::thread::sleep(std::time::Duration::from_millis(600));
                     crate::overlay::prewarm(&h, 0);
+                    std::thread::sleep(std::time::Duration::from_millis(250));
                     crate::recorder::windows::prewarm_region_selector(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(200));
+                    std::thread::sleep(std::time::Duration::from_millis(250));
                     crate::hud::prewarm(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    std::thread::sleep(std::time::Duration::from_millis(250));
                     crate::editor::window::prewarm(&h);
+                    std::thread::sleep(std::time::Duration::from_millis(250));
                     crate::recorder::windows::prewarm_trim_window(&h);
                 });
             }

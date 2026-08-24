@@ -8,9 +8,17 @@ use super::{apply_update, Hotkeys, Settings};
 
 pub struct SettingsState(pub Mutex<Settings>);
 
-#[tauri::command]
-pub fn settings_get_all(state: State<SettingsState>) -> Settings {
-    state.0.lock().unwrap().clone()
+/// `(async)` — sync commands execute on the MAIN thread, and at boot that thread is
+/// busy building the pre-warmed webviews (overlay/selector/HUD/editor/trim). Running
+/// this on the async runtime instead lets the frontend's very first invoke return
+/// immediately instead of queueing seconds behind window builds (the >2s black-veil
+/// bug). Takes AppHandle (owned → 'static future) rather than State<'_, …>, whose
+/// borrow is not 'static; the guard lives only inside this never-awaiting body.
+#[tauri::command(async)]
+pub async fn settings_get_all(app: AppHandle) -> Settings {
+    // One-expression body: all borrows (State temp + guard) die at the semicolon,
+    // keeping the command future 'static without any named intermediates.
+    app.state::<SettingsState>().0.lock().unwrap().clone()
 }
 
 #[tauri::command]
