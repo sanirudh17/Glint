@@ -150,13 +150,10 @@ pub fn run() {
             // registering earlier would arm the built-in defaults and ignore the user's keys.
             shortcuts::register(app.handle())?;
 
-            // Apply the persisted taskbar preference and visual settings to the main window.
+            // Apply the persisted taskbar preference to the main window.
             {
                 let state = app.state::<SettingsState>();
-                let (show, theme, accent) = {
-                    let s = state.0.lock().unwrap();
-                    (s.show_in_taskbar, s.theme.clone(), s.accent.clone())
-                };
+                let show = state.0.lock().unwrap().show_in_taskbar;
                 if let Some(win) = app.get_webview_window("main") {
                     let _ = win.set_skip_taskbar(!show);
                     // Kill the OS open/show transition so the main window snaps
@@ -164,28 +161,22 @@ pub fn run() {
                     // the window's lifetime, so every later show() (tray restore,
                     // capture restore) is also instantaneous.
                     crate::window::disable_transitions(&win);
-                    let theme_str = match theme {
-                        crate::settings::Theme::Dark => "dark",
-                        crate::settings::Theme::Light => "light",
-                        crate::settings::Theme::System => "system",
-                    };
-                    let eval_script = format!(
-                        r##"(() => {{
-                            try {{
-                                localStorage.setItem("glint.theme", "{theme_str}");
-                                localStorage.setItem("glint.accent", "{accent}");
-                                var t = "{theme_str}";
-                                if (t === "system") {{
-                                    t = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
-                                }}
-                                document.documentElement.setAttribute("data-theme", t);
-                                document.documentElement.style.setProperty("--bg", t === "light" ? "#F6F7F9" : "#0C0D0F");
-                                document.documentElement.style.setProperty("--accent", "{accent}");
-                            }} catch (e) {{}}
-                        }})()"##
-                    );
-                    let _ = win.eval(&eval_script);
                 }
+            }
+
+            // Safety valve: ensure the main window is revealed even if the frontend
+            // encounters an unexpected error.
+            {
+                let h = app.handle().clone();
+                std::thread::spawn(move || {
+                    std::thread::sleep(std::time::Duration::from_millis(2500));
+                    if let Some(win) = h.get_webview_window("main") {
+                        if !win.is_visible().unwrap_or(true) {
+                            let _ = win.show();
+                            let _ = win.set_focus();
+                        }
+                    }
+                });
             }
 
             // Self-heal the Explorer "Open in Glint" verb: if enabled (default true)
@@ -204,27 +195,15 @@ pub fn run() {
                 }
             }
 
-            // Pre-warm the transient webviews (hidden) so the first use doesn't pay
-            // the webview-creation cost — the dominant source of the open delay:
-            // capture OVERLAY, recording region SELECTOR, HUD, the annotation EDITOR
-            // and the TRIM window. The editor/trim are reused across opens (hide on
-            // close, retarget + reload on open), so every open after launch is instant.
-            // DELAYED TO IDLE: Keep startup 100% free of webview contention so the
-            // main window renders its first frame in <100ms. Then stagger background
-            // prewarming gently.
+            // Pre-warm the capture overlay and region selector when completely idle (8s after launch).
+            // Zero webview contention during startup.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(3500));
+                    std::thread::sleep(std::time::Duration::from_millis(8000));
                     crate::overlay::prewarm(&h, 0);
-                    std::thread::sleep(std::time::Duration::from_millis(400));
+                    std::thread::sleep(std::time::Duration::from_millis(500));
                     crate::recorder::windows::prewarm_region_selector(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(400));
-                    crate::hud::prewarm(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(400));
-                    crate::editor::window::prewarm(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(400));
-                    crate::recorder::windows::prewarm_trim_window(&h);
                 });
             }
 

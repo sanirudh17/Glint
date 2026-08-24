@@ -22,7 +22,7 @@
         "transparent": false,
         "resizable": true,
         "center": true,
-        "visible": true,
+        "visible": false,
         "backgroundColor": "#0C0D0F"
       }
     ],

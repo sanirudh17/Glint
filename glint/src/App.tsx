@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { router } from "./router";
 import {
   useAppStore,
@@ -20,30 +21,34 @@ type CaptureComplete = {
   clipboard: boolean;
 };
 
-/**
- * App — root component.
- *
- * Bootstraps the theme on mount (calls Rust settings_get_all, stamps
- * data-theme onto <html>), then hands off to the router.
- *
- * The annotation editor is NOT reached from here — it lives in its own OS window
- * (label "editor", route #/editor, built by editor::window), so this window never
- * navigates to /editor. That's why there's no `editor-open` navigation below: the
- * editor window loads #/editor directly and its EditorView fetches the source on
- * mount (and reloads on `editor-open` for a reopen).
- */
 export default function App() {
   const loadSettings = useAppStore((s) => s.loadSettings);
   const pushToast = useAppStore((s) => s.pushToast);
 
   useEffect(() => {
-    // Hydrate settings from the DB (single async invoke, ~10ms). The head script
-    // in index.html already applied the localStorage mirror before first paint, so
-    // the first frame is already close; this just heals any stale localStorage
-    // (pink→green) without a visible transition (loadSettings disables .ready).
-    loadSettings().catch(() => {
-      /* backend missing (plain Vite) — keep localStorage theme */
-    });
+    // Hydrate settings from the DB (single async invoke, ~10ms).
+    loadSettings()
+      .catch(() => {
+        /* backend missing (plain Vite) — keep localStorage theme */
+      })
+      .finally(() => {
+        // Once the true theme and accent are applied and the DOM has painted,
+        // reveal the main window. This guarantees zero black frame and zero color splash:
+        // the window pops in instantly fully formed with its final UI.
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            try {
+              const win = getCurrentWindow();
+              if (win.label === "main") {
+                void win.show();
+                void win.setFocus();
+              }
+            } catch {
+              /* not running under Tauri (plain Vite) */
+            }
+          });
+        });
+      });
   }, [loadSettings]);
 
   useEffect(() => {

@@ -3,24 +3,19 @@ import { createHashRouter, Navigate, Outlet } from "react-router-dom";
 import { Titlebar } from "./components/Titlebar";
 import { NavRail } from "./components/NavRail";
 import HomeView from "./views/HomeView";
-// Small, chrome-free transient routes stay EAGER so their windows (overlay, HUD, the
-// pre-warmed region selector, etc.) render the instant they're shown.
-import { OverlayApp } from "./overlay/OverlayApp";
-import { HudApp } from "./hud/HudApp";
-import { PinApp } from "./pin/PinApp";
-import { ControlBar } from "./recorder/ControlBar";
-import { Countdown } from "./recorder/Countdown";
-import { RegionSelect } from "./recorder/RegionSelect";
-import { RecHud } from "./recorder/RecHud";
-import { RecCam } from "./recorder/RecCam";
-import { FxOverlay } from "./recorder/FxOverlay";
+const OverlayApp = lazy(() => import("./overlay/OverlayApp").then((m) => ({ default: m.OverlayApp })));
+const HudApp = lazy(() => import("./hud/HudApp").then((m) => ({ default: m.HudApp })));
+const PinApp = lazy(() => import("./pin/PinApp").then((m) => ({ default: m.PinApp })));
+const ControlBar = lazy(() => import("./recorder/ControlBar").then((m) => ({ default: m.ControlBar })));
+const Countdown = lazy(() => import("./recorder/Countdown").then((m) => ({ default: m.Countdown })));
+const RegionSelect = lazy(() => import("./recorder/RegionSelect").then((m) => ({ default: m.RegionSelect })));
+const RecHud = lazy(() => import("./recorder/RecHud").then((m) => ({ default: m.RecHud })));
+const RecCam = lazy(() => import("./recorder/RecCam").then((m) => ({ default: m.RecCam })));
+const FxOverlay = lazy(() => import("./recorder/FxOverlay").then((m) => ({ default: m.FxOverlay })));
 import "./components/shell.css";
 
 // Heavy, on-demand routes are code-split so their JS (Konva in the editor, the trim
-// timeline/video, etc.) is NOT loaded into every window's renderer. This is what keeps the
-// background webviews (the pre-warmed selector/overlay/HUD, the tray) lean: they never
-// navigate to these routes, so their chunks are never fetched or parsed. The main window
-// loads a chunk only when you actually open that view.
+// timeline/video, etc.) is NOT loaded into every window's renderer.
 const LibraryView = lazy(() => import("./views/LibraryView"));
 const SettingsView = lazy(() => import("./views/SettingsView"));
 const EditorView = lazy(() => import("./views/EditorView"));
@@ -56,91 +51,40 @@ function AppShell() {
 
 export const router = createHashRouter([
   {
-    /**
-     * Chrome-free overlay route — rendered WITHOUT AppShell.
-     *
-     * The Tauri overlay window is borderless and transparent; mounting
-     * AppShell here would show a spurious Titlebar and NavRail over the
-     * frozen screenshot. This top-level route sits outside the AppShell
-     * parent so OverlayApp is the sole root element for this path.
-     *
-     * URL pattern: tauri://localhost/#/overlay?monitor=<id>
-     * The ?monitor query is parsed directly from window.location.hash
-     * inside OverlayApp (React Router strips query before rendering).
-     */
     path: "/overlay",
-    element: <OverlayApp />,
+    element: lazyRoute(<OverlayApp />),
   },
   {
-    /**
-     * Chrome-free HUD route — the post-capture bar. Like /overlay it sits
-     * outside AppShell so HudApp is the sole root for this transparent,
-     * borderless window. URL: tauri://localhost/#/hud
-     */
     path: "/hud",
-    element: <HudApp />,
+    element: lazyRoute(<HudApp />),
   },
   {
-    /**
-     * Chrome-free pin route — a floating always-on-top image window. Like
-     * /overlay and /hud it sits outside AppShell so PinApp is the sole root.
-     * URL: tauri://localhost/#/pin (window label distinguishes each pin).
-     */
     path: "/pin",
-    element: <PinApp />,
+    element: lazyRoute(<PinApp />),
   },
   {
-    /**
-     * Chrome-free recorder control bar — floating REC indicator (dot + timer +
-     * Stop). Like /pin it sits outside AppShell so ControlBar is the sole root.
-     * URL: tauri://localhost/#/rec-bar
-     */
     path: "/rec-bar",
-    element: <ControlBar />,
+    element: lazyRoute(<ControlBar />),
   },
   {
-    /**
-     * Chrome-free countdown overlay — 3·2·1 before recording starts. Fullscreen,
-     * click-through, closes itself at 0. URL: tauri://localhost/#/rec-countdown
-     */
     path: "/rec-countdown",
-    element: <Countdown />,
+    element: lazyRoute(<Countdown />),
   },
   {
-    /**
-     * Chrome-free live region selector — fullscreen transparent overlay where the
-     * user drags a rectangle to define the recording region. Takes focus (not
-     * click-through) so it receives pointer and Esc events.
-     * URL: tauri://localhost/#/rec-select
-     */
     path: "/rec-select",
-    element: <RegionSelect />,
+    element: lazyRoute(<RegionSelect />),
   },
   {
-    /**
-     * Chrome-free post-recording HUD — a floating card with the finished video's
-     * thumbnail + quick actions, bottom-left. URL: tauri://localhost/#/rec-hud
-     */
     path: "/rec-hud",
-    element: <RecHud />,
+    element: lazyRoute(<RecHud />),
   },
   {
-    /**
-     * Chrome-free webcam bubble — a circular live camera feed that sits on screen
-     * and is intentionally NOT excluded from capture so gdigrab records it.
-     * URL: tauri://localhost/#/rec-cam
-     */
     path: "/rec-cam",
-    element: <RecCam />,
+    element: lazyRoute(<RecCam />),
   },
   {
-    /**
-     * Chrome-free FX overlay — transparent, click-through; gdigrab records whatever
-     * it draws (click ripples, keystroke chips, cursor spotlight). Sits outside
-     * AppShell so FxOverlay is the sole root. URL: tauri://localhost/#/rec-fx
-     */
     path: "/rec-fx",
-    element: <FxOverlay />,
+    element: lazyRoute(<FxOverlay />),
   },
   {
     /**
