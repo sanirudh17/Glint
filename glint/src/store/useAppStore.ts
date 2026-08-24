@@ -139,8 +139,15 @@ export const useAppStore = create<AppState>((set, get) => ({
 
     const merged: Settings = { ...rustSettings, theme, accent, auto_save, auto_copy, open_in_editor, explorer_menu_enabled, record_system_audio, record_microphone, record_webcam, record_webcam_movable };
     set({ settings: merged });
+    // Prevent pink→green flash: DB value may differ from localStorage head value (pink). Disable transitions, apply, then re-enable.
+    try { document.documentElement.classList.remove("ready"); } catch {}
     applyTheme(theme);
     applyAccent(accent);
+    try {
+      requestAnimationFrame(() => requestAnimationFrame(() => document.documentElement.classList.add("ready")));
+    } catch {}
+    // Sync localStorage mirrors are already updated by applyTheme/applyAccent
+    try { localStorage.setItem(THEME_STORAGE_KEY, theme); localStorage.setItem(ACCENT_STORAGE_KEY, accent); } catch {}
   },
 
   setTheme: async (theme: Theme) => {
@@ -365,6 +372,7 @@ export function applyTheme(theme: Theme): void {
       : theme;
   document.documentElement.dataset.theme = resolved;
   try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch { /* no storage → skip */ }
+  // Do not touch .ready here — initial load's ready is managed by index.html/main.tsx/loadSettings
 }
 
 // ─── Accent palette + helpers ─────────────────────────────────────────────────
@@ -437,9 +445,6 @@ export function applyAccent(hex: string): void {
     root.setProperty("--accent-subtle", entry.subtle);
   } else {
     root.setProperty("--accent", hex);
-    // Derive hover/subtle from the raw hex so we never keep a stale pink
-    // wash from a previous palette entry. Hover: same hex (or lighten later);
-    // subtle: 12% alpha wash.
     try {
       let h = hex.replace("#", "").trim();
       if (h.length === 3) h = h[0] + h[0] + h[1] + h[1] + h[2] + h[2];
@@ -452,11 +457,5 @@ export function applyAccent(hex: string): void {
       }
     } catch { /* ignore */ }
   }
-  // Mark the document as having applied its real accent so the
-  // html:not(.ready) transition gate in index.html can lift.
-  try {
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => document.documentElement.classList.add("ready"));
-    });
-  } catch { /* no raf */ }
+  // Do not touch .ready here — see loadSettings for the pink→green no-flash handling
 }
