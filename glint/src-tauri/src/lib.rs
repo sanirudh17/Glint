@@ -179,15 +179,12 @@ pub fn run() {
                 }
             }
 
-            // Pre-warm the focus-taking transient webviews (hidden) so the first use
-            // doesn't pay the webview-creation cost — the dominant source of the open
-            // delay: the capture OVERLAY and the recording region SELECTOR. Both are safe
-            // to keep alive and reuse because they take focus on show. The HUD is now
-            // also pre-warmed (hidden but alive) so its first capture doesn't pay a
-            // cold build cost while the system is under load — the main source of the
-            // "HUD fails to appear under load" bug. A pre-warmed hidden HUD still
-            // warms the renderer; it is positioned + shown only when a capture lands.
-            // Off-thread + delayed so it never blocks startup.
+            // Pre-warm the transient webviews (hidden) so the first use doesn't pay
+            // the webview-creation cost — the dominant source of the open delay:
+            // capture OVERLAY, recording region SELECTOR, HUD, the annotation EDITOR
+            // and the TRIM window. The editor/trim are reused across opens (hide on
+            // close, retarget + reload on open), so every open after launch is instant.
+            // Off-thread + staggered so it never blocks startup.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
@@ -196,6 +193,9 @@ pub fn run() {
                     crate::recorder::windows::prewarm_region_selector(&h);
                     std::thread::sleep(std::time::Duration::from_millis(200));
                     crate::hud::prewarm(&h);
+                    std::thread::sleep(std::time::Duration::from_millis(300));
+                    crate::editor::window::prewarm(&h);
+                    crate::recorder::windows::prewarm_trim_window(&h);
                 });
             }
 
@@ -220,7 +220,8 @@ pub fn run() {
         })
         .on_window_event(|window, event| {
             if let tauri::WindowEvent::CloseRequested { api, .. } = event {
-                if window.label() == "main" {
+                let label = window.label().to_string();
+                if label == "main" {
                     api.prevent_close();
                     // Taskbar preview bug: a hidden window's DWM thumbnail is a
                     // white placeholder with the app icon. If the window is in the
@@ -236,7 +237,7 @@ pub fn run() {
                     } else {
                         let _ = window.hide();
                     }
-                    // Drop any in-memory editing source when the window is
+                    // Drop any in-memory editing source when the main window is
                     // dismissed so a capture's pixels don't linger past the
                     // session. Invisible to an open editor (its base lives in the
                     // frontend store); the next entry point repopulates this.
@@ -244,6 +245,14 @@ pub fn run() {
                     if let Some(ed) = window.try_state::<crate::editor::EditorState>() {
                         *ed.0.lock().unwrap() = None;
                     }
+                } else if label == crate::editor::window::EDITOR_LABEL
+                    || label == crate::recorder::windows::TRIM_LABEL
+                {
+                    // Keep the editor + trim webviews ALIVE: hide instead of destroy.
+                    // They are pre-mounted, so the next open shows instantly with zero
+                    // cold-build delay; reopening always re-targets + reloads first.
+                    api.prevent_close();
+                    let _ = window.hide();
                 }
             }
             // Drop a pin's in-memory bytes when its window is destroyed (any

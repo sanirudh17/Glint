@@ -1240,16 +1240,19 @@ fn prepare_trim_target(app: &tauri::AppHandle, id: i64, path: String) {
 }
 
 /// Open the trim window for a recording (from the HUD or Library). Single instance:
-/// if one is already open, focus it and toast rather than retargeting. Async because
-/// it builds a WebView2 window (must stay off the main thread — window-build rule).
+/// an existing (possibly pre-warmed hidden) window is REUSED — retarget it via
+/// RecorderTrimState + `rec-trim-reload`, show, and its TrimView refetches. No cold
+/// rebuild, no flash, and no more "Close the current trim first" friction. Async
+/// because a first build must stay off the main thread (window-build rule).
 #[tauri::command(async)]
 pub async fn recorder_open_trim(app: tauri::AppHandle, id: i64, path: String) -> Result<(), String> {
-    if app.get_webview_window(windows::TRIM_LABEL).is_some() {
-        let _ = windows::build_trim_window(&app); // focuses existing
-        let _ = app.emit("glint-toast", "Close the current trim first");
+    let existed = app.get_webview_window(windows::TRIM_LABEL).is_some();
+    prepare_trim_target(&app, id, path);
+    if existed {
+        windows::show_trim_window(&app);
+        let _ = app.emit_to(windows::TRIM_LABEL, "rec-trim-reload", ());
         return Ok(());
     }
-    prepare_trim_target(&app, id, path);
     windows::build_trim_window(&app).map_err(|e| e.to_string())
 }
 
@@ -1260,17 +1263,19 @@ pub async fn recorder_open_trim(app: tauri::AppHandle, id: i64, path: String) ->
 pub fn open_trim_for_external(app: &tauri::AppHandle, path: String) {
     let app = app.clone();
     tauri::async_runtime::spawn(async move {
-        if app.get_webview_window(windows::TRIM_LABEL).is_some() {
-            let _ = windows::build_trim_window(&app); // focus existing
-            let _ = app.emit("glint-toast", "Close the current trim first");
-            return;
-        }
+        let existed = app.get_webview_window(windows::TRIM_LABEL).is_some();
         let id = {
             let db = app.state::<crate::Db>();
             let conn = db.0.lock().unwrap();
             crate::db::find_capture_id_by_path(&conn, &path).unwrap_or(-1)
         };
         prepare_trim_target(&app, id, path);
+        if existed {
+            // Warm window: retarget in place — instant, no rebuild.
+            windows::show_trim_window(&app);
+            let _ = app.emit_to(windows::TRIM_LABEL, "rec-trim-reload", ());
+            return;
+        }
         if let Err(e) = windows::build_trim_window(&app) {
             let _ = app.emit("glint-toast", format!("Couldn't open trim: {e}"));
         }

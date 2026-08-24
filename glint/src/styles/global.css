@@ -87,6 +87,20 @@ button {
 }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ─── Boot veil ─────────────────────────────────────────────────────── */
+/*
+ * Rendered by App until settings (theme + accent) hydrate from the DB.
+ * Matches the window background exactly, so it's indistinguishable from the
+ * not-yet-painted window — and guarantees the first visible UI frame already
+ * carries the correct accent (no stale-pink flash from the localStorage mirror).
+ */
+.boot-veil {
+  position: fixed;
+  inset: 0;
+  background: var(--bg, #0C0D0F);
+  z-index: 99999;
+}
+
 /* ─── Focus ring ─────────────────────────────────────────────────────── */
 /*
  * Only visible on keyboard navigation — never on mouse click.

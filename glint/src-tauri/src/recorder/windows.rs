@@ -3,7 +3,7 @@
 //! called from async (`#[tauri::command(async)]`) contexts, which keeps the
 //! builds off the main thread and avoids the WebView2 deadlock.
 
-use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder, Wry};
 
 pub const BAR_LABEL: &str = "rec-bar";
 
@@ -332,15 +332,10 @@ pub fn close_cam_bubble(app: &AppHandle) {
 
 pub const TRIM_LABEL: &str = "rec-trim";
 
-/// The trim / quick-edit window: a NORMAL decorated, focused, resizable app window
-/// (unlike the transparent recorder overlays). Built off the main thread (async
-/// command) per the window-build rule. Single instance — focus if already open.
-pub fn build_trim_window(app: &AppHandle) -> tauri::Result<()> {
-    if let Some(w) = app.get_webview_window(TRIM_LABEL) {
-        let _ = w.set_focus();
-        return Ok(());
-    }
-    let win = WebviewWindowBuilder::new(app, TRIM_LABEL, WebviewUrl::App("index.html#/rec-trim".into()))
+/// Shared builder so the trim window can be built visible (on demand) or hidden
+/// (startup prewarm) with identical chrome.
+fn trim_builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
+    WebviewWindowBuilder::new(app, TRIM_LABEL, WebviewUrl::App("index.html#/rec-trim".into()))
         .title("Glint — Trim Recording")
         .decorations(true)
         .resizable(true)
@@ -350,11 +345,48 @@ pub fn build_trim_window(app: &AppHandle) -> tauri::Result<()> {
         // Open maximized so the preview + timeline get the full screen — a 900×600 window
         // is cramped for scrubbing. Still a normal decorated window the user can un-maximize.
         .maximized(true)
-        .visible(true)
+        // Dark substrate from the first frame — never a white/black placeholder.
         .background_color(tauri::window::Color(12, 13, 15, 255))
-        .build()?;
+}
+
+/// The trim / quick-edit window: a NORMAL decorated, focused, resizable app window
+/// (unlike the transparent recorder overlays). Built off the main thread (async
+/// command) per the window-build rule. Single instance — reused across opens:
+/// callers retarget via RecorderTrimState + `rec-trim-reload`, so reopening is
+/// INSTANT (no cold webview build).
+pub fn build_trim_window(app: &AppHandle) -> tauri::Result<()> {
+    if app.get_webview_window(TRIM_LABEL).is_some() {
+        show_trim_window(app);
+        return Ok(());
+    }
+    let win = trim_builder(app).visible(true).build()?;
+    // Kill OS open transition so the window snaps in instantly.
+    crate::window::disable_transitions(&win);
     let _ = win.set_focus();
     Ok(())
+}
+
+/// Build the trim window once, hidden, so the first "Trim" click doesn't pay the
+/// WebView2 cold-start. Idempotent. Safe from a spawned thread (window-build rule).
+pub fn prewarm_trim_window(app: &AppHandle) {
+    if app.get_webview_window(TRIM_LABEL).is_some() {
+        return;
+    }
+    match trim_builder(app).visible(false).build() {
+        Ok(w) => {
+            crate::window::disable_transitions(&w);
+        }
+        Err(e) => log::warn!("trim prewarm failed (will build on demand): {e}"),
+    }
+}
+
+/// Show + focus the (possibly hidden/pre-warmed) trim window.
+pub fn show_trim_window(app: &AppHandle) {
+    if let Some(w) = app.get_webview_window(TRIM_LABEL) {
+        let _ = w.unminimize();
+        let _ = w.show();
+        let _ = w.set_focus();
+    }
 }
 
 /// Close the trim window if open.

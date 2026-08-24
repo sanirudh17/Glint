@@ -266,14 +266,15 @@ pub fn editor_done(
     });
 
     // Building the tray webview must run OFF the main thread (window-build rule). Only
-    // close the editor window if the tray actually came up, so a build failure never
-    // strands the user with no window. The main window is left minimized in the
-    // taskbar (the user restores it from there) — Done doesn't touch it.
+    // hide the editor window if the tray actually came up, so a build failure never
+    // strands the user with no window. HIDE (not close): the editor webview stays
+    // alive and pre-mounted, so the next "Annotate" opens instantly. The main window
+    // is left minimized in the taskbar — Done doesn't touch it.
     let app2 = app.clone();
     std::thread::spawn(move || match crate::hud::ensure_open(&app2) {
         Ok(()) => {
             if let Some(win) = app2.get_webview_window(crate::editor::window::EDITOR_LABEL) {
-                let _ = win.close();
+                let _ = win.hide();
             }
         }
         Err(e) => {

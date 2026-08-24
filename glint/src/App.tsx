@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
 import { RouterProvider } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
 import { router } from "./router";
@@ -36,14 +36,35 @@ export default function App() {
   const loadSettings = useAppStore((s) => s.loadSettings);
   const pushToast = useAppStore((s) => s.pushToast);
 
+  // Boot veil: render NOTHING until settings (theme + accent) are hydrated from
+  // the DB. This is the hard guarantee against the pink→green flash: the stale
+  // localStorage mirror may hold an old accent, so any UI rendered before the DB
+  // read completes can flash the wrong color. A dark veil matching the window
+  // background is indistinguishable from the not-yet-painted window, and the first
+  // real frame the user sees is already styled with the correct accent. The veil
+  // lifts on hydration OR after a short cap (plain-Vite dev without the backend).
+  const [booted, setBooted] = useState(false);
+
   useEffect(() => {
-    // Theme + accent were already applied synchronously in main.tsx (from the
-    // localStorage mirror) before first paint — no flash. Just hydrate the full
-    // settings from the backend, which re-applies the same theme/accent from the DB.
-    loadSettings().catch(() => {
-      // Backend not ready (e.g., running plain Vite without Tauri) — main.tsx's
-      // pre-paint fallback already stamped a theme, so there's nothing more to do.
-    });
+    let done = false;
+    const finish = () => {
+      if (!done) {
+        done = true;
+        setBooted(true);
+      }
+    };
+    // Cap: never block boot more than 400ms (backend missing / slow disk).
+    const cap = window.setTimeout(finish, 400);
+    loadSettings()
+      .catch(() => {
+        // Backend not ready (e.g., running plain Vite without Tauri) — the cap
+        // lifts the veil and main.tsx's pre-paint fallback theme applies.
+      })
+      .finally(() => {
+        window.clearTimeout(cap);
+        finish();
+      });
+    return () => window.clearTimeout(cap);
   }, [loadSettings]);
 
   useEffect(() => {
@@ -89,6 +110,10 @@ export default function App() {
       subs.forEach((p) => p.then((fn) => fn()));
     };
   }, [pushToast]);
+
+  if (!booted) {
+    return <div className="boot-veil" aria-hidden="true" />;
+  }
 
   return (
     <>
