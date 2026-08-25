@@ -58,18 +58,3 @@ ReactDOM.createRoot(document.getElementById("root") as HTMLElement).render(
     <App />
   </React.StrictMode>,
 );
-
-// Reveal the main window on the very first painted animation frame.
-// Because Rust seeds window.__GLINT_BOOT__ and background_color, the window snaps onto screen
-// 100% fully painted, themed, and rendered — with 0s black screen, 0s white screen, and 0s flash.
-try {
-  const win = getCurrentWindow();
-  if (win.label === "main") {
-    requestAnimationFrame(() => {
-      void win.show();
-      void win.setFocus();
-    });
-  }
-} catch {
-  /* not running under Tauri (plain Vite) */
-}

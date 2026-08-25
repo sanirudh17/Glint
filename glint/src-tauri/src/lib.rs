@@ -226,19 +226,12 @@ pub fn run() {
                 }
             }
 
-            // Pre-warm background editor windows and sidecars right after the main window is up (300ms after launch).
-            // Staggered by 150ms so startup has zero webview contention, but opening Editor or Trim is instantaneous.
-            // Transparent overlays (capture overlay and region selector) are built on-demand on first use
-            // so DWM transparent composition surfaces never flash on screen during startup.
+            // Pre-warm ffprobe sidecar in OS disk cache and antivirus scanner (off-thread).
+            // Do not create any background webview windows during startup to keep cold boot 100% clean with zero flash.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(300));
-                    crate::editor::window::prewarm(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(150));
-                    crate::recorder::windows::prewarm_trim_window(&h);
-                    std::thread::sleep(std::time::Duration::from_millis(150));
-                    // Pre-warm ffprobe sidecar in OS disk cache and antivirus scanner
+                    std::thread::sleep(std::time::Duration::from_millis(1500));
                     if let Ok(cmd) = h.shell().sidecar("ffprobe") {
                         tauri::async_runtime::spawn(async move {
                             let _ = cmd.args(["-version"]).output().await;

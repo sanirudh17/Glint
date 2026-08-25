@@ -1,5 +1,6 @@
-import { lazy, Suspense, type ReactNode } from "react";
-import { createHashRouter, Navigate, Outlet } from "react-router-dom";
+import { useEffect, lazy, Suspense, type ReactNode } from "react";
+import { createHashRouter, Outlet } from "react-router-dom";
+import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Titlebar } from "./components/Titlebar";
 import { NavRail } from "./components/NavRail";
 import HomeView from "./views/HomeView";
@@ -35,6 +36,25 @@ const lazyRoute = (el: ReactNode) => <Suspense fallback={null}>{el}</Suspense>;
  * resolved client-side regardless of the origin.
  */
 function AppShell() {
+  // Reveal the main window only once AppShell and HomeView have committed to the DOM.
+  // Double-rAF guarantees the browser has painted the dashboard components with zero flash.
+  useEffect(() => {
+    try {
+      const win = getCurrentWindow();
+      if (win.label === "main") {
+        const r = requestAnimationFrame(() => {
+          requestAnimationFrame(() => {
+            void win.show();
+            void win.setFocus();
+          });
+        });
+        return () => cancelAnimationFrame(r);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   return (
     <div className="g-shell">
       <Titlebar />
@@ -121,7 +141,7 @@ export const router = createHashRouter([
     path: "/",
     element: <AppShell />,
     children: [
-      { index: true, element: <Navigate to="/home" replace /> },
+      { index: true, element: <HomeView /> },
       { path: "home", element: <HomeView /> },
       { path: "library", element: <LibraryView /> },
       { path: "settings", element: <SettingsView /> },
