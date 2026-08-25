@@ -226,9 +226,10 @@ pub fn run() {
                 }
             }
 
-            // Pre-warm background windows and sidecars right after the main window is up (300ms after launch).
-            // Staggered by 150ms so startup has zero webview contention, but opening Editor,
-            // Trim, Overlay, or Region Selector is instantaneous on the very first click.
+            // Pre-warm background editor windows and sidecars right after the main window is up (300ms after launch).
+            // Staggered by 150ms so startup has zero webview contention, but opening Editor or Trim is instantaneous.
+            // Transparent overlays (capture overlay and region selector) are built on-demand on first use
+            // so DWM transparent composition surfaces never flash on screen during startup.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
@@ -243,10 +244,6 @@ pub fn run() {
                             let _ = cmd.args(["-version"]).output().await;
                         });
                     }
-                    std::thread::sleep(std::time::Duration::from_millis(150));
-                    crate::overlay::prewarm(&h, 0);
-                    std::thread::sleep(std::time::Duration::from_millis(150));
-                    crate::recorder::windows::prewarm_region_selector(&h);
                 });
             }
 
