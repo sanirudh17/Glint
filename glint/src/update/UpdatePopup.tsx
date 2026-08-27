@@ -85,9 +85,6 @@ export function UpdatePopup() {
               onClick={() => void install(status.assetUrl, status.latest)}>
               Update now
             </Button>
-            <Button variant="ghost" size="sm" onClick={onDismiss}>
-              Later
-            </Button>
           </div>
         </>
       )}
