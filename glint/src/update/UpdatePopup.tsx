@@ -54,10 +54,12 @@ export function UpdatePopup() {
         : "";
 
   function onDismiss() {
-    if (version) {
-      try { localStorage.setItem(DISMISS_KEY, version); } catch { /* no storage */ }
+    const v = version || (status.kind === "available" ? status.latest : "");
+    if (v) {
+      try { localStorage.setItem(DISMISS_KEY, v); } catch { /* no storage */ }
     }
     setDismissed(true);
+    setShowing(false);
   }
 
   return (
@@ -82,6 +84,9 @@ export function UpdatePopup() {
             <Button variant="primary" size="sm" icon={ArrowUpCircle}
               onClick={() => void install(status.assetUrl, status.latest)}>
               Update now
+            </Button>
+            <Button variant="ghost" size="sm" onClick={onDismiss}>
+              Later
             </Button>
           </div>
         </>
