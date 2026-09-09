@@ -94,8 +94,12 @@
 .library-search {
   width: 100%;
   min-width: 0;
-  height: 34px;
+  height: 36px;
   padding: 0 var(--s3) 0 var(--s6);
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  line-height: normal;
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--r2);

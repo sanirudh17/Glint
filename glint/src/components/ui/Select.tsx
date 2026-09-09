@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, useId } from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown, Check } from "lucide-react";
 import "./ui.css";
 
 export interface SelectOption {
@@ -185,6 +185,11 @@ export function Select({
                 onMouseEnter={() => setHighlightedIndex(index)}
               >
                 <span className="g-select-option-label">{opt.label}</span>
+                {isSelected && (
+                  <span className="g-select-option-check" aria-hidden="true">
+                    <Check size={13} strokeWidth={2.2} />
+                  </span>
+                )}
               </div>
             );
           })}
