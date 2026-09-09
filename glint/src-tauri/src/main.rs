@@ -6,5 +6,7 @@
 #![windows_subsystem = "windows"]
 
 fn main() {
+    // Configure WebView2 to initialize swapchains to 0x00000000 (transparent) instead of default #FFFFFFFF (opaque white).
+    std::env::set_var("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "0");
     glint_lib::run()
 }

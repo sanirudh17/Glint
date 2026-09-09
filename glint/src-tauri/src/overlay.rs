@@ -4,11 +4,14 @@
 //! frozen frame (the `overlay-refresh` event), and shows it. On commit/cancel it
 //! is HIDDEN, not closed, so the next capture pays no webview-creation cost.
 
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use tauri::{
     AppHandle, Emitter, Listener, Manager, WebviewUrl, WebviewWindow, WebviewWindowBuilder,
 };
+
+static NEXT_SESSION: AtomicU64 = AtomicU64::new(0);
 
 /// How long the backend waits for the overlay's `overlay-ready` (fetched+decoded)
 /// before showing anyway. Warm captures signal in a few tens of ms; the cap
@@ -35,6 +38,7 @@ fn build(app: &AppHandle, label: &str, monitor_id: u32) -> tauri::Result<Webview
         .resizable(false)
         .shadow(false)
         .visible(false) // shown after it positions to the monitor
+        .background_color(tauri::window::Color(0, 0, 0, 0))
         .build()?;
     // Kill the OS fade/scale-in transition so the frozen overlay snaps on screen the
     // instant the shortcut fires (set once — it persists across every reuse show()).
@@ -58,11 +62,15 @@ pub fn prewarm(app: &AppHandle, monitor_id: u32) {
 
 pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
     let label = format!("{OVERLAY_PREFIX}{monitor_id}");
+    let _ = NEXT_SESSION.fetch_add(1, Ordering::SeqCst);
     // Reuse the pre-warmed window when present; build on demand as a fallback.
     let win = match app.get_webview_window(&label) {
         Some(w) => w,
         None => build(app, &label, monitor_id)?,
     };
+
+    // Re-assert transparency on every show so the DWM compositor never falls back to white.
+    let _ = win.set_background_color(Some(tauri::window::Color(0, 0, 0, 0)));
 
     // Cover the primary monitor by manual position+size (single-monitor phase).
     // We deliberately do NOT call set_fullscreen(true): on Windows, OS fullscreen
@@ -145,6 +153,7 @@ pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
 /// Single-monitor today: at most one overlay is ever visible, so the un-scoped
 /// `overlay-cleared` can't be crossed with another overlay's ack.
 pub fn teardown_all(app: &AppHandle) {
+    let session = NEXT_SESSION.load(Ordering::SeqCst);
     let labels: Vec<String> = app
         .webview_windows()
         .keys()
@@ -159,7 +168,7 @@ pub fn teardown_all(app: &AppHandle) {
             if win.is_visible().unwrap_or(false) {
                 let app = app.clone();
                 let label = label.clone();
-                std::thread::spawn(move || clear_then_hide(&app, &label));
+                std::thread::spawn(move || clear_then_hide(&app, &label, session));
             } else {
                 let _ = win.hide();
             }
@@ -168,8 +177,9 @@ pub fn teardown_all(app: &AppHandle) {
 }
 
 /// Clear a visible overlay to transparent, wait (bounded) for that to paint, then
-/// hide it. Runs on a worker thread (see `teardown_all`).
-fn clear_then_hide(app: &AppHandle, label: &str) {
+/// hide it. Runs on a worker thread (see `teardown_all`). Aborts without hiding if
+/// a newer capture session has already been triggered.
+fn clear_then_hide(app: &AppHandle, label: &str, session: u64) {
     let (tx, rx) = mpsc::channel::<()>();
     let cleared_id = app.once("overlay-cleared", move |_| {
         let _ = tx.send(());
@@ -177,6 +187,10 @@ fn clear_then_hide(app: &AppHandle, label: &str) {
     let _ = app.emit_to(label, "overlay-clear", ());
     let _ = rx.recv_timeout(CLEAR_TIMEOUT);
     app.unlisten(cleared_id);
+    if NEXT_SESSION.load(Ordering::SeqCst) != session {
+        log::info!("overlay: skipping hide because a new capture session has started");
+        return;
+    }
     if let Some(win) = app.get_webview_window(label) {
         let _ = win.hide();
     }

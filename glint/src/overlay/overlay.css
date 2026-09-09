@@ -12,6 +12,12 @@
  *              window lets the live desktop show through until data arrives.
  */
 
+html,
+body {
+  background: transparent !important;
+  background-color: transparent !important;
+}
+
 .ov-root {
   position: fixed;
   inset: 0;

@@ -72,6 +72,7 @@ export function OverlayApp() {
       try {
         const { data: frame, fetchMs, decodeMs } = await loadOverlayFrame(monitorId);
         setData(frame);
+        await nextPaint();
         void signalOverlayReady(fetchMs, decodeMs);
       } catch {
         cancelCapture();

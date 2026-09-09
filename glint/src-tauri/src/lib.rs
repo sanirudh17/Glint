@@ -73,6 +73,7 @@ fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    std::env::set_var("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "0");
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // A second launch (e.g. "Open in Glint" while Glint is already running)
@@ -227,7 +228,7 @@ pub fn run() {
             }
 
             // Pre-warm ffprobe sidecar in OS disk cache and antivirus scanner (off-thread).
-            // Do not create any background webview windows during startup to keep cold boot 100% clean with zero flash.
+            // Pre-warm the overlay window once off-thread after cold start so captures have zero webview-creation delay.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
@@ -237,6 +238,7 @@ pub fn run() {
                             let _ = cmd.args(["-version"]).output().await;
                         });
                     }
+                    crate::overlay::prewarm(&h, 0);
                 });
             }
 
