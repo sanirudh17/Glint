@@ -50,6 +50,21 @@ function useMonitorId(): number {
 export function OverlayApp() {
   const monitorId = useMonitorId();
   const [data, setData] = useState<OverlayData | null>(null);
+  const [displayFrame, setDisplayFrame] = useState<OverlayData | null>(null);
+
+  const isPreviewActive = Boolean(data);
+
+  // Keep displayFrame mounted during exit transition for smooth cross-fade
+  useEffect(() => {
+    if (data) {
+      setDisplayFrame(data);
+    } else {
+      const timer = setTimeout(() => {
+        setDisplayFrame(null);
+      }, 200);
+      return () => clearTimeout(timer);
+    }
+  }, [data]);
 
   // The overlay window is pre-warmed and REUSED across captures. The mount-time
   // fetch only matters for the on-demand fallback build (a fresh window with a
@@ -83,14 +98,12 @@ export function OverlayApp() {
 
   // Clear-before-hide handshake (see overlay.rs `teardown_all`). On every capture
   // exit the backend emits `overlay-clear` and waits for our `overlay-cleared`
-  // before hiding this reused window. We drop the frozen frame (→ transparent
-  // empty state) and only ack once that has actually PAINTED — so the hidden
-  // window's retained GPU surface is transparent, not this capture's screenshot.
-  // Without it, a cold show after a long idle briefly composites the stale frame
-  // (the "flash of a previous screen" bug). Mirror of the decode-before-show wait.
+  // before hiding this reused window. We trigger the creamy fade-out transition,
+  // wait for it to complete (180ms) and paint, then ack.
   useEffect(() => {
     const un = listen("overlay-clear", async () => {
       setData(null);
+      await new Promise((resolve) => setTimeout(resolve, 180));
       await nextPaint();
       void signalOverlayCleared();
     });
@@ -106,45 +119,51 @@ export function OverlayApp() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  // Transparent while loading — Tauri transparent window shows live desktop.
-  if (!data) return <div className="ov-root ov-empty" />;
-
   return (
-    <div
-      className="ov-root"
-      style={{ backgroundImage: `url(${data.imageDataUrl})` }}
-    >
+    <div className={`ov-root ${!isPreviewActive && !displayFrame ? "ov-empty" : ""}`}>
       {/*
-       * ── MODE LAYER MOUNT POINT ──────────────────────────────────────────
-       * Tasks 9–12 insert the interactive capture UI here.
-       * The data prop shape is:
-       *   data.mode       — "area" | "fullscreen" | "window"
-       *   data.windows    — WindowRect[] for window-mode highlighting
-       *   data.width/height/scale — monitor logical dimensions
-       *   commitCapture() / cancelCapture() from captureIpc
-       * ───────────────────────────────────────────────────────────────────
+       * Creamy preview-mode transition surface: cross-fades against the transparent desktop.
+       * Animates ONLY opacity + transform (scale 0.985 <-> 1) + backdrop-filter blur ramp in glass mode.
        */}
+      <div
+        className={`ov-preview-surface ${isPreviewActive ? "ov-active" : ""}`}
+        style={{
+          backgroundImage: displayFrame ? `url(${displayFrame.imageDataUrl})` : undefined,
+        }}
+      />
 
-      {/* Mode router — Area / Fullscreen / Window over the shared frozen image. */}
-      {data.mode === "area" && (
-        <SelectionLayer
-          monitorId={monitorId}
-          scale={data.scale}
-          imageDataUrl={data.imageDataUrl}
-          cursorX={data.cursorX}
-          cursorY={data.cursorY}
-        />
-      )}
-      {data.mode === "fullscreen" && (
-        <FullscreenMode
-          monitorId={monitorId}
-          width={data.width}
-          height={data.height}
-          scale={data.scale}
-        />
-      )}
-      {data.mode === "window" && (
-        <WindowMode monitorId={monitorId} windows={data.windows} scale={data.scale} />
+      {/*
+       * Interactive capture layer: sits above the preview surface.
+       * Animates ONLY opacity — NO transform scale — ensuring selection rect,
+       * badges, and handles stay 100% pixel-stable without layout shift.
+       */}
+      {displayFrame && (
+        <div className={`ov-mode-layer ${isPreviewActive ? "ov-active" : ""}`}>
+          {displayFrame.mode === "area" && (
+            <SelectionLayer
+              monitorId={monitorId}
+              scale={displayFrame.scale}
+              imageDataUrl={displayFrame.imageDataUrl}
+              cursorX={displayFrame.cursorX}
+              cursorY={displayFrame.cursorY}
+            />
+          )}
+          {displayFrame.mode === "fullscreen" && (
+            <FullscreenMode
+              monitorId={monitorId}
+              width={displayFrame.width}
+              height={displayFrame.height}
+              scale={displayFrame.scale}
+            />
+          )}
+          {displayFrame.mode === "window" && (
+            <WindowMode
+              monitorId={monitorId}
+              windows={displayFrame.windows}
+              scale={displayFrame.scale}
+            />
+          )}
+        </div>
       )}
     </div>
   );

@@ -23,7 +23,7 @@ const READY_TIMEOUT: Duration = Duration::from_millis(300);
 /// before hiding it (see `teardown_all`). The webview is warm at this point (the
 /// user just interacted with it), so the ack lands in ~1–2 frames; the cap only
 /// guards against a wedged webview so teardown never hangs.
-const CLEAR_TIMEOUT: Duration = Duration::from_millis(200);
+const CLEAR_TIMEOUT: Duration = Duration::from_millis(400);
 
 pub const OVERLAY_PREFIX: &str = "overlay-";
 
