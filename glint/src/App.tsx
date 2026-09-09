@@ -75,6 +75,19 @@ export default function App() {
     };
   }, [pushToast]);
 
+  useEffect(() => {
+    // When theme is set to "system", track OS dark/light changes live
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => {
+      const currentTheme = useAppStore.getState().settings?.theme;
+      if (currentTheme === "system") {
+        applyTheme("system");
+      }
+    };
+    media.addEventListener("change", handler);
+    return () => media.removeEventListener("change", handler);
+  }, []);
+
   return (
     <>
       <RouterProvider router={router} />

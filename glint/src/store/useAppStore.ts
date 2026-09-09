@@ -317,7 +317,7 @@ function broadcastVisual(theme: Theme, accent: string): void {
   });
 }
 
-/** Resolve "system" → actual dark/light, then stamp onto <html data-theme>. */
+/** Resolve "system" → actual dark/light, then stamp onto <html data-theme> and sync --bg. */
 export function applyTheme(theme: Theme): void {
   const resolved =
     theme === "system"
@@ -326,6 +326,10 @@ export function applyTheme(theme: Theme): void {
         : "light"
       : theme;
   document.documentElement.dataset.theme = resolved;
+  document.documentElement.style.setProperty(
+    "--bg",
+    resolved === "light" ? "#F6F7F9" : "#0C0D0F",
+  );
   try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch { /* no storage → skip */ }
   // Do not touch .ready here — initial load's ready is managed by index.html/main.tsx/loadSettings
 }

@@ -14,7 +14,7 @@ try {
   const initialAccent = boot?.accent ?? localStorage.getItem(ACCENT_STORAGE_KEY) ?? "#2BAAAD";
   if (initialAccent) applyAccent(initialAccent);
 } catch {
-  document.documentElement.dataset.theme = "dark";
+  applyTheme("dark");
 }
 
 // Chrome-free transient webviews (capture overlay, HUD, pinned images) are
@@ -46,7 +46,7 @@ try {
     // head script was bypassed (e.g. hard reload). The index.html inline
     // style already paints #0C0D0F, this just keeps --bg consistent.
     if (!document.documentElement.dataset.theme) {
-      document.documentElement.dataset.theme = "dark";
+      applyTheme("dark");
     }
   }
 

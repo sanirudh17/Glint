@@ -7,6 +7,8 @@
     <style>
       /* Prevent white flash before webview paints. */
       html, body { background: var(--bg, #0C0D0F); margin: 0; }
+      :root[data-theme="dark"] { --bg: #0C0D0F; }
+      :root[data-theme="light"] { --bg: #F6F7F9; }
       /* Gate transitions until settings are fully hydrated and first frame is rendered.
          Without this, color switches animate visibly on startup. */
       html:not(.ready) *, :root:not(.ready) * {
