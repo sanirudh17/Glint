@@ -252,16 +252,19 @@
 /* ─── Select ─────────────────────────────────────────────────────────── */
 .g-select-wrap {
   position: relative;
-  display: inline-flex;
-  align-items: center;
+  width: 100%;
+  max-width: 280px;
+  flex-shrink: 0;
 }
 
-.g-select {
-  appearance: none;
-  -webkit-appearance: none;
+.g-select-trigger {
   width: 100%;
   height: 34px;
-  padding: 0 var(--s7) 0 var(--s3);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--s2);
+  padding: 0 var(--s3);
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--r2);
@@ -270,36 +273,116 @@
   font-size: var(--fz-md);
   font-weight: var(--fw-normal);
   cursor: pointer;
+  text-align: left;
+  user-select: none;
+  -webkit-user-select: none;
   transition:
     border-color var(--dur) var(--ease),
-    background var(--dur) var(--ease);
+    background var(--dur) var(--ease),
+    box-shadow var(--dur) var(--ease);
 }
 
-.g-select:hover {
+.g-select-trigger:hover:not(:disabled) {
   border-color: var(--border-strong);
+  background: var(--bg-elev2);
+}
+
+.g-select-trigger:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
+.g-select-wrap--open .g-select-trigger {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
+}
+
+.g-select-value {
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.g-select-chevron {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-dim);
+  opacity: 0.9;
+  transition: transform var(--dur) var(--ease);
+}
+
+.g-select-wrap--open .g-select-chevron {
+  transform: rotate(180deg);
+}
+
+.g-select-dropdown {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  right: 0;
+  z-index: 1000;
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.18);
+  padding: 4px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.g-select-dropdown--top {
+  top: auto;
+  bottom: calc(100% + 4px);
+}
+
+.g-select-option {
+  padding: 7px 10px;
+  border-radius: var(--r1);
+  font-size: var(--fz-md);
+  line-height: 1.4;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  user-select: none;
+  -webkit-user-select: none;
+  transition:
+    background var(--dur) var(--ease),
+    color var(--dur) var(--ease);
+}
+
+.g-select-option:hover,
+.g-select-option--highlighted {
+  background: var(--bg-elev2);
+}
+
+.g-select-option--selected {
+  background: var(--accent-subtle);
+  color: var(--text);
+  font-weight: var(--fw-medium);
+}
+
+.g-select-option--selected.g-select-option--highlighted {
+  background: color-mix(in srgb, var(--accent) 18%, var(--bg-elev2));
 }
 
 /* Disabled select — inert and visibly unavailable. */
 .g-select-wrap--disabled {
   opacity: 0.4;
-}
-.g-select-wrap--disabled .g-select {
-  cursor: not-allowed;
-}
-.g-select-wrap--disabled .g-select:hover {
-  border-color: var(--border);
-}
-
-.g-select option {
-  background: var(--bg-elev2);
-  color: var(--text);
-}
-
-.g-select-chevron {
-  position: absolute;
-  right: var(--s3);
   pointer-events: none;
-  color: var(--text-faint);
+}
+.g-select-wrap--disabled .g-select-trigger {
+  cursor: not-allowed;
 }
 
 /* ─── Card ───────────────────────────────────────────────────────────── */

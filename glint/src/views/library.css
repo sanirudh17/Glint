@@ -129,10 +129,8 @@
 /* Kind filter — fixed width so it doesn't grow like the text input */
 .library-bar .g-select-wrap {
   flex-shrink: 0;
-}
-
-.library-bar .g-select {
   width: 140px;
+  max-width: 140px;
 }
 
 /* ─── Empty state wrapper ─────────────────────────────────────────────── */
