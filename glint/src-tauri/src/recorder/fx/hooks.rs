@@ -46,19 +46,108 @@ fn emit(event: &str, payload: serde_json::Value) {
     });
 }
 
+fn current_modifiers(current_vk: u32, is_down: bool) -> Vec<&'static str> {
+    unsafe {
+        use windows::Win32::UI::Input::KeyboardAndMouse::{
+            GetAsyncKeyState, VK_CONTROL, VK_LCONTROL, VK_LMENU, VK_LWIN, VK_MENU, VK_RCONTROL,
+            VK_RMENU, VK_RWIN, VK_SHIFT,
+        };
+        let mut mods = Vec::with_capacity(4);
+
+        let ctrl_down = match current_vk {
+            0x11 | 0xA2 | 0xA3 => is_down,
+            _ => {
+                let s = GetAsyncKeyState(VK_CONTROL.0 as i32) as u16;
+                let sl = GetAsyncKeyState(VK_LCONTROL.0 as i32) as u16;
+                let sr = GetAsyncKeyState(VK_RCONTROL.0 as i32) as u16;
+                ((s | sl | sr) & 0x8000) != 0
+            }
+        };
+        if ctrl_down {
+            mods.push("Ctrl");
+        }
+
+        let alt_down = match current_vk {
+            0x12 | 0xA4 | 0xA5 => is_down,
+            _ => {
+                let s = GetAsyncKeyState(VK_MENU.0 as i32) as u16;
+                let sl = GetAsyncKeyState(VK_LMENU.0 as i32) as u16;
+                let sr = GetAsyncKeyState(VK_RMENU.0 as i32) as u16;
+                ((s | sl | sr) & 0x8000) != 0
+            }
+        };
+        if alt_down {
+            mods.push("Alt");
+        }
+
+        let shift_down = match current_vk {
+            0x10 | 0xA0 | 0xA1 => is_down,
+            _ => {
+                let s = GetAsyncKeyState(VK_SHIFT.0 as i32) as u16;
+                let sl = GetAsyncKeyState(0xA0) as u16; // VK_LSHIFT
+                let sr = GetAsyncKeyState(0xA1) as u16; // VK_RSHIFT
+                ((s | sl | sr) & 0x8000) != 0
+            }
+        };
+        if shift_down {
+            mods.push("Shift");
+        }
+
+        let win_down = match current_vk {
+            0x5B | 0x5C => is_down,
+            _ => {
+                let sl = GetAsyncKeyState(VK_LWIN.0 as i32) as u16;
+                let sr = GetAsyncKeyState(VK_RWIN.0 as i32) as u16;
+                ((sl | sr) & 0x8000) != 0
+            }
+        };
+        if win_down {
+            mods.push("Win");
+        }
+
+        mods
+    }
+}
+
 unsafe extern "system" fn mouse_proc(code: i32, wparam: WPARAM, lparam: LPARAM) -> LRESULT {
     if code >= 0 {
         let info = &*(lparam.0 as *const MSLLHOOKSTRUCT);
         let (x, y) = (info.pt.x, info.pt.y);
+        let cfg = CFG.with(|c| c.get());
         match wparam.0 as u32 {
-            WM_LBUTTONDOWN if CFG.with(|c| c.get().click_viz) => {
-                emit("fx-click", serde_json::json!({ "x": x, "y": y, "button": "left" }));
+            WM_LBUTTONDOWN => {
+                if cfg.click_viz {
+                    emit("fx-click", serde_json::json!({ "x": x, "y": y, "button": "left" }));
+                }
+                if cfg.keystrokes {
+                    let mods = current_modifiers(0, false);
+                    if !mods.is_empty() {
+                        emit("fx-key", serde_json::json!({
+                            "text": "Click",
+                            "isModifier": false,
+                            "down": true,
+                            "modifiers": mods,
+                        }));
+                    }
+                }
             }
-            WM_RBUTTONDOWN if CFG.with(|c| c.get().click_viz) => {
-                emit("fx-click", serde_json::json!({ "x": x, "y": y, "button": "right" }));
+            WM_RBUTTONDOWN => {
+                if cfg.click_viz {
+                    emit("fx-click", serde_json::json!({ "x": x, "y": y, "button": "right" }));
+                }
+                if cfg.keystrokes {
+                    let mods = current_modifiers(0, false);
+                    if !mods.is_empty() {
+                        emit("fx-key", serde_json::json!({
+                            "text": "Right Click",
+                            "isModifier": false,
+                            "down": true,
+                            "modifiers": mods,
+                        }));
+                    }
+                }
             }
             WM_MOUSEMOVE => {
-                let cfg = CFG.with(|c| c.get());
                 if cfg.spotlight || cfg.cursor_hide || cfg.cursor_size > 0 {
                     let now = now_ms();
                     let last = LAST_MOVE.with(|l| l.get());
@@ -82,7 +171,13 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
         let up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
         if down || up {
             if let Some((label, is_mod)) = super::keymap::vk_label(info.vkCode) {
-                emit("fx-key", serde_json::json!({ "text": label, "isModifier": is_mod, "down": down }));
+                let mods = current_modifiers(info.vkCode, down);
+                emit("fx-key", serde_json::json!({
+                    "text": label,
+                    "isModifier": is_mod,
+                    "down": down,
+                    "modifiers": mods,
+                }));
             }
         }
     }
@@ -120,7 +215,7 @@ pub fn start_hooks(app: AppHandle, cfg: super::FxConfig) -> HookHandle {
         // Only hook what's needed. In particular the KEYBOARD hook is installed
         // solely when keystroke display is on — we never watch the keyboard for the
         // mouse-only effects (privacy).
-        let want_mouse = cfg.click_viz || cfg.spotlight || cfg.cursor_hide || cfg.cursor_size > 0;
+        let want_mouse = cfg.click_viz || cfg.spotlight || cfg.cursor_hide || cfg.cursor_size > 0 || cfg.keystrokes;
         let want_kbd = cfg.keystrokes;
         let mouse = if want_mouse {
             unsafe { SetWindowsHookExW(WH_MOUSE_LL, Some(mouse_proc), None, 0) }.ok()

@@ -16,6 +16,8 @@ pub fn vk_label(vk: u32) -> Option<(&'static str, bool)> {
         0x41..=0x5A => k(LETTERS[(vk - 0x41) as usize]),
         // Top-row digits 0–9.
         0x30..=0x39 => k(DIGITS[(vk - 0x30) as usize]),
+        // Numpad digits 0–9.
+        0x60..=0x69 => k(DIGITS[(vk - 0x60) as usize]),
         // Common named keys.
         0x0D => k("Enter"),
         0x1B => k("Esc"),
@@ -23,11 +25,28 @@ pub fn vk_label(vk: u32) -> Option<(&'static str, bool)> {
         0x09 => k("Tab"),
         0x08 => k("Backspace"),
         0x2E => k("Del"),
+        0x2D => k("Insert"),
+        0x24 => k("Home"),
+        0x23 => k("End"),
+        0x21 => k("PgUp"),
+        0x22 => k("PgDn"),
         0x25 => k("←"),
         0x26 => k("↑"),
         0x27 => k("→"),
         0x28 => k("↓"),
         0x70..=0x7B => k(FKEYS[(vk - 0x70) as usize]),
+        // OEM punctuation.
+        0xBA => k(";"),
+        0xBB => k("="),
+        0xBC => k(","),
+        0xBD => k("-"),
+        0xBE => k("."),
+        0xBF => k("/"),
+        0xC0 => k("`"),
+        0xDB => k("["),
+        0xDC => k("\\"),
+        0xDD => k("]"),
+        0xDE => k("'"),
         _ => None,
     }
 }
@@ -65,6 +84,17 @@ mod tests {
         assert_eq!(vk_label(0x20), Some(("Space", false)));
         assert_eq!(vk_label(0x70), Some(("F1", false)));
         assert_eq!(vk_label(0x7B), Some(("F12", false)));
+    }
+
+    #[test]
+    fn numpad_and_punctuation() {
+        assert_eq!(vk_label(0x60), Some(("0", false)));
+        assert_eq!(vk_label(0x69), Some(("9", false)));
+        assert_eq!(vk_label(0xBA), Some((";", false)));
+        assert_eq!(vk_label(0xBC), Some((",", false)));
+        assert_eq!(vk_label(0xBE), Some((".", false)));
+        assert_eq!(vk_label(0x21), Some(("PgUp", false)));
+        assert_eq!(vk_label(0x24), Some(("Home", false)));
     }
 
     #[test]

@@ -53,6 +53,7 @@ windows = { version = "0.62", features = [
     "Win32_Media_Audio",
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Dwm",
+    "Win32_UI_Input_KeyboardAndMouse",
 ] }
 raw-window-handle = "0.6"
 # In-app updater: fetch the latest GitHub release installer and launch it. A tiny

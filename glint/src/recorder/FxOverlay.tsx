@@ -58,7 +58,7 @@ export function FxOverlay() {
         if (cfg.click_viz) ripples.push({ ...e.payload, born: performance.now() });
       }),
       listen<{ x: number; y: number }>("fx-cursor", (e) => { cursor = e.payload; }),
-      listen<{ text: string; isModifier: boolean; down: boolean }>("fx-key", (e) => {
+      listen<{ text: string; isModifier: boolean; down: boolean; modifiers?: string[] }>("fx-key", (e) => {
         if (cfg.keystrokes) combo = reduceKey(combo, e.payload, performance.now());
       }),
       listen<{ click_viz: boolean; keystrokes: boolean; spotlight: boolean }>("fx-config", (e) => {
@@ -117,7 +117,7 @@ export function FxOverlay() {
 
       // Keystroke chips — a fixed bottom-center strip.
       const chips = cfg.keystrokes ? visibleChips(combo, now, CHIP_TTL_MS) : null;
-      if (chips) drawChips(ctx, chips, canvas.width, canvas.height, scale);
+      if (chips) drawChips(ctx, chips, canvas.width, canvas.height, scale, combo, now);
 
       raf = requestAnimationFrame(draw);
     };
@@ -136,26 +136,78 @@ export function FxOverlay() {
 }
 
 /** Draw the key-cap chip strip centered near the bottom of the recording area. */
-function drawChips(ctx: CanvasRenderingContext2D, chips: string[], w: number, h: number, scale: number) {
-  ctx.font = `${20 * scale}px ui-monospace, monospace`;
-  ctx.textBaseline = "middle";
+function drawChips(
+  ctx: CanvasRenderingContext2D,
+  chips: string[],
+  w: number,
+  h: number,
+  scale: number,
+  combo: ComboState,
+  now: number
+) {
+  ctx.save();
   const padX = 14 * scale, gap = 8 * scale, chipH = 40 * scale;
-  const widths = chips.map((c) => ctx.measureText(c).width + padX * 2);
+  ctx.textBaseline = "middle";
+
+  const widths = chips.map((c) => {
+    const isCount = c.startsWith("×");
+    ctx.font = isCount ? `bold ${18 * scale}px ui-monospace, monospace` : `${20 * scale}px ui-monospace, monospace`;
+    return ctx.measureText(c).width + padX * 2;
+  });
   const total = widths.reduce((a, b) => a + b, 0) + gap * (chips.length - 1);
   let x = (w - total) / 2;
   // Sit the strip well above the floating control pill (which hugs ~60px from the
   // bottom, ~44px tall) so the two never overlap on screen. Clamp for short regions.
   const y = Math.max(20 * scale, h - 168 * scale);
+
+  // Smooth fade-out near the end of TTL
+  const age = now - combo.at;
+  const fadeStart = CHIP_TTL_MS - 250;
+  if (age > fadeStart) {
+    ctx.globalAlpha = Math.max(0, (CHIP_TTL_MS - age) / 250);
+  }
+
+  // Tactile press pulse: pop scale slightly on every down press
+  const pressAge = combo.lastPressedAt ? now - combo.lastPressedAt : 999;
+  if (pressAge < 120) {
+    const pop = 1 + 0.06 * Math.sin(((120 - pressAge) / 120) * (Math.PI / 2));
+    const cx = w / 2, cy = y + chipH / 2;
+    ctx.translate(cx, cy);
+    ctx.scale(pop, pop);
+    ctx.translate(-cx, -cy);
+  }
+
+  const computedAccent = getComputedStyle(document.documentElement).getPropertyValue("--accent").trim() || "#5b7cfa";
+
   chips.forEach((c, i) => {
     const cw = widths[i];
-    ctx.fillStyle = "rgba(18,20,28,0.86)";
-    roundRect(ctx, x, y, cw, chipH, 8 * scale); ctx.fill();
-    ctx.strokeStyle = "rgba(255,255,255,0.18)"; ctx.lineWidth = 1 * scale;
-    roundRect(ctx, x, y, cw, chipH, 8 * scale); ctx.stroke();
-    ctx.fillStyle = "#e8e8ee";
-    ctx.fillText(c, x + padX, y + chipH / 2);
+    const isCount = c.startsWith("×");
+    if (isCount) {
+      ctx.fillStyle = "rgba(40, 50, 75, 0.92)";
+      roundRect(ctx, x, y, cw, chipH, 8 * scale);
+      ctx.fill();
+      ctx.strokeStyle = computedAccent;
+      ctx.lineWidth = 1.5 * scale;
+      roundRect(ctx, x, y, cw, chipH, 8 * scale);
+      ctx.stroke();
+      ctx.font = `bold ${18 * scale}px ui-monospace, monospace`;
+      ctx.fillStyle = computedAccent;
+      ctx.fillText(c, x + padX, y + chipH / 2);
+    } else {
+      ctx.fillStyle = "rgba(18,20,28,0.86)";
+      roundRect(ctx, x, y, cw, chipH, 8 * scale);
+      ctx.fill();
+      ctx.strokeStyle = "rgba(255,255,255,0.18)";
+      ctx.lineWidth = 1 * scale;
+      roundRect(ctx, x, y, cw, chipH, 8 * scale);
+      ctx.stroke();
+      ctx.font = `${20 * scale}px ui-monospace, monospace`;
+      ctx.fillStyle = "#e8e8ee";
+      ctx.fillText(c, x + padX, y + chipH / 2);
+    }
     x += cw + gap;
   });
+  ctx.restore();
 }
 
 /** A stylized arrow pointer (device px), tip at x,y. Shape-agnostic fallback for
