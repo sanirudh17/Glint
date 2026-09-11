@@ -103,8 +103,10 @@
 
 /* ─── Dark theme (primary) ─────────────────────────────────────────────── */
 :root[data-theme="dark"] {
-  /* Substrate — unified smooth dark background matching sidebar & topbar */
+  /* Substrate — smooth dark canvas */
   --bg:        #141518;
+  /* Sidebar & Titlebar frame — subtle distinctness from canvas */
+  --bg-frame:   #0F1013;
   --bg-elev:   #141518;
   --bg-elev2:  #1A1C21;
   --bg-elev3:  #202329;
@@ -129,6 +131,7 @@
 /* ─── Light theme ──────────────────────────────────────────────────────── */
 :root[data-theme="light"] {
   --bg:        #F6F7F9;
+  --bg-frame:  #ECEEF2;
   --bg-elev:   #FFFFFF;
   --bg-elev2:  #EDEFF3;
   --bg-elev3:  #E4E6EB;

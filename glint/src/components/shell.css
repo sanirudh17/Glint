@@ -20,7 +20,7 @@
   align-items: center;
   justify-content: space-between;
   height: var(--titlebar-h);
-  background: var(--bg-elev);
+  background: var(--bg-frame, var(--bg-elev));
   border-bottom: 1px solid var(--border);
   padding: 0 var(--s2) 0 var(--s4);
   flex-shrink: 0;
@@ -112,7 +112,7 @@
      edge. */
   padding: var(--s6) var(--s2) var(--s3);
   gap: var(--s1);
-  background: var(--bg-elev);
+  background: var(--bg-frame, var(--bg-elev));
   border-right: 1px solid var(--border);
   transition: width var(--dur-slow) var(--ease);
   /* No overflow:hidden — nav-item tooltips open rightward and must escape the rail. */

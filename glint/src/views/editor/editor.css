@@ -104,7 +104,7 @@
 }
 .editor-rail {
   display: flex; flex-direction: column; gap: 4px;
-  padding: var(--s3) var(--s2); border-right: 1px solid var(--border); background: var(--bg-elev);
+  padding: var(--s3) var(--s2); border-right: 1px solid var(--border); background: var(--bg-frame, var(--bg-elev));
 }
 /* All tool items have uniform 4px spacing */
 .editor-rail-group {
@@ -158,7 +158,7 @@
   align-items: stretch;
   justify-content: space-between;
   border-bottom: 1px solid var(--border);
-  background: var(--bg-elev);
+  background: var(--bg-frame, var(--bg-elev));
 }
 /* The style bar is the flexible middle: it shrinks and scrolls horizontally so the
    fixed Export/Done buttons on the right are never pushed off-screen. */
@@ -244,7 +244,17 @@
 .editor-stage-pin { position: absolute; inset: 0; overflow: hidden; }
 /* Holds the natural-resolution Konva stage and applies the zoom as a GPU transform.
    transform-origin top-left so the scaled canvas fills from the wrapper's origin. */
-.editor-stage-scale { position: absolute; top: 0; left: 0; transform-origin: top left; }
+.editor-stage-scale {
+  position: absolute;
+  top: 0;
+  left: 0;
+  transform-origin: top left;
+  will-change: transform;
+}
+.editor-stage-scale canvas {
+  image-rendering: -webkit-optimize-contrast;
+  image-rendering: crisp-edges;
+}
 /* Transparency checkerboard shown behind a transparent-background frame. Fixed
    neutral grays (not theme tokens) on purpose — a transparency checker is a
    universal convention that should read the same in any theme. Visible only

@@ -53,12 +53,22 @@
 .home-resume { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .home-resume-chip {
   display: inline-flex; align-items: center; gap: var(--s2);
-  padding: var(--s2) var(--s3);
+  padding: 6px var(--s3);
+  height: 32px;
+  box-sizing: border-box;
   border: 1px solid var(--border); border-radius: var(--r-btn);
   background: var(--bg-elev); color: var(--text-dim); cursor: pointer;
   font-size: var(--fz-sm); max-width: 260px;
+  line-height: normal;
   transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .home-resume-chip:hover { border-color: var(--border-strong); color: var(--text); }
 .home-resume-chip--stale { opacity: 0.5; }
-.home-resume-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.home-resume-name {
+  display: inline-block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  line-height: 1.4;
+  padding-bottom: 2px;
+}

@@ -24,6 +24,7 @@
   flex-direction: column;
   gap: var(--s4);
   padding: var(--s7) var(--s4) var(--s7) var(--s5);
+  background: var(--bg-frame, var(--bg-elev));
   border-right: 1px solid var(--border);
   overflow-y: auto;
   flex-shrink: 0;

@@ -653,6 +653,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         ref={ref}
         width={compW}
         height={compH}
+        pixelRatio={1}
         onMouseDown={onDown}
         onMouseMove={onMove}
         onMouseUp={onUp}

@@ -34,7 +34,7 @@
   white-space: nowrap;
   user-select: none;
 }
-.g-btn > span { line-height: 1; display: inline-flex; align-items: center; }
+.g-btn > span { line-height: normal; display: inline-flex; align-items: center; }
 
 .g-btn:disabled {
   opacity: 0.38;
