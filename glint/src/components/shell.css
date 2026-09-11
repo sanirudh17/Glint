@@ -21,6 +21,7 @@
   justify-content: space-between;
   height: var(--titlebar-h);
   background: var(--bg-elev);
+  border-bottom: 1px solid var(--border);
   padding: 0 var(--s2) 0 var(--s4);
   flex-shrink: 0;
   position: relative;
@@ -112,6 +113,7 @@
   padding: var(--s6) var(--s2) var(--s3);
   gap: var(--s1);
   background: var(--bg-elev);
+  border-right: 1px solid var(--border);
   transition: width var(--dur-slow) var(--ease);
   /* No overflow:hidden — nav-item tooltips open rightward and must escape the rail. */
 }
@@ -120,12 +122,13 @@
   width: var(--nav-w-expanded);
 }
 
-/* Footer holds the toggle, pinned to the bottom with breathing room instead
-   of a hairline — no orphaned dash in either rail state. */
+/* Footer holds the toggle, pinned to the bottom. When expanded, a hairline marks
+   it as a utility control distinct from the nav destinations above. */
 .g-nav-foot {
   margin-top: auto;
 }
 .g-nav-rail--expanded .g-nav-foot {
+  border-top: 1px solid var(--border);
   padding-top: var(--s2);
 }
 

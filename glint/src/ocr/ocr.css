@@ -12,6 +12,7 @@
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--r2);
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   color: var(--text);
   font-family: var(--font-ui, sans-serif);
   user-select: none;

@@ -24,6 +24,7 @@
   flex-direction: column;
   gap: var(--s4);
   padding: var(--s7) var(--s4) var(--s7) var(--s5);
+  border-right: 1px solid var(--border);
   overflow-y: auto;
   flex-shrink: 0;
 }
@@ -32,6 +33,7 @@
 .settings-nav-eyebrow {
   display: block;
   padding-bottom: var(--s3);
+  border-bottom: 1px solid var(--border);
 }
 
 .settings-nav-list {
@@ -100,6 +102,7 @@
 .settings-panel .g-section + .g-section {
   margin-top: var(--s6);
   padding-top: var(--s6);
+  border-top: 1px solid var(--border);
 }
 
 /* ─── Inert control wrapper ───────────────────────────────────────────────── */
@@ -250,9 +253,11 @@
   align-items: baseline;
   gap: var(--s4);
   padding: var(--s2) 0;
+  border-bottom: 1px solid var(--border);
 }
 
 .settings-storage-row:last-child {
+  border-bottom: none;
   padding-bottom: 0;
 }
 
@@ -297,7 +302,18 @@
 .settings-hotkey-help ol { margin: 0 0 6px; padding-left: 18px; }
 .settings-hotkey-help p { margin: 0; opacity: 0.8; }
 
-.settings-hotkey-row { display: flex; align-items: center; gap: 12px; flex-wrap: wrap; padding: 8px 0; border: 1px solid transparent; border-radius: var(--r2); transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease); }
+.settings-hotkey-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  padding: 8px 0;
+  border-bottom: 1px solid var(--border);
+  transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
+}
+.settings-hotkey-row:last-child {
+  border-bottom: none;
+}
 .settings-hotkey-row.is-capturing {
   background: var(--accent-subtle);
   border-color: var(--accent);

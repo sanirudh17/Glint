@@ -292,6 +292,10 @@ pub fn run() {
                     api.prevent_close();
                     let _ = window.hide();
                     let _ = window.emit("rec-trim-close", ());
+                } else if label == crate::ocr::window::OCR_LABEL {
+                    // Keep the OCR webview ALIVE: hide instead of destroy.
+                    api.prevent_close();
+                    let _ = window.hide();
                 }
             }
             // Drop a pin's in-memory bytes when its window is destroyed (any

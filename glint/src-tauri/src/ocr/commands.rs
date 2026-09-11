@@ -38,7 +38,10 @@ pub fn ocr_copy(text: String) -> Result<(), String> {
 /// with text they didn't ask for. Runs off the main thread (callers are async/spawned).
 pub fn publish_and_open(app: &tauri::AppHandle, out: super::OcrOutput) {
     *app.state::<OcrState>().0.lock().unwrap() = Some(out);
-    let _ = super::window::build_ocr_window(app);
+    if let Err(e) = super::window::build_ocr_window(app) {
+        log::error!("failed to build/raise OCR window: {e}");
+        let _ = tauri::Emitter::emit(app, "glint-toast", "Couldn't open text window");
+    }
 }
 
 /// Start a Capture Text session (freeze + overlay). On region commit, `capture_commit`

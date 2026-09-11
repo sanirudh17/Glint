@@ -261,7 +261,7 @@ pub fn capture_commit(
     // Take the session out — it won't be available after this.
     let session = { state.0.lock().unwrap().take() }.ok_or("no active capture session")?;
     overlay::teardown_all(&app);
-    if session.restore_main {
+    if session.restore_main && session.intent != crate::capture::CaptureIntent::Text {
         crate::capture::restore_main_window(&app);
     }
 
@@ -301,6 +301,9 @@ fn finish_ocr_commit(
         }
         Err(e) => {
             let _ = app.emit("glint-toast", &e);
+            if session.restore_main {
+                crate::capture::restore_main_window(app);
+            }
             Ok(()) // handled via toast; not a hard commit failure
         }
     }
