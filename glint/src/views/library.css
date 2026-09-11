@@ -227,7 +227,8 @@
 .cap-text {
   display: flex;
   flex-direction: column;
-  gap: 1px;
+  justify-content: center;
+  gap: 2px;
   min-width: 0;
   flex: 1 1 auto;
 }
@@ -275,16 +276,16 @@
  * (hover-gated visibility, zero transitions). */
 .cap-actions {
   position: absolute;
-  left: 50%;
+  left: 8px;
+  right: 8px;
   bottom: 8px;
-  transform: translateX(-50%);
   z-index: 3;
   display: flex;
   align-items: center;
-  max-width: calc(100% - 16px);
+  justify-content: center;
   padding: 3px 5px;
   border-radius: 10px;
-  background: rgba(8, 9, 13, 0.92);
+  background: rgb(8, 9, 13);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   opacity: 0;
@@ -311,7 +312,7 @@
   border-radius: 7px;
   border: none;
   background: transparent;
-  color: rgba(255, 255, 255, 0.8);
+  color: rgba(255, 255, 255, 0.85);
   cursor: pointer;
 }
 .cap-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }

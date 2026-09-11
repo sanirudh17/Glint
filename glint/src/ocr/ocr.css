@@ -145,6 +145,7 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: none;
   height: 34px;
   min-width: 104px;
   padding: 0 18px;

@@ -1,19 +1,51 @@
 /** OcrPanel.tsx — OCR sheet dialog (#/ocr window): read-only text, copy, save. */
 import { useEffect, useRef, useState } from "react";
-import { getCurrentWindow } from "@tauri-apps/api/window";
+import { getCurrentWindow, LogicalSize } from "@tauri-apps/api/window";
 import { Check, ScanText, SearchX, X } from "lucide-react";
 import { ocrResult, ocrCopy, type OcrResult } from "../lib/ocr";
 import { hasText as hasTextOf, countsLabel, copyTarget } from "./ocrPanelModel";
 import "./ocr.css";
+
+/**
+ * Fit the OS window to the content (once, on load) so a short extraction is a
+ * small dialog, not a big window with a little text in it. Renderer-side
+ * setSize/center — no backend involvement. Long text caps at the Rust window
+ * maximum and scrolls inside the well. Never fights a manual resize: once only.
+ */
+function fitWindowToText(text: string | null, done: { current: boolean }) {
+  if (done.current) return;
+  done.current = true;
+  try {
+    const lines = (text ?? "").split("\n").length;
+    // header ~62 + well (clamped text block + padding) + status/footer ~96 + pad 48
+    const well = Math.min(Math.max(lines, 3) * 21 + 30, 330);
+    const h = Math.min(620, Math.max(430, 62 + well + 96 + 48));
+    const win = getCurrentWindow();
+    void win.setSize(new LogicalSize(660, Math.round(h)));
+    void win.center();
+  } catch {
+    /* plain browser preview — no window to fit */
+  }
+}
 
 export function OcrPanel() {
   const [res, setRes] = useState<OcrResult | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [copied, setCopied] = useState(false); // nothing is copied until the user clicks Copy
   const ref = useRef<HTMLTextAreaElement>(null);
+  const fitted = useRef(false);
 
   useEffect(() => {
-    ocrResult().then((r) => { setRes(r); setLoaded(true); }).catch(() => setLoaded(true));
+    ocrResult()
+      .then((r) => {
+        setRes(r);
+        setLoaded(true);
+        fitWindowToText(r?.text ?? null, fitted);
+      })
+      .catch(() => {
+        setLoaded(true);
+        fitWindowToText(null, fitted);
+      });
   }, []);
 
   useEffect(() => {
@@ -97,6 +129,9 @@ export function OcrPanel() {
           </div>
         )}
 
+        {/* Footer: secondary first, primary Copy All rightmost. No footer Close —
+            the header X already closes (redundant duplication removed). All
+            three share identical box metrics by class. */}
         <div className="ocr-actions">
           {hasText && (
             <button type="button" className="ocr-btn" onClick={saveTxt}>
@@ -108,9 +143,6 @@ export function OcrPanel() {
               Copy All
             </button>
           )}
-          <button type="button" className="ocr-btn" onClick={() => getCurrentWindow().close()}>
-            Close
-          </button>
         </div>
       </div>
     </div>
