@@ -42,6 +42,12 @@ export type OverlayMeta = {
    */
   cursorX: number | null;
   cursorY: number | null;
+  /**
+   * Tiny frozen-frame crop around the grab-time cursor (tens of KB, physical-px
+   * origin within the frame). Decodes in ~ms so the loupe renders instantly
+   * from the metadata leg; null when the cursor was off-frame/unreadable.
+   */
+  loupePatch: { dataUrl: string; x: number; y: number; size: number } | null;
 };
 
 // ─── Raw backend shape (snake_case) ──────────────────────────────────────────
@@ -54,6 +60,7 @@ interface RawOverlayMeta {
   windows: WindowRect[];
   cursor_x: number | null;
   cursor_y: number | null;
+  loupe_patch: { image_data_url: string; x: number; y: number; size: number } | null;
 }
 
 function mapMeta(d: RawOverlayMeta): OverlayMeta {
@@ -65,6 +72,14 @@ function mapMeta(d: RawOverlayMeta): OverlayMeta {
     windows: d.windows,
     cursorX: d.cursor_x,
     cursorY: d.cursor_y,
+    loupePatch: d.loupe_patch
+      ? {
+          dataUrl: d.loupe_patch.image_data_url,
+          x: d.loupe_patch.x,
+          y: d.loupe_patch.y,
+          size: d.loupe_patch.size,
+        }
+      : null,
   };
 }
 

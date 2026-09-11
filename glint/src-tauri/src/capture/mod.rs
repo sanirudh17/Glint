@@ -8,6 +8,7 @@ pub mod windows_enum;
 
 use crate::overlay;
 use frozen::{CapturedImage, ScreenCapturer, XcapCapturer};
+use geometry::PixelRect;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
@@ -80,6 +81,74 @@ pub struct CaptureSession {
     /// the encoder finishes; `capture_overlay_data` waits bounded for it, then
     /// falls back to a synchronous encode. Display-only — commits crop raw pixels.
     pub backdrop_url: Mutex<Option<std::sync::Arc<String>>>,
+    /// Tiny crop of the frozen frame around the grab-time cursor, encoded
+    /// synchronously (~ms, tens of KB) and served inside `capture_overlay_meta`
+    /// so the loupe renders instantly — long before the full-frame image leg
+    /// lands. `None` when the cursor is off-frame (other monitor) or unreadable;
+    /// the loupe then simply waits for the full frame as before.
+    pub loupe_patch: Option<LoupePatch>,
+}
+
+/// A tiny frozen-frame crop around the grab-time cursor for the instant loupe.
+/// Coordinates are PHYSICAL px in frame space.
+#[derive(Clone)]
+pub struct LoupePatch {
+    pub data_url: String,
+    pub x: u32,
+    pub y: u32,
+    pub size: u32,
+}
+
+/// Side (physical px) of the square loupe patch. The loupe samples a 15px
+/// window, so 128px covers ±56px of cursor travel — far more than the
+/// stationary aiming the patch exists for — while staying tens of KB.
+const LOUPE_PATCH_PX: u32 = 128;
+
+/// Pure geometry half of the loupe patch: a `size`-clamped square centred on
+/// the frame-space cursor, clamped into the frame. Unit-tested.
+fn loupe_crop_rect(fx: f64, fy: f64, img_w: u32, img_h: u32) -> Option<PixelRect> {
+    if fx < 0.0 || fy < 0.0 || fx >= img_w as f64 || fy >= img_h as f64 {
+        return None;
+    }
+    let size = LOUPE_PATCH_PX.min(img_w).min(img_h);
+    if size == 0 {
+        return None;
+    }
+    let x = ((fx - size as f64 / 2.0).round() as i64).clamp(0, (img_w - size) as i64) as u32;
+    let y = ((fy - size as f64 / 2.0).round() as i64).clamp(0, (img_h - size) as i64) as u32;
+    geometry::clamp_rect(PixelRect { x, y, w: size, h: size }, img_w, img_h)
+}
+
+/// Crop + fast-PNG-encode + base64 a loupe patch around the live cursor.
+/// Best-effort and synchronous (~ms): any failure degrades to `None` and the
+/// loupe waits for the full frame. Must run after cursor compositing so the
+/// patch matches the frozen frame pixel-for-pixel.
+fn build_loupe_patch(
+    app: &AppHandle,
+    image: &CapturedImage,
+    origin_x: i32,
+    origin_y: i32,
+) -> Option<LoupePatch> {
+    let p = app.cursor_position().ok()?;
+    let rect = loupe_crop_rect(
+        p.x - origin_x as f64,
+        p.y - origin_y as f64,
+        image.width,
+        image.height,
+    )?;
+    let rgba = geometry::crop_rgba(&image.rgba, image.width, image.height, rect);
+    let patch = CapturedImage { width: rect.w, height: rect.h, rgba };
+    let png = frozen::encode_png_fast(&patch).ok()?;
+    use base64::Engine;
+    Some(LoupePatch {
+        data_url: format!(
+            "data:image/png;base64,{}",
+            base64::engine::general_purpose::STANDARD.encode(&png)
+        ),
+        x: rect.x,
+        y: rect.y,
+        size: rect.w,
+    })
 }
 
 #[derive(Default)]
@@ -167,15 +236,19 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
         .lock()
         .unwrap()
         .include_cursor;
+    let (ox, oy) = app
+        .primary_monitor()
+        .ok()
+        .flatten()
+        .map(|m| (m.position().x, m.position().y))
+        .unwrap_or((0, 0));
     if include_cursor {
-        let (ox, oy) = app
-            .primary_monitor()
-            .ok()
-            .flatten()
-            .map(|m| (m.position().x, m.position().y))
-            .unwrap_or((0, 0));
         cursor::composite_cursor(&mut image.rgba, image.width, image.height, ox, oy);
     }
+    // Crop the instant-loupe patch AFTER compositing so it matches the frozen
+    // frame pixel-for-pixel. Synchronous but tiny (~ms) — it rides the metadata
+    // leg, not the show path.
+    let loupe_patch = build_loupe_patch(app, &image, ox, oy);
     log::info!(
         "captured frozen frame: {}x{} [perf] screen grab: {}ms",
         image.width,
@@ -250,6 +323,7 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
         intent: CaptureIntent::Screenshot,
         id: sid,
         backdrop_url: Mutex::new(None),
+        loupe_patch,
     });
 
     match overlay::open_for_monitor(app, monitor_id) {
@@ -319,5 +393,24 @@ mod tests {
         assert!(matches!(CaptureMode::from_str("window"), Ok(CaptureMode::Window)));
         assert!(matches!(CaptureMode::from_str("fullscreen"), Ok(CaptureMode::Fullscreen)));
         assert!(CaptureMode::from_str("nope").is_err());
+    }
+
+    #[test]
+    fn loupe_crop_centres_and_clamps() {
+        // Centre of a 1080p frame: full-size square around the cursor.
+        let r = loupe_crop_rect(960.0, 540.0, 1920, 1080).unwrap();
+        assert_eq!((r.x, r.y, r.w, r.h), (896, 476, 128, 128));
+        // Top-left corner clamps into the frame.
+        let r = loupe_crop_rect(0.0, 0.0, 1920, 1080).unwrap();
+        assert_eq!((r.x, r.y), (0, 0));
+        // Bottom-right corner clamps into the frame.
+        let r = loupe_crop_rect(1919.0, 1079.0, 1920, 1080).unwrap();
+        assert_eq!((r.x, r.y, r.w, r.h), (1792, 952, 128, 128));
+        // Cursor off-frame (other monitor) → no patch.
+        assert!(loupe_crop_rect(-5.0, 100.0, 1920, 1080).is_none());
+        assert!(loupe_crop_rect(2000.0, 100.0, 1920, 1080).is_none());
+        // Frame smaller than the patch → whole frame.
+        let r = loupe_crop_rect(50.0, 50.0, 100, 100).unwrap();
+        assert_eq!((r.x, r.y, r.w, r.h), (0, 0, 100, 100));
     }
 }

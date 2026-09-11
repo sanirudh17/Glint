@@ -72,6 +72,7 @@ export function SelectionLayer({
   monitorId,
   scale,
   imageDataUrl,
+  loupePatch,
   cursorX,
   cursorY,
 }: {
@@ -79,6 +80,8 @@ export function SelectionLayer({
   scale: number;
   /** Null until the frozen-frame leg lands — chrome renders first, loupe after. */
   imageDataUrl: string | null;
+  /** Tiny grab-time crop (physical-px origin) for the instant loupe. */
+  loupePatch: { dataUrl: string; x: number; y: number; size: number } | null;
   /** Backend-supplied cursor position — see loupeVisibility.ts for why. */
   cursorX: number | null;
   cursorY: number | null;
@@ -96,6 +99,10 @@ export function SelectionLayer({
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [cursor, setCursor] = useState<Point | null>(() => seedCursor(cursorX, cursorY));
   const [interacting, setInteracting] = useState(false);
+  // Instant-loupe bitmap: the tiny grab-time patch decodes in ~ms from the
+  // metadata leg, while the full frame is still on its way. Superseded (not
+  // merged) the moment the full bitmap is ready — same pixels, full coverage.
+  const [patchBitmap, setPatchBitmap] = useState<ImageBitmap | null>(null);
 
   // Re-seed when a reused overlay window loads a new frozen frame (the window is
   // pre-warmed and reused across captures, so mount-time state alone is stale).
@@ -104,8 +111,6 @@ export function SelectionLayer({
   }, [cursorX, cursorY]);
 
   // Decode the frozen image into an ImageBitmap once — the loupe samples it.
-  // Skipped while the frame leg is still in flight (the chrome is already up
-  // from the metadata leg); the loupe simply appears with the frame.
   useEffect(() => {
     if (!imageDataUrl) {
       setBitmap(null);
@@ -127,6 +132,31 @@ export function SelectionLayer({
       made?.close();
     };
   }, [imageDataUrl]);
+
+  // Decode the instant-loupe patch (tens of KB — resolves in ~ms). Same
+  // discipline as the full bitmap: close on replace/unmount, never leak GPU
+  // memory across reused-window captures.
+  useEffect(() => {
+    if (!loupePatch) {
+      setPatchBitmap(null);
+      return;
+    }
+    let cancelled = false;
+    let made: ImageBitmap | null = null;
+    fetch(loupePatch.dataUrl)
+      .then((r) => r.blob())
+      .then((b) => createImageBitmap(b))
+      .then((bmp) => {
+        if (cancelled) { bmp.close(); return; }
+        made = bmp;
+        setPatchBitmap(bmp);
+      })
+      .catch(() => { /* falls back to waiting for the full frame */ });
+    return () => {
+      cancelled = true;
+      made?.close();
+    };
+  }, [loupePatch]);
 
   // ── Commit ──────────────────────────────────────────────────────────────────
 
@@ -244,6 +274,28 @@ export function SelectionLayer({
     confirm();
   }
 
+  // ── Effective loupe source: the full bitmap when decoded, else the instant
+  // patch while the cursor is inside it (plus a small margin for the 15px
+  // sample window). The patch covers stationary aiming; the moment the cursor
+  // roams past it, the loupe hides until the full frame lands — strictly better
+  // than showing nothing, and the swap is pixel-identical.
+  const PATCH_MARGIN = 9; // physical px, just beyond the SAMPLE half-window (7)
+  let loupeBitmap: ImageBitmap | null = bitmap;
+  let loupeOrigin: { x: number; y: number } | undefined;
+  if (!loupeBitmap && patchBitmap && loupePatch && cursor) {
+    const px = cursor.x * scale;
+    const py = cursor.y * scale;
+    if (
+      px >= loupePatch.x - PATCH_MARGIN &&
+      px < loupePatch.x + loupePatch.size + PATCH_MARGIN &&
+      py >= loupePatch.y - PATCH_MARGIN &&
+      py < loupePatch.y + loupePatch.size + PATCH_MARGIN
+    ) {
+      loupeBitmap = patchBitmap;
+      loupeOrigin = { x: loupePatch.x, y: loupePatch.y };
+    }
+  }
+
   return (
     <div
       ref={layerRef}
@@ -276,11 +328,11 @@ export function SelectionLayer({
           hidden once a selection is settled so it doesn't obscure the result. */}
       {isLoupeVisible({
         cursor,
-        hasBitmap: bitmap !== null,
+        hasBitmap: loupeBitmap !== null,
         hasRect: rect !== null,
         interacting,
       }) && (
-        <Loupe bitmap={bitmap!} cx={cursor!.x} cy={cursor!.y} scale={scale} />
+        <Loupe bitmap={loupeBitmap!} cx={cursor!.x} cy={cursor!.y} scale={scale} srcOrigin={loupeOrigin} />
       )}
     </div>
   );

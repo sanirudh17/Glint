@@ -147,6 +147,7 @@ export function OverlayApp() {
               monitorId={monitorId}
               scale={chrome.scale}
               imageDataUrl={frame?.imageDataUrl ?? null}
+              loupePatch={chrome.loupePatch}
               cursorX={chrome.cursorX}
               cursorY={chrome.cursorY}
             />

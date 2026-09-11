@@ -35,9 +35,16 @@ interface LoupeProps {
   cy: number;
   /** Monitor scale factor — logical × scale = physical px in the frozen bitmap. */
   scale: number;
+  /**
+   * Top-left of `bitmap` in PHYSICAL px within the frozen frame. Defaults to
+   * 0,0 (the full frame). Set when sampling the instant loupe patch — a small
+   * crop around the grab-time cursor that arrives with the metadata leg, long
+   * before the full frame decodes.
+   */
+  srcOrigin?: { x: number; y: number };
 }
 
-export function Loupe({ bitmap, cx, cy, scale }: LoupeProps) {
+export function Loupe({ bitmap, cx, cy, scale, srcOrigin }: LoupeProps) {
   const ref = useRef<HTMLCanvasElement>(null);
   const [hex, setHex] = useState("#000000");
 
@@ -47,9 +54,10 @@ export function Loupe({ bitmap, cx, cy, scale }: LoupeProps) {
     const ctx = cv.getContext("2d");
     if (!ctx) return;
 
-    // Centre physical pixel under the cursor.
-    const centerX = Math.floor(cx * scale);
-    const centerY = Math.floor(cy * scale);
+    // Centre physical pixel under the cursor, relative to the bitmap's origin
+    // (the full frame starts at 0,0; the instant patch starts at its crop offset).
+    const centerX = Math.floor(cx * scale) - (srcOrigin?.x ?? 0);
+    const centerY = Math.floor(cy * scale) - (srcOrigin?.y ?? 0);
     const sx = centerX - HALF;
     const sy = centerY - HALF;
 
@@ -90,7 +98,7 @@ export function Loupe({ bitmap, cx, cy, scale }: LoupeProps) {
         .map((c) => c.toString(16).padStart(2, "0"))
         .join("");
     setHex((prev) => (prev === next ? prev : next));
-  }, [bitmap, cx, cy, scale]);
+  }, [bitmap, cx, cy, scale, srcOrigin]);
 
   // ── Position: offset from cursor, flipping near viewport edges ───────────────
   const vw = window.innerWidth;

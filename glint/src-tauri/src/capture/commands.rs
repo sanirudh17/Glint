@@ -17,6 +17,15 @@ pub struct WindowRectDto {
 }
 
 #[derive(Serialize)]
+pub struct LoupePatchDto {
+    pub image_data_url: String,
+    /// Top-left of the patch in PHYSICAL px within the frozen frame.
+    pub x: u32,
+    pub y: u32,
+    pub size: u32,
+}
+
+#[derive(Serialize)]
 pub struct OverlayMeta {
     pub width: u32,
     pub height: u32,
@@ -30,6 +39,10 @@ pub struct OverlayMeta {
     /// the mouse. Best-effort: None just restores the move-to-reveal behavior.
     pub cursor_x: Option<f64>,
     pub cursor_y: Option<f64>,
+    /// Tiny frozen-frame crop around the grab-time cursor (tens of KB) so the
+    /// loupe renders instantly from the metadata leg. None when the cursor was
+    /// off-frame/unreadable — the loupe then waits for the full frame as before.
+    pub loupe_patch: Option<LoupePatchDto>,
 }
 
 /// Cheap metadata half of the overlay payload: no image, no encode, no wait.
@@ -46,6 +59,18 @@ pub fn capture_overlay_meta(
 ) -> Result<OverlayMeta, String> {
     let (mode_str, scale, windows, width, height) = session_meta(&state)?;
     let (cursor_x, cursor_y) = cursor_logical(&app, scale);
+    let loupe_patch = state
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|s| s.loupe_patch.clone())
+        .map(|p| LoupePatchDto {
+            image_data_url: p.data_url,
+            x: p.x,
+            y: p.y,
+            size: p.size,
+        });
     Ok(OverlayMeta {
         width,
         height,
@@ -54,6 +79,7 @@ pub fn capture_overlay_meta(
         windows,
         cursor_x,
         cursor_y,
+        loupe_patch,
     })
 }
 
