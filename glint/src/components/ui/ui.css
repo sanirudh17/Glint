@@ -402,8 +402,8 @@
 
 .g-select-option:hover,
 .g-select-option--highlighted {
-  background: var(--accent-subtle);
-  color: var(--accent);
+  background: var(--bg-elev2);
+  color: var(--text);
 }
 
 .g-select-option--selected,
