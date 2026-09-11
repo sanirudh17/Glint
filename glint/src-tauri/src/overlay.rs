@@ -14,9 +14,9 @@ use tauri::{
 static NEXT_SESSION: AtomicU64 = AtomicU64::new(0);
 
 /// How long the backend waits for the overlay's `overlay-ready` (fetched+decoded)
-/// before showing anyway. Warm captures signal in a few tens of ms; the cap
-/// guarantees we never regress to a long blank-hidden delay if the signal is slow
-/// or absent (e.g. a freshly built window whose listener isn't up yet).
+/// for the [perf] log line. This wait is LOGGING-ONLY and never gates show() —
+/// the window is shown immediately (see `open_for_monitor`), so the cap only
+/// bounds how long the capture thread lingers, never user-visible latency.
 const READY_TIMEOUT: Duration = Duration::from_millis(300);
 
 /// How long we wait for a VISIBLE overlay to paint its cleared (transparent) state
@@ -89,37 +89,31 @@ pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
         log::warn!("overlay: no primary monitor; using default window geometry");
     }
 
-    // Plan A — decode-then-show. Instead of showing immediately and letting the
-    // (idle-throttled) webview wake + fetch + decode a multi-MB PNG on the visible
-    // critical path (the ~1s cold-idle freeze + flash), we ask the overlay to fetch
-    // AND decode the new frozen frame while it is STILL HIDDEN, and wait for its
-    // `overlay-ready` before showing. show() then only composites an already-decoded
-    // image. This runs on a spawned capture thread (see capture::begin_spawned), so
-    // the bounded wait never blocks the main event loop that delivers the signal.
+    // SHOW FIRST, then let the frame paint. The window was cleared to transparent
+    // on teardown, so the first frames reveal the live desktop (visually identical
+    // to the frozen frame) with the crosshair already live — the shortcut feels
+    // instant. The decoded frozen frame fades in over the existing 180ms CSS
+    // transition when it lands. Gating show() on `overlay-ready` (decode-then-show)
+    // held the window hidden for fetch + decode + paint (~half a second of nothing),
+    // which read as invocation lag. Stale-flash safety comes from the
+    // clear-on-teardown handshake, not from this wait — so this wait is now
+    // logging-only and never blocks show(). This runs on a spawned capture thread
+    // (see capture::begin_spawned), so the bounded wait never blocks the main
+    // event loop that delivers the signal.
     let (tx, rx) = mpsc::channel::<String>();
     let ready_id = app.once("overlay-ready", move |ev| {
         let _ = tx.send(ev.payload().to_string());
     });
 
-    let waited = Instant::now();
     // Tell the (already-mounted) overlay app to load the new frozen frame. The
     // mount-time fetch only covers the on-demand fallback build; a reused window
     // is already mounted, so this event is what refreshes it each capture.
     let _ = app.emit_to(label.as_str(), "overlay-refresh", ());
 
-    match rx.recv_timeout(READY_TIMEOUT) {
-        Ok(payload) => log::info!(
-            "overlay ready {payload} [perf] refresh→ready: {}ms",
-            waited.elapsed().as_millis()
-        ),
-        Err(_) => log::warn!(
-            "overlay ready TIMEOUT after {}ms — showing anyway [perf]",
-            waited.elapsed().as_millis()
-        ),
+    if let Err(e) = win.show() {
+        app.unlisten(ready_id);
+        return Err(e);
     }
-    app.unlisten(ready_id);
-
-    win.show()?;
     win.set_focus()?;
     // Force the crosshair NOW. A window shown under a stationary mouse keeps the OS
     // arrow until the pointer moves, because Windows only re-evaluates the CSS cursor on
@@ -127,6 +121,20 @@ pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
     // press. Setting the native cursor calls SetCursor immediately; the CSS cursor then
     // takes over seamlessly (also crosshair) once the mouse moves.
     let _ = win.set_cursor_icon(tauri::CursorIcon::Crosshair);
+
+    let waited = Instant::now();
+    match rx.recv_timeout(READY_TIMEOUT) {
+        Ok(payload) => log::info!(
+            "overlay ready {payload} [perf] refresh→ready: {}ms",
+            waited.elapsed().as_millis()
+        ),
+        Err(_) => log::warn!(
+            "overlay ready TIMEOUT after {}ms [perf]",
+            waited.elapsed().as_millis()
+        ),
+    }
+    app.unlisten(ready_id);
+
     Ok(())
 }
 

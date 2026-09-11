@@ -74,12 +74,12 @@ export function OverlayApp() {
     getOverlayData(monitorId).then(setData).catch(() => {});
   }, [monitorId]);
 
-  // Each capture, the backend repositions this window (still HIDDEN) and emits
-  // `overlay-refresh`, then waits for our `overlay-ready` before showing. So here
-  // we fetch AND decode the new frozen frame while hidden, paint it, then signal
-  // ready — the backend's show() only has to composite the already-decoded image
-  // (no ~1s cold-idle repaint stall). A real failure means a stuck overlay, so
-  // cancel; the backend also has a timeout fallback so it never hangs hidden.
+  // Each capture, the backend repositions this window, emits `overlay-refresh`,
+  // and shows it IMMEDIATELY (transparent at first — the live desktop shows
+  // through, visually identical to the frozen frame). Here we fetch + decode the
+  // new frozen frame and paint it; it fades in over the 180ms CSS transition.
+  // `overlay-ready` is logging-only for the backend's [perf] line, never a gate
+  // for show(). A real failure means a stuck overlay, so cancel.
   useEffect(() => {
     const un = listen("overlay-refresh", async () => {
       resetCaptureLatch();

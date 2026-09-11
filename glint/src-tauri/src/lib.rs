@@ -228,7 +228,11 @@ pub fn run() {
             }
 
             // Pre-warm ffprobe sidecar in OS disk cache and antivirus scanner (off-thread).
-            // Pre-warm the overlay window once off-thread after cold start so captures have zero webview-creation delay.
+            // Pre-warm the capture overlay + recording region selector once off-thread
+            // after cold start so the first shortcut press has zero webview-creation
+            // delay. Staggered so the two WebView2 builds never contend; both windows
+            // are built hidden + transparent with OS transitions disabled, so the DWM
+            // compositor never flashes them on screen during startup.
             {
                 let h = app.handle().clone();
                 std::thread::spawn(move || {
@@ -239,6 +243,8 @@ pub fn run() {
                         });
                     }
                     crate::overlay::prewarm(&h, 0);
+                    std::thread::sleep(std::time::Duration::from_millis(150));
+                    crate::recorder::windows::prewarm_region_selector(&h);
                 });
             }
 

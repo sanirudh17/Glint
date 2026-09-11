@@ -54,19 +54,20 @@ interface RawOverlayData {
 // ─── Commands ─────────────────────────────────────────────────────────────────
 
 /**
- * Fetch AND decode the frozen frame for the given monitor (Plan A: "decode-then-
- * show"). The decode runs while the overlay window is still hidden, so showing it
- * only has to composite an already-decoded image — killing the ~1s cold-idle
- * repaint stall. Returns timings for the [perf] confirmation log.
+ * Fetch AND decode the frozen frame for the given monitor. The backend shows the
+ * (transparent-cleared) overlay immediately and lets this frame fade in when it
+ * lands — the decode runs concurrently with the visible window, not gated before
+ * show(). Returns timings for the [perf] confirmation log.
  */
 export function loadOverlayFrame(monitorId: number): Promise<LoadedFrame<OverlayData>> {
   return loadFrameWith(() => getOverlayData(monitorId), decodeDataUrl);
 }
 
 /**
- * Tell the backend the overlay has fetched + decoded the new frozen frame and is
- * ready to be shown. Carries the fetch/decode timings for the [perf] log. Errors
- * are swallowed — a missing signal just means the backend shows on its timeout.
+ * Tell the backend the overlay has fetched + decoded the new frozen frame and
+ * painted it. Carries the fetch/decode timings for the [perf] log. Logging-only —
+ * the backend shows the window immediately without waiting for this. Errors are
+ * swallowed — a missing signal just means no [perf] line for this capture.
  */
 export function signalOverlayReady(fetchMs: number, decodeMs: number): Promise<void> {
   return emit("overlay-ready", { fetchMs, decodeMs }).catch(() => {});
