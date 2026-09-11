@@ -18,12 +18,14 @@ import { useEffect, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import {
   getOverlayData,
+  getOverlayMeta,
   loadOverlayFrame,
   signalOverlayReady,
   signalOverlayCleared,
   cancelCapture,
   resetCaptureLatch,
   type OverlayData,
+  type OverlayMeta,
 } from "../lib/captureIpc";
 import { nextPaint } from "./nextPaint";
 import { SelectionLayer } from "./SelectionLayer";
@@ -49,35 +51,43 @@ function useMonitorId(): number {
 
 export function OverlayApp() {
   const monitorId = useMonitorId();
-  const [data, setData] = useState<OverlayData | null>(null);
+  // Two-leg load for instant invoke. `meta` is served in ~1ms and renders the
+  // interactive chrome (selection layer, hints, loupe seed) over the live
+  // desktop the moment the window shows; `frame` adds the frozen backdrop and
+  // hard-cuts it in when the multi-MB image leg lands. No enter/exit animation
+  // anywhere: the window snaps on at the shortcut press and off at Esc/Enter.
+  const [meta, setMeta] = useState<OverlayMeta | null>(null);
+  const [frame, setFrame] = useState<OverlayData | null>(null);
 
-  // No enter/exit animation anywhere in this overlay: the window snaps on at
-  // the shortcut press and snaps off at Esc/Enter. `data` drives the surfaces
-  // directly — a hard cut, never a fade.
-  const isPreviewActive = Boolean(data);
+  // The frame is a superset of the metadata — either one can drive the chrome,
+  // so a slow/failed meta leg never blocks interaction once the frame lands.
+  const chrome = meta ?? frame;
 
   // The overlay window is pre-warmed and REUSED across captures. The mount-time
   // fetch only matters for the on-demand fallback build (a fresh window with a
   // live session); when pre-warmed at startup there's no session yet, so a failure
   // here is expected — stay transparent, don't cancel.
   useEffect(() => {
-    getOverlayData(monitorId).then(setData).catch(() => {});
+    getOverlayData(monitorId).then(setFrame).catch(() => {});
   }, [monitorId]);
 
   // Each capture, the backend repositions this window, emits `overlay-refresh`,
   // and shows it IMMEDIATELY (transparent at first — the live desktop shows
-  // through, visually identical to the frozen frame). Here we fetch the new
-  // frozen frame (usually served from the session's pre-encoded cache) and
-  // hard-cut it on screen — no fade. `overlay-ready` is logging-only for the
-  // backend's [perf] line, never a gate for show(). A real failure means a
-  // stuck overlay, so cancel.
+  // through, visually identical to the frozen frame). Both legs fire
+  // concurrently: the chrome is interactive within milliseconds, the frozen
+  // frame (usually served from the session's pre-encoded cache) hard-cuts in
+  // right after — no fade. `overlay-ready` is logging-only for the backend's
+  // [perf] line, never a gate for show(). A failed image leg means a stuck
+  // overlay, so cancel.
   useEffect(() => {
     const un = listen("overlay-refresh", async () => {
       resetCaptureLatch();
-      setData(null);
+      setMeta(null);
+      setFrame(null);
+      getOverlayMeta(monitorId).then(setMeta).catch(() => {});
       try {
-        const { data: frame, fetchMs, decodeMs } = await loadOverlayFrame(monitorId);
-        setData(frame);
+        const { data, fetchMs, decodeMs } = await loadOverlayFrame(monitorId);
+        setFrame(data);
         await nextPaint();
         void signalOverlayReady(fetchMs, decodeMs);
       } catch {
@@ -95,7 +105,8 @@ export function OverlayApp() {
   // the next cold show — then ack so the backend hides immediately.
   useEffect(() => {
     const un = listen("overlay-clear", async () => {
-      setData(null);
+      setMeta(null);
+      setFrame(null);
       await nextPaint();
       void signalOverlayCleared();
     });
@@ -112,46 +123,47 @@ export function OverlayApp() {
   }, []);
 
   return (
-    <div className={`ov-root ${!isPreviewActive ? "ov-empty" : ""}`}>
+    <div className={`ov-root ${!chrome && !frame ? "ov-empty" : ""}`}>
       {/*
-       * Frozen-frame surface. Hard-cuts against the transparent desktop —
-       * no fade, no scale, no blur ramp.
+       * Frozen-frame surface. Hard-cuts against the transparent desktop the
+       * moment the image leg lands — no fade, no scale, no blur ramp.
        */}
       <div
-        className={`ov-preview-surface ${isPreviewActive ? "ov-active" : ""}`}
+        className={`ov-preview-surface ${frame ? "ov-active" : ""}`}
         style={{
-          backgroundImage: data ? `url(${data.imageDataUrl})` : undefined,
+          backgroundImage: frame ? `url(${frame.imageDataUrl})` : undefined,
         }}
       />
 
       {/*
-       * Interactive capture layer: sits above the preview surface.
-       * Snaps on/off with the frame — never a half-visible state.
+       * Interactive capture layer: renders from the ~1ms metadata leg, so it
+       * is live over the desktop before the frozen frame arrives. The loupe
+       * appears with the frame (SelectionLayer gates it on its bitmap).
        */}
-      {data && (
-        <div className={`ov-mode-layer ${isPreviewActive ? "ov-active" : ""}`}>
-          {data.mode === "area" && (
+      {chrome && (
+        <div className="ov-mode-layer ov-active">
+          {chrome.mode === "area" && (
             <SelectionLayer
               monitorId={monitorId}
-              scale={data.scale}
-              imageDataUrl={data.imageDataUrl}
-              cursorX={data.cursorX}
-              cursorY={data.cursorY}
+              scale={chrome.scale}
+              imageDataUrl={frame?.imageDataUrl ?? null}
+              cursorX={chrome.cursorX}
+              cursorY={chrome.cursorY}
             />
           )}
-          {data.mode === "fullscreen" && (
+          {chrome.mode === "fullscreen" && (
             <FullscreenMode
               monitorId={monitorId}
-              width={data.width}
-              height={data.height}
-              scale={data.scale}
+              width={chrome.width}
+              height={chrome.height}
+              scale={chrome.scale}
             />
           )}
-          {data.mode === "window" && (
+          {chrome.mode === "window" && (
             <WindowMode
               monitorId={monitorId}
-              windows={data.windows}
-              scale={data.scale}
+              windows={chrome.windows}
+              scale={chrome.scale}
             />
           )}
         </div>

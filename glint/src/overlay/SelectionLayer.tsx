@@ -77,7 +77,8 @@ export function SelectionLayer({
 }: {
   monitorId: number;
   scale: number;
-  imageDataUrl: string;
+  /** Null until the frozen-frame leg lands — chrome renders first, loupe after. */
+  imageDataUrl: string | null;
   /** Backend-supplied cursor position — see loupeVisibility.ts for why. */
   cursorX: number | null;
   cursorY: number | null;
@@ -103,7 +104,13 @@ export function SelectionLayer({
   }, [cursorX, cursorY]);
 
   // Decode the frozen image into an ImageBitmap once — the loupe samples it.
+  // Skipped while the frame leg is still in flight (the chrome is already up
+  // from the metadata leg); the loupe simply appears with the frame.
   useEffect(() => {
+    if (!imageDataUrl) {
+      setBitmap(null);
+      return;
+    }
     let cancelled = false;
     let made: ImageBitmap | null = null;
     fetch(imageDataUrl)

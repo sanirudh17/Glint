@@ -17,6 +17,97 @@ pub struct WindowRectDto {
 }
 
 #[derive(Serialize)]
+pub struct OverlayMeta {
+    pub width: u32,
+    pub height: u32,
+    pub scale: f64,
+    pub mode: String,
+    pub windows: Vec<WindowRectDto>,
+    /// Cursor position in the overlay's logical/CSS px space at the moment the
+    /// overlay loads, or None if the OS position couldn't be read. The webview
+    /// cannot discover this itself — a stationary pointer generates no
+    /// WM_MOUSEMOVE, so without it the loupe stays hidden until the user moves
+    /// the mouse. Best-effort: None just restores the move-to-reveal behavior.
+    pub cursor_x: Option<f64>,
+    pub cursor_y: Option<f64>,
+}
+
+/// Cheap metadata half of the overlay payload: no image, no encode, no wait.
+/// Served in ~1ms so the overlay can render its interactive chrome (selection
+/// layer, hints, crosshair guides) over the live desktop the instant the window
+/// shows, while the multi-MB frozen frame is still encoding/transferring. The
+/// frame hard-cuts in when `capture_overlay_data` lands — visually identical,
+/// since it froze this same desktop. Sync: microseconds, never blocks the loop.
+#[tauri::command]
+pub fn capture_overlay_meta(
+    _monitor_id: u32,
+    app: AppHandle,
+    state: State<CaptureState>,
+) -> Result<OverlayMeta, String> {
+    let (mode_str, scale, windows, width, height) = session_meta(&state)?;
+    let (cursor_x, cursor_y) = cursor_logical(&app, scale);
+    Ok(OverlayMeta {
+        width,
+        height,
+        scale,
+        mode: mode_str,
+        windows,
+        cursor_x,
+        cursor_y,
+    })
+}
+
+/// Read mode/scale/window-rects/dims under one short lock. Window rects are
+/// converted from physical px to logical px (divide by scale).
+fn session_meta(
+    state: &State<CaptureState>,
+) -> Result<(String, f64, Vec<WindowRectDto>, u32, u32), String> {
+    let guard = state.0.lock().unwrap();
+    let session = guard.as_ref().ok_or("no active capture session")?;
+    let windows = session
+        .windows
+        .iter()
+        .map(|w| WindowRectDto {
+            id: w.id,
+            x: w.x as f64 / session.scale,
+            y: w.y as f64 / session.scale,
+            w: w.w as f64 / session.scale,
+            h: w.h as f64 / session.scale,
+        })
+        .collect();
+    Ok((
+        session.mode.as_str().to_string(),
+        session.scale,
+        windows,
+        session.image.width,
+        session.image.height,
+    ))
+}
+
+/// Where the mouse is RIGHT NOW, in the overlay's coordinate space, so the loupe
+/// renders correctly placed on the first paint instead of waiting for a move.
+/// Every step is best-effort — a failure degrades to "appears on first move".
+fn cursor_logical(app: &AppHandle, scale: f64) -> (Option<f64>, Option<f64>) {
+    match app.cursor_position() {
+        Ok(p) => {
+            let (ox, oy) = app
+                .primary_monitor()
+                .ok()
+                .flatten()
+                .map(|m| (m.position().x, m.position().y))
+                .unwrap_or((0, 0));
+            let (lx, ly) =
+                crate::capture::geometry::global_to_overlay_logical(p.x, p.y, ox, oy, scale);
+            (Some(lx), Some(ly))
+        }
+        Err(e) => {
+            log::warn!("overlay: cursor position unavailable ({e}); loupe will appear on first move");
+            (None, None)
+        }
+    }
+}
+
+#[derive(Serialize)]
 pub struct OverlayData {
     pub width: u32,
     pub height: u32,
@@ -25,10 +116,7 @@ pub struct OverlayData {
     pub image_data_url: String,
     pub windows: Vec<WindowRectDto>,
     /// Cursor position in the overlay's logical/CSS px space at the moment the
-    /// overlay loads, or None if the OS position couldn't be read. The webview
-    /// cannot discover this itself — a stationary pointer generates no
-    /// WM_MOUSEMOVE, so without it the loupe stays hidden until the user moves
-    /// the mouse. Best-effort: None just restores the move-to-reveal behavior.
+    /// overlay loads — see `OverlayMeta::cursor_x`.
     pub cursor_x: Option<f64>,
     pub cursor_y: Option<f64>,
 }
@@ -44,6 +132,10 @@ pub struct OverlayData {
 /// window show (see `begin_restoring`); this command serves that cached data URL
 /// (a cheap Arc clone). It waits bounded for an in-flight encode, then falls back
 /// to a synchronous encode so a wedged encoder can never hang the overlay.
+///
+/// Latency note: the overlay does NOT wait for this before becoming interactive —
+/// it renders its chrome from `capture_overlay_meta` first, then hard-cuts this
+/// frame in when it lands.
 #[tauri::command(async)]
 pub async fn capture_overlay_data(
     _monitor_id: u32,
@@ -51,29 +143,13 @@ pub async fn capture_overlay_data(
     state: State<'_, CaptureState>,
 ) -> Result<OverlayData, String> {
     // Grab the cheap metadata under one short lock, then release before any wait.
-    let (mode_str, scale, windows, cached): (String, f64, Vec<WindowRectDto>, Option<std::sync::Arc<String>>) = {
-        let guard = state.0.lock().unwrap();
-        let session = guard.as_ref().ok_or("no active capture session")?;
-        let mode_str = session.mode.as_str().to_string();
-        let scale = session.scale;
-        let windows = session
-            .windows
-            .iter()
-            .map(|w| WindowRectDto {
-                id: w.id,
-                x: w.x as f64 / session.scale,
-                y: w.y as f64 / session.scale,
-                w: w.w as f64 / session.scale,
-                h: w.h as f64 / session.scale,
-            })
-            .collect();
-        let cached = session.backdrop_url.lock().unwrap().clone();
-        drop(guard);
-        (mode_str, scale, windows, cached)
-    };
-
-    // Fast path: the background encoder already finished.
-    let mut backdrop = cached;
+    let (mode_str, scale, windows, width, height) = session_meta(&state)?;
+    let mut backdrop = state
+        .0
+        .lock()
+        .unwrap()
+        .as_ref()
+        .and_then(|s| s.backdrop_url.lock().unwrap().clone());
     if backdrop.is_none() {
         // The encode is still in flight (fetch raced it right after show): poll
         // briefly, then encode synchronously as a fallback. Async context, so a
@@ -118,35 +194,7 @@ pub async fn capture_overlay_data(
         }
     };
     log::info!("[perf] overlay_data served ({}KB)", image_data_url.len() / 1024);
-    // Re-read dims + scale for the DTO (cheap; the session may be gone by now only
-    // if a cancel raced us — fall back to the values captured above).
-    let (width, height) = {
-        let guard = state.0.lock().unwrap();
-        match guard.as_ref() {
-            Some(s) => (s.image.width, s.image.height),
-            None => (0, 0),
-        }
-    };
-    // Where the mouse is RIGHT NOW, in the overlay's coordinate space, so the loupe
-    // renders correctly placed on the first paint instead of waiting for a move.
-    // Every step is best-effort — a failure degrades to "appears on first move".
-    let (cursor_x, cursor_y) = match app.cursor_position() {
-        Ok(p) => {
-            let (ox, oy) = app
-                .primary_monitor()
-                .ok()
-                .flatten()
-                .map(|m| (m.position().x, m.position().y))
-                .unwrap_or((0, 0));
-            let (lx, ly) =
-                crate::capture::geometry::global_to_overlay_logical(p.x, p.y, ox, oy, scale);
-            (Some(lx), Some(ly))
-        }
-        Err(e) => {
-            log::warn!("overlay: cursor position unavailable ({e}); loupe will appear on first move");
-            (None, None)
-        }
-    };
+    let (cursor_x, cursor_y) = cursor_logical(&app, scale);
 
     Ok(OverlayData {
         width,

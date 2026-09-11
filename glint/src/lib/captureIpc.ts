@@ -19,13 +19,19 @@ export type WindowRect = { id: number; x: number; y: number; w: number; h: numbe
 
 export type CaptureMode = "area" | "fullscreen" | "window";
 
-export type OverlayData = {
+export type OverlayData = OverlayMeta & {
+  /** Mapped from backend snake_case `image_data_url`. Full data:image/png;base64,… URL. */
+  imageDataUrl: string;
+};
+
+/** Metadata half of the overlay payload: everything except the frozen image.
+/// Served in ~1ms by `capture_overlay_meta` so the overlay chrome can render
+/// instantly while the multi-MB frame is still on its way. */
+export type OverlayMeta = {
   width: number;
   height: number;
   scale: number;
   mode: CaptureMode;
-  /** Mapped from backend snake_case `image_data_url`. Full data:image/png;base64,… URL. */
-  imageDataUrl: string;
   /** Window rects in logical/CSS px. */
   windows: WindowRect[];
   /**
@@ -40,15 +46,30 @@ export type OverlayData = {
 
 // ─── Raw backend shape (snake_case) ──────────────────────────────────────────
 
-interface RawOverlayData {
+interface RawOverlayMeta {
   width: number;
   height: number;
   scale: number;
   mode: CaptureMode;
-  image_data_url: string;
   windows: WindowRect[];
   cursor_x: number | null;
   cursor_y: number | null;
+}
+
+function mapMeta(d: RawOverlayMeta): OverlayMeta {
+  return {
+    width: d.width,
+    height: d.height,
+    scale: d.scale,
+    mode: d.mode,
+    windows: d.windows,
+    cursorX: d.cursor_x,
+    cursorY: d.cursor_y,
+  };
+}
+
+interface RawOverlayData extends RawOverlayMeta {
+  image_data_url: string;
 }
 
 // ─── Commands ─────────────────────────────────────────────────────────────────
@@ -85,6 +106,18 @@ export function signalOverlayCleared(): Promise<void> {
 }
 
 /**
+ * Fetch the overlay metadata WITHOUT the frozen image (~1ms, no encode, no
+ * wait). The overlay fires this + `getOverlayData` concurrently on every
+ * `overlay-refresh`: the chrome (selection layer, hints, loupe seed) renders
+ * from the metadata instantly over the live desktop, and the frozen frame
+ * hard-cuts in when the image leg lands.
+ */
+export async function getOverlayMeta(monitorId: number): Promise<OverlayMeta> {
+  const d = await invoke<RawOverlayMeta>("capture_overlay_meta", { monitorId });
+  return mapMeta(d);
+}
+
+/**
  * Fetch the frozen screenshot and window list for the given monitor.
  * Maps `image_data_url` → `imageDataUrl` so TypeScript callers use camelCase.
  *
@@ -93,14 +126,8 @@ export function signalOverlayCleared(): Promise<void> {
 export async function getOverlayData(monitorId: number): Promise<OverlayData> {
   const d = await invoke<RawOverlayData>("capture_overlay_data", { monitorId });
   return {
-    width: d.width,
-    height: d.height,
-    scale: d.scale,
-    mode: d.mode,
+    ...mapMeta(d),
     imageDataUrl: d.image_data_url,
-    windows: d.windows,
-    cursorX: d.cursor_x,
-    cursorY: d.cursor_y,
   };
 }
 
