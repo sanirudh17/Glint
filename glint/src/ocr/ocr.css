@@ -1,14 +1,16 @@
-/* ── OCR sheet dialog (#/ocr window) ─────────────────────────────────────────
- * macOS sheet-style: centered column, hairline border, layered ambient shadow,
- * header with icon tile + title + close, tinted read-only well, hairline
- * footer with right-aligned actions. Appears instantly — zero animation. */
+/* ── OCR dialog (#/ocr window) ───────────────────────────────────────────────
+ * ONE surface only: the layout fills the window edge-to-edge, so there is
+ * never a card-inside-a-window look. Content is vertically centered in the
+ * window. Header with icon tile + title + close, tinted read-only well,
+ * footer with uniformly-sized actions. Appears instantly — zero animation. */
 
 .ocr-root {
   display: flex;
   flex-direction: column;
   align-items: center;
+  justify-content: center;
   min-height: 100vh;
-  padding: 28px 24px 20px;
+  padding: 24px;
   background: var(--bg);
   color: var(--text);
   font-size: var(--fz-md);
@@ -23,11 +25,7 @@
   width: 100%;
   max-width: 600px;
   max-height: calc(100vh - 48px);
-  background: var(--bg-elev);
-  border: 1px solid var(--border);
-  border-radius: 14px;
-  box-shadow: var(--shadow-pop);
-  overflow: hidden;
+  min-height: 0;
 }
 
 /* Header: icon tile + title/counts + close */
@@ -35,16 +33,16 @@
   display: flex;
   align-items: center;
   gap: var(--s3);
-  padding: 14px 14px 14px 16px;
+  padding: 4px 2px 14px;
 }
 .ocr-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
   flex: none;
-  width: 32px;
-  height: 32px;
-  border-radius: var(--r-btn);
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
   background: var(--accent-subtle);
   color: var(--accent);
 }
@@ -75,18 +73,18 @@
   color: var(--text-dim);
   cursor: pointer;
 }
-.ocr-close:hover { background: var(--bg-elev2); color: var(--text); border-color: var(--border); }
+.ocr-close:hover { background: var(--bg-elev2); color: var(--text); }
 
 /* Body: scrollable, selectable, read-only well */
 .ocr-well {
   flex: 1;
-  min-height: 120px;
+  min-height: 140px;
   display: flex;
-  margin: 0 14px;
-  padding: 12px 14px;
+  padding: 14px 16px;
   border: 1px solid var(--border);
-  border-radius: var(--r2);
-  background: var(--bg-elev2);
+  border-radius: var(--r3);
+  background: var(--bg-elev);
+  box-shadow: var(--shadow-ambient);
   user-select: text;
   -webkit-user-select: text;
   cursor: text;
@@ -112,11 +110,10 @@
   flex-direction: column;
   align-items: center;
   gap: var(--s2);
-  padding: 36px 20px;
-  margin: 0 14px;
+  padding: 40px 20px;
   border: 1px solid var(--border);
-  border-radius: var(--r2);
-  background: var(--bg-elev2);
+  border-radius: var(--r3);
+  background: var(--bg-elev);
   color: var(--text-dim);
   font-size: var(--fz-md);
   text-align: center;
@@ -124,35 +121,34 @@
 .ocr-empty-icon { color: var(--text-faint); }
 .ocr-empty-hint { font-size: var(--fz-sm); color: var(--text-faint); }
 
-/* Status line above the footer */
+/* Status line */
 .ocr-status {
   display: flex;
   align-items: center;
   gap: 6px;
   min-height: 22px;
-  padding: 8px 16px 0;
+  padding: 10px 2px 0;
   font-size: var(--fz-sm);
   color: var(--text-dim);
 }
 .ocr-ok { color: var(--accent); }
 
-/* Footer: hairline top border, right-aligned actions */
+/* Footer: right-aligned, uniformly-sized actions */
 .ocr-actions {
   display: flex;
   align-items: center;
   justify-content: flex-end;
   gap: var(--s2);
-  margin-top: 10px;
-  padding: 12px 14px;
-  border-top: 1px solid var(--border);
+  padding-top: 16px;
 }
 .ocr-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  gap: var(--s2);
-  height: 32px;
-  padding: 0 16px;
+  height: 34px;
+  min-width: 104px;
+  padding: 0 18px;
+  box-sizing: border-box;
   border-radius: var(--r-btn);
   border: 1px solid var(--border);
   background: transparent;
@@ -164,7 +160,7 @@
   cursor: pointer;
   white-space: nowrap;
 }
-.ocr-btn:hover { background: var(--bg-elev2); border-color: var(--border-strong); }
+.ocr-btn:hover { background: var(--bg-elev2); }
 .ocr-btn:active { background: var(--bg-elev3); }
 .ocr-btn--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .ocr-btn--primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }

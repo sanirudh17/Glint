@@ -76,7 +76,7 @@
 .g-btn-ghost:hover:not(:disabled) {
   background: var(--bg-elev2);
   color: var(--text);
-  border-color: var(--border);
+  border-color: transparent;
 }
 .g-btn-ghost:active:not(:disabled) {
   background: var(--bg-elev3);
@@ -208,7 +208,6 @@
   flex-direction: column;
   gap: var(--s1);
   padding-bottom: var(--s4);
-  border-bottom: 1px solid var(--border);
 }
 
 .g-section-title {
@@ -407,7 +406,8 @@
   color: var(--text);
 }
 
-.g-select-option--selected {
+.g-select-option--selected,
+.g-select-option--selected.g-select-option--highlighted {
   background: var(--accent-subtle);
   color: var(--accent);
   font-weight: var(--fw-medium);
@@ -415,10 +415,6 @@
 
 .g-select-option--selected .g-select-option-label {
   color: var(--accent);
-}
-
-.g-select-option--selected.g-select-option--highlighted {
-  background: color-mix(in srgb, var(--accent) 18%, var(--bg-elev2));
 }
 
 /* Disabled select — inert and visibly unavailable. */
@@ -498,14 +494,22 @@
 }
 
 .g-empty-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  background: var(--bg-elev2);
+  border: 1px solid var(--border);
   color: var(--text-faint);
-  opacity: 0.6;
 }
 
 .g-empty-title {
-  font-size: var(--fz-md);
-  font-weight: var(--fw-medium);
-  color: var(--text-dim);
+  font-size: var(--fz-lg);
+  font-weight: var(--fw-semi);
+  letter-spacing: var(--ls-ui);
+  color: var(--text);
   line-height: var(--lh-tight);
 }
 

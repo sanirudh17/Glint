@@ -16,7 +16,7 @@ export function EmptyState({ icon: Icon, title, hint, action }: EmptyStateProps)
   return (
     <div className="g-empty">
       <span className="g-empty-icon" aria-hidden="true">
-        <Icon size={32} strokeWidth={1.25} />
+        <Icon size={22} strokeWidth={1.5} />
       </span>
       <p className="g-empty-title">{title}</p>
       {hint && <p className="g-empty-hint">{hint}</p>}

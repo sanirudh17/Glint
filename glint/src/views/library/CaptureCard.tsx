@@ -24,8 +24,8 @@ export function CaptureCard({
 }: {
   item: CaptureItem;
   onChanged: () => void;
-  /** "home" = centered compact overlay (Copy · Annotate · Pin); "library" =
-   * bottom-aligned pill with the full divider-grouped action set. */
+  /** "home" = compact pill trio (Copy · Annotate · Pin); "library" =
+   * bottom-aligned pill with the full grouped action set. Same pill language. */
   variant?: "home" | "library";
 }) {
   const pushToast = useAppStore((s) => s.pushToast);
@@ -152,8 +152,10 @@ export function CaptureCard({
           </div>
         )}
         {variant === "home" ? (
-          <div className="cap-hover" onPointerDown={(e) => e.stopPropagation()}>
-            {homeActs.map(renderBtn)}
+          <div className="cap-actions" onPointerDown={(e) => e.stopPropagation()}>
+            <span className="cap-group" role="group">
+              {homeActs.map(renderBtn)}
+            </span>
           </div>
         ) : (
           <div className="cap-actions" onPointerDown={(e) => e.stopPropagation()}>
@@ -167,10 +169,10 @@ export function CaptureCard({
       </div>
 
       <div className="cap-meta">
-        <span className="cap-name">
-          {isRecording
-            ? <Video className="cap-kind" size={13} strokeWidth={1.5} aria-label="Recording" />
-            : <ImageIcon className="cap-kind" size={13} strokeWidth={1.5} aria-label="Screenshot" />}
+        {isRecording
+          ? <Video className="cap-kind" size={14} strokeWidth={1.5} aria-label="Recording" />
+          : <ImageIcon className="cap-kind" size={14} strokeWidth={1.5} aria-label="Screenshot" />}
+        <div className="cap-text">
           {renaming ? (
             <input
               className="cap-rename-input"
@@ -186,12 +188,16 @@ export function CaptureCard({
               onBlur={() => void finishRename()}
             />
           ) : (
-            <span className="cap-dims" title={item.title ?? undefined}>
-              {item.title ? item.title : item.width && item.height ? `${item.width}×${item.height}` : "—"}
+            <span className="cap-title" title={item.title ?? undefined}>
+              {item.title ? item.title : "Untitled capture"}
             </span>
           )}
-        </span>
-        <span className="cap-when">{when(item.created_at)}</span>
+          <span className="cap-sub">
+            {item.width && item.height ? `${item.width}×${item.height}` : "—"}
+            <span className="cap-sub-sep" aria-hidden="true">·</span>
+            {when(item.created_at)}
+          </span>
+        </div>
       </div>
     </div>
   );

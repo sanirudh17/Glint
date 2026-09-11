@@ -187,7 +187,6 @@ export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel
             </button>
           ))}
         </div>
-        <span className="crop-sep" aria-hidden="true" />
         <button type="button" className="crop-pill" onClick={onCancel}>
           Cancel
         </button>

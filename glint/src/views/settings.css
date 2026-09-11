@@ -24,7 +24,6 @@
   flex-direction: column;
   gap: var(--s4);
   padding: var(--s7) var(--s4) var(--s7) var(--s5);
-  border-right: 1px solid var(--border);
   overflow-y: auto;
   flex-shrink: 0;
 }
@@ -33,7 +32,6 @@
 .settings-nav-eyebrow {
   display: block;
   padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--border);
 }
 
 .settings-nav-list {
@@ -102,7 +100,6 @@
 .settings-panel .g-section + .g-section {
   margin-top: var(--s6);
   padding-top: var(--s6);
-  border-top: 1px solid var(--border);
 }
 
 /* ─── Inert control wrapper ───────────────────────────────────────────────── */
@@ -194,11 +191,9 @@
   align-items: center;
   justify-content: space-between;
   padding: var(--s2) 0;
-  border-bottom: 1px solid var(--border);
 }
 
 .settings-hotkey-row:last-child {
-  border-bottom: none;
   padding-bottom: 0;
 }
 
@@ -255,11 +250,9 @@
   align-items: baseline;
   gap: var(--s4);
   padding: var(--s2) 0;
-  border-bottom: 1px solid var(--border);
 }
 
 .settings-storage-row:last-child {
-  border-bottom: none;
   padding-bottom: 0;
 }
 

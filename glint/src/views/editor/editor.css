@@ -46,7 +46,6 @@
   align-items: center;
   gap: var(--s4);
   padding: var(--s2) var(--s4);
-  border-bottom: 1px solid var(--border);
   background: var(--bg-elev);
 }
 .editor-swatches, .editor-widths { display: flex; gap: var(--s2); align-items: center; }
@@ -105,15 +104,14 @@
 }
 .editor-rail {
   display: flex; flex-direction: column; gap: 2px;
-  padding: var(--s3) var(--s2); border-right: 1px solid var(--border); background: var(--bg-elev);
+  padding: var(--s3) var(--s2); background: var(--bg-elev);
 }
-/* Hairline-separated tool groups: one visual zone per gesture family. */
+/* Tool groups separated by breathing room, not rules. */
 .editor-rail-group {
   display: flex; flex-direction: column; gap: 2px;
   padding-bottom: 6px; margin-bottom: 4px;
-  border-bottom: 1px solid var(--border);
 }
-.editor-rail-group:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
+.editor-rail-group:last-of-type { margin-bottom: 0; padding-bottom: 0; }
 .editor-tool {
   display: inline-flex; align-items: center; justify-content: center;
   width: 36px; height: 36px; border-radius: var(--r-btn);
@@ -131,8 +129,8 @@
 }
 /* Push the trailing action group (undo/redo/clear) to the bottom of the rail so the
    tools sit as one tidy zone up top and the free space collects between them, instead
-   of the actions crowding against the last tool. */
-.editor-rail-sep { height: 1px; margin: var(--s2) 4px; margin-top: auto; background: var(--border); }
+   of the actions crowding against the last tool. Spacing only — no rule. */
+.editor-rail-sep { height: 1px; margin: var(--s2) 4px; margin-top: auto; }
 
 /* Inline text-annotation editor: a real <textarea> floated over the Konva text
    node's screen position while editing (Konva has no text input). */
@@ -158,7 +156,6 @@
   display: flex;
   align-items: stretch;
   justify-content: space-between;
-  border-bottom: 1px solid var(--border);
   background: var(--bg-elev);
 }
 /* The style bar is the flexible middle: it shrinks and scrolls horizontally so the
@@ -177,7 +174,7 @@
   background: var(--bg); color: var(--text); cursor: pointer; font-size: var(--fz-sm); line-height: 1; text-align: center;
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
-.editor-export-btn:hover { border-color: var(--border-strong); }
+.editor-export-btn:hover { background: var(--bg-elev2); }
 .editor-export-btn--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .editor-export-btn--primary:hover { background: var(--accent-hover); }
 
@@ -310,7 +307,7 @@
   z-index: 21;
   display: flex;
   align-items: center;
-  gap: var(--s2);
+  gap: var(--s3);
   padding: 4px 6px;
   background: rgba(10, 11, 15, 0.85);
   -webkit-backdrop-filter: blur(10px);
@@ -336,7 +333,6 @@
 }
 .crop-chip:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 .crop-chip--active { background: var(--accent-subtle); color: var(--text); }
-.crop-sep { width: 1px; height: 18px; background: rgba(255, 255, 255, 0.12); }
 .crop-pill {
   height: 28px;
   padding: 0 14px;
@@ -368,7 +364,6 @@
   align-items: center;
   gap: var(--s2);
   padding: var(--s2) var(--s4);
-  border-right: 1px solid var(--border);
 }
 
 /* ── Frame panel (right dock) ────────────────────────────────────────────── */
@@ -379,7 +374,6 @@
   flex-direction: column;
   gap: var(--s4);
   padding: var(--s4);
-  border-left: 1px solid var(--border);
   background: var(--bg-elev);
   overflow-y: auto;
 }
@@ -502,7 +496,6 @@
   gap: var(--s2);
   margin-top: auto;
   padding-top: var(--s3);
-  border-top: 1px solid var(--border);
 }
 .frame-text-btn {
   padding: var(--s2);
@@ -514,7 +507,7 @@
   font-size: var(--fz-sm);
   transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-.frame-text-btn:hover { border-color: var(--border-strong); color: var(--text); }
+.frame-text-btn:hover { background: var(--bg-elev2); color: var(--text); }
 
 /* Keyboard-shortcut cheatsheet — a single-column, scrollable modal (opened with ?). */
 .editor-cheatsheet-backdrop {
@@ -536,7 +529,6 @@
 .editor-cheatsheet-head {
   display: flex; align-items: center; justify-content: space-between;
   padding: 16px 18px 12px;
-  border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
 }
 .editor-cheatsheet-title { font-size: 14px; font-weight: var(--fw-semi); letter-spacing: var(--ls-ui); }
 .editor-cheatsheet-close {

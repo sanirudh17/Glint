@@ -2,12 +2,9 @@
  * Glint — Library view styles
  *
  * Visual language: matches Home view's calm vertical rhythm.
- * Section-eyebrow pattern (monospace .label + hairline border-bottom),
- * framed empty state, token-driven spacing throughout.
- *
- * Aesthetic choice: the filter bar sits flush under the section hairline —
- * no elevated toolbar, no box-shadow. Controls feel part of the header
- * zone rather than floating above content. Calm, intentional.
+ * Section header (monospace eyebrow + live count) separated from the filter
+ * bar by spacing, not rules. Controls feel part of the header zone rather
+ * than floating above content. Calm, intentional.
  */
 
 /* ─── Layout ─────────────────────────────────────────────────────────── */
@@ -37,17 +34,15 @@
 }
 
 /*
- * Section header row: monospace eyebrow (.label, from global.css) on the left, a
- * live capture count on the right, over a shared hairline — same structural
- * device as Home, now with a count for information scent.
+ * Section header row: monospace eyebrow on the left, a live capture count on
+ * the right — separated from the filter bar by spacing, never a rule.
  */
 .library-head {
   display: flex;
   align-items: baseline;
   justify-content: space-between;
   gap: var(--s3);
-  padding-bottom: var(--s3);
-  border-bottom: 1px solid var(--border);
+  padding-bottom: var(--s1);
 }
 .library-section-label {
   display: block;
@@ -123,6 +118,7 @@
 .library-search:focus {
   outline: none;
   border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-subtle);
 }
 
 /* Suppress WebKit's default search-cancel button — the input is inert in P1 */
@@ -179,7 +175,11 @@
   transition: border-color var(--dur) var(--ease), transform var(--dur) var(--ease);
 }
 /* Subtle tactile lift on hover — reads as "pick me up / drag me". */
-.cap-card:hover { border-color: var(--border-strong); transform: translateY(-2px); }
+.cap-card:hover {
+  border-color: var(--border-strong);
+  transform: translateY(-2px);
+  box-shadow: var(--shadow-ambient);
+}
 .cap-card:active { cursor: grabbing; transform: none; }
 @media (prefers-reduced-motion: reduce) {
   .cap-card { transition: border-color var(--dur) var(--ease); }
@@ -214,35 +214,45 @@
 
 .cap-meta {
   display: flex;
-  align-items: center;
-  justify-content: space-between;
+  align-items: flex-start;
   gap: var(--s2);
-  padding: var(--s2) var(--s3);
+  padding: 10px var(--s3) 11px;
 }
-/* Kind glyph + title/dims group — kind is shown by icon shape, not colour. */
-.cap-name {
-  display: flex;
-  align-items: center;
-  gap: var(--s2);
-  min-width: 0;
-  flex: 1 1 auto;
-}
+/* Kind glyph, top-aligned with the two-line block — shown by icon shape. */
 .cap-kind {
   color: var(--text-faint);
   flex-shrink: 0;
+  margin-top: 2px;
 }
-.cap-dims {
-  font-family: var(--ff-mono, ui-monospace, monospace);
-  font-size: var(--fz-xs);
-  font-variant-numeric: tabular-nums;
-  color: var(--text-dim);
-  /* A custom title can be long — keep it on one line and clip. */
+.cap-text {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+/* Title: UI face, medium — the card's voice. Dims/date drop to a mono subline. */
+.cap-title {
+  font-size: var(--fz-md);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-ui);
+  color: var(--text);
+  line-height: var(--lh-tight);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  min-width: 0;
 }
-.cap-when { font-size: var(--fz-xs); color: var(--text-faint); flex-shrink: 0; }
+.cap-sub {
+  font-family: var(--ff-mono, ui-monospace, monospace);
+  font-size: var(--fz-xs);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-faint);
+  line-height: 1.5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cap-sub-sep { margin: 0 0.5em; }
 
 /* Inline rename field — matches the meta row's footprint. */
 .cap-rename-input {
@@ -258,9 +268,11 @@
 }
 
 /* ── Grid hover overlay: bottom-aligned translucent pill ────────────────────
- * Library variant. Divider-grouped icon-only actions in a dark pill with a
- * hairline border. Instant show/hide (hover-gated visibility, zero
- * transitions): main-window hover state only, never entrance motion. */
+ * Shared by Library (full divider-free grouped set) and Home (compact trio).
+ * Dark solid pill with a hairline border — deliberately NO backdrop-filter:
+ * WebView2 composites backdrop blur a frame late at reduced resolution, which
+ * read as a "blurry then sharp" glitch on first hover. Instant show/hide
+ * (hover-gated visibility, zero transitions). */
 .cap-actions {
   position: absolute;
   left: 50%;
@@ -272,9 +284,7 @@
   max-width: calc(100% - 16px);
   padding: 3px 5px;
   border-radius: 10px;
-  background: rgba(8, 9, 13, 0.82);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
+  background: rgba(8, 9, 13, 0.92);
   border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   opacity: 0;
@@ -285,11 +295,10 @@
 .cap-group {
   display: flex;
   align-items: center;
+  gap: 1px;
 }
 .cap-group + .cap-group {
-  margin-left: 5px;
-  padding-left: 5px;
-  border-left: 1px solid rgba(255, 255, 255, 0.12);
+  margin-left: 7px;
 }
 
 .cap-btn {
@@ -328,29 +337,4 @@
 }
 .cap-btn:hover .cap-tip { opacity: 1; }
 
-/* ── Home hover overlay: centered compact actions over the thumbnail ─────────
- * Dark gradient scrim + centered icon-only buttons (Copy · Annotate · Pin).
- * Instant appear/disappear. The full action set lives one click away in
- * Library ("View all"). */
-.cap-hover {
-  position: absolute;
-  inset: 0;
-  z-index: 3;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 6px;
-  background: linear-gradient(to top, rgba(8, 9, 13, 0.72), rgba(8, 9, 13, 0.28));
-  opacity: 0;
-  pointer-events: none;
-}
-.cap-card:hover .cap-hover { opacity: 1; pointer-events: auto; }
-.cap-hover .cap-btn {
-  width: 32px;
-  height: 32px;
-  background: rgba(10, 11, 15, 0.72);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  -webkit-backdrop-filter: blur(8px);
-  backdrop-filter: blur(8px);
-}
-.cap-hover .cap-btn:hover { background: rgba(30, 32, 40, 0.9); }
+
