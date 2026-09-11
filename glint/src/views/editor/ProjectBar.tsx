@@ -56,10 +56,10 @@ export function ProjectBar() {
   return (
     <div className="editor-projectbar" role="toolbar" aria-label="Project">
       <button className="editor-export-btn" onClick={doOpen} title="Open a .glint project">
-        <FolderOpen size={16} strokeWidth={1.75} /> Open
+        <FolderOpen size={16} strokeWidth={1.5} /> Open
       </button>
       <button className="editor-export-btn" onClick={() => doSave()} title="Save project (Ctrl+S)">
-        <Save size={16} strokeWidth={1.75} /> Save
+        <Save size={16} strokeWidth={1.5} /> Save
       </button>
     </div>
   );

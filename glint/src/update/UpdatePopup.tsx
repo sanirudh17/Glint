@@ -65,11 +65,11 @@ export function UpdatePopup() {
   return (
     <div className="upd-popup" role="dialog" aria-label="Software update available">
       <div className="upd-head">
-        <span className="upd-badge"><ArrowUpCircle size={16} strokeWidth={2} /></span>
+        <span className="upd-badge"><ArrowUpCircle size={16} strokeWidth={1.5} /></span>
         <span className="upd-title">Update available</span>
         {status.kind !== "downloading" && status.kind !== "launching" && (
           <button type="button" className="upd-dismiss" aria-label="Dismiss" onClick={onDismiss}>
-            <X size={15} strokeWidth={2} />
+            <X size={15} strokeWidth={1.5} />
           </button>
         )}
       </div>

@@ -1,10 +1,11 @@
 /**
  * HudActions.tsx — the hover toolbar of the post-capture HUD.
  *
- * Five iconographic, instrument-grade actions that reveal over the bottom of the
- * thumbnail on hover. Dismiss is a separate corner button on the card itself.
- * Annotate + Pin are honest stubs until P5 / P7. Each button stops pointer-down
- * propagation so clicking it never starts a drag-out.
+ * One horizontal icon-only dock: a dark translucent pill with 1px hairline
+ * dividers grouping [Copy | Copy path] · [Save/Reveal] · [Annotate | Extract] ·
+ * [Pin]. Dismiss lives on the card corner (the 208px card cannot fit a seventh
+ * 30px target). Each button stops pointer-down propagation so clicking it never
+ * starts a drag-out. Tooltips are instant CSS chips — no delay, no animation.
  */
 import {
   Copy,
@@ -40,33 +41,44 @@ export function HudActions({
   saved: boolean;
 }) {
   // When the capture was auto-saved, the Save slot becomes Reveal-in-folder.
-  const actions: ButtonDef[] = [
-    { id: "copy",      icon: Copy,  tip: "Copy image" },
-    { id: "copy-path", icon: Link2, tip: "Copy path" },
-    saved
-      ? { id: "save", icon: FolderOpen, tip: "Reveal in folder" }
-      : { id: "save", icon: Save,       tip: "Save" },
-    { id: "annotate",  icon: Pencil, tip: "Annotate" },
-    { id: "extract-text", icon: ScanText, tip: "Extract text" },
-    { id: "pin",       icon: Pin,    tip: "Pin" },
+  // Groups mirror the CleanShot dock: divider-separated, never nested.
+  const groups: ButtonDef[][] = [
+    [
+      { id: "copy",      icon: Copy,  tip: "Copy image" },
+      { id: "copy-path", icon: Link2, tip: "Copy path" },
+    ],
+    [
+      saved
+        ? { id: "save", icon: FolderOpen, tip: "Reveal in folder" }
+        : { id: "save", icon: Save,       tip: "Save to Library" },
+    ],
+    [
+      { id: "annotate",    icon: Pencil,   tip: "Annotate" },
+      { id: "extract-text", icon: ScanText, tip: "Extract text" },
+    ],
+    [
+      { id: "pin", icon: Pin, tip: "Pin" },
+    ],
   ];
   return (
-    <div className="hud-toolbar">
-      {actions.map(({ id, icon: Icon, tip }) => (
-        <button
-          key={id}
-          type="button"
-          className="hud-btn"
-          // Native title: a real OS tooltip that isn't clipped by the small HUD
-          // window (a CSS tooltip would be cut off at the window edge).
-          title={tip}
-          aria-label={tip}
-          // Don't let a button press initiate a thumbnail drag.
-          onPointerDown={(e) => e.stopPropagation()}
-          onClick={() => onAction(id)}
-        >
-          <Icon size={16} strokeWidth={1.75} />
-        </button>
+    <div className="hud-toolbar" role="toolbar" aria-label="Capture actions">
+      {groups.map((group, gi) => (
+        <span className="hud-toolgroup" key={gi} role="group">
+          {group.map(({ id, icon: Icon, tip }) => (
+            <button
+              key={id}
+              type="button"
+              className="hud-btn"
+              aria-label={tip}
+              // Don't let a button press initiate a thumbnail drag.
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={() => onAction(id)}
+            >
+              <Icon size={16} strokeWidth={1.5} />
+              <span className="hud-tip" aria-hidden="true">{tip}</span>
+            </button>
+          ))}
+        </span>
       ))}
     </div>
   );

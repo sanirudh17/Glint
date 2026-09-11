@@ -356,7 +356,7 @@ export function RegionSelect() {
           </button>
         </div>
         <button className="rec-sel-fullbtn" onPointerDown={(e) => e.stopPropagation()} onClick={confirmFullscreen}>
-          <Monitor size={15} strokeWidth={2} /> Record Full Screen
+          <Monitor size={15} strokeWidth={1.5} /> Record Full Screen
         </button>
       </div>
     </div>

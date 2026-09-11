@@ -1,5 +1,10 @@
 /* Glint — global base styles */
 @import "./tokens.css";
+/* Premium grotesque, bundled locally (no runtime network). Weights 400/500/600/700. */
+@import "@fontsource/manrope/400.css";
+@import "@fontsource/manrope/500.css";
+@import "@fontsource/manrope/600.css";
+@import "@fontsource/manrope/700.css";
 
 /* ─── Reset ───────────────────────────────────────────────────────────── */
 *, *::before, *::after {
@@ -17,15 +22,10 @@ html:not(.ready) *,
 
 /* ─── Font ────────────────────────────────────────────────────────────── */
 /*
- * No remote font loading at runtime. Inter is the system font on many
- * modern Windows 11 installs (ships with Office 365 / Edge). We use it
- * as the first named face with a system-ui/sans-serif fallback so the
- * design degrades gracefully. If Inter is absent, the app still looks
- * correct — just without the variable-weight axis.
- *
- * If a future build step bundles Inter locally (npm: inter-font), add
- * a @font-face block here pointing at /assets/inter/*.woff2.
- * Do NOT add a google-fonts link that phones home at runtime.
+ * Manrope (local @fontsource bundle) is the UI voice; Segoe UI Variable Text
+ * is the Windows-native fallback. Monospace is reserved for code, data, and
+ * measurement — never as a costume. Do NOT add a google-fonts link that
+ * phones home at runtime.
  */
 
 /* ─── Base ────────────────────────────────────────────────────────────── */
@@ -39,8 +39,7 @@ html {
 body {
   background: var(--bg, #0C0D0F);
   color: var(--text);
-  font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont,
-               "Segoe UI Variable Text", "Segoe UI", sans-serif;
+  font-family: var(--font-ui);
   font-size: var(--fz-md);
   font-weight: var(--fw-normal);
   line-height: var(--lh-base);
@@ -66,12 +65,23 @@ h1, h2, h3, h4, h5, h6 {
 /* Labels / caps / metadata — monospace nod to capture-tool DNA */
 .label,
 .mono {
-  font-family: "Cascadia Code", "JetBrains Mono", ui-monospace,
-               "Consolas", monospace;
+  font-family: var(--font-mono);
   font-size: var(--fz-xs);
   letter-spacing: var(--ls-label);
   text-transform: uppercase;
   color: var(--text-faint);
+}
+
+/* UI labels set in sentence case — tight tracking, medium weight */
+.ui-label {
+  letter-spacing: var(--ls-ui);
+  font-weight: var(--fw-medium);
+}
+
+/* Tabular numerals — timers, timecodes, dimensions, counts */
+.tnum {
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: "tnum" 1;
 }
 
 /* ─── Interactive baseline ───────────────────────────────────────────── */

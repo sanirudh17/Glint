@@ -89,10 +89,9 @@ export function TrayCard({ item, onChanged }: { item: TrayItem; onChanged: () =>
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => onAction("dismiss")}
       >
-        <X size={13} strokeWidth={2} />
+        <X size={13} strokeWidth={1.5} />
       </button>
 
-      <div className="hud-scrim" aria-hidden="true" />
       <HudActions onAction={onAction} saved={saved} />
 
       <div className={`hud-status${status ? " hud-status--show" : ""}`} aria-live="polite">

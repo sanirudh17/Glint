@@ -55,7 +55,7 @@
   border: 2px solid transparent; cursor: pointer; padding: 0;
   box-shadow: inset 0 0 0 1px rgba(0,0,0,0.2);
 }
-.editor-swatch--active { border-color: var(--text); }
+.editor-swatch--active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-subtle), inset 0 0 0 1px rgba(0,0,0,0.2); }
 /* Custom-color swatch: shows a spectrum hint when no preset is active, the
    chosen color otherwise. Wraps a hidden native <input type=color>. */
 .editor-swatch--custom {
@@ -104,9 +104,16 @@
   background: var(--bg); color: var(--text); font-size: var(--fz-sm);
 }
 .editor-rail {
-  display: flex; flex-direction: column; gap: 4px;
+  display: flex; flex-direction: column; gap: 2px;
   padding: var(--s3) var(--s2); border-right: 1px solid var(--border); background: var(--bg-elev);
 }
+/* Hairline-separated tool groups: one visual zone per gesture family. */
+.editor-rail-group {
+  display: flex; flex-direction: column; gap: 2px;
+  padding-bottom: 6px; margin-bottom: 4px;
+  border-bottom: 1px solid var(--border);
+}
+.editor-rail-group:last-of-type { border-bottom: none; margin-bottom: 0; padding-bottom: 0; }
 .editor-tool {
   display: inline-flex; align-items: center; justify-content: center;
   width: 36px; height: 36px; border-radius: var(--r-btn);
@@ -115,7 +122,7 @@
 }
 .editor-tool:hover { background: var(--bg-elev2); color: var(--text); }
 .editor-tool:active:not(:disabled) { background: var(--bg-elev3); }
-.editor-tool--active { background: var(--accent-subtle); color: var(--accent); }
+.editor-tool--active { background: var(--accent-subtle); color: var(--text); }
 .editor-tool:disabled { opacity: 0.35; cursor: default; }
 .editor-tool:disabled:hover { background: transparent; color: var(--text-dim); }
 .editor-tool--danger:hover:not(:disabled) {
@@ -138,7 +145,7 @@
   border-radius: 2px;
   outline: none;
   background: color-mix(in srgb, var(--bg) 78%, transparent);
-  font-family: Arial, sans-serif;
+  font-family: var(--font-ui);
   line-height: 1;
   resize: none;
   overflow: hidden;
@@ -171,7 +178,7 @@
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
 .editor-export-btn:hover { border-color: var(--border-strong); }
-.editor-export-btn--primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+.editor-export-btn--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
 .editor-export-btn--primary:hover { background: var(--accent-hover); }
 
 /* ── Zoom cluster (floating, bottom-right of the canvas) ─────────────────── */
@@ -208,8 +215,8 @@
 .editor-zoom-btn:hover:not(:disabled) { background: var(--bg-elev3); color: var(--text); }
 .editor-zoom-btn:active:not(:disabled) { background: var(--border); }
 .editor-zoom-btn:disabled { opacity: 0.4; cursor: default; }
-.editor-zoom-btn--active { color: var(--accent); background: var(--accent-subtle); }
-.editor-zoom-btn--active:hover:not(:disabled) { background: var(--accent-subtle); color: var(--accent); }
+.editor-zoom-btn--active { color: var(--text); background: var(--accent-subtle); }
+.editor-zoom-btn--active:hover:not(:disabled) { background: var(--accent-subtle); color: var(--text); }
 .editor-zoom-val {
   min-width: 46px;
   height: 26px;
@@ -291,6 +298,61 @@
   white-space: nowrap;
   pointer-events: none;
 }
+
+/* CleanShot-style crop bar: aspect chips + pill Cancel/Done, docked top-center.
+   Floating dark pill with hairline border — chrome dims behind it via the
+   existing surround. Instant; no entrance motion. */
+.crop-bar {
+  position: absolute;
+  top: var(--s3);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 21;
+  display: flex;
+  align-items: center;
+  gap: var(--s2);
+  padding: 4px 6px;
+  background: rgba(10, 11, 15, 0.85);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 10px;
+  box-shadow: var(--shadow-ambient);
+}
+.crop-aspects { display: flex; align-items: center; gap: 2px; }
+.crop-chip {
+  min-width: 40px;
+  height: 26px;
+  padding: 0 8px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: var(--fz-sm);
+  font-weight: var(--fw-medium);
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.crop-chip:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.crop-chip--active { background: var(--accent-subtle); color: var(--text); }
+.crop-sep { width: 1px; height: 18px; background: rgba(255, 255, 255, 0.12); }
+.crop-pill {
+  height: 28px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.88);
+  font-size: var(--fz-sm);
+  font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-ui);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.crop-pill:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
+.crop-pill--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.crop-pill--primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); color: var(--accent-fg); }
 
 /* ── Frame toggle (top bar) ──────────────────────────────────────────────── */
 .editor-frame-slot {
@@ -424,7 +486,7 @@
   padding: 0;
   box-shadow: inset 0 0 0 1px rgba(0, 0, 0, 0.2);
 }
-.frame-grad.is-active { border-color: var(--text); }
+.frame-grad.is-active { border-color: var(--accent); box-shadow: 0 0 0 2px var(--accent-subtle), inset 0 0 0 1px rgba(0, 0, 0, 0.2); }
 
 /* Sliders */
 .frame-slider { display: flex; flex-direction: column; gap: var(--s2); }
@@ -476,16 +538,18 @@
   padding: 16px 18px 12px;
   border-bottom: 1px solid var(--border, rgba(255, 255, 255, 0.08));
 }
-.editor-cheatsheet-title { font-size: 14px; font-weight: 650; letter-spacing: 0.2px; }
+.editor-cheatsheet-title { font-size: 14px; font-weight: var(--fw-semi); letter-spacing: var(--ls-ui); }
 .editor-cheatsheet-close {
   display: inline-flex; align-items: center;
   border: none; background: transparent; padding: 0; cursor: pointer;
 }
 .editor-cheatsheet-close kbd {
-  font-family: ui-monospace, "SF Mono", monospace; font-size: 10px;
-  color: var(--text-dim); background: var(--bg-elev2, rgba(255, 255, 255, 0.06));
+  font-family: var(--font-ui); font-size: 10px; font-weight: var(--fw-semi);
+  color: var(--text-dim); background: linear-gradient(to bottom, var(--bg-elev3), var(--bg-elev2));
   border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
-  border-radius: var(--r1, 5px); padding: 3px 7px;
+  border-bottom-width: 2px;
+  border-radius: 6px; padding: 3px 7px;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
   transition: color var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
 .editor-cheatsheet-close:hover kbd { color: var(--text); border-color: var(--border-strong); }
@@ -504,10 +568,11 @@
 .editor-cheatsheet-row:hover { background: var(--bg-elev2, rgba(255, 255, 255, 0.04)); }
 .editor-cheatsheet-label { color: var(--text); }
 .editor-cheatsheet-kbd {
-  flex: none; font-family: ui-monospace, "SF Mono", monospace; font-size: 11px;
-  color: var(--text-dim);
-  background: var(--bg-elev2, rgba(255, 255, 255, 0.06));
+  flex: none; font-family: var(--font-ui); font-size: 11px; font-weight: var(--fw-semi);
+  color: var(--text);
+  background: linear-gradient(to bottom, var(--bg-elev3), var(--bg-elev2));
   border: 1px solid var(--border, rgba(255, 255, 255, 0.12));
   border-bottom-width: 2px;
-  border-radius: var(--r1, 5px); padding: 2px 8px; text-align: center;
+  border-radius: 6px; padding: 2px 8px; text-align: center;
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }

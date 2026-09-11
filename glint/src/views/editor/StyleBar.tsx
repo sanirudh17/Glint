@@ -142,7 +142,7 @@ export function StyleBar() {
             aria-label="Eyedropper"
             onClick={() => setPicking(!picking)}
           >
-            <Pipette size={14} strokeWidth={1.75} />
+            <Pipette size={14} strokeWidth={1.5} />
           </button>
         )}
       </div>
@@ -216,7 +216,7 @@ export function StyleBar() {
           aria-label="Toggle start arrowhead"
           onClick={() => applyArrowStart(!eff.arrowStart)}
         >
-          <ArrowLeftRight size={15} strokeWidth={1.75} />
+          <ArrowLeftRight size={15} strokeWidth={1.5} />
         </button>
       )}
       {isText && (

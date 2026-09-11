@@ -30,7 +30,7 @@ export function IconButton({
         .filter(Boolean)
         .join(" ")}
     >
-      <Icon size={16} strokeWidth={1.75} />
+      <Icon size={16} strokeWidth={1.5} />
     </button>
   );
 }

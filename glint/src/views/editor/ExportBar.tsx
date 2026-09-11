@@ -85,16 +85,16 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
         onPointerDown={onDrag}
         title="Press and drag onto any app"
       >
-        <Share2 size={16} strokeWidth={1.75} /> Drag
+        <Share2 size={16} strokeWidth={1.5} /> Drag
       </button>
       <button className="editor-export-btn" onClick={onCopy} title="Copy to clipboard">
-        <Copy size={16} strokeWidth={1.75} /> Copy
+        <Copy size={16} strokeWidth={1.5} /> Copy
       </button>
       <button className="editor-export-btn" onClick={onSave} title="Export a PNG to the Library">
-        <Download size={16} strokeWidth={1.75} /> Export
+        <Download size={16} strokeWidth={1.5} /> Export
       </button>
       <button className="editor-export-btn editor-export-btn--primary" onClick={onDone} title="Finish — send to the corner HUD">
-        <Check size={16} strokeWidth={1.75} /> Done
+        <Check size={16} strokeWidth={1.5} /> Done
       </button>
     </div>
   );

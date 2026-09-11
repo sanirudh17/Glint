@@ -804,7 +804,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
           title="Zoom out"
           aria-label="Zoom out"
         >
-          <Minus size={15} strokeWidth={2} />
+          <Minus size={15} strokeWidth={1.5} />
         </button>
         <button
           className="editor-zoom-val"
@@ -821,7 +821,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
           title="Zoom in"
           aria-label="Zoom in"
         >
-          <Plus size={15} strokeWidth={2} />
+          <Plus size={15} strokeWidth={1.5} />
         </button>
         <button
           className={`editor-zoom-btn${zoom === "fit" ? " editor-zoom-btn--active" : ""}`}
@@ -830,7 +830,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
           aria-label="Fit to window"
           aria-pressed={zoom === "fit"}
         >
-          <Maximize2 size={14} strokeWidth={2} />
+          <Maximize2 size={14} strokeWidth={1.5} />
         </button>
       </div>
 

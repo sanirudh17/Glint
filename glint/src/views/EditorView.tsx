@@ -231,7 +231,7 @@ export default function EditorView() {
             aria-pressed={frameEnabled}
             disabled={!base}
           >
-            <FrameIcon size={16} strokeWidth={1.75} /> Frame
+            <FrameIcon size={16} strokeWidth={1.5} /> Frame
           </button>
           {/* Corners is the standalone round-and-trim control; with the decorative
               Frame on, its Radius governs rounding instead, so hide Corners then. */}
@@ -243,7 +243,7 @@ export default function EditorView() {
               aria-pressed={cornersOpen}
               disabled={!base}
             >
-              <SquareRoundCorner size={16} strokeWidth={1.75} /> Corners
+              <SquareRoundCorner size={16} strokeWidth={1.5} /> Corners
             </button>
           )}
         </div>

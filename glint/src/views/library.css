@@ -257,34 +257,100 @@
   outline: none;
 }
 
+/* ── Grid hover overlay: bottom-aligned translucent pill ────────────────────
+ * Library variant. Divider-grouped icon-only actions in a dark pill with a
+ * hairline border. Instant show/hide (hover-gated visibility, zero
+ * transitions): main-window hover state only, never entrance motion. */
 .cap-actions {
   position: absolute;
-  top: var(--s2);
-  right: var(--s2);
+  left: 50%;
+  bottom: 8px;
+  transform: translateX(-50%);
+  z-index: 3;
   display: flex;
-  gap: 2px;
-  padding: 2px;
-  border-radius: var(--r1);
-  background: rgba(8, 9, 13, 0.72);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  align-items: center;
+  max-width: calc(100% - 16px);
+  padding: 3px 5px;
+  border-radius: 10px;
+  background: rgba(8, 9, 13, 0.82);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
   opacity: 0;
-  transition: opacity var(--dur) var(--ease);
+  pointer-events: none;
 }
-.cap-card:hover .cap-actions { opacity: 1; }
+.cap-card:hover .cap-actions { opacity: 1; pointer-events: auto; }
+
+.cap-group {
+  display: flex;
+  align-items: center;
+}
+.cap-group + .cap-group {
+  margin-left: 5px;
+  padding-left: 5px;
+  border-left: 1px solid rgba(255, 255, 255, 0.12);
+}
 
 .cap-btn {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
   width: 28px;
   height: 28px;
-  border-radius: var(--r-btn);
+  border-radius: 7px;
   border: none;
   background: transparent;
   color: rgba(255, 255, 255, 0.8);
   cursor: pointer;
-  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .cap-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
 .cap-btn--danger:hover { background: var(--danger-subtle); color: var(--danger); }
+
+/* Instant tooltip chip above the button — zero delay, zero animation. */
+.cap-tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(10, 11, 15, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 11px;
+  font-weight: var(--fw-medium);
+  line-height: 1.4;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+}
+.cap-btn:hover .cap-tip { opacity: 1; }
+
+/* ── Home hover overlay: centered compact actions over the thumbnail ─────────
+ * Dark gradient scrim + centered icon-only buttons (Copy · Annotate · Pin).
+ * Instant appear/disappear. The full action set lives one click away in
+ * Library ("View all"). */
+.cap-hover {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  background: linear-gradient(to top, rgba(8, 9, 13, 0.72), rgba(8, 9, 13, 0.28));
+  opacity: 0;
+  pointer-events: none;
+}
+.cap-card:hover .cap-hover { opacity: 1; pointer-events: auto; }
+.cap-hover .cap-btn {
+  width: 32px;
+  height: 32px;
+  background: rgba(10, 11, 15, 0.72);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+}
+.cap-hover .cap-btn:hover { background: rgba(30, 32, 40, 0.9); }

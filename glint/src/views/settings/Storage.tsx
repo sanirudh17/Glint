@@ -49,7 +49,7 @@ export function Storage() {
           ] as const).map(([label, value]) => (
             <div className="settings-storage-row" key={label}>
               <span className="settings-storage-key">
-                <HardDrive size={13} strokeWidth={1.75} />
+                <HardDrive size={13} strokeWidth={1.5} />
                 {label}
               </span>
               <code className="settings-storage-path">{value ?? "…"}</code>
@@ -63,7 +63,7 @@ export function Storage() {
           <code className="settings-folder-path">{paths?.screenshots ?? "…"}</code>
           <div className="settings-folder-actions">
             <button type="button" className="settings-hotkey-btn" onClick={() => void choose()}>
-              <FolderOpen size={13} strokeWidth={1.75} /> Choose…
+              <FolderOpen size={13} strokeWidth={1.5} /> Choose…
             </button>
             <button
               type="button"
@@ -78,7 +78,7 @@ export function Storage() {
                 className="settings-hotkey-btn settings-hotkey-btn--ghost"
                 onClick={() => void resetDefault()}
               >
-                <RotateCcw size={13} strokeWidth={1.75} /> Reset
+                <RotateCcw size={13} strokeWidth={1.5} /> Reset
               </button>
             )}
           </div>

@@ -3,8 +3,9 @@
   flex-direction: column;
   height: 100vh;
   background: var(--bg, #0c0d0f);
-  color: #e8e8ee;
-  font: 13px system-ui, sans-serif;
+  color: var(--text);
+  font-size: 13px;
+  line-height: var(--lh-base);
 }
 /* Preview stage: holds the screen video + the webcam overlay layer. */
 .trim-stage { position: relative; flex: 1; min-height: 0; }
@@ -40,29 +41,35 @@
 }
 .trim-error {
   padding: 16px;
-  color: #ff8585;
+  color: var(--danger);
 }
 /* Boot gate: keep controls visible while smoothly fading the video in once decoded */
 .trim-root.is-booting .trim-video { opacity: 0; }
 .trim-root .trim-video { transition: opacity 0.15s ease-out; }
 .trim-transport, .trim-actions { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+/* One icon set: 1.5px stroke on transport, actions, and filmstrip glyphs. */
+.trim-transport svg, .trim-actions svg, .trim-filmstrip svg { stroke-width: 1.5; }
 .trim-spacer { flex: 1; }
 .trim-time, .trim-out { opacity: 0.85; font-variant-numeric: tabular-nums; }
-.trim-iconbtn, .trim-btn { background: #1b1d27; color: #e8e8ee; border: 1px solid rgba(255,255,255,0.12); border-radius: var(--r-btn); padding: 6px 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; line-height: 1; text-align: center; min-width: 72px; box-sizing: border-box; }
+.trim-iconbtn, .trim-btn { background: var(--bg-elev2); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-btn); padding: 6px 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; line-height: 1; text-align: center; min-width: 72px; box-sizing: border-box; letter-spacing: var(--ls-ui); font-weight: var(--fw-medium); transition: background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out); }
+.trim-iconbtn:hover:not(:disabled), .trim-btn:hover:not(:disabled) { background: var(--bg-elev3); border-color: var(--border-strong); }
+.trim-iconbtn:active:not(:disabled), .trim-btn:active:not(:disabled) { background: var(--bg-elev3); }
 .trim-iconbtn:disabled, .trim-btn:disabled { opacity: 0.4; cursor: default; }
-.trim-btn--primary { background: var(--accent); border-color: var(--accent); }
-.trim-track { position: relative; height: 56px; margin: 0 12px 4px; background: #14151c; border-radius: 8px; overflow: hidden; cursor: ew-resize; touch-action: none; }
+.trim-btn--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
+.trim-btn--primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.trim-track { position: relative; height: 56px; margin: 0 12px 4px; background: var(--bg-elev2); border: 1px solid var(--border); border-radius: 8px; overflow: hidden; cursor: ew-resize; touch-action: none; }
 /* Zoomable content layer: `zoom×` wider than the track, panned via translateX. All timeline
    children (waveform, clips, playhead) are positioned relative to this, so their plain
    t/duration percentages scale with the zoom for free. */
 .trim-content { position: absolute; top: 0; bottom: 0; left: 0; will-change: transform; }
-/* Kept clips are translucent so the waveform behind them shows through; gaps are a
-   dim translucent hatch that reads as "removed" and dims the waveform underneath. */
+/* Kept vs discarded is tint + opacity only — no stripes/patterns. Kept clips
+   are translucent accent so the waveform shows through; gaps are a flat dim
+   wash that quiets the waveform underneath. */
 .trim-clip { position: absolute; top: 6px; bottom: 6px; background: var(--accent-subtle); border: 1px solid var(--accent); border-radius: 5px; box-sizing: border-box; pointer-events: none; }
-.trim-clip--gap { background: repeating-linear-gradient(45deg, rgba(20,21,28,0.82), rgba(20,21,28,0.82) 6px, rgba(15,16,22,0.82) 6px, rgba(15,16,22,0.82) 12px); border-color: rgba(255,255,255,0.08); }
-.trim-clip--sel { outline: 2px solid #9db2ff; }
+.trim-clip--gap { background: rgba(148, 163, 184, 0.10); border-color: transparent; }
+.trim-clip--sel { outline: 2px solid var(--accent); outline-offset: -1px; }
 .trim-playhead { position: absolute; top: 0; bottom: 0; width: 2px; background: #ff5d5d; pointer-events: none; }
-.trim-progress { position: relative; flex: 1; height: 26px; background: #14151c; border-radius: 7px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
+.trim-progress { position: relative; flex: 1; height: 26px; background: var(--bg-elev2); border: 1px solid var(--border); border-radius: 7px; overflow: hidden; display: flex; align-items: center; justify-content: center; }
 .trim-progress-fill { position: absolute; left: 0; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 33%, transparent); }
 .trim-progress span { position: relative; font-size: 12px; }
 
@@ -98,7 +105,7 @@
 .trim-fades {
   display: inline-flex; gap: 14px; align-items: center;
   margin-left: 8px; padding-left: 18px;
-  border-left: 1px solid rgba(255,255,255,0.1);
+  border-left: 1px solid var(--border);
 }
 .trim-fade { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
 .trim-fade-label { font-size: 11px; color: var(--text-dim); }
@@ -119,8 +126,8 @@
 .trim-strip-tile {
   display: inline-flex; align-items: center; gap: 6px; flex: none;
   height: 30px; padding: 0 10px; box-sizing: border-box;
-  background: #1b1d27; color: #e8e8ee;
-  border: 1px solid rgba(255,255,255,0.12); border-radius: var(--r-btn);
+  background: var(--bg-elev2); color: var(--text);
+  border: 1px solid var(--border); border-radius: var(--r-btn);
   cursor: grab; user-select: none; -webkit-user-select: none;
   touch-action: none; /* pointer drag must not be hijacked by the strip's horizontal scroll */
   transition: border-color 120ms var(--ease, ease), background 120ms var(--ease, ease);
@@ -129,9 +136,9 @@
 .trim-strip-tile--dragging { opacity: 0.5; }
 /* Direction chevron between tiles — shows the left→right processing order. Non-interactive so
    it never interferes with a drag. */
-.trim-strip-arrow { flex: none; color: rgba(255,255,255,0.28); pointer-events: none; }
-/* Insertion target: uniform 1px accent border on all sides where the dragged tile will land. */
-.trim-strip-tile--over { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
+.trim-strip-arrow { flex: none; color: var(--text-faint); pointer-events: none; }
+/* Insertion target: accent hairline where the dragged tile will land. */
+.trim-strip-tile--over { border-color: var(--accent); background: var(--bg-elev3); }
 /* Selected clip: matches the timeline's sticky selection so number/speed keys have a clear
    target. Uses the accent so it reads as "active". */
 .trim-strip-tile--selected { border-color: var(--accent); background: var(--accent-subtle); }
@@ -144,7 +151,7 @@
 .trim-strip-dur { font-size: 12px; font-variant-numeric: tabular-nums; opacity: 0.85; }
 .trim-strip-speed {
   font-size: 10px; font-variant-numeric: tabular-nums;
-  padding: 1px 4px; border-radius: 3px; background: rgba(255,255,255,0.1);
+  padding: 1px 4px; border-radius: 3px; background: var(--bg-elev3); color: var(--text-dim);
 }
 
 /* Audio waveform behind the timeline clips — mirrored around the track's centre so it

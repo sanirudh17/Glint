@@ -23,6 +23,7 @@
   color: var(--text);
   font-family: inherit;
   font-weight: var(--fw-medium);
+  letter-spacing: var(--ls-ui);
   line-height: 1;
   cursor: pointer;
   transition:
@@ -75,7 +76,7 @@
 .g-btn-ghost:hover:not(:disabled) {
   background: var(--bg-elev2);
   color: var(--text);
-  border-color: transparent;
+  border-color: var(--border);
 }
 .g-btn-ghost:active:not(:disabled) {
   background: var(--bg-elev3);

@@ -36,7 +36,7 @@ export function Titlebar() {
           onClick={() => win.minimize()}
           aria-label="Minimize"
         >
-          <Minus size={13} strokeWidth={1.75} />
+          <Minus size={13} strokeWidth={1.5} />
         </button>
 
         <button
@@ -44,7 +44,7 @@ export function Titlebar() {
           onClick={() => win.toggleMaximize()}
           aria-label="Toggle maximize"
         >
-          <Square size={11} strokeWidth={1.75} />
+          <Square size={11} strokeWidth={1.5} />
         </button>
 
         <button
@@ -52,7 +52,7 @@ export function Titlebar() {
           onClick={() => win.close()}
           aria-label="Close"
         >
-          <X size={13} strokeWidth={1.75} />
+          <X size={13} strokeWidth={1.5} />
         </button>
       </div>
     </div>

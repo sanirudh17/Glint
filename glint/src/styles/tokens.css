@@ -1,9 +1,11 @@
 /*
  * Glint — Design tokens
- * Dark-primary. One accent (periwinkle-blue #5B7CFA), used sparingly.
- * Aesthetic direction: "ink on glass" — surfaces sit above a near-black
- * substrate via micro-borders, never glows. Monospace for metadata/timestamps
- * nods to the capture tool DNA; variable-weight Inter for prose.
+ * Dark-primary. One strategic accent (runtime-switchable palette, Teal default),
+ * used sparingly for primary actions and active states; everything else neutral.
+ * Aesthetic direction: "ink on glass" — deep slate-charcoal substrate (never
+ * pure black), surfaces lifted via 1px hairlines tinted from the surface and
+ * soft ambient shadows (never dark glows). Manrope grotesque for UI,
+ * monospace reserved for code/data/measurement.
  *
  * NO purple gradients, glow, sparkle icons, or rainbow accents.
  */
@@ -37,6 +39,15 @@
   --fz-xl: 20px;
   --fz-2xl: 28px;
 
+  /* Typefaces — Manrope (bundled via @fontsource) for UI, system fallbacks */
+  --font-ui: "Manrope", "Segoe UI Variable Text", "Segoe UI", system-ui,
+             -apple-system, sans-serif;
+  --font-mono: "Cascadia Code", "JetBrains Mono", ui-monospace,
+               "Consolas", monospace;
+  /* Alias: hud/overlay CSS reference --ff-mono — define it once here */
+  --ff-mono: "Cascadia Code", "JetBrains Mono", ui-monospace,
+             "Consolas", monospace;
+
   /* Weight — variable font axis */
   --fw-light:  300;
   --fw-normal: 400;
@@ -50,12 +61,23 @@
 
   /* Letter spacing (only for caps/labels) */
   --ls-label: 0.04em;
+  /* Tight tracking for UI labels/set-in-sentence-case headings */
+  --ls-ui: -0.01em;
 
-  /* Motion — swift, not bouncy */
+  /* Motion — swift, not bouncy. Utility surfaces (HUD, overlays, popups)
+   * use NO transitions at all; main-app hover/selection states may use
+   * --dur with --ease-out only. Never on window/panel entrance. */
   --ease:      cubic-bezier(0.2, 0.6, 0.2, 1);
   --ease-out:  cubic-bezier(0.0, 0.0, 0.2, 1);
   --dur:       140ms;
   --dur-slow:  240ms;
+
+  /* Depth — hairlines tinted from the surface; soft dispersed ambient
+   * shadows (macOS window-shadow style) only where a surface floats */
+  --shadow-ambient: 0 8px 28px rgba(0, 0, 0, 0.32),
+                    0 2px 8px rgba(0, 0, 0, 0.24);
+  --shadow-pop:     0 12px 40px rgba(0, 0, 0, 0.40),
+                    0 4px 12px rgba(0, 0, 0, 0.28);
 
   /* Accent */
   --accent:        #2BAAAD;
@@ -91,10 +113,11 @@
   --border:        #22252C;
   --border-strong: #2E323A;
 
-  /* Text — high contrast but not glaring */
-  --text:       #E8EAF0;
-  --text-dim:   #8B92A0;
-  --text-faint: #50565F;
+  /* Text — WCAG AAA body (≥7:1), AA labels (≥4.5:1) on #0C0D0F.
+   * body #F1F5F9 ≈17:1 · dim #B7C0D1 ≈10:1 · faint #94A3B8 ≈7.6:1 */
+  --text:       #F1F5F9;
+  --text-dim:   #B7C0D1;
+  --text-faint: #94A3B8;
 
   --accent-fg:  #ffffff;
 

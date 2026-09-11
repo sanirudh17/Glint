@@ -5,21 +5,37 @@ import {
 import { useEditorStore } from "../../editor/useEditorStore";
 import type { ToolId } from "../../editor/model";
 
-const TOOLS: { id: ToolId; icon: LucideIcon; tip: string; key: string }[] = [
-  { id: "select",    icon: MousePointer2, tip: "Select (V)",      key: "V" },
-  { id: "arrow",     icon: ArrowUpRight,  tip: "Arrow (A)",       key: "A" },
-  { id: "line",      icon: Minus,         tip: "Line (L)",        key: "L" },
-  { id: "rect",      icon: Square,        tip: "Rectangle (R)",   key: "R" },
-  { id: "ellipse",   icon: CircleIcon,    tip: "Ellipse (O)",     key: "O" },
-  { id: "text",      icon: Type,          tip: "Text (T)",        key: "T" },
-  { id: "pen",       icon: Pen,           tip: "Pen (P)",         key: "P" },
-  { id: "highlight", icon: Highlighter,   tip: "Highlighter (H)", key: "H" },
-  { id: "blur",      icon: Droplet,       tip: "Blur (B)",        key: "B" },
-  { id: "redact",    icon: EyeOff,        tip: "Redact (K)",      key: "K" },
-  { id: "spotlight", icon: Focus,         tip: "Spotlight (F)",   key: "F" },
-  { id: "step",      icon: Hash,          tip: "Step (S)",        key: "S" },
-  { id: "eraser",    icon: Eraser,        tip: "Eraser (E)",      key: "E" },
-  { id: "crop",      icon: CropIcon,      tip: "Crop (C)",        key: "C" },
+const GROUPS: { id: ToolId; icon: LucideIcon; tip: string; key: string }[][] = [
+  [
+    { id: "select",    icon: MousePointer2, tip: "Select (V)",      key: "V" },
+  ],
+  [
+    { id: "arrow",     icon: ArrowUpRight,  tip: "Arrow (A)",       key: "A" },
+    { id: "line",      icon: Minus,         tip: "Line (L)",        key: "L" },
+    { id: "rect",      icon: Square,        tip: "Rectangle (R)",   key: "R" },
+    { id: "ellipse",   icon: CircleIcon,    tip: "Ellipse (O)",     key: "O" },
+  ],
+  [
+    { id: "text",      icon: Type,          tip: "Text (T)",        key: "T" },
+  ],
+  [
+    { id: "pen",       icon: Pen,           tip: "Pen (P)",         key: "P" },
+    { id: "highlight", icon: Highlighter,   tip: "Highlighter (H)", key: "H" },
+  ],
+  [
+    { id: "blur",      icon: Droplet,       tip: "Blur (B)",        key: "B" },
+    { id: "redact",    icon: EyeOff,        tip: "Redact (K)",      key: "K" },
+    { id: "spotlight", icon: Focus,         tip: "Spotlight (F)",   key: "F" },
+  ],
+  [
+    { id: "step",      icon: Hash,          tip: "Step (S)",        key: "S" },
+  ],
+  [
+    { id: "eraser",    icon: Eraser,        tip: "Eraser (E)",      key: "E" },
+  ],
+  [
+    { id: "crop",      icon: CropIcon,      tip: "Crop (C)",        key: "C" },
+  ],
 ];
 
 export function ToolRail() {
@@ -32,24 +48,28 @@ export function ToolRail() {
 
   return (
     <div className="editor-rail" role="toolbar" aria-label="Annotation tools">
-      {TOOLS.map(({ id, icon: Icon, tip }) => (
-        <button
-          key={id}
-          className={`editor-tool${tool === id ? " editor-tool--active" : ""}`}
-          title={tip}
-          aria-label={tip}
-          aria-pressed={tool === id}
-          onClick={() => setTool(id)}
-        >
-          <Icon size={18} strokeWidth={1.75} />
-        </button>
+      {GROUPS.map((group, gi) => (
+        <div className="editor-rail-group" key={gi} role="group">
+          {group.map(({ id, icon: Icon, tip }) => (
+            <button
+              key={id}
+              className={`editor-tool${tool === id ? " editor-tool--active" : ""}`}
+              title={tip}
+              aria-label={tip}
+              aria-pressed={tool === id}
+              onClick={() => setTool(id)}
+            >
+              <Icon size={18} strokeWidth={1.5} />
+            </button>
+          ))}
+        </div>
       ))}
       <div className="editor-rail-sep" />
       <button className="editor-tool" title="Undo (Ctrl+Z)" aria-label="Undo" onClick={() => undo()}>
-        <Undo2 size={18} strokeWidth={1.75} />
+        <Undo2 size={18} strokeWidth={1.5} />
       </button>
       <button className="editor-tool" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" onClick={() => redo()}>
-        <Redo2 size={18} strokeWidth={1.75} />
+        <Redo2 size={18} strokeWidth={1.5} />
       </button>
       <button
         className="editor-tool editor-tool--danger"
@@ -58,7 +78,7 @@ export function ToolRail() {
         disabled={!hasAnnotations}
         onClick={() => clearAll()}
       >
-        <Trash2 size={18} strokeWidth={1.75} />
+        <Trash2 size={18} strokeWidth={1.5} />
       </button>
     </div>
   );

@@ -29,7 +29,7 @@ export function Button({
         .join(" ")}
       {...rest}
     >
-      {Icon && <Icon size={iconSize} strokeWidth={1.75} />}
+      {Icon && <Icon size={iconSize} strokeWidth={1.5} />}
       {children && <span>{children}</span>}
     </button>
   );

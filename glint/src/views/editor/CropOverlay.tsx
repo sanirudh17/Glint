@@ -25,6 +25,14 @@ const HANDLES: { id: string; fx: number; fy: number; cursor: string }[] = [
 
 const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(v, hi));
 
+/** Aspect presets for the crop bar. `ratio: null` = Free (no constraint). */
+const ASPECTS: { id: string; label: string; ratio: number | null }[] = [
+  { id: "free", label: "Free", ratio: null },
+  { id: "1:1", label: "1:1", ratio: 1 },
+  { id: "4:3", label: "4:3", ratio: 4 / 3 },
+  { id: "16:9", label: "16:9", ratio: 16 / 9 },
+];
+
 /**
  * Crop-mode UI: a draggable/resizable rectangle in IMAGE space, drawn over the
  * stage (origin = composition top-left, since the parent wrapper is exactly the
@@ -50,6 +58,25 @@ export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel
   // Smallest crop edge, in image px — clamped down for tiny images so a resize
   // can never produce a crop larger than the image.
   const min = Math.max(1, Math.min(16, Math.floor(imageW / 4), Math.floor(imageH / 4)));
+
+  // Active aspect preset, matched against the current rect (rounded to 3dp so
+  // float drift doesn't deselect the chip after a resize).
+  const activeAspect = (() => {
+    if (rect.h <= 0) return "free";
+    const r = rect.w / rect.h;
+    return ASPECTS.find((a) => a.ratio !== null && Math.abs(a.ratio - r) < 0.001)?.id ?? "free";
+  })();
+
+  // Fit an aspect box centred in the image bounds (appearance affordance only —
+  // confirm/cancel still flow through the existing callbacks + Enter/Esc).
+  const applyAspect = (ratio: number | null) => {
+    if (ratio === null) return;
+    let w = imageW, h = imageW / ratio;
+    if (h > imageH) { h = imageH; w = imageH * ratio; }
+    w = Math.max(min, Math.floor(w));
+    h = Math.max(min, Math.floor(h));
+    setRect({ x: Math.floor((imageW - w) / 2), y: Math.floor((imageH - h) / 2), w, h });
+  };
 
   // The annotation/content offset folded into screen mapping (image → screen px).
   const offX = layout.contentX - layout.cropX;
@@ -143,6 +170,34 @@ export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel
             style={{ left: `${h.fx * 100}%`, top: `${h.fy * 100}%`, cursor: h.cursor }}
           />
         ))}
+      </div>
+      {/* CleanShot-style crop bar: aspect chips + pill Cancel/Done. Same
+          callbacks as Enter/Esc — no new behavior, just pointer affordances. */}
+      <div className="crop-bar" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="crop-aspects" role="group" aria-label="Aspect ratio">
+          {ASPECTS.map((a) => (
+            <button
+              key={a.id}
+              type="button"
+              className={`crop-chip${activeAspect === a.id ? " crop-chip--active" : ""}`}
+              aria-pressed={activeAspect === a.id}
+              onClick={() => applyAspect(a.ratio)}
+            >
+              {a.label}
+            </button>
+          ))}
+        </div>
+        <span className="crop-sep" aria-hidden="true" />
+        <button type="button" className="crop-pill" onClick={onCancel}>
+          Cancel
+        </button>
+        <button
+          type="button"
+          className="crop-pill crop-pill--primary"
+          onClick={() => onConfirm(normalizeRect(rectRef.current))}
+        >
+          Done
+        </button>
       </div>
       <div className="crop-hint">Drag to crop · Enter to apply · Esc to cancel</div>
     </div>

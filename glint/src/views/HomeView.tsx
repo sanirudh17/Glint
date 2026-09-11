@@ -94,7 +94,7 @@ export default function HomeView() {
           <span className="label home-eyebrow" id="rc-label">Recent</span>
           {recent.length > 0 && (
             <button className="home-viewall" onClick={() => navigate("/library")}>
-              View all in Library <ArrowRight size={13} strokeWidth={1.75} />
+              View all in Library <ArrowRight size={13} strokeWidth={1.5} />
             </button>
           )}
         </div>
@@ -104,7 +104,7 @@ export default function HomeView() {
           </div>
         ) : (
           <div className="home-recent-grid" role="list" aria-label="Recent captures">
-            {recent.map((c) => (<CaptureCard key={c.id} item={c} onChanged={reloadRecent} />))}
+            {recent.map((c) => (<CaptureCard key={c.id} item={c} onChanged={reloadRecent} variant="home" />))}
           </div>
         )}
       </section>
@@ -121,7 +121,7 @@ export default function HomeView() {
                 onClick={() => onOpenRecent(p)}
                 title={p.exists ? p.path : `${p.path} (missing)`}
               >
-                <RotateCcw size={14} strokeWidth={1.75} />
+                <RotateCcw size={14} strokeWidth={1.5} />
                 <span className="home-resume-name">{p.name}</span>
               </button>
             ))}

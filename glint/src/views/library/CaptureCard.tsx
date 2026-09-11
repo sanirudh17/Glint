@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { ExternalLink, FolderOpen, Copy, Pencil, Pin, Trash2, Play, Scissors, ScanText, Tag, Image as ImageIcon, Video } from "lucide-react";
+import { ExternalLink, FolderOpen, Copy, Pencil, Pin, Trash2, Play, Scissors, ScanText, Tag, Image as ImageIcon, Video, type LucideIcon } from "lucide-react";
 import type { CaptureItem } from "../../lib/captures";
 import { openCapture, revealCapture, copyCapture, copyCapturePath, deleteCapture, renameCapture, dragOut } from "../../lib/captures";
 import { openTrim } from "../../lib/trim";
@@ -17,7 +17,17 @@ function when(unixSec: number): string {
   });
 }
 
-export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged: () => void }) {
+export function CaptureCard({
+  item,
+  onChanged,
+  variant = "library",
+}: {
+  item: CaptureItem;
+  onChanged: () => void;
+  /** "home" = centered compact overlay (Copy · Annotate · Pin); "library" =
+   * bottom-aligned pill with the full divider-grouped action set. */
+  variant?: "home" | "library";
+}) {
   const pushToast = useAppStore((s) => s.pushToast);
   const isRecording = item.kind === "recording";
 
@@ -41,6 +51,8 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
     cancelRef.current = false;
     setRenaming(true);
   };
+  // ── Hover actions (appearance-only grouping; every action below already
+  // existed on the card — nothing added, nothing removed) ──────────────────
   // Enter and click-away both blur → commit; Escape blurs with cancelRef set → skip.
   const finishRename = async () => {
     setRenaming(false);
@@ -52,6 +64,73 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
     if (next !== (item.title ?? "")) {
       await act(async () => { await renameCapture(item.id, next); onChanged(); });
     }
+  };
+  interface CardAct {
+    label: string;
+    icon: LucideIcon;
+    danger?: boolean;
+    run: () => void;
+  }
+  const doCopyPath = () => act(async () => { await copyCapturePath(item.id); pushToast("Path copied"); });
+  const doDelete = () => act(async () => { await deleteCapture(item.id); onChanged(); });
+
+  // Library pill: the full set, divider-grouped.
+  const shotGroups: CardAct[][] = [
+    [
+      { label: "Copy", icon: Copy, run: () => act(() => copyCapture(item.id)) },
+      { label: "Reveal in Explorer", icon: FolderOpen, run: () => act(() => revealCapture(item.id)) },
+    ],
+    [
+      { label: "Annotate", icon: Pencil, run: () => act(() => openEditorCapture(item.id)) },
+      { label: "Extract text", icon: ScanText, run: () => act(() => extractCapture(item.id)) },
+    ],
+    [
+      { label: "Open", icon: ExternalLink, run: () => act(() => openCapture(item.id)) },
+      { label: "Pin to screen", icon: Pin, run: () => act(() => pinCreateFromCapture(item.id)) },
+    ],
+    [{ label: "Rename", icon: Tag, run: startRename }],
+    [{ label: "Delete", icon: Trash2, danger: true, run: doDelete }],
+  ];
+  const recGroups: CardAct[][] = [
+    [
+      { label: "Open", icon: ExternalLink, run: () => act(() => openCapture(item.id)) },
+      { label: "Reveal in Explorer", icon: FolderOpen, run: () => act(() => revealCapture(item.id)) },
+    ],
+    [
+      { label: "Trim", icon: Scissors, run: () => act(() => openTrim(item.id, item.path)) },
+      { label: "Rename", icon: Tag, run: startRename },
+    ],
+    [{ label: "Copy file path", icon: Copy, run: doCopyPath }],
+    [{ label: "Delete", icon: Trash2, danger: true, run: doDelete }],
+  ];
+  // Home overlay: compact primary trio (the full set lives in Library).
+  const homeActs: CardAct[] = isRecording
+    ? [
+        { label: "Copy file path", icon: Copy, run: doCopyPath },
+        { label: "Trim", icon: Scissors, run: () => act(() => openTrim(item.id, item.path)) },
+        { label: "Pin to screen", icon: Pin, run: () => act(() => pinCreateFromCapture(item.id)) },
+      ]
+    : [
+        { label: "Copy", icon: Copy, run: () => act(() => copyCapture(item.id)) },
+        { label: "Annotate", icon: Pencil, run: () => act(() => openEditorCapture(item.id)) },
+        { label: "Pin to screen", icon: Pin, run: () => act(() => pinCreateFromCapture(item.id)) },
+      ];
+
+  const renderBtn = (a: CardAct) => {
+    const Icon = a.icon;
+    return (
+      <button
+        key={a.label}
+        type="button"
+        className={`cap-btn${a.danger ? " cap-btn--danger" : ""}`}
+        aria-label={a.label}
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={a.run}
+      >
+        <Icon size={16} strokeWidth={1.5} />
+        <span className="cap-tip" aria-hidden="true">{a.label}</span>
+      </button>
+    );
   };
 
   return (
@@ -69,7 +148,20 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
         )}
         {isRecording && (
           <div className="cap-thumb-play">
-            <Play size={24} strokeWidth={1.75} />
+            <Play size={24} strokeWidth={1.5} />
+          </div>
+        )}
+        {variant === "home" ? (
+          <div className="cap-hover" onPointerDown={(e) => e.stopPropagation()}>
+            {homeActs.map(renderBtn)}
+          </div>
+        ) : (
+          <div className="cap-actions" onPointerDown={(e) => e.stopPropagation()}>
+            {(isRecording ? recGroups : shotGroups).map((group, gi) => (
+              <span className="cap-group" key={gi} role="group">
+                {group.map(renderBtn)}
+              </span>
+            ))}
           </div>
         )}
       </div>
@@ -77,8 +169,8 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
       <div className="cap-meta">
         <span className="cap-name">
           {isRecording
-            ? <Video className="cap-kind" size={13} strokeWidth={1.75} aria-label="Recording" />
-            : <ImageIcon className="cap-kind" size={13} strokeWidth={1.75} aria-label="Screenshot" />}
+            ? <Video className="cap-kind" size={13} strokeWidth={1.5} aria-label="Recording" />
+            : <ImageIcon className="cap-kind" size={13} strokeWidth={1.5} aria-label="Screenshot" />}
           {renaming ? (
             <input
               className="cap-rename-input"
@@ -100,73 +192,6 @@ export function CaptureCard({ item, onChanged }: { item: CaptureItem; onChanged:
           )}
         </span>
         <span className="cap-when">{when(item.created_at)}</span>
-      </div>
-
-      <div className="cap-actions" onPointerDown={(e) => e.stopPropagation()}>
-        {isRecording ? (
-          <>
-            <button className="cap-btn" aria-label="Open" title="Open" onClick={() => act(() => openCapture(item.id))}>
-              <ExternalLink size={15} strokeWidth={1.75} />
-            </button>
-            <button className="cap-btn" aria-label="Reveal in Explorer" title="Reveal" onClick={() => act(() => revealCapture(item.id))}>
-              <FolderOpen size={15} strokeWidth={1.75} />
-            </button>
-            <button className="cap-btn" aria-label="Trim" title="Trim" onClick={() => act(() => openTrim(item.id, item.path))}>
-              <Scissors size={15} strokeWidth={1.75} />
-            </button>
-            <button className="cap-btn" aria-label="Rename" title="Rename" onClick={startRename}>
-              <Tag size={15} strokeWidth={1.75} />
-            </button>
-            <button
-              className="cap-btn"
-              aria-label="Copy file path"
-              title="Copy file path"
-              onClick={() => act(async () => { await copyCapturePath(item.id); pushToast("Path copied"); })}
-            >
-              <Copy size={15} strokeWidth={1.75} />
-            </button>
-            <button
-              className="cap-btn cap-btn--danger"
-              aria-label="Delete"
-              title="Delete"
-              onClick={() => act(async () => { await deleteCapture(item.id); onChanged(); })}
-            >
-              <Trash2 size={15} strokeWidth={1.75} />
-            </button>
-          </>
-        ) : (
-          <>
-            <button className="cap-btn" aria-label="Open" title="Open" onClick={() => act(() => openCapture(item.id))}>
-              <ExternalLink size={15} strokeWidth={1.75} />
-            </button>
-            <button className="cap-btn" aria-label="Reveal in Explorer" title="Reveal" onClick={() => act(() => revealCapture(item.id))}>
-              <FolderOpen size={15} strokeWidth={1.75} />
-            </button>
-            <button className="cap-btn" aria-label="Edit" title="Edit" onClick={() => act(() => openEditorCapture(item.id))}>
-              <Pencil size={15} strokeWidth={1.75} />
-            </button>
-            <button className="cap-btn" aria-label="Rename" title="Rename" onClick={startRename}>
-              <Tag size={15} strokeWidth={1.75} />
-            </button>
-            <button className="cap-btn" aria-label="Extract text" title="Extract text" onClick={() => act(() => extractCapture(item.id))}>
-              <ScanText size={15} strokeWidth={1.75} />
-            </button>
-            <button className="cap-btn" aria-label="Copy" title="Copy" onClick={() => act(() => copyCapture(item.id))}>
-              <Copy size={15} strokeWidth={1.75} />
-            </button>
-            <button className="cap-btn" aria-label="Pin to screen" title="Pin to screen" onClick={() => act(() => pinCreateFromCapture(item.id))}>
-              <Pin size={15} strokeWidth={1.75} />
-            </button>
-            <button
-              className="cap-btn cap-btn--danger"
-              aria-label="Delete"
-              title="Delete"
-              onClick={() => act(async () => { await deleteCapture(item.id); onChanged(); })}
-            >
-              <Trash2 size={15} strokeWidth={1.75} />
-            </button>
-          </>
-        )}
       </div>
     </div>
   );

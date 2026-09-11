@@ -77,7 +77,7 @@ export default function SettingsView() {
                 aria-current={active === id ? "page" : undefined}
                 onClick={() => setActive(id)}
               >
-                <Icon size={15} strokeWidth={1.75} />
+                <Icon size={15} strokeWidth={1.5} />
                 <span>{label}</span>
               </button>
             </li>

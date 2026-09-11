@@ -3,8 +3,8 @@
  *
  * Mirrors the screenshot HUD (HudApp): a compact thumbnail card parked bottom-left
  * that IS the drag handle. Quiet by default — just the video preview with a play
- * badge and viewfinder ticks. On hover, a scrim + a small action toolbar reveal
- * over the bottom edge (Open · Reveal · Copy path) and a close button appears
+ * badge and viewfinder ticks. On hover, the action dock reveals over the bottom
+ * edge ([Trim] · [Open | Reveal] · [Copy path]) and a close button appears
  * top-right. Reuses the screenshot HUD's styles so the two feel identical.
  *
  * Recorder-owned: it invokes the generic Library commands by id and the shared
@@ -12,7 +12,7 @@
  */
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ExternalLink, FolderOpen, Copy, X, Play, Scissors } from "lucide-react";
+import { ExternalLink, FolderOpen, Copy, X, Play, Scissors, type LucideIcon } from "lucide-react";
 import { dragOut } from "../lib/hudIpc";
 import { openTrim } from "../lib/trim";
 import "../hud/hud.css";
@@ -31,6 +31,17 @@ export function RecHud() {
 
   const dismiss = () => { invoke("rec_hud_dismiss").catch(() => {}); };
   const act = (cmd: string) => { if (data) invoke(cmd, { id: data.id }).catch(() => {}); };
+
+  // Same dock language as the screenshot card: divider-grouped pill, instant
+  // tooltips, no motion. [Trim] · [Open | Reveal] · [Copy path].
+  const groups: { tip: string; icon: LucideIcon; run: () => void }[][] = [
+    [{ tip: "Trim", icon: Scissors, run: () => data && openTrim(data.id, data.path) }],
+    [
+      { tip: "Open", icon: ExternalLink, run: () => act("capture_open") },
+      { tip: "Reveal in Explorer", icon: FolderOpen, run: () => act("capture_reveal") },
+    ],
+    [{ tip: "Copy file path", icon: Copy, run: () => act("capture_copy_path") }],
+  ];
 
   return (
     <div className="hud-root">
@@ -68,24 +79,28 @@ export function RecHud() {
           onPointerDown={(e) => e.stopPropagation()}
           onClick={dismiss}
         >
-          <X size={13} strokeWidth={2} />
+          <X size={13} strokeWidth={1.5} />
         </button>
 
-        {/* Scrim + action toolbar — revealed on hover. */}
-        <div className="hud-scrim" aria-hidden="true" />
-        <div className="hud-toolbar">
-          <button className="hud-btn" title="Trim" aria-label="Trim" onPointerDown={(e) => e.stopPropagation()} onClick={() => data && openTrim(data.id, data.path)}>
-            <Scissors size={16} strokeWidth={1.75} />
-          </button>
-          <button className="hud-btn" title="Open" aria-label="Open" onPointerDown={(e) => e.stopPropagation()} onClick={() => act("capture_open")}>
-            <ExternalLink size={16} strokeWidth={1.75} />
-          </button>
-          <button className="hud-btn" title="Reveal in Explorer" aria-label="Reveal" onPointerDown={(e) => e.stopPropagation()} onClick={() => act("capture_reveal")}>
-            <FolderOpen size={16} strokeWidth={1.75} />
-          </button>
-          <button className="hud-btn" title="Copy file path" aria-label="Copy path" onPointerDown={(e) => e.stopPropagation()} onClick={() => act("capture_copy_path")}>
-            <Copy size={16} strokeWidth={1.75} />
-          </button>
+        {/* Action dock — revealed on hover. */}
+        <div className="hud-toolbar" role="toolbar" aria-label="Recording actions">
+          {groups.map((group, gi) => (
+            <span className="hud-toolgroup" key={gi} role="group">
+              {group.map(({ tip, icon: Icon, run }) => (
+                <button
+                  key={tip}
+                  type="button"
+                  className="hud-btn"
+                  aria-label={tip}
+                  onPointerDown={(e) => e.stopPropagation()}
+                  onClick={run}
+                >
+                  <Icon size={16} strokeWidth={1.5} />
+                  <span className="hud-tip" aria-hidden="true">{tip}</span>
+                </button>
+              ))}
+            </span>
+          ))}
         </div>
       </div>
     </div>

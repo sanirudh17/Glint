@@ -44,7 +44,7 @@ export function Updates() {
           onClick={() => void check()}
           disabled={busy}
         >
-          <RefreshCw size={13} strokeWidth={1.75} className={checking ? "settings-update-spin" : ""} />
+          <RefreshCw size={13} strokeWidth={1.5} className={checking ? "settings-update-spin" : ""} />
           {checking ? "Checking…" : "Check now"}
         </button>
       </div>
@@ -67,7 +67,7 @@ export function Updates() {
             className="settings-hotkey-btn settings-update-install"
             onClick={() => void install(status.assetUrl, status.latest)}
           >
-            <ArrowUpCircle size={14} strokeWidth={2} />
+            <ArrowUpCircle size={14} strokeWidth={1.5} />
             Update now
           </button>
         </div>
@@ -92,7 +92,7 @@ export function Updates() {
 
       {status.kind === "error" && (
         <p className="settings-update-note settings-update-note--error">
-          <AlertCircle size={14} strokeWidth={2} />
+          <AlertCircle size={14} strokeWidth={1.5} />
           {status.message}
         </p>
       )}

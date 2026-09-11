@@ -268,7 +268,7 @@ function Hint({ text }: { text: string }) {
       onFocus={show}
       onBlur={hide}
     >
-      <Info size={13} strokeWidth={2} aria-hidden />
+      <Info size={13} strokeWidth={1.5} aria-hidden />
       {pos && (
         <span className="frame-tip" style={{ left: pos.left, top: pos.top }}>
           {text}

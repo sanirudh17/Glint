@@ -63,7 +63,7 @@ export default function LibraryView() {
         </div>
         <div className="library-bar" role="search" aria-label="Filter captures">
           <div className="library-search-wrap">
-            <Search className="library-search-icon" size={15} strokeWidth={1.75} aria-hidden="true" />
+            <Search className="library-search-icon" size={15} strokeWidth={1.5} aria-hidden="true" />
             <input
               className="library-search"
               type="search"

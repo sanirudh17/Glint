@@ -198,7 +198,7 @@ export function PinApp() {
         onPointerDown={(e) => e.stopPropagation()}
         onClick={() => pinClose()}
       >
-        <X size={13} strokeWidth={2} />
+        <X size={13} strokeWidth={1.5} />
       </button>
 
       <div className={`pin-flash${flash ? " pin-flash--show" : ""}`} aria-live="polite">{flash}</div>

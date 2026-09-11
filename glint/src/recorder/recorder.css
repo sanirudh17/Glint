@@ -22,10 +22,15 @@
   background: rgba(20,20,24,0.98); color: #fff; font-size: 11px; font-weight: 500;
   border: 1px solid rgba(255,255,255,0.16); pointer-events: none;
 }
-.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff3b30; animation: rec-pulse 1.2s infinite; }
-.rec-dot--paused { background: #f5a623; animation: none; }
-@keyframes rec-pulse { 0%,100% { opacity: 1 } 50% { opacity: 0.35 } }
+/* Recording indicator: a static red dot (amber when paused). Deliberately NOT
+   pulsed — utility surfaces carry zero keyframe animation; the tabular timer
+   beside it already signals a live recording. */
+.rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff3b30; flex: none; }
+.rec-dot--paused { background: #f5a623; }
 .rec-time { font-variant-numeric: tabular-nums; min-width: 44px; }
+/* One icon set: 1.5px stroke throughout the pill (filled transport glyphs
+   keep their fill; the stroke only trims their edge). */
+.rec-bar svg { stroke-width: 1.5; }
 .rec-pause { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; border: none; border-radius: var(--r-btn); background: rgba(255,255,255,0.14); color: #fff; cursor: pointer; }
 .rec-pause:hover { background: rgba(255,255,255,0.24); }
 .rec-pause:disabled { opacity: 0.5; cursor: default; }
@@ -85,10 +90,12 @@
   display: flex; align-items: center; gap: 12px; z-index: 5; pointer-events: none;
 }
 .rec-sel-hint { background: rgba(0,0,0,0.6); color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 13px; white-space: nowrap; flex: none; }
+/* One icon set: 1.5px stroke on the selector chips + full-screen button. */
+.rec-sel-chip svg, .rec-sel-fullbtn svg { stroke-width: 1.5; }
 .rec-sel-fullbtn {
   pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
   height: 34px; padding: 0 18px; box-sizing: border-box; white-space: nowrap;
-  background: var(--accent); color: #fff; border: none; border-radius: var(--r-btn);
+  background: var(--accent); color: var(--accent-fg); border: none; border-radius: var(--r-btn);
   font-size: 13px; font-weight: 600; cursor: pointer;
 }
 .rec-sel-fullbtn:hover { background: var(--accent-hover); }
@@ -100,7 +107,7 @@
   width: 140px; height: 34px; padding: 0 12px; box-sizing: border-box; white-space: nowrap;
   background: rgba(20,22,30,0.72); color: #fff; border: 1px solid rgba(255,255,255,0.16);
   border-radius: var(--r-btn); font-size: 12px; font-weight: 500;
-  cursor: pointer; transition: background 120ms var(--ease, ease), border-color 120ms var(--ease, ease);
+  cursor: pointer;
 }
 .rec-sel-chip:hover { background: rgba(44,48,60,0.82); }
 .rec-sel-chip--off { color: rgba(255,255,255,0.5); border-color: rgba(255,255,255,0.08); background: rgba(20,22,30,0.5); }
@@ -113,6 +120,5 @@
   display: flex; align-items: center; justify-content: center;
   color: rgba(255, 255, 255, 0.92); pointer-events: none;
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
-  transition: opacity 150ms var(--ease, ease);
 }
 .hud-card:hover .rec-hud-play-badge { opacity: 0; }

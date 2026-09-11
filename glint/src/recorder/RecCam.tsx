@@ -178,10 +178,10 @@ export function RecCam() {
       <video ref={videoRef} className="reccam-video" autoPlay muted playsInline />
       <div className="reccam-controls">
         <button className="reccam-btn" title="Resize" aria-label="Resize" onClick={cycleSize}>
-          <Maximize2 size={13} strokeWidth={2} />
+          <Maximize2 size={13} strokeWidth={1.5} />
         </button>
         <button className="reccam-btn" title="Turn off webcam" aria-label="Turn off webcam" onClick={close}>
-          <X size={13} strokeWidth={2} />
+          <X size={13} strokeWidth={1.5} />
         </button>
       </div>
     </div>

@@ -160,7 +160,7 @@ export function Select({
       >
         <span className="g-select-value">{selectedOption?.label ?? ""}</span>
         <span className="g-select-chevron" aria-hidden="true">
-          <ChevronDown size={14} strokeWidth={1.75} />
+          <ChevronDown size={14} strokeWidth={1.5} />
         </span>
       </button>
 
