@@ -29,15 +29,12 @@ body {
 }
 
 /*
- * Creamy-but-fast preview-mode transition (Bug 2).
- * Cross-fades the preview surface against the non-preview transparent desktop.
- * Specs:
- *   - Duration: 180ms (160–200ms range)
- *   - Easing: var(--ease) (cubic-bezier(0.2, 0.6, 0.2, 1))
- *   - Animates ONLY: opacity (0 <-> 1), transform (scale(0.985) <-> scale(1)), backdrop-filter blur ramp
- *   - will-change: opacity, transform
- *   - No background color animation (prevents flash)
- *   - Fully interruptible and idempotent via CSS transitions
+ * Instant snap, zero animation. The overlay window appears the instant the
+ * shortcut fires and must be fully interactive on its first painted frame, and
+ * it must vanish the instant Esc/Enter fires. Any fade/scale/blur ramp reads as
+ * invocation lag, and animating backdrop-filter over a fullscreen transparent
+ * window can flicker black on some GPUs — so: no transitions, no transform, no
+ * backdrop-filter. State swaps are hard cuts.
  */
 .ov-preview-surface {
   position: absolute;
@@ -46,37 +43,25 @@ body {
   background-position: center center;
   background-size: cover;
   opacity: 0;
-  transform: scale(0.985);
-  backdrop-filter: blur(0px);
-  -webkit-backdrop-filter: blur(0px);
-  will-change: opacity, transform;
   pointer-events: none;
-  transition:
-    opacity 180ms var(--ease),
-    transform 180ms var(--ease),
-    backdrop-filter 180ms var(--ease),
-    -webkit-backdrop-filter 180ms var(--ease);
+  transition: none;
 }
 
 .ov-preview-surface.ov-active {
   opacity: 1;
-  transform: scale(1);
-  backdrop-filter: blur(2px);
-  -webkit-backdrop-filter: blur(2px);
 }
 
 /*
  * Mode layer: selection rect, guides, badges, handles, and hints.
- * Sits on top of the preview surface and animates only opacity.
- * It does NOT scale, ensuring selection rect, badges, and handles stay 100% pixel-stable.
+ * Sits on top of the preview surface. Snaps on/off with the preview surface —
+ * no opacity fade, so there is never a half-visible interaction state.
  */
 .ov-mode-layer {
   position: absolute;
   inset: 0;
   opacity: 0;
   pointer-events: none;
-  will-change: opacity;
-  transition: opacity 180ms var(--ease);
+  transition: none;
 }
 
 .ov-mode-layer.ov-active {

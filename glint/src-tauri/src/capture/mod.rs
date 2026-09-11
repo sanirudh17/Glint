@@ -9,9 +9,15 @@ pub mod windows_enum;
 use crate::overlay;
 use frozen::{CapturedImage, ScreenCapturer, XcapCapturer};
 use std::str::FromStr;
+use std::sync::atomic::{AtomicU64, Ordering};
 use std::sync::Mutex;
 use tauri::{AppHandle, Emitter, Manager};
 use windows_enum::WindowInfo;
+
+/// Monotonic id for capture sessions. Lets the background backdrop encoder
+/// verify its pixels still belong to the live session before storing — a rapid
+/// second capture must never receive the first capture's encoded frame.
+static NEXT_CAPTURE_ID: AtomicU64 = AtomicU64::new(1);
 
 #[derive(Clone, Copy, Debug)]
 pub enum CaptureMode {
@@ -67,6 +73,13 @@ pub struct CaptureSession {
     /// What the committed region is FOR. Defaults to Screenshot; the Capture Text
     /// entry point re-tags it to Text after the session is built.
     pub intent: CaptureIntent,
+    /// Identity for the background backdrop encoder (see `NEXT_CAPTURE_ID`).
+    pub id: u64,
+    /// Cached `data:image/png;base64,…` backdrop for the overlay, encoded ONCE per
+    /// session on a background thread parallel with the window show. `None` until
+    /// the encoder finishes; `capture_overlay_data` waits bounded for it, then
+    /// falls back to a synchronous encode. Display-only — commits crop raw pixels.
+    pub backdrop_url: Mutex<Option<std::sync::Arc<String>>>,
 }
 
 #[derive(Default)]
@@ -187,6 +200,46 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
         Vec::new()
     };
 
+    let sid = NEXT_CAPTURE_ID.fetch_add(1, Ordering::SeqCst);
+
+    // Kick off the backdrop encode on its own thread BEFORE showing: it runs
+    // parallel with the window show + position, so the overlay's fetch (fired at
+    // show) usually hits a warm cache instead of paying a full-screen PNG encode
+    // + base64 on the visible path. The pixels are cloned (one fast memcpy) so
+    // the encoder never contends with the session lock.
+    {
+        let app = app.clone();
+        let pixels = image.rgba.clone();
+        let (w, h) = (image.width, image.height);
+        std::thread::spawn(move || {
+            let t = std::time::Instant::now();
+            let img = CapturedImage { width: w, height: h, rgba: pixels };
+            let url = match frozen::encode_png_fast(&img) {
+                Ok(png) => {
+                    use base64::Engine;
+                    Some(std::sync::Arc::new(format!(
+                        "data:image/png;base64,{}",
+                        base64::engine::general_purpose::STANDARD.encode(&png)
+                    )))
+                }
+                Err(e) => {
+                    log::warn!("backdrop encode failed (overlay will encode on fetch): {e}");
+                    None
+                }
+            };
+            if let Some(url) = url {
+                if let Some(session) = app.state::<CaptureState>().0.lock().unwrap().as_ref() {
+                    // Only store when this is still the live session — a rapid second
+                    // capture must never receive the previous capture's frame.
+                    if session.id == sid {
+                        *session.backdrop_url.lock().unwrap() = Some(url);
+                        log::info!("[perf] backdrop pre-encoded: {}ms", t.elapsed().as_millis());
+                    }
+                }
+            }
+        });
+    }
+
     *app.state::<CaptureState>().0.lock().unwrap() = Some(CaptureSession {
         monitor_id,
         image,
@@ -195,6 +248,8 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
         mode,
         restore_main,
         intent: CaptureIntent::Screenshot,
+        id: sid,
+        backdrop_url: Mutex::new(None),
     });
 
     match overlay::open_for_monitor(app, monitor_id) {

@@ -39,38 +39,94 @@ pub struct OverlayData {
 /// block the event loop (and the overlay's own responsiveness) while it ran. The
 /// backdrop is DISPLAY-ONLY — the committed capture crops the raw session pixels —
 /// so it uses the fast (larger, identical-pixels) encoder.
+///
+/// The PNG is encoded ONCE per session on a background thread parallel with the
+/// window show (see `begin_restoring`); this command serves that cached data URL
+/// (a cheap Arc clone). It waits bounded for an in-flight encode, then falls back
+/// to a synchronous encode so a wedged encoder can never hang the overlay.
 #[tauri::command(async)]
-pub fn capture_overlay_data(
+pub async fn capture_overlay_data(
     _monitor_id: u32,
     app: AppHandle,
-    state: State<CaptureState>,
+    state: State<'_, CaptureState>,
 ) -> Result<OverlayData, String> {
-    let guard = state.0.lock().unwrap();
-    let session = guard.as_ref().ok_or("no active capture session")?;
-    let _perf = std::time::Instant::now();
-    let png = crate::capture::frozen::encode_png_fast(&session.image).map_err(|e| e.to_string())?;
-    let _enc = _perf.elapsed().as_millis();
-    let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
-    log::info!(
-        "[perf] overlay_data: encode_png={_enc}ms total={}ms (png={}KB b64={}KB {}x{})",
-        _perf.elapsed().as_millis(),
-        png.len() / 1024,
-        b64.len() / 1024,
-        session.image.width,
-        session.image.height
-    );
-    // Convert window rects from physical px to logical px (divide by scale).
-    let windows = session
-        .windows
-        .iter()
-        .map(|w| WindowRectDto {
-            id: w.id,
-            x: w.x as f64 / session.scale,
-            y: w.y as f64 / session.scale,
-            w: w.w as f64 / session.scale,
-            h: w.h as f64 / session.scale,
-        })
-        .collect();
+    // Grab the cheap metadata under one short lock, then release before any wait.
+    let (mode_str, scale, windows, cached): (String, f64, Vec<WindowRectDto>, Option<std::sync::Arc<String>>) = {
+        let guard = state.0.lock().unwrap();
+        let session = guard.as_ref().ok_or("no active capture session")?;
+        let mode_str = session.mode.as_str().to_string();
+        let scale = session.scale;
+        let windows = session
+            .windows
+            .iter()
+            .map(|w| WindowRectDto {
+                id: w.id,
+                x: w.x as f64 / session.scale,
+                y: w.y as f64 / session.scale,
+                w: w.w as f64 / session.scale,
+                h: w.h as f64 / session.scale,
+            })
+            .collect();
+        let cached = session.backdrop_url.lock().unwrap().clone();
+        drop(guard);
+        (mode_str, scale, windows, cached)
+    };
+
+    // Fast path: the background encoder already finished.
+    let mut backdrop = cached;
+    if backdrop.is_none() {
+        // The encode is still in flight (fetch raced it right after show): poll
+        // briefly, then encode synchronously as a fallback. Async context, so a
+        // tokio sleep never blocks the event loop.
+        for _ in 0..100 {
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+            let hit = state
+                .0
+                .lock()
+                .unwrap()
+                .as_ref()
+                .and_then(|s| s.backdrop_url.lock().unwrap().clone());
+            if hit.is_some() {
+                backdrop = hit;
+                break;
+            }
+            // The session vanished mid-wait (cancel raced the fetch) — stop early.
+            if state.0.lock().unwrap().is_none() {
+                break;
+            }
+        }
+    }
+    let image_data_url = match backdrop {
+        Some(url) => (*url).clone(),
+        None => {
+            let guard = state.0.lock().unwrap();
+            let session = guard.as_ref().ok_or("no active capture session")?;
+            let _perf = std::time::Instant::now();
+            let png =
+                crate::capture::frozen::encode_png_fast(&session.image).map_err(|e| e.to_string())?;
+            let _enc = _perf.elapsed().as_millis();
+            let b64 = base64::engine::general_purpose::STANDARD.encode(&png);
+            log::info!(
+                "[perf] overlay_data: fallback sync encode_png={_enc}ms total={}ms (png={}KB b64={}KB {}x{})",
+                _perf.elapsed().as_millis(),
+                png.len() / 1024,
+                b64.len() / 1024,
+                session.image.width,
+                session.image.height
+            );
+            format!("data:image/png;base64,{b64}")
+        }
+    };
+    log::info!("[perf] overlay_data served ({}KB)", image_data_url.len() / 1024);
+    // Re-read dims + scale for the DTO (cheap; the session may be gone by now only
+    // if a cancel raced us — fall back to the values captured above).
+    let (width, height) = {
+        let guard = state.0.lock().unwrap();
+        match guard.as_ref() {
+            Some(s) => (s.image.width, s.image.height),
+            None => (0, 0),
+        }
+    };
     // Where the mouse is RIGHT NOW, in the overlay's coordinate space, so the loupe
     // renders correctly placed on the first paint instead of waiting for a move.
     // Every step is best-effort — a failure degrades to "appears on first move".
@@ -83,7 +139,7 @@ pub fn capture_overlay_data(
                 .map(|m| (m.position().x, m.position().y))
                 .unwrap_or((0, 0));
             let (lx, ly) =
-                crate::capture::geometry::global_to_overlay_logical(p.x, p.y, ox, oy, session.scale);
+                crate::capture::geometry::global_to_overlay_logical(p.x, p.y, ox, oy, scale);
             (Some(lx), Some(ly))
         }
         Err(e) => {
@@ -93,11 +149,11 @@ pub fn capture_overlay_data(
     };
 
     Ok(OverlayData {
-        width: session.image.width,
-        height: session.image.height,
-        scale: session.scale,
-        mode: session.mode.as_str().to_string(),
-        image_data_url: format!("data:image/png;base64,{b64}"),
+        width,
+        height,
+        scale,
+        mode: mode_str,
+        image_data_url,
         windows,
         cursor_x,
         cursor_y,
