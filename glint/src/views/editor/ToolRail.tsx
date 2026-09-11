@@ -65,21 +65,23 @@ export function ToolRail() {
         </div>
       ))}
       <div className="editor-rail-sep" />
-      <button className="editor-tool" title="Undo (Ctrl+Z)" aria-label="Undo" onClick={() => undo()}>
-        <Undo2 size={18} strokeWidth={1.5} />
-      </button>
-      <button className="editor-tool" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" onClick={() => redo()}>
-        <Redo2 size={18} strokeWidth={1.5} />
-      </button>
-      <button
-        className="editor-tool editor-tool--danger"
-        title="Clear all annotations"
-        aria-label="Clear all annotations"
-        disabled={!hasAnnotations}
-        onClick={() => clearAll()}
-      >
-        <Trash2 size={18} strokeWidth={1.5} />
-      </button>
+      <div className="editor-rail-bottom" role="group" aria-label="History actions">
+        <button className="editor-tool" title="Undo (Ctrl+Z)" aria-label="Undo" onClick={() => undo()}>
+          <Undo2 size={18} strokeWidth={1.5} />
+        </button>
+        <button className="editor-tool" title="Redo (Ctrl+Shift+Z)" aria-label="Redo" onClick={() => redo()}>
+          <Redo2 size={18} strokeWidth={1.5} />
+        </button>
+        <button
+          className="editor-tool editor-tool--danger"
+          title="Clear all annotations"
+          aria-label="Clear all annotations"
+          disabled={!hasAnnotations}
+          onClick={() => clearAll()}
+        >
+          <Trash2 size={18} strokeWidth={1.5} />
+        </button>
+      </div>
     </div>
   );
 }

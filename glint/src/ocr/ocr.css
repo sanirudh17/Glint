@@ -154,13 +154,15 @@
   gap: 10px;
 }
 
-/* Uniform compact button dimensions: both are identical in height and width */
+/* Condensed compact button dimensions: hugs text piece snugly */
 .ocr-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 96px;
-  height: 30px;
+  width: auto;
+  min-width: 0;
+  height: 28px;
+  padding: 0 10px;
   box-sizing: border-box;
   border-radius: var(--r-btn);
   border: 1px solid var(--border);

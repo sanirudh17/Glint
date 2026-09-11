@@ -155,10 +155,10 @@
 .hud-toolgroup {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
 }
 .hud-toolgroup + .hud-toolgroup {
-  margin-left: 7px;
+  margin-left: 2px;
 }
 
 .hud-btn {

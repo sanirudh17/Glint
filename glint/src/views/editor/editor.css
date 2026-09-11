@@ -103,13 +103,13 @@
   background: var(--bg); color: var(--text); font-size: var(--fz-sm);
 }
 .editor-rail {
-  display: flex; flex-direction: column; gap: 2px;
+  display: flex; flex-direction: column; gap: 4px;
   padding: var(--s3) var(--s2); background: var(--bg-elev);
 }
-/* Tool groups separated by breathing room, not rules. */
+/* All tool items have uniform 4px spacing */
 .editor-rail-group {
-  display: flex; flex-direction: column; gap: 2px;
-  padding-bottom: 6px; margin-bottom: 4px;
+  display: flex; flex-direction: column; gap: 4px;
+  margin: 0; padding: 0;
 }
 .editor-rail-group:last-of-type { margin-bottom: 0; padding-bottom: 0; }
 .editor-tool {
@@ -127,10 +127,11 @@
   background: color-mix(in srgb, var(--danger) 16%, transparent);
   color: var(--danger);
 }
-/* Push the trailing action group (undo/redo/clear) to the bottom of the rail so the
-   tools sit as one tidy zone up top and the free space collects between them, instead
-   of the actions crowding against the last tool. Spacing only — no rule. */
-.editor-rail-sep { height: 1px; margin: var(--s2) 4px; margin-top: auto; }
+/* Bottom action group (undo/redo/clear) has uniform 4px spacing with clean separation */
+.editor-rail-sep { height: 1px; margin-top: auto; margin-bottom: 4px; }
+.editor-rail-bottom {
+  display: flex; flex-direction: column; gap: 4px;
+}
 
 /* Inline text-annotation editor: a real <textarea> floated over the Konva text
    node's screen position while editing (Konva has no text input). */

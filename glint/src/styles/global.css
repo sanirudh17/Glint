@@ -37,7 +37,7 @@ html {
 }
 
 body {
-  background: var(--bg, #0C0D0F);
+  background: var(--bg, #141518);
   color: var(--text);
   font-family: var(--font-ui);
   font-size: var(--fz-md);
@@ -114,7 +114,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .boot-veil {
   position: fixed;
   inset: 0;
-  background: var(--bg, #0C0D0F);
+  background: var(--bg, #141518);
   z-index: 99999;
 }
 

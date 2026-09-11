@@ -296,10 +296,10 @@
 .cap-group {
   display: flex;
   align-items: center;
-  gap: 1px;
+  gap: 2px;
 }
 .cap-group + .cap-group {
-  margin-left: 7px;
+  margin-left: 2px;
 }
 
 .cap-btn {

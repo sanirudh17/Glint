@@ -109,25 +109,31 @@ export default function HomeView() {
         )}
       </section>
 
-      {/* ── Resume (conditional) ────────────────────────────── */}
-      {resumable.length > 0 && (
-        <section className="home-section" aria-labelledby="rs-label">
-          <span className="label home-eyebrow" id="rs-label">Resume</span>
-          <div className="home-resume" role="list">
-            {resumable.map((p) => (
-              <button
-                key={p.path}
-                className={`home-resume-chip${p.exists ? "" : " home-resume-chip--stale"}`}
-                onClick={() => onOpenRecent(p)}
-                title={p.exists ? p.path : `${p.path} (missing)`}
-              >
-                <RotateCcw size={14} strokeWidth={1.5} />
-                <span className="home-resume-name">{p.name}</span>
-              </button>
-            ))}
-          </div>
-        </section>
-      )}
+      {/* ── Resume ─────────────────────────────────────────── */}
+      <section className="home-section" aria-labelledby="rs-label">
+        <span className="label home-eyebrow" id="rs-label">Resume</span>
+        <div className="home-resume" role="list">
+          {resumable.map((p) => (
+            <button
+              key={p.path}
+              className={`home-resume-chip${p.exists ? "" : " home-resume-chip--stale"}`}
+              onClick={() => onOpenRecent(p)}
+              title={p.exists ? p.path : `${p.path} (missing)`}
+            >
+              <RotateCcw size={14} strokeWidth={1.5} />
+              <span className="home-resume-name">{p.name}</span>
+            </button>
+          ))}
+          <button
+            className="home-resume-chip"
+            onClick={onOpenProject}
+            title="Open an existing .glint project from disk"
+          >
+            <FolderOpen size={14} strokeWidth={1.5} />
+            <span className="home-resume-name">Open existing project</span>
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
