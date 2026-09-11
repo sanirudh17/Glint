@@ -187,11 +187,11 @@ export function CaptureCard({
               }}
               onBlur={() => void finishRename()}
             />
-          ) : (
-            <span className="cap-title" title={item.title ?? undefined}>
-              {item.title ? item.title : "Untitled capture"}
+          ) : item.title ? (
+            <span className="cap-title" title={item.title}>
+              {item.title}
             </span>
-          )}
+          ) : null}
           <span className="cap-sub">
             {item.width && item.height ? `${item.width}×${item.height}` : "—"}
             <span className="cap-sub-sep" aria-hidden="true">·</span>

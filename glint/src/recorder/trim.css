@@ -45,12 +45,18 @@
 }
 /* Boot gate: keep controls visible while smoothly fading the video in once decoded */
 .trim-root.is-booting .trim-video { opacity: 0; }
-.trim-root .trim-video { transition: opacity 0.15s ease-out; }
-.trim-transport, .trim-actions { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.trim-transport { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
+.trim-actions { display: flex; align-items: center; gap: 12px; padding: 8px 16px; }
 /* One icon set: 1.5px stroke on transport, actions, and filmstrip glyphs. */
 .trim-transport svg, .trim-actions svg, .trim-filmstrip svg { stroke-width: 1.5; }
 .trim-spacer { flex: 1; }
-.trim-time, .trim-out { opacity: 0.85; font-variant-numeric: tabular-nums; }
+.trim-time { opacity: 0.85; font-variant-numeric: tabular-nums; }
+.trim-out {
+  opacity: 0.9;
+  font-variant-numeric: tabular-nums;
+  font-weight: var(--fw-medium);
+  margin-right: 18px;
+}
 .trim-iconbtn, .trim-btn { background: var(--bg-elev2); color: var(--text); border: 1px solid var(--border); border-radius: var(--r-btn); padding: 6px 14px; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; line-height: 1; text-align: center; min-width: 72px; box-sizing: border-box; letter-spacing: var(--ls-ui); font-weight: var(--fw-medium); transition: background var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out); }
 .trim-iconbtn:hover:not(:disabled), .trim-btn:hover:not(:disabled) { background: var(--bg-elev3); }
 .trim-iconbtn:active:not(:disabled), .trim-btn:active:not(:disabled) { background: var(--bg-elev3); }
@@ -86,10 +92,10 @@
 .trim-speedbtn:disabled { opacity: .45; cursor: default; }
 
 /* Webcam overlay control (actions row) */
-.trim-camctl { display: inline-flex; align-items: center; gap: 4px; }
+.trim-camctl { display: inline-flex; align-items: center; gap: 6px; margin-right: 18px; }
 
 /* Timeline zoom control (actions row) */
-.trim-zoomctl { display: inline-flex; align-items: center; gap: 4px; }
+.trim-zoomctl { display: inline-flex; align-items: center; gap: 6px; margin-right: 18px; }
 .trim-zoomval { min-width: 26px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-dim); }
 
 /* Per-clip speed badge on the timeline */
@@ -100,13 +106,12 @@
   font-variant-numeric: tabular-nums; pointer-events: none;
 }
 
-/* Fade steppers (actions row) — separated from the zoom/cam controls to their left by a
-   divider + breathing room so the −/+ steppers aren't confused with the zoom −/+ buttons. */
+/* Fade steppers (actions row) — separated from the zoom/cam controls with breathing room */
 .trim-fades {
-  display: inline-flex; gap: 14px; align-items: center;
-  margin-left: 8px; padding-left: 18px;
+  display: inline-flex; gap: 18px; align-items: center;
+  margin-left: 0; padding-left: 0;
 }
-.trim-fade { display: inline-flex; align-items: center; justify-content: center; gap: 4px; }
+.trim-fade { display: inline-flex; align-items: center; justify-content: center; gap: 6px; }
 .trim-fade-label { font-size: 11px; color: var(--text-dim); }
 .trim-fade-btn {
   width: 22px; height: 22px; font-size: 14px; line-height: 1;

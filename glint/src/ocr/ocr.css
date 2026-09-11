@@ -8,8 +8,10 @@
   height: 100vh;
   width: 100vw;
   box-sizing: border-box;
-  padding: 12px 16px 14px;
-  background: var(--bg);
+  padding: 10px 14px 12px;
+  background: var(--bg-elev);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
   color: var(--text);
   font-family: var(--font-ui, sans-serif);
   user-select: none;
@@ -25,6 +27,36 @@
   height: 28px;
   margin-bottom: 8px;
   flex-shrink: 0;
+  cursor: grab;
+}
+
+.ocr-header-right {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ocr-close-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--r1);
+  border: none;
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
+}
+
+.ocr-close-btn:hover {
+  background: var(--bg-elev2);
+  color: var(--text);
+}
+
+.ocr-close-btn:active {
+  background: var(--bg-elev3);
 }
 
 .ocr-meta {
@@ -122,20 +154,20 @@
   gap: 10px;
 }
 
-/* Uniform button dimensions: both are identical in height and width */
+/* Uniform compact button dimensions: both are identical in height and width */
 .ocr-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 116px;
-  height: 32px;
+  width: 96px;
+  height: 30px;
   box-sizing: border-box;
   border-radius: var(--r-btn);
   border: 1px solid var(--border);
   background: var(--bg-elev);
   color: var(--text);
   font-family: var(--font-ui, sans-serif);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: var(--fw-medium);
   letter-spacing: var(--ls-ui);
   line-height: 1;

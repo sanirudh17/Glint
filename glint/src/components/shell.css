@@ -214,9 +214,3 @@
   background: var(--bg);
 }
 
-:root[data-theme="dark"] .g-content {
-  background:
-    radial-gradient(ellipse 720px 440px at 100% 0%, rgba(56, 110, 220, 0.09), transparent 70%),
-    radial-gradient(ellipse 600px 380px at 0% 0%, rgba(35, 75, 160, 0.07), transparent 70%),
-    var(--bg);
-}

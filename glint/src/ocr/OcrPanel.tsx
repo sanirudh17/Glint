@@ -1,7 +1,7 @@
 /** OcrPanel.tsx — Single small focus window for extracted text: Save as .txt & Copy. */
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Check, ScanText, SearchX } from "lucide-react";
+import { Check, ScanText, SearchX, X } from "lucide-react";
 import { ocrResult, ocrCopy, type OcrResult } from "../lib/ocr";
 import { hasText as hasTextOf, countsLabel, copyTarget } from "./ocrPanelModel";
 import "./ocr.css";
@@ -46,18 +46,29 @@ export function OcrPanel() {
 
   return (
     <div className="ocr-root">
-      <header className="ocr-header">
+      <header className="ocr-header" data-tauri-drag-region>
         <div className="ocr-meta">
           <ScanText size={15} strokeWidth={1.5} className="ocr-icon" aria-hidden="true" />
           <span className="ocr-label">Captured Text</span>
           {hasText && <span className="ocr-counts">{countsLabel(res!)}</span>}
         </div>
-        {copied && (
-          <div className="ocr-copied-badge" role="status">
-            <Check size={13} strokeWidth={2} aria-hidden="true" />
-            <span>Copied</span>
-          </div>
-        )}
+        <div className="ocr-header-right">
+          {copied && (
+            <div className="ocr-copied-badge" role="status">
+              <Check size={13} strokeWidth={2} aria-hidden="true" />
+              <span>Copied</span>
+            </div>
+          )}
+          <button
+            type="button"
+            className="ocr-close-btn"
+            onClick={() => getCurrentWindow().close().catch(() => {})}
+            aria-label="Close"
+            title="Close (Esc)"
+          >
+            <X size={14} strokeWidth={1.5} />
+          </button>
+        </div>
       </header>
 
       {loaded && !hasText ? (

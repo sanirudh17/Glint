@@ -105,7 +105,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: Theme::Dark,
-            accent: "#5B7CFA".into(),
+            accent: "#2BAAAD".into(),
             hotkeys: Hotkeys::default(),
             auto_save: true,
             auto_copy: true,

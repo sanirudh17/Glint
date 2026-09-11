@@ -13,7 +13,7 @@
 /* ─── Global (theme-independent) ──────────────────────────────────────── */
 :root {
   /* Default substrate before JS sets data-theme — prevents white flash */
-  --bg: #0C0D0F;
+  --bg: #141518;
   /* Spacing — 4-pt grid */
   --s1: 4px;
   --s2: 8px;
@@ -103,8 +103,8 @@
 
 /* ─── Dark theme (primary) ─────────────────────────────────────────────── */
 :root[data-theme="dark"] {
-  /* Substrate — near-black with a cool blue-grey cast, not pure black */
-  --bg:        #0C0D0F;
+  /* Substrate — unified smooth dark background matching sidebar & topbar */
+  --bg:        #141518;
   --bg-elev:   #141518;
   --bg-elev2:  #1A1C21;
   --bg-elev3:  #202329;
