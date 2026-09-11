@@ -17,11 +17,9 @@ import "./components/shell.css";
 
 import EditorView from "./views/EditorView";
 import { TrimView } from "./recorder/TrimView";
+import LibraryView from "./views/LibraryView";
+import SettingsView from "./views/SettingsView";
 
-// Heavy, on-demand routes are code-split so their JS (Konva in the editor, the trim
-// timeline/video, etc.) is NOT loaded into every window's renderer.
-const LibraryView = lazy(() => import("./views/LibraryView"));
-const SettingsView = lazy(() => import("./views/SettingsView"));
 const OcrPanel = lazy(() => import("./ocr/OcrPanel").then((m) => ({ default: m.OcrPanel })));
 
 /** Suspense wrapper for a lazily-loaded route element. Fallback is empty — the chunk loads

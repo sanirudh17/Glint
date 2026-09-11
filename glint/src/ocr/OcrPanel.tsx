@@ -1,7 +1,7 @@
-/** OcrPanel.tsx — OCR sheet dialog (#/ocr window): read-only text, copy, save. */
+/** OcrPanel.tsx — Single small focus window for extracted text: Save as .txt & Copy. */
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Check, ScanText, SearchX, X } from "lucide-react";
+import { Check, ScanText, SearchX } from "lucide-react";
 import { ocrResult, ocrCopy, type OcrResult } from "../lib/ocr";
 import { hasText as hasTextOf, countsLabel, copyTarget } from "./ocrPanelModel";
 import "./ocr.css";
@@ -9,7 +9,7 @@ import "./ocr.css";
 export function OcrPanel() {
   const [res, setRes] = useState<OcrResult | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [copied, setCopied] = useState(false); // nothing is copied until the user clicks Copy
+  const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
   useEffect(() => {
@@ -26,10 +26,9 @@ export function OcrPanel() {
     const el = ref.current; if (!el) return;
     await ocrCopy(copyTarget(el.value, el.selectionStart, el.selectionEnd)).catch(() => {});
     setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
   };
 
-  // Renderer-side .txt export (Blob download — no backend involved). The text
-  // is already in memory, so this adds no pipeline, schema, or IPC changes.
   const saveTxt = () => {
     const text = ref.current?.value ?? res?.text ?? "";
     if (!text) return;
@@ -47,72 +46,58 @@ export function OcrPanel() {
 
   return (
     <div className="ocr-root">
-      <div className="ocr-sheet" role="dialog" aria-label="Extracted text">
-        <div className="ocr-header">
-          {/* No source thumbnail exists in OcrResult — an icon tile stands in. */}
-          <span className="ocr-icon" aria-hidden="true">
-            <ScanText size={17} strokeWidth={1.5} />
-          </span>
-          <div className="ocr-titleblock">
-            <span className="ocr-title">Extracted Text</span>
-            {hasText && <span className="ocr-counts">{countsLabel(res!)}</span>}
+      <header className="ocr-header">
+        <div className="ocr-meta">
+          <ScanText size={15} strokeWidth={1.5} className="ocr-icon" aria-hidden="true" />
+          <span className="ocr-label">Captured Text</span>
+          {hasText && <span className="ocr-counts">{countsLabel(res!)}</span>}
+        </div>
+        {copied && (
+          <div className="ocr-copied-badge" role="status">
+            <Check size={13} strokeWidth={2} aria-hidden="true" />
+            <span>Copied</span>
           </div>
-          <span className="ocr-spacer" />
+        )}
+      </header>
+
+      {loaded && !hasText ? (
+        <div className="ocr-empty">
+          <SearchX size={20} strokeWidth={1.5} aria-hidden="true" />
+          <span>No text detected in this capture.</span>
+        </div>
+      ) : (
+        <div className="ocr-body">
+          <textarea
+            ref={ref}
+            className="ocr-text"
+            defaultValue={res?.text ?? ""}
+            readOnly
+            spellCheck={false}
+            aria-label="Extracted text"
+          />
+        </div>
+      )}
+
+      <footer className="ocr-footer">
+        <div className="ocr-actions">
           <button
             type="button"
-            className="ocr-close"
-            aria-label="Close"
-            onClick={() => getCurrentWindow().close()}
+            className="ocr-btn"
+            disabled={!hasText}
+            onClick={saveTxt}
           >
-            <X size={15} strokeWidth={1.5} />
+            Save as .txt
+          </button>
+          <button
+            type="button"
+            className="ocr-btn ocr-btn--primary"
+            disabled={!hasText}
+            onClick={copy}
+          >
+            {copied ? "Copied!" : "Copy"}
           </button>
         </div>
-
-        {loaded && !hasText ? (
-          <div className="ocr-empty">
-            <SearchX size={22} strokeWidth={1.5} className="ocr-empty-icon" aria-hidden="true" />
-            <span>No text found in that region.</span>
-            <span className="ocr-empty-hint">Try a larger region with clearer contrast.</span>
-          </div>
-        ) : (
-          hasText && (
-            <div className="ocr-well">
-              <textarea
-                ref={ref}
-                className="ocr-text"
-                defaultValue={res!.text}
-                readOnly
-                onChange={() => setCopied(false)}
-                spellCheck={false}
-                aria-label="Extracted text"
-              />
-            </div>
-          )
-        )}
-
-        {copied && (
-          <div className="ocr-status" role="status">
-            <Check size={14} strokeWidth={1.5} className="ocr-ok" aria-hidden="true" />
-            <span>Copied to clipboard</span>
-          </div>
-        )}
-
-        <div className="ocr-actions">
-          {hasText && (
-            <button type="button" className="ocr-btn" onClick={saveTxt}>
-              Save as .txt
-            </button>
-          )}
-          {hasText && (
-            <button type="button" className="ocr-btn ocr-btn--primary" onClick={copy}>
-              Copy All
-            </button>
-          )}
-          <button type="button" className="ocr-btn" onClick={() => getCurrentWindow().close()}>
-            Close
-          </button>
-        </div>
-      </div>
+      </footer>
     </div>
   );
 }
