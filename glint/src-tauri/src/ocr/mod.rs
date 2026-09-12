@@ -29,10 +29,10 @@ pub fn normalize_ocr_text(raw: &str) -> String {
         Regex::new(r"(?m)^(\s*)(?:[©¢°®§•·▪▫■□◆►▸▶]|\(c\)|\(C\)|\+»)\s*").unwrap()
     });
     static RE_PLUS_STAR_BULLET: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?m)^(\s*)[\*\+]\s+([A-Za-z0-9\[\(\x22\x27`])").unwrap()
+        Regex::new(r"(?m)^(\s*)[\*\+\-–—]\s+([A-Za-z0-9\[\(\x22\x27`])").unwrap()
     });
     static RE_EO_BULLET: LazyLock<Regex> = LazyLock::new(|| {
-        Regex::new(r"(?m)^(\s*)[eo]\s+([A-Z][a-z]+:)").unwrap()
+        Regex::new(r"(?m)^(\s*)[eoO]\s+([A-Za-z0-9\[\(\x22\x27`])").unwrap()
     });
     static RE_WORD_BULLET: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"([A-Za-z\)])\s+(?:\+»|·)\s+([A-Za-z\(])").unwrap()
@@ -66,6 +66,18 @@ pub fn normalize_ocr_text(raw: &str) -> String {
     });
     static RE_POUR_ARROW: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r"\b(Pour(?:\s+all)?\s+\d+L?)\s*[>+]\s*(\d+L?)\b").unwrap()
+    });
+    static RE_ARROW_FRACTION: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\s+>\s+(\d+/\d+)").unwrap()
+    });
+    static RE_ARROW_WORD: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"([a-zA-Z0-9\)])\s+>\s+([a-zA-Z]{2,})").unwrap()
+    });
+    static RE_CHEVRON_ARROW: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\s*(?:»|›)\s*").unwrap()
+    });
+    static RE_KEBAB_EMDASH: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"([a-z0-9])(?:—|–)([a-z0-9])").unwrap()
     });
     static RE_GTE: LazyLock<Regex> = LazyLock::new(|| {
         Regex::new(r">\s*=").unwrap()
@@ -147,6 +159,9 @@ pub fn normalize_ocr_text(raw: &str) -> String {
             .replace(" -", " → ")
     }).into_owned();
     text = RE_POUR_ARROW.replace_all(&text, "${1} → ${2}").into_owned();
+    text = RE_ARROW_FRACTION.replace_all(&text, " → ${1}").into_owned();
+    text = RE_ARROW_WORD.replace_all(&text, "${1} → ${2}").into_owned();
+    text = RE_CHEVRON_ARROW.replace_all(&text, " → ").into_owned();
 
     // 3. Arrows
     text = RE_LONG_ARROW.replace_all(&text, " ⟶ ").into_owned();
@@ -175,6 +190,7 @@ pub fn normalize_ocr_text(raw: &str) -> String {
     text = RE_LOGIC_OR_V.replace_all(&text, "${1} ∨ ${2}").into_owned();
 
     // 7. Math, Sets, and Typographic symbols
+    text = RE_KEBAB_EMDASH.replace_all(&text, "${1}-${2}").into_owned();
     text = RE_PRIME.replace_all(&text, "${1}′${2}").into_owned();
     text = RE_ASTERISK_OP.replace_all(&text, "${1}∗${2}").into_owned();
     text = RE_SET_IN_EURO.replace_all(&text, " ∈ ").into_owned();
@@ -515,5 +531,13 @@ mod tests {
         assert_eq!(normalize_ocr_text("1.5 - 2.0 Marks"), "1.5 – 2.0 Marks");
         assert_eq!(normalize_ocr_text("3 — 1 = 2"), "3 − 1 = 2");
         assert_eq!(normalize_ocr_text("dots..."), "dots…");
+        assert_eq!(normalize_ocr_text("fix/premium—ui-overhaul"), "fix/premium-ui-overhaul");
+    }
+
+    #[test]
+    fn normalizes_user_verification_snippet() {
+        let input = "### Verification\n\ne Rust OCR Test Suite: cargo test ocr > 14/14 tests passed.\n\n• Frontend Vitest Suite: npm test » 22/22 test files passed (191 tests).\n\n• Frontend Production Build: npm run build (tsc && vite build) > compiled cleanly.\n• Commit: Recorded at d8853e5 on branch fix/premium—ui-overhaul.";
+        let expected = "### Verification\n\n• Rust OCR Test Suite: cargo test ocr → 14/14 tests passed.\n\n• Frontend Vitest Suite: npm test → 22/22 test files passed (191 tests).\n\n• Frontend Production Build: npm run build (tsc && vite build) → compiled cleanly.\n• Commit: Recorded at d8853e5 on branch fix/premium-ui-overhaul.";
+        assert_eq!(normalize_ocr_text(input), expected);
     }
 }
