@@ -19,8 +19,179 @@ pub struct OcrOutput {
 #[derive(Default)]
 pub struct OcrState(pub std::sync::Mutex<Option<OcrOutput>>);
 
+use regex::Regex;
+use std::sync::LazyLock;
+
+/// Normalizes raw OCR output by correcting misrecognized glyphs, restoring bullet points,
+/// arrows, inequalities, logic operators, set notations, and mathematical symbols.
+pub fn normalize_ocr_text(raw: &str) -> String {
+    static RE_BULLET_START: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^(\s*)(?:[©¢°®§•·▪▫■□◆►▸▶]|\(c\)|\(C\)|\+»)\s*").unwrap()
+    });
+    static RE_PLUS_STAR_BULLET: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^(\s*)[\*\+]\s+([A-Za-z0-9\[\(\x22\x27`])").unwrap()
+    });
+    static RE_EO_BULLET: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?m)^(\s*)[eo]\s+([A-Z][a-z]+:)").unwrap()
+    });
+    static RE_WORD_BULLET: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"([A-Za-z\)])\s+(?:\+»|·)\s+([A-Za-z\(])").unwrap()
+    });
+    static RE_LONG_ARROW: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\s*(?:—\+|—>|-->|–>)\s*").unwrap()
+    });
+    static RE_STATE_TRANS: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(\([a-zA-Z0-9,\s+−-]+\))\s*—\s*(\()").unwrap()
+    });
+    static RE_SINGLE_ARROW: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\s*(?:->|—\s*>|–\s*>|-\s*>)\s*").unwrap()
+    });
+    static RE_DOUBLE_ARROW_LR: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\s*(?:<==>|<=>)\s*").unwrap()
+    });
+    static RE_DOUBLE_ARROW_R: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\s*(?:==>|=>)\s*").unwrap()
+    });
+    static RE_DOUBLE_ARROW_L: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\s*<==\s*").unwrap()
+    });
+    static RE_LEFT_ARROW_LONG: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\s*(?:<--|<—)\s*").unwrap()
+    });
+    static RE_LEFT_ARROW_SINGLE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\s*<-\s*").unwrap()
+    });
+    static RE_PATH_CHAIN: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\bpath\s+[A-Z](?:\s*[\+\-]\s*[A-Z])+").unwrap()
+    });
+    static RE_POUR_ARROW: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\b(Pour(?:\s+all)?\s+\d+L?)\s*[>+]\s*(\d+L?)\b").unwrap()
+    });
+    static RE_GTE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r">\s*=").unwrap()
+    });
+    static RE_LTE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"<\s*=").unwrap()
+    });
+    static RE_NEQ: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\s*(?:!=|=/=|/=|=\s*)\s*").unwrap()
+    });
+    static RE_EPSILON_COND: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(?:[>≥]\s*)?«\s*>\s*0").unwrap()
+    });
+    static RE_INEQ_EPSILON: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"([><=≤≥])\s*«").unwrap()
+    });
+    static RE_DIV_EPSILON: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"/«").unwrap()
+    });
+    static RE_LOGIC_AND_COND: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"([><=≤≥]\s*\d+)\s*A\s*(\S+\s*[><=≤≥])").unwrap()
+    });
+    static RE_LOGIC_AND_COND2: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"([><=≤≥]\s*[a-zA-Z0-9]+)\s+A\s+([a-zA-Z0-9]+\s*[><=≤≥])").unwrap()
+    });
+    static RE_LOGIC_AND_CARET: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\s+\^\s+").unwrap()
+    });
+    static RE_LOGIC_OR_V: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"([a-zA-Z0-9\)])\s+(?:v|V)\s+([a-zA-Z0-9\(])").unwrap()
+    });
+    static RE_PRIME: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\b([sxySn])['’ʼ]([^a-zA-Z0-9]|$)").unwrap()
+    });
+    static RE_ASTERISK_OP: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\b([CPa])\*([^a-zA-Z0-9*]|$)").unwrap()
+    });
+    static RE_SET_IN_EURO: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\s+€\s+").unwrap()
+    });
+    static RE_SET_IN_BRACE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"((?:\b[a-zA-Z]|\)))\s+(?:in|e|€)\s*(\{)").unwrap()
+    });
+    static RE_SET_IN_FIELD: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"((?:\b[a-zA-Z]|\)))\s+(?:in|e|€)\s+([RZNQC])\b").unwrap()
+    });
+    static RE_SET_NOT_IN: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\b([a-zA-Z])\s+(?:not in)\s+").unwrap()
+    });
+    static RE_NUM_RANGE: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(\d+(?:\.\d+)?)\s*-\s*(\d+(?:\.\d+)?)").unwrap()
+    });
+    static RE_MATH_MINUS: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(\d+)\s*—\s*(\d+)").unwrap()
+    });
+    static RE_MATH_MINUS_VAR: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"(\d+)\s*—\s*([a-zA-Z])").unwrap()
+    });
+    static RE_ELLIPSIS: LazyLock<Regex> = LazyLock::new(|| {
+        Regex::new(r"\.{3,}").unwrap()
+    });
+
+    let mut text = raw.to_string();
+
+    // 1. Bullets
+    text = RE_BULLET_START.replace_all(&text, "${1}• ").into_owned();
+    text = RE_PLUS_STAR_BULLET.replace_all(&text, "${1}• ${2}").into_owned();
+    text = RE_EO_BULLET.replace_all(&text, "${1}• ${2}").into_owned();
+    text = RE_WORD_BULLET.replace_all(&text, "${1} • ${2}").into_owned();
+
+    // 2. Contextual domain arrows
+    text = RE_PATH_CHAIN.replace_all(&text, |caps: &regex::Captures| {
+        caps[0]
+            .replace(" + ", " → ")
+            .replace("+ ", " → ")
+            .replace(" +", " → ")
+            .replace(" - ", " → ")
+            .replace("- ", " → ")
+            .replace(" -", " → ")
+    }).into_owned();
+    text = RE_POUR_ARROW.replace_all(&text, "${1} → ${2}").into_owned();
+
+    // 3. Arrows
+    text = RE_LONG_ARROW.replace_all(&text, " ⟶ ").into_owned();
+    text = RE_STATE_TRANS.replace_all(&text, "${1} ⟶ ${2}").into_owned();
+    text = RE_SINGLE_ARROW.replace_all(&text, " → ").into_owned();
+    text = RE_DOUBLE_ARROW_LR.replace_all(&text, " ⇔ ").into_owned();
+    text = RE_DOUBLE_ARROW_R.replace_all(&text, " ⇒ ").into_owned();
+    text = RE_DOUBLE_ARROW_L.replace_all(&text, " ⇐ ").into_owned();
+    text = RE_LEFT_ARROW_LONG.replace_all(&text, " ⟵ ").into_owned();
+    text = RE_LEFT_ARROW_SINGLE.replace_all(&text, " ← ").into_owned();
+
+    // 4. Inequalities & Comparisons
+    text = RE_GTE.replace_all(&text, "≥").into_owned();
+    text = RE_LTE.replace_all(&text, "≤").into_owned();
+    text = RE_NEQ.replace_all(&text, " ≠ ").into_owned();
+
+    // 5. Greek Epsilon & Optimality Conditions
+    text = RE_EPSILON_COND.replace_all(&text, "≥ ϵ > 0").into_owned();
+    text = RE_INEQ_EPSILON.replace_all(&text, "${1} ϵ").into_owned();
+    text = RE_DIV_EPSILON.replace_all(&text, "/ϵ").into_owned();
+
+    // 6. Logic Operators
+    text = RE_LOGIC_AND_COND.replace_all(&text, "${1} ∧ ${2}").into_owned();
+    text = RE_LOGIC_AND_COND2.replace_all(&text, "${1} ∧ ${2}").into_owned();
+    text = RE_LOGIC_AND_CARET.replace_all(&text, " ∧ ").into_owned();
+    text = RE_LOGIC_OR_V.replace_all(&text, "${1} ∨ ${2}").into_owned();
+
+    // 7. Math, Sets, and Typographic symbols
+    text = RE_PRIME.replace_all(&text, "${1}′${2}").into_owned();
+    text = RE_ASTERISK_OP.replace_all(&text, "${1}∗${2}").into_owned();
+    text = RE_SET_IN_EURO.replace_all(&text, " ∈ ").into_owned();
+    text = RE_SET_IN_BRACE.replace_all(&text, "${1} ∈ ${2}").into_owned();
+    text = RE_SET_IN_FIELD.replace_all(&text, "${1} ∈ ${2}").into_owned();
+    text = RE_SET_NOT_IN.replace_all(&text, "${1} ∉ ").into_owned();
+    text = RE_MATH_MINUS.replace_all(&text, "${1} − ${2}").into_owned();
+    text = RE_MATH_MINUS_VAR.replace_all(&text, "${1} − ${2}").into_owned();
+    text = RE_NUM_RANGE.replace_all(&text, "${1} – ${2}").into_owned();
+    text = RE_ELLIPSIS.replace_all(&text, "…").into_owned();
+
+    text
+}
+
 /// Join OCR lines into a single block of text: trim trailing whitespace per line,
-/// join with `\n`, drop a trailing blank tail. Empty / whitespace-only → None.
+/// join with `\n`, drop a trailing blank tail, and normalize OCR formatting/symbols.
+/// Empty / whitespace-only → None.
 pub fn assemble_text(lines: &[String]) -> Option<String> {
     let joined = lines
         .iter()
@@ -31,7 +202,7 @@ pub fn assemble_text(lines: &[String]) -> Option<String> {
     if trimmed.trim().is_empty() {
         None
     } else {
-        Some(trimmed.to_string())
+        Some(normalize_ocr_text(trimmed))
     }
 }
 
@@ -289,5 +460,60 @@ mod tests {
         assert!(is_dark_background(&[0, 0, 0, 20]));
         assert!(!is_dark_background(&[255, 255, 255, 200]));
         assert!(!is_dark_background(&[]));
+    }
+
+    #[test]
+    fn normalizes_bullets_at_line_start() {
+        assert_eq!(normalize_ocr_text("© From Node [B]:"), "• From Node [B]:");
+        assert_eq!(normalize_ocr_text("¢ From Node [C]:"), "• From Node [C]:");
+        assert_eq!(normalize_ocr_text("° From Node [D]:"), "• From Node [D]:");
+        assert_eq!(normalize_ocr_text("+ [A]: cost=0+1=1"), "• [A]: cost=0+1=1");
+        assert_eq!(normalize_ocr_text("  + [A]: cost=0+1=1"), "  • [A]: cost=0+1=1");
+        assert_eq!(normalize_ocr_text("* Complexity: Time"), "• Complexity: Time");
+        assert_eq!(normalize_ocr_text("e Agent: An entity"), "• Agent: An entity");
+        assert_eq!(normalize_ocr_text("Artifact +» Document"), "Artifact • Document");
+    }
+
+    #[test]
+    fn normalizes_arrows() {
+        assert_eq!(normalize_ocr_text("S —+ A—+C—+G"), "S ⟶ A ⟶ C ⟶ G");
+        assert_eq!(normalize_ocr_text("Perceiving —> Thinking —+ Acting"), "Perceiving ⟶ Thinking ⟶ Acting");
+        assert_eq!(normalize_ocr_text("(x,y) — (4,y)"), "(x,y) ⟶ (4,y)");
+        assert_eq!(normalize_ocr_text("path S + B - D"), "path S → B → D");
+        assert_eq!(normalize_ocr_text("Pour 3L > 4L"), "Pour 3L → 4L");
+        assert_eq!(normalize_ocr_text("Pour 4L + 3L"), "Pour 4L → 3L");
+        assert_eq!(normalize_ocr_text("Pour all 4L > 3L"), "Pour all 4L → 3L");
+        assert_eq!(normalize_ocr_text("a -> b"), "a → b");
+        assert_eq!(normalize_ocr_text("a <- b"), "a ← b");
+        assert_eq!(normalize_ocr_text("a ==> b"), "a ⇒ b");
+        assert_eq!(normalize_ocr_text("a <=> b"), "a ⇔ b");
+    }
+
+    #[test]
+    fn normalizes_inequalities_logic_and_epsilon() {
+        assert_eq!(normalize_ocr_text("x >= 4"), "x ≥ 4");
+        assert_eq!(normalize_ocr_text("x <= 3"), "x ≤ 3");
+        assert_eq!(normalize_ocr_text("x != y"), "x ≠ y");
+        assert_eq!(normalize_ocr_text("Frontier = ∅"), "Frontier ≠ ∅");
+        assert_eq!(
+            normalize_ocr_text("c(s,a,s') > «> 0"),
+            "c(s,a,s′) ≥ ϵ > 0"
+        );
+        assert_eq!(normalize_ocr_text(">=4Ay>0"), "≥4 ∧ y>0");
+        assert_eq!(normalize_ocr_text("x < 4 A y > 0"), "x < 4 ∧ y > 0");
+        assert_eq!(normalize_ocr_text("C*/«"), "C∗/ϵ");
+    }
+
+    #[test]
+    fn normalizes_math_sets_and_typography() {
+        assert_eq!(normalize_ocr_text("Optimal Path Cost (C*)"), "Optimal Path Cost (C∗)");
+        assert_eq!(normalize_ocr_text("P(s')"), "P(s′)");
+        assert_eq!(normalize_ocr_text("x in {0,1,2}"), "x ∈ {0,1,2}");
+        assert_eq!(normalize_ocr_text("x € {0,1,2}"), "x ∈ {0,1,2}");
+        assert_eq!(normalize_ocr_text("U(s) e R"), "U(s) ∈ R");
+        assert_eq!(normalize_ocr_text("x not in S"), "x ∉ S");
+        assert_eq!(normalize_ocr_text("1.5 - 2.0 Marks"), "1.5 – 2.0 Marks");
+        assert_eq!(normalize_ocr_text("3 — 1 = 2"), "3 − 1 = 2");
+        assert_eq!(normalize_ocr_text("dots..."), "dots…");
     }
 }

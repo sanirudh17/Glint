@@ -52,23 +52,34 @@
 /* Resume chips — subtle, conditional */
 .home-resume { display: flex; flex-wrap: wrap; gap: var(--s2); }
 .home-resume-chip {
-  display: inline-flex; align-items: center; gap: var(--s2);
-  padding: 6px var(--s3);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--s2);
+  padding: 0 var(--s3);
   height: 32px;
   box-sizing: border-box;
-  border: 1px solid var(--border); border-radius: var(--r-btn);
-  background: var(--bg-elev); color: var(--text-dim); cursor: pointer;
-  font-size: var(--fz-sm); max-width: 260px;
-  line-height: normal;
+  border: 1px solid var(--border);
+  border-radius: var(--r-btn);
+  background: var(--bg-elev);
+  color: var(--text-dim);
+  cursor: pointer;
+  font-size: var(--fz-sm);
+  max-width: 260px;
+  line-height: 1;
   transition: border-color var(--dur) var(--ease), color var(--dur) var(--ease);
 }
 .home-resume-chip:hover { border-color: var(--border-strong); color: var(--text); }
 .home-resume-chip--stale { opacity: 0.5; }
+.home-resume-chip svg {
+  flex-shrink: 0;
+  display: block;
+}
 .home-resume-name {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  line-height: 1.4;
-  padding-bottom: 2px;
+  line-height: 1;
 }

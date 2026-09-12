@@ -497,9 +497,9 @@ export function TrimView() {
       <div className="trim-actions">
         <span className="trim-out">Output: {fmt(outDur)} / {fmt(duration)}</span>
         <div className="trim-zoomctl" role="group" aria-label="Timeline zoom">
-          <button className="trim-iconbtn" onClick={zoomOut} disabled={zoom <= 1} title="Zoom out (−)"><ZoomOut size={16} /></button>
+          <button className="trim-zoombtn" onClick={zoomOut} disabled={zoom <= 1} title="Zoom out (−)"><ZoomOut size={13} /></button>
           <span className="trim-zoomval">{zoom}×</span>
-          <button className="trim-iconbtn" onClick={zoomIn} disabled={zoom >= 8} title="Zoom in (+)"><ZoomIn size={16} /></button>
+          <button className="trim-zoombtn" onClick={zoomIn} disabled={zoom >= 8} title="Zoom in (+)"><ZoomIn size={13} /></button>
         </div>
         {probe?.has_cam && cam && (
           <div className="trim-camctl" role="group" aria-label="Webcam overlay">

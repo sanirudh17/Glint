@@ -94,9 +94,55 @@
 /* Webcam overlay control (actions row) */
 .trim-camctl { display: inline-flex; align-items: center; gap: 6px; margin-right: 18px; }
 
-/* Timeline zoom control (actions row) */
-.trim-zoomctl { display: inline-flex; align-items: center; gap: 6px; margin-right: 18px; }
-.trim-zoomval { min-width: 26px; text-align: center; font-size: 11px; font-variant-numeric: tabular-nums; color: var(--text-dim); }
+/* Timeline zoom control (actions row) — compact, minimalistic segmented pill */
+.trim-zoomctl {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  margin-right: 16px;
+  padding: 2px 4px;
+  background: var(--bg-elev, rgba(128,128,128,.08));
+  border: 1px solid var(--border);
+  border-radius: var(--r-btn);
+}
+.trim-zoombtn {
+  width: 22px;
+  height: 22px;
+  min-width: 22px;
+  padding: 0;
+  border-radius: calc(var(--r-btn) - 2px);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-dim);
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
+  transition: background var(--dur) var(--ease-out), color var(--dur) var(--ease-out), border-color var(--dur) var(--ease-out);
+}
+.trim-zoombtn:hover:not(:disabled) {
+  background: var(--bg-elev2);
+  color: var(--text);
+  border-color: var(--border);
+}
+.trim-zoombtn:active:not(:disabled) {
+  background: var(--bg-elev3);
+}
+.trim-zoombtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+.trim-zoomval {
+  min-width: 22px;
+  text-align: center;
+  font-size: 11px;
+  font-weight: var(--fw-medium, 500);
+  font-variant-numeric: tabular-nums;
+  color: var(--text-dim);
+  user-select: none;
+  line-height: 1;
+}
 
 /* Per-clip speed badge on the timeline */
 .trim-speed-badge {
