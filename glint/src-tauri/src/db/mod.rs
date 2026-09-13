@@ -5,7 +5,13 @@ pub fn migrations() -> Vec<Migration> {
         version: 1,
         description: "create captures and settings",
         sql: "
-            CREATE TABLE captures (
+            -- Idempotent (IF NOT EXISTS): the same glint.db is also opened by
+            -- rusqlite (`ensure_captures_table` below), which creates `captures`
+            -- without migration bookkeeping. If it wins the race, this migration
+            -- must be a no-op success, not a 'table already exists' failure
+            -- that rejects the whole plugin-sql load and breaks every settings
+            -- persist (e.g. changing the capture folder on a fresh install).
+            CREATE TABLE IF NOT EXISTS captures (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 kind TEXT NOT NULL,            -- 'screenshot' | 'recording'
                 path TEXT NOT NULL,
@@ -17,8 +23,8 @@ pub fn migrations() -> Vec<Migration> {
                 created_at INTEGER NOT NULL,   -- unix seconds
                 deleted_at INTEGER             -- soft delete
             );
-            CREATE INDEX idx_captures_created ON captures(created_at);
-            CREATE TABLE settings (
+            CREATE INDEX IF NOT EXISTS idx_captures_created ON captures(created_at);
+            CREATE TABLE IF NOT EXISTS settings (
                 key TEXT PRIMARY KEY,
                 value TEXT NOT NULL            -- JSON-encoded
             );
@@ -211,6 +217,41 @@ pub fn capture_path(conn: &Connection, id: i64) -> rusqlite::Result<Option<Strin
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// Regression: migration 1 must survive the rusqlite race. The same glint.db
+    /// is created by `ensure_captures_table` (no bookkeeping), so if it runs
+    /// first, plugin-sql replays migration 1 against existing tables — plain
+    /// CREATE TABLE would fail with "table captures already exists" and break
+    /// every settings persist (e.g. changing the capture folder on fresh installs).
+    #[test]
+    fn migration_1_is_idempotent() {
+        let ms = migrations();
+        assert_eq!(ms.len(), 1);
+        let sql = ms[0].sql.to_uppercase();
+        assert!(
+            sql.contains("CREATE TABLE IF NOT EXISTS CAPTURES"),
+            "captures table creation must be idempotent"
+        );
+        assert!(
+            sql.contains("CREATE TABLE IF NOT EXISTS SETTINGS"),
+            "settings table creation must be idempotent"
+        );
+        assert!(
+            sql.contains("CREATE INDEX IF NOT EXISTS"),
+            "index creation must be idempotent"
+        );
+    }
+
+    /// End-to-end shape of the race: tables pre-created the rusqlite way, then
+    /// the migration SQL runs verbatim against the same connection without error.
+    #[test]
+    fn migration_sql_reruns_cleanly_over_rusqlite_tables() {
+        let c = Connection::open_in_memory().unwrap();
+        ensure_captures_table(&c).unwrap();
+        c.execute_batch(migrations()[0].sql).unwrap();
+        // And twice more for good measure — a retried migration is a pure no-op.
+        c.execute_batch(migrations()[0].sql).unwrap();
+    }
 
     fn mem() -> Connection {
         let c = Connection::open_in_memory().unwrap();
