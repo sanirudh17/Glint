@@ -202,6 +202,16 @@ pub fn begin_delayed_spawned(app: &AppHandle, mode: CaptureMode) {
     });
 }
 
+/// Serializes capture begins. Every hotkey press spawns its own thread, so a
+/// second press (or a mash of presses when the first feels slow) would otherwise
+/// run teardown→grab→show interleaved with the first: the two sessions share
+/// process-global un-scoped `once` rendezvous (`overlay-ready`, `overlay-cleared`)
+/// that can cross-consume, and a straggler teardown can hide a just-shown overlay —
+/// surfacing as "pressed and nothing happened, then it suddenly popped up".
+/// The first begin wins; overlapped presses are dropped with a log line (standard
+/// hotkey debounce). Poison-safe: a poisoned lock is recovered, never wedged.
+static BEGIN_IN_FLIGHT: Mutex<()> = Mutex::new(());
+
 /// Entry point from hotkeys / tray. Leaves the main window untouched.
 pub fn begin(app: &AppHandle, mode: CaptureMode) {
     begin_restoring(app, mode, false);
@@ -212,6 +222,16 @@ pub fn begin(app: &AppHandle, mode: CaptureMode) {
 /// buttons (which hid the main window first). Never panics; logs + toasts on
 /// failure. Must run off the main thread (see [`begin_spawned`]).
 pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
+    // Drop overlapped begins (see BEGIN_IN_FLIGHT): the grab→show sequence must
+    // never run interleaved with itself across threads.
+    let _in_flight = match BEGIN_IN_FLIGHT.try_lock() {
+        Ok(guard) => guard,
+        Err(std::sync::TryLockError::WouldBlock) => {
+            log::warn!("capture begin dropped: another capture is already starting");
+            return;
+        }
+        Err(std::sync::TryLockError::Poisoned(inner)) => inner.into_inner(),
+    };
     log::info!("capture begin: mode={}", mode.as_str());
     // Guard against double-begin: tear down any existing overlay first. The tray
     // (Quick Access Overlay) is NOT torn down here — a new capture is appended to

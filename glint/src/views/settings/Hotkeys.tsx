@@ -47,6 +47,27 @@ export function Hotkeys() {
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [flash, setFlash] = useState<Record<string, string>>({});
   const flashTimer = useRef<number | null>(null);
+  // Tracks whether global shortcuts are currently suspended by THIS panel.
+  // Cleared on every path where Rust re-arms them (commit) or we resume
+  // (endCapture) — so the unmount cleanup below only fires when capture was
+  // abandoned (navigate away / window closed mid-capture), which otherwise
+  // leaks the suspend and kills every global shortcut until app restart.
+  const suspendedRef = useRef(false);
+
+  // Safety net: never leave shortcuts suspended if this panel goes away
+  // mid-capture. Deliberately unmount-only (empty deps): resuming on
+  // capturing-change would re-register right after commit's re-arm and hit
+  // the Windows unregister/register race (see commit's comment).
+  useEffect(() => {
+    return () => {
+      if (suspendedRef.current) {
+        suspendedRef.current = false;
+        void resumeHotkeys().catch(() => {});
+      }
+      if (flashTimer.current) window.clearTimeout(flashTimer.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // While a row is capturing, listen for the next key combo. Esc cancels; Backspace/Delete
   // clears. Global shortcuts are suspended for the duration (see startCapture).
@@ -74,11 +95,13 @@ export function Hotkeys() {
   async function startCapture(action: string) {
     setErrors((e) => ({ ...e, [action]: "" }));
     await suspendHotkeys().catch(() => {});
+    suspendedRef.current = true;
     setCapturing(action);
   }
 
   async function endCapture() {
     await resumeHotkeys().catch(() => {});
+    suspendedRef.current = false;
     setCapturing(null);
   }
 
@@ -101,6 +124,7 @@ export function Hotkeys() {
       // re-register the just-set accelerator microseconds apart, and Windows often hasn't
       // released it yet — so the new shortcut would silently stay unregistered until the
       // next save. (Escape/cancel still resumes via endCapture, where no setHotkey ran.)
+      suspendedRef.current = false;
       setCapturing(null);
     }
   }
