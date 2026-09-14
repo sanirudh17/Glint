@@ -82,7 +82,67 @@ interface AppState {
   dismissToast: (id: number) => void;
 }
 
-export const useAppStore = create<AppState>((set, get) => ({
+export const useAppStore = create<AppState>((set, get) => {
+  const settings = () => get().settings;
+
+  // ─── Optimistic write-through ──────────────────────────────────────────
+  //
+  // Every control in Settings (toggles, dropdowns, accent swatches) is a
+  // controlled component driven by `settings`. The setters used to await the
+  // Rust invoke + the SQLite persist BEFORE updating local state, so any
+  // backend hiccup left the control visibly "stuck" at its old value with no
+  // feedback (most call sites fire-and-forget, swallowing the rejection).
+  //
+  // `commit` flips local state FIRST so controls respond instantly, then syncs
+  // to the backend. On failure it rolls back to the previous snapshot and
+  // toasts the real error — controls never get stuck silently. It swallows the
+  // rejection (after toasting) so fire-and-forget call sites stay safe; the
+  // two setters whose callers display their own errors (hotkey rebind,
+  // capture-folder pick) use the throwing variants below instead.
+
+  /** Human-readable form of an invoke/DB rejection (usually a plain string). */
+  const errText = (e: unknown): string => {
+    if (typeof e === "string") return e;
+    if (e instanceof Error && e.message) return e.message;
+    try {
+      const s = JSON.stringify(e);
+      return s === undefined ? "unknown error" : s;
+    } catch {
+      return "unknown error";
+    }
+  };
+
+  const toastPersistWarning = (label: string, e: unknown): void => {
+    get().pushToast(
+      `${label} applies for this session, but it may not stick after restart (${errText(e)})`,
+    );
+  };
+
+  const commit = async <K extends keyof Settings>(
+    key: K,
+    value: Settings[K],
+    label: string,
+  ): Promise<void> => {
+    const prev = settings();
+    if (prev) set({ settings: { ...prev, [key]: value } });
+    try {
+      const updated = await saveSetting(key, value);
+      try {
+        await persistSetting(key, value);
+      } catch (persistErr) {
+        toastPersistWarning(label, persistErr);
+      }
+      // Merge the authoritative backend copy over current state (not over the
+      // stale `prev`) so rapid consecutive changes to different keys can't
+      // clobber each other.
+      set({ settings: { ...(settings() ?? {}), ...updated } as Settings });
+    } catch (err) {
+      if (prev) set({ settings: prev });
+      get().pushToast(`Couldn't save ${label} (${errText(err)})`);
+    }
+  };
+
+  return {
   settings: null,
   toasts: [],
 
@@ -106,52 +166,85 @@ export const useAppStore = create<AppState>((set, get) => ({
   },
 
   setTheme: async (theme: Theme) => {
-    // a. Keep the Rust live copy validated and in sync for this session.
-    const updated = await saveSetting("theme", theme);
-    // b. Persist to SQLite so it survives the next restart.
-    await persistSetting("theme", theme);
-    const accent = get().settings?.accent ?? updated.accent;
-    set({ settings: { ...updated, accent } });
+    // Optimistic: re-render + repaint instantly; roll back visuals on failure.
+    const prev = settings();
+    if (prev) set({ settings: { ...prev, theme } });
     applyTheme(theme);
-    // c. Push the change to every OTHER live window (overlay, HUD, recorder,
-    //    editor). localStorage alone won't do it — a running WebView2 never
-    //    re-reads it — so we broadcast and each window re-applies (see App.tsx).
-    broadcastVisual(theme, accent);
+    try {
+      // a. Keep the Rust live copy validated and in sync for this session.
+      const updated = await saveSetting("theme", theme);
+      // b. Persist to SQLite so it survives the next restart.
+      try {
+        await persistSetting("theme", theme);
+      } catch (persistErr) {
+        toastPersistWarning("Theme", persistErr);
+      }
+      const accent = settings()?.accent ?? updated.accent;
+      set({ settings: { ...updated, accent } });
+      applyTheme(theme);
+      // c. Push the change to every OTHER live window (overlay, HUD, recorder,
+      //    editor). localStorage alone won't do it — a running WebView2 never
+      //    re-reads it — so we broadcast and each window re-applies (see App.tsx).
+      broadcastVisual(theme, accent);
+    } catch (err) {
+      if (prev) {
+        set({ settings: prev });
+        applyTheme(prev.theme);
+      }
+      get().pushToast(`Couldn't save theme (${errText(err)})`);
+    }
   },
 
   setAccent: async (hex: string) => {
-    // a. Inform Rust (validation + live copy).
-    const updated = await saveSetting("accent", hex);
-    // b. Persist to SQLite.
-    await persistSetting("accent", hex);
-    const theme = get().settings?.theme ?? updated.theme;
-    set({ settings: { ...updated, accent: hex } });
+    // Optimistic: re-render + repaint instantly; roll back visuals on failure.
+    const prev = settings();
+    if (prev) set({ settings: { ...prev, accent: hex } });
     applyAccent(hex);
-    // c. Broadcast so already-open windows re-apply the new accent live.
-    broadcastVisual(theme, hex);
+    try {
+      // a. Inform Rust (validation + live copy).
+      const updated = await saveSetting("accent", hex);
+      // b. Persist to SQLite.
+      try {
+        await persistSetting("accent", hex);
+      } catch (persistErr) {
+        toastPersistWarning("Accent colour", persistErr);
+      }
+      const theme = settings()?.theme ?? updated.theme;
+      set({ settings: { ...updated, accent: hex } });
+      applyAccent(hex);
+      // c. Broadcast so already-open windows re-apply the new accent live.
+      broadcastVisual(theme, hex);
+    } catch (err) {
+      if (prev) {
+        set({ settings: prev });
+        applyAccent(prev.accent);
+      }
+      get().pushToast(`Couldn't save accent colour (${errText(err)})`);
+    }
   },
 
-  setAutoSave: async (on: boolean) => {
-    const updated = await saveSetting("auto_save", on);
-    await persistSetting("auto_save", on);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setAutoSave: (on: boolean) => commit("auto_save", on, "Auto-save"),
 
-  setAutoCopy: async (on: boolean) => {
-    const updated = await saveSetting("auto_copy", on);
-    await persistSetting("auto_copy", on);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setAutoCopy: (on: boolean) => commit("auto_copy", on, "Auto-copy"),
 
-  setOpenInEditor: async (on: boolean) => {
-    const updated = await saveSetting("open_in_editor", on);
-    await persistSetting("open_in_editor", on);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setOpenInEditor: (on: boolean) => commit("open_in_editor", on, "Open in editor"),
 
   setExplorerMenu: async (on: boolean) => {
-    const updated = await saveSetting("explorer_menu_enabled", on);
-    await persistSetting("explorer_menu_enabled", on);
+    const prev = settings();
+    if (prev) set({ settings: { ...prev, explorer_menu_enabled: on } });
+    try {
+      const updated = await saveSetting("explorer_menu_enabled", on);
+      try {
+        await persistSetting("explorer_menu_enabled", on);
+      } catch (persistErr) {
+        toastPersistWarning("Right-click menu setting", persistErr);
+      }
+      set({ settings: { ...(settings() ?? {}), ...updated } as Settings });
+    } catch (err) {
+      if (prev) set({ settings: prev });
+      get().pushToast(`Couldn't save right-click menu setting (${errText(err)})`);
+      return;
+    }
     try {
       if (on) await registerExplorerMenu();
       else await unregisterExplorerMenu();
@@ -159,124 +252,137 @@ export const useAppStore = create<AppState>((set, get) => ({
     } catch {
       get().pushToast("Couldn't update the right-click menu");
     }
-    set({ settings: { ...get().settings, ...updated } as Settings });
   },
 
-  setRecordSystemAudio: async (on: boolean) => {
-    const updated = await saveSetting("record_system_audio", on);
-    await persistSetting("record_system_audio", on);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setRecordSystemAudio: (on: boolean) =>
+    commit("record_system_audio", on, "System audio"),
 
-  setRecordMicrophone: async (on: boolean) => {
-    const updated = await saveSetting("record_microphone", on);
-    await persistSetting("record_microphone", on);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setRecordMicrophone: (on: boolean) =>
+    commit("record_microphone", on, "Microphone"),
 
-  setRecordWebcam: async (on: boolean) => {
-    const updated = await saveSetting("record_webcam", on);
-    await persistSetting("record_webcam", on);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setRecordWebcam: (on: boolean) =>
+    commit("record_webcam", on, "Webcam"),
 
-  setRecordWebcamMovable: async (on: boolean) => {
-    const updated = await saveSetting("record_webcam_movable", on);
-    await persistSetting("record_webcam_movable", on);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setRecordWebcamMovable: (on: boolean) =>
+    commit("record_webcam_movable", on, "Movable webcam"),
 
-  setRecordFx: async (key: RecordFxKey, value: boolean | CursorSize) => {
-    const updated = await saveSetting(key, value);
-    await persistSetting(key, value);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setRecordFx: (key: RecordFxKey, value: boolean | CursorSize) =>
+    commit(key, value, "Recording effect"),
 
   setHotkey: async (action: string, accelerator: string) => {
-    // Throws (rejected invoke) on invalid/conflict — the panel catches + shows it.
-    const updated = await setHotkeyIpc(action, accelerator);
-    await persistSetting("hotkeys", updated.hotkeys);
-    set({ settings: { ...get().settings, ...updated } as Settings });
+    // Throws (rejected invoke) on invalid/conflict — the Hotkeys panel catches
+    // and shows it inline, so this rolls back WITHOUT toasting (no double
+    // feedback). Optimistic so the row responds instantly on success.
+    const prev = settings();
+    if (prev) {
+      set({
+        settings: {
+          ...prev,
+          hotkeys: { ...prev.hotkeys, [action]: accelerator },
+        },
+      });
+    }
+    try {
+      const updated = await setHotkeyIpc(action, accelerator);
+      try {
+        await persistSetting("hotkeys", updated.hotkeys);
+      } catch (persistErr) {
+        toastPersistWarning("Shortcut", persistErr);
+      }
+      set({ settings: { ...(settings() ?? {}), ...updated } as Settings });
+    } catch (err) {
+      if (prev) set({ settings: prev });
+      throw err;
+    }
   },
 
   resetHotkeys: async () => {
-    const updated = await resetHotkeysIpc();
-    await persistSetting("hotkeys", updated.hotkeys);
-    set({ settings: { ...get().settings, ...updated } as Settings });
+    try {
+      const updated = await resetHotkeysIpc();
+      try {
+        await persistSetting("hotkeys", updated.hotkeys);
+      } catch (persistErr) {
+        toastPersistWarning("Shortcuts", persistErr);
+      }
+      set({ settings: { ...(settings() ?? {}), ...updated } as Settings });
+    } catch (err) {
+      get().pushToast(`Couldn't reset shortcuts (${errText(err)})`);
+    }
   },
 
   setSaveDir: async (path: string) => {
-    const updated = await setSaveDirIpc(path); // throws on unwritable
-    await persistSetting("save_dir", path);
-    set({ settings: { ...get().settings, ...updated } as Settings });
+    // Throws on unwritable path — the Storage panel catches and toasts, so
+    // roll back WITHOUT toasting here (no double feedback).
+    const prev = settings();
+    if (prev) set({ settings: { ...prev, save_dir: path } });
+    try {
+      const updated = await setSaveDirIpc(path); // throws on unwritable
+      try {
+        await persistSetting("save_dir", path);
+      } catch (persistErr) {
+        toastPersistWarning("Capture folder", persistErr);
+      }
+      set({ settings: { ...(settings() ?? {}), ...updated } as Settings });
+    } catch (err) {
+      if (prev) set({ settings: prev });
+      throw err;
+    }
   },
 
-  setSoundEffects: async (on: boolean) => {
-    const updated = await saveSetting("sound_effects", on);
-    await persistSetting("sound_effects", on);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setSoundEffects: (on: boolean) =>
+    commit("sound_effects", on, "Sound effects"),
 
   setShowInTaskbar: async (on: boolean) => {
-    const updated = await saveSetting("show_in_taskbar", on);
-    await persistSetting("show_in_taskbar", on);
-    await windowSetTaskbar(on);
-    set({ settings: { ...get().settings, ...updated } as Settings });
+    const prev = settings();
+    if (prev) set({ settings: { ...prev, show_in_taskbar: on } });
+    try {
+      const updated = await saveSetting("show_in_taskbar", on);
+      try {
+        await persistSetting("show_in_taskbar", on);
+      } catch (persistErr) {
+        toastPersistWarning("Taskbar setting", persistErr);
+      }
+      set({ settings: { ...(settings() ?? {}), ...updated } as Settings });
+    } catch (err) {
+      if (prev) set({ settings: prev });
+      get().pushToast(`Couldn't save taskbar setting (${errText(err)})`);
+      return;
+    }
+    // The taskbar button is a side effect — a failure here must not roll back
+    // the (already saved) setting, just surface a toast.
+    try {
+      await windowSetTaskbar(on);
+    } catch {
+      get().pushToast("Couldn't update the taskbar button");
+    }
   },
 
-  setIncludeCursor: async (on: boolean) => {
-    const updated = await saveSetting("include_cursor", on);
-    await persistSetting("include_cursor", on);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setIncludeCursor: (on: boolean) =>
+    commit("include_cursor", on, "Include cursor"),
 
-  setImageFormat: async (v: "png" | "jpeg" | "webp") => {
-    const updated = await saveSetting("image_format", v);
-    await persistSetting("image_format", v);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setImageFormat: (v: "png" | "jpeg" | "webp") =>
+    commit("image_format", v, "Image format"),
 
-  setJpegQuality: async (v: "high" | "medium" | "low") => {
-    const updated = await saveSetting("jpeg_quality", v);
-    await persistSetting("jpeg_quality", v);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setJpegQuality: (v: "high" | "medium" | "low") =>
+    commit("jpeg_quality", v, "JPEG quality"),
 
-  setRecordFps: async (v: 30 | 60) => {
-    const updated = await saveSetting("record_fps", v);
-    await persistSetting("record_fps", v);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setRecordFps: (v: 30 | 60) =>
+    commit("record_fps", v, "Frame rate"),
 
-  setWebcamDevice: async (id: string) => {
-    const updated = await saveSetting("webcam_device_id", id);
-    await persistSetting("webcam_device_id", id);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setWebcamDevice: (id: string) =>
+    commit("webcam_device_id", id, "Camera"),
 
-  setWebcamShape: async (shape: "circle" | "rounded" | "square" | "rect") => {
-    const updated = await saveSetting("webcam_shape", shape);
-    await persistSetting("webcam_shape", shape);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setWebcamShape: (shape: "circle" | "rounded" | "square" | "rect") =>
+    commit("webcam_shape", shape, "Webcam shape"),
 
-  setCaptureDelay: async (v: 3 | 5 | 10) => {
-    const updated = await saveSetting("capture_delay_secs", v);
-    await persistSetting("capture_delay_secs", v);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setCaptureDelay: (v: 3 | 5 | 10) =>
+    commit("capture_delay_secs", v, "Capture delay"),
 
-  setRecordResolution: async (v: "original" | "1080p" | "720p") => {
-    const updated = await saveSetting("record_resolution", v);
-    await persistSetting("record_resolution", v);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setRecordResolution: (v: "original" | "1080p" | "720p") =>
+    commit("record_resolution", v, "Resolution"),
 
-  setRecordQuality: async (v: "high" | "medium" | "low") => {
-    const updated = await saveSetting("record_quality", v);
-    await persistSetting("record_quality", v);
-    set({ settings: { ...get().settings, ...updated } as Settings });
-  },
+  setRecordQuality: (v: "high" | "medium" | "low") =>
+    commit("record_quality", v, "Recording quality"),
 
   pushToast: (text: string) =>
     set((s) => ({
@@ -287,7 +393,8 @@ export const useAppStore = create<AppState>((set, get) => ({
     set((s) => ({
       toasts: s.toasts.filter((t) => t.id !== id),
     })),
-}));
+  };
+});
 
 // ─── Theme helpers ────────────────────────────────────────────────────────────
 

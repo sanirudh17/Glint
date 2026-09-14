@@ -40,6 +40,21 @@ pub fn migrations() -> Vec<Migration> {
 
 // ─── rusqlite captures layer (tray-core owns the captures table) ───────────────
 
+/// Forget plugin-sql's bookkeeping row for migration 1 so it re-applies.
+///
+/// v0.1.13 rewrote migration 1 as idempotent (`IF NOT EXISTS`), which changed
+/// its checksum. Databases migrated by earlier releases recorded the old
+/// checksum, so plugin-sql refused to load them at all ("migration 1 was
+/// previously applied but has been modified") — breaking EVERY settings
+/// persist (toggles stuck, dropdowns snapping back) with no visible error.
+/// Since the current migration 1 SQL is a pure no-op on migrated databases,
+/// forgetting + re-applying it is safe. A missing bookkeeping table (fresh DB
+/// that plugin-sql hasn't touched yet) is fine — the DELETE just no-ops and
+/// plugin-sql applies v1 itself on first load.
+pub fn repair_migration_bookkeeping(conn: &Connection) {
+    let _ = conn.execute("DELETE FROM _sqlx_migrations WHERE version = 1", []);
+}
+
 use rusqlite::Connection;
 
 #[derive(Debug, Clone)]
@@ -251,6 +266,42 @@ mod tests {
         c.execute_batch(migrations()[0].sql).unwrap();
         // And twice more for good measure — a retried migration is a pure no-op.
         c.execute_batch(migrations()[0].sql).unwrap();
+    }
+
+    /// Regression for the v0.1.13 checksum break: migration 1's SQL was made
+    /// idempotent, changing its checksum, so databases migrated by earlier
+    /// releases failed every plugin-sql load ("previously applied but has been
+    /// modified") and broke all settings persists. Forgetting the v1 row lets
+    /// the idempotent migration re-apply cleanly.
+    #[test]
+    fn repair_forgets_stale_v1_row_and_tolerates_missing_table() {
+        let c = Connection::open_in_memory().unwrap();
+        // Fresh DB (no bookkeeping table yet): must be a silent no-op.
+        repair_migration_bookkeeping(&c);
+        // Stale row recorded by a pre-idempotent release: removed.
+        c.execute_batch(
+            "CREATE TABLE _sqlx_migrations (
+                version BIGINT PRIMARY KEY,
+                description TEXT NOT NULL,
+                installed_on TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+                success BOOLEAN NOT NULL,
+                checksum BLOB NOT NULL,
+                execution_time BIGINT NOT NULL
+            );
+            INSERT INTO _sqlx_migrations
+                (version, description, success, checksum, execution_time)
+            VALUES (1, 'create captures and settings', 1, x'00', 0);",
+        )
+        .unwrap();
+        repair_migration_bookkeeping(&c);
+        let n: i64 = c
+            .query_row(
+                "SELECT COUNT(*) FROM _sqlx_migrations WHERE version = 1",
+                [],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(n, 0);
     }
 
     fn mem() -> Connection {

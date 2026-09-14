@@ -26,7 +26,7 @@ export function Appearance() {
         <Select
           value={settings.theme}
           options={THEME_OPTIONS}
-          onChange={(v) => setTheme(v as Theme)}
+          onChange={(v) => void setTheme(v as Theme)}
           ariaLabel="Theme"
         />
       </Field>
@@ -54,7 +54,7 @@ export function Appearance() {
                   .filter(Boolean)
                   .join(" ")}
                 style={{ "--swatch-color": entry.accent } as React.CSSProperties}
-                onClick={() => setAccent(entry.accent)}
+                onClick={() => void setAccent(entry.accent)}
               >
                 {active && (
                   <Check

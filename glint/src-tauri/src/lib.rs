@@ -140,6 +140,11 @@ pub fn run() {
             let conn = rusqlite::Connection::open(&db_path)
                 .map_err(|e| format!("open glint.db: {e}"))?;
             let _ = conn.busy_timeout(std::time::Duration::from_millis(5000));
+            // Self-heal the plugin-sql checksum break (see
+            // db::repair_migration_bookkeeping): pre-v0.1.13 databases recorded
+            // migration 1 under its old SQL text, so plugin-sql rejects every
+            // load and no setting can persist. Runs before any frontend DB use.
+            crate::db::repair_migration_bookkeeping(&conn);
             // Hydrate persisted settings into the live SettingsState.
             {
                 let state = app.state::<SettingsState>();

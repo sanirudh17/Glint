@@ -20,7 +20,20 @@ import type { Settings } from "../store/useAppStore";
 // own connection.
 //
 let dbP: Promise<Database> | null = null;
-const db = () => (dbP ??= Database.load("sqlite:glint.db"));
+/**
+ * Shared loader for the plugin-sql connection. A failed load is NOT cached:
+ * without this, one rejected `Database.load` (e.g. the pre-0.1.13 migration
+ * checksum break) poisoned every later persist until app restart, so toggles
+ * kept failing even after the underlying problem was healed.
+ */
+async function db(): Promise<Database> {
+  try {
+    return await (dbP ??= Database.load("sqlite:glint.db"));
+  } catch (e) {
+    dbP = null;
+    throw e;
+  }
+}
 
 // ─── Capture types ───────────────────────────────────────────────────────────
 
