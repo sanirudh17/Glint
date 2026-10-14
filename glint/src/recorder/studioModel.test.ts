@@ -20,4 +20,9 @@ describe("Studio projects", () => {
     const split = splitClips(reopened.clips, 3);
     expect(new Set(split.map((c) => c.id)).size).toBe(split.length);
   });
+  it("preserves an imported video's source protection and manual effects", () => {
+    const imported={...project,version:2 as const,importedVideo:true,cursor:{...DEFAULT_CURSOR,visible:false,clicks:false}};
+    const reopened=hydrateProject(JSON.parse(JSON.stringify(imported)),10,{version:1,geometry:{x:0,y:0,width:640,height:360,monitorX:0,monitorY:0,monitorWidth:640,monitorHeight:360,dpiScale:1},events:[]});
+    expect(reopened.importedVideo).toBe(true);expect(reopened.cursor.visible).toBe(false);expect(reopened.clips).toEqual(imported.clips);
+  });
 });

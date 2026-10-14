@@ -63,7 +63,7 @@ try {
   results.push({type:'stress',path:stressPath,seconds:(Date.now()-stressStart)/1000,zooms:22,masks:5,probe});console.log('Stress: 22 zooms and five masks exported successfully.');
   await open(stress);data=await page.invoke('studio_load',{path:fixture.source});assert.deepEqual(data.project.zoomSegments,stress.zoomSegments);assert.deepEqual(data.project.masks,stress.masks);
   const legacy=structuredClone(fixture.project);legacy.version=1;delete legacy.zoomSegments;delete legacy.masks;delete legacy.motionBlur;
-  await open(legacy);data=await page.invoke('studio_load',{path:fixture.source});assert.equal(data.project.version,2);assert.deepEqual(data.project.look,legacy.look);assert.deepEqual(data.project.clips,legacy.clips);
+  await open(legacy);await pause(450);data=await page.invoke('studio_load',{path:fixture.source});assert.equal(data.project.version,2);assert.deepEqual(data.project.look,legacy.look);assert.deepEqual(data.project.clips,legacy.clips);
   const discardFolder=join(root,'Discard check.glint-studio');await mkdir(discardFolder,{recursive:true});
   const discardSource=join(discardFolder,'video.mp4'),discardExport=join(root,'Discard check (Studio).mp4');
   await copyFile(fixture.source,discardSource);await copyFile(join(dirname(fixture.source),'events.json'),join(discardFolder,'events.json'));await writeFile(join(discardFolder,'project.json'),JSON.stringify(stress));

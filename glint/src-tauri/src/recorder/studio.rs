@@ -82,7 +82,26 @@ pub fn folder_for(dir:&Path,name:&str)->PathBuf {
     while folder.exists() {folder=dir.join(format!("{stem} {i}.glint-studio"));i+=1;}
     folder
 }
-pub fn is_studio_video(path:&str)->bool {let p=Path::new(path);p.file_name().is_some_and(|n|n=="video.mp4")&&p.parent().is_some_and(|d|d.join("project.json").is_file())}
+pub fn import_folder(path:&Path)->PathBuf {
+    path.with_file_name(format!("{}.glint-studio",path.file_name().unwrap_or_default().to_string_lossy()))
+}
+fn import_matches(folder:&Path,source:&Path)->bool {
+    let Ok(bytes)=std::fs::read(folder.join("origin.json")) else {return false;};
+    let Ok(origin)=serde_json::from_slice::<PathBuf>(&bytes) else {return false;};
+    source.canonicalize().is_ok_and(|p|p==origin)
+}
+pub fn project_folder(path:&str)->Option<PathBuf> {
+    let source=Path::new(path);
+    if source.file_name().is_some_and(|n|n=="video.mp4") {
+        if let Some(folder)=source.parent().filter(|d|d.join("project.json").is_file()) {return Some(folder.to_owned());}
+    }
+    let folder=import_folder(source);
+    (folder.join("project.json").is_file()&&import_matches(&folder,source)).then_some(folder)
+}
+pub fn is_studio_video(path:&str)->bool {project_folder(path).is_some()}
+pub fn is_imported_video(path:&str)->bool {
+    project_folder(path).is_some_and(|folder|import_matches(&folder,Path::new(path)))
+}
 pub fn initial_project(duration:f64)->serde_json::Value {
     serde_json::json!({"version":1,"look":{"enabled":true,"background":{"type":"gradient","gradientId":"dusk"},"padding":40,"radius":12,"shadow":35,"aspect":"auto","chrome":{"style":"none","theme":"light","buttons":"mac","title":"","url":""}},
         "cursor":{"visible":true,"smoothing":0.5,"size":32,"style":"arrow","hideIdle":true,"idleSeconds":2.0,"clicks":true,"clickSize":36,"keystrokes":false},
@@ -104,10 +123,39 @@ pub fn write_project(folder:&Path,project:&serde_json::Value)->Result<(),String>
     #[cfg(not(windows))] std::fs::rename(&tmp,&dest).map_err(|e|e.to_string())?;
     Ok(())
 }
+/// Standalone videos share the Studio editor. Only edit metadata is written;
+/// input events cannot be recovered from a baked recording, and the source is read-only.
+fn prepare_import(path:&Path,duration:f64,width:u32,height:u32)->Result<(),String> {
+    static IMPORT_LOCK:Mutex<()>=Mutex::new(());
+    let _guard=IMPORT_LOCK.lock().map_err(|_|"Studio import lock failed")?;
+    if !duration.is_finite()||duration<=0.||width<2||height<2 {return Err("This video has no editable frames".into());}
+    let source=path.canonicalize().map_err(|e|e.to_string())?;
+    if project_folder(&path.to_string_lossy()).is_some() {return Ok(());}
+    let folder=import_folder(path);
+    if folder.exists()&&!import_matches(&folder,path) {return Err("An unrelated Studio folder already exists beside this video".into());}
+    std::fs::create_dir_all(&folder).map_err(|e|e.to_string())?;
+    std::fs::write(folder.join("origin.json"),serde_json::to_vec(&source).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
+    let geometry=Geometry{x:0,y:0,width,height,monitor_x:0,monitor_y:0,monitor_width:width,monitor_height:height,dpi_scale:1.};
+    let events=Events{version:1,geometry,events:vec![]};
+    std::fs::write(folder.join("events.json"),serde_json::to_vec(&events).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
+    let mut project=initial_project(duration);
+    project["version"]=2.into();project["importedVideo"]=true.into();
+    project["look"]["padding"]=0.into();project["look"]["radius"]=0.into();project["look"]["shadow"]=0.into();
+    project["look"]["background"]=serde_json::json!({"type":"solid","color":"#101319"});
+    project["cursor"]["visible"]=false.into();project["cursor"]["clicks"]=false.into();project["cursor"]["hideIdle"]=false.into();
+    write_project(&folder,&project)
+}
+#[tauri::command(async)]
+pub async fn studio_import(app:tauri::AppHandle,path:String)->Result<serde_json::Value,String> {
+    if !is_studio_video(&path) {
+        let probe=super::trim::recorder_trim_probe(app,path.clone()).await?;
+        prepare_import(Path::new(&path),probe.duration_secs,probe.width,probe.height)?;
+    }
+    studio_load(path)?.ok_or_else(||"Studio project could not be prepared".into())
+}
 #[tauri::command(async)]
 pub fn studio_load(path:String)->Result<Option<serde_json::Value>,String> {
-    if !is_studio_video(&path) {return Ok(None);}
-    let dir=Path::new(&path).parent().unwrap();
+    let Some(dir)=project_folder(&path) else {return Ok(None);};
     let project:serde_json::Value=serde_json::from_slice(&std::fs::read(dir.join("project.json")).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
     if project["version"]!=1 && project["version"]!=2 {return Err("Unsupported Studio project version".into());}
     let events:Events=serde_json::from_slice(&std::fs::read(dir.join("events.json")).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
@@ -115,8 +163,8 @@ pub fn studio_load(path:String)->Result<Option<serde_json::Value>,String> {
 }
 #[tauri::command(async)]
 pub fn studio_save(path:String,project:serde_json::Value)->Result<(),String> {
-    if !is_studio_video(&path) {return Err("This video is not a Studio project".into());}
-    write_project(Path::new(&path).parent().unwrap(),&project)
+    let dir=project_folder(&path).ok_or("This video is not a Studio project")?;
+    write_project(&dir,&project)
 }
 
 #[cfg(test)]
@@ -124,4 +172,34 @@ mod tests {
     use super::*;
     #[test] fn pause_excludes_wall_time() {let c=EventClock::default();assert!(c.stamp().is_none());c.arm();c.sync(1.0);assert!(c.stamp().unwrap()>=1.0);c.pause();assert!(c.stamp().is_none());c.finish_span(2.25);c.arm();c.sync(0.5);assert!((c.stamp().unwrap()-2.75).abs()<0.01);}
     #[test] fn projects_start_versioned_and_styled() {let p=initial_project(60.0);assert_eq!(p["version"],1);assert_eq!(p["look"]["enabled"],true);assert_eq!(p["clips"][0]["end"],60.0);}
+    #[test] fn importing_a_video_preserves_source_and_reopens_edits() {
+        let root=std::env::temp_dir().join(format!("glint-import-{}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir(&root).unwrap();
+        let source=root.join("Older recording.mp4");std::fs::write(&source,b"original video bytes").unwrap();
+        prepare_import(&source,12.,640,360).unwrap();
+        let path=source.to_string_lossy().to_string();
+        let data=studio_load(path.clone()).unwrap().unwrap();
+        assert!(is_imported_video(&path));assert_eq!(data["project"]["importedVideo"],true);
+        assert_eq!(data["events"]["events"],serde_json::json!([]));
+        assert_eq!(data["events"]["geometry"]["width"],640);
+        assert_eq!(data["project"]["cursor"]["visible"],false);
+        assert_eq!(data["project"]["look"]["padding"],0);
+        let mut project=data["project"].clone();project["crop"]=serde_json::json!({"x":20,"y":10,"w":400,"h":300});
+        studio_save(path.clone(),project.clone()).unwrap();
+        prepare_import(&source,12.,640,360).unwrap();
+        assert_eq!(studio_load(path).unwrap().unwrap()["project"],project);
+        assert_eq!(std::fs::read(&source).unwrap(),b"original video bytes");
+        let folder=import_folder(&source);
+        for name in ["project.json","origin.json","events.json"] {std::fs::remove_file(folder.join(name)).unwrap();}
+        std::fs::remove_dir(folder).unwrap();std::fs::remove_file(source).unwrap();std::fs::remove_dir(root).unwrap();
+    }
+    #[test] fn import_refuses_to_replace_an_unrelated_project_folder() {
+        let root=std::env::temp_dir().join(format!("glint-import-conflict-{}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        std::fs::create_dir(&root).unwrap();let source=root.join("clip.mp4");std::fs::write(&source,b"source").unwrap();
+        let folder=import_folder(&source);std::fs::create_dir(&folder).unwrap();
+        std::fs::write(folder.join("project.json"),b"keep these edits").unwrap();
+        assert!(prepare_import(&source,12.,640,360).unwrap_err().contains("unrelated"));
+        assert_eq!(std::fs::read(folder.join("project.json")).unwrap(),b"keep these edits");
+        std::fs::remove_file(folder.join("project.json")).unwrap();std::fs::remove_dir(folder).unwrap();std::fs::remove_file(source).unwrap();std::fs::remove_dir(root).unwrap();
+    }
 }

@@ -20,13 +20,17 @@ export function StudioPanel({ project, path, width, height, saveStatus, exportMe
   selectedMask:string|null;onSelectMask:(id:string|null)=>void;drawingMask:boolean;onDrawMask:()=>void;onSeek:(time:number)=>void;
 }) {
   const parts = path.split(/[\\/]/);
-  const name = (parts[parts.length - 2] ?? "Recording").replace(/\.glint-studio$/, "");
+  const name = project.importedVideo
+    ? (parts[parts.length-1]??'Recording').replace(/\.[^.]+$/,'')
+    : (parts[parts.length - 2] ?? "Recording").replace(/\.glint-studio$/, "");
+  const hasCursor=events.events.some(e=>e.kind==='cursor');
   const crop = project.crop ?? { x: 0, y: 0, w: width, h: height };
   const saved = saveStatus === "Saved";
   return <aside className="studio-panel" aria-label="Studio settings" data-ui>
     <header className="studio-panel-header">
       <h2>Studio</h2>
       <p className="studio-project-name" title={path}>{name}</p>
+      {project.importedVideo&&<p className="look-hint">Edits save separately. Your original video is kept.</p>}
       <div className={`studio-save-status${saved ? " is-saved" : ""}`} role="status">
         {saved && <Check size={11} strokeWidth={1.8} aria-hidden />}
         <span>{saved ? "All changes saved" : saveStatus}</span>
@@ -39,8 +43,9 @@ export function StudioPanel({ project, path, width, height, saveStatus, exportMe
       <LookControls video look={project.look} onChange={(patch) => onChange({ look: { ...project.look, ...patch } })} />
       <StudioZoomControls segments={project.zoomSegments} selected={selectedZoom} time={time} duration={duration} events={events} onChange={zoomSegments=>onChange({zoomSegments})} onSelect={onSelectZoom} onPick={onPickZoom}/>
       <StudioMaskControls masks={project.masks} selected={selectedMask} time={time} duration={duration} width={width} height={height} drawing={drawingMask} onDraw={onDrawMask} onChange={masks=>onChange({masks})} onSelect={onSelectMask} onSeek={onSeek}/>
-      {project.masks.length>0&&<div className="look-row"><span className="look-label">Delete source after export</span><Switch ariaLabel="Delete unmasked source after export" checked={project.deleteSourceAfterExport??false} onChange={deleteSourceAfterExport=>onChange({deleteSourceAfterExport})}/></div>}
-      <CursorControls cursor={project.cursor} onChange={(patch) => onChange({ cursor: { ...project.cursor, ...patch } })} />
+      {project.masks.length>0&&!project.importedVideo&&<div className="look-row"><span className="look-label">Delete source after export</span><Switch ariaLabel="Delete unmasked source after export" checked={project.deleteSourceAfterExport??false} onChange={deleteSourceAfterExport=>onChange({deleteSourceAfterExport})}/></div>}
+      {hasCursor?<CursorControls cursor={project.cursor} onChange={(patch) => onChange({ cursor: { ...project.cursor, ...patch } })} />
+        :<ControlDisclosure title="Cursor & effects"><p className="look-hint">This video has no recorded cursor data. Record in Studio mode to edit the cursor, smoothing and click effects.</p></ControlDisclosure>}
       <ControlDisclosure title="Motion blur" className="studio-effects-controls">
         <div className="look-row"><span className="look-label">Motion blur</span><Switch ariaLabel="Enable motion blur" checked={project.motionBlur?.enabled??false} onChange={enabled=>onChange({motionBlur:{...(project.motionBlur??DEFAULT_MOTION),enabled}})}/></div>
         {project.motionBlur?.enabled&&<LookSlider label="Amount" ariaLabel="Motion blur amount" value={project.motionBlur.intensity*100} unit="%" onChange={value=>onChange({motionBlur:{...project.motionBlur!,intensity:value/100}})}/>}

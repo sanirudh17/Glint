@@ -29,6 +29,9 @@ pub fn studio_discard_source(
     if !studio::is_studio_video(&path) {
         return Err("Not a Studio source".into());
     }
+    if studio::is_imported_video(&path) {
+        return Err("Imported original videos are kept unchanged".into());
+    }
     let source = PathBuf::from(&path)
         .canonicalize()
         .map_err(|e| e.to_string())?;
@@ -137,7 +140,7 @@ async fn perform(
     let data: Project = serde_json::from_value(project.clone()).map_err(|e| e.to_string())?;
     let probe = trim::recorder_trim_probe(app.clone(), path.to_string()).await?;
     data.segments(probe.duration_secs)?;
-    let folder = PathBuf::from(path).parent().unwrap().to_owned();
+    let folder = studio::project_folder(path).ok_or("Missing Studio project")?;
     studio::write_project(&folder, &project)?;
     let events: studio::Events = serde_json::from_slice(
         &std::fs::read(folder.join("events.json")).map_err(|e| e.to_string())?,
@@ -149,7 +152,9 @@ async fn perform(
         .map_err(|e| e.to_string())?
         .into();
     let binary = PathBuf::from(command.get_program());
-    let name = folder.file_stem().unwrap().to_string_lossy();
+    let name = if studio::is_imported_video(path) {
+        std::path::Path::new(path).file_stem().unwrap().to_string_lossy()
+    } else {folder.file_stem().unwrap().to_string_lossy()};
     let parent = folder.parent().unwrap();
     let output = crate::paths::dedupe(parent, &format!("{name} (Studio).mp4"), |p| p.exists());
     let tmp = folder.join("export.partial.mp4");

@@ -4,7 +4,7 @@ import { StudioMaskOverlay } from "./StudioMaskOverlay";
 import { newMask,setMaskKeyframe } from "./studioMasks";
 import "../look/look.css";
 import { StudioPreview } from "./StudioPreview";
-import { studioLoad, studioSave, studioExport, studioExportCancel,studioDiscardSource } from "../lib/studio";
+import { studioLoad, studioImport, studioSave, studioExport, studioExportCancel,studioDiscardSource } from "../lib/studio";
 import {confirm} from '@tauri-apps/plugin-dialog';
 import { hydrateProject, type StudioData, type StudioProject } from "./studioModel";
 /** TrimView.tsx — recording trim window (#/rec-trim): player + multi-cut timeline. */
@@ -176,7 +176,7 @@ export function TrimView() {
       setSrc(convertFileSrc(t.path));
       try {
         const p = await trimProbe(t.path);
-        const data = await studioLoad(t.path);
+        const data = await studioLoad(t.path) ?? await studioImport(t.path);
         if (generation !== loadGeneration.current) return;
         const project = data ? hydrateProject(data.project, p.duration_secs, data.events, p) : null;
         if (data && project) setStudio({ ...data, project });

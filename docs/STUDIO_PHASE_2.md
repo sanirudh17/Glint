@@ -100,3 +100,34 @@ The checked artifacts are in the OS temp folder `glint-phase2-tulyuzov`.
 
 Loupe zoom is explicitly optional in the plan; the required whole-frame zoom is
 implemented first. It is not part of the Phase 2 acceptance gate.
+
+## Follow-up: existing recordings open in Studio
+
+The initial editor gate required a native Studio folder. An older standalone MP4
+therefore opened only the basic trim editor, even in the newest build. Existing
+videos now automatically prepare Studio edit metadata when opened through Trim
+or the file-launch argument. Quick recording still saves an ordinary MP4.
+
+For an imported video, a small `<filename>.glint-studio` folder beside it holds
+`project.json`, empty input-event metadata and an `origin.json` reference. The
+original video is read directly; it is neither copied nor overwritten. Reopening
+the original reuses the saved zooms, masks, crop, look and cuts. Export creates a
+separate `<stem> (Studio).mp4`. Native source deletion refuses imported originals,
+and the UI hides that option for imports. Keep the project folder beside its video
+to retain the edits.
+
+Manual zoom, masking, highlights, motion blur, looks and crop work on imported
+videos. They start with no added padding, rounding or shadow. Cursor editing,
+follow-cursor focus and click-based automatic zoom require input data captured
+during recording; their unavailable state is explained in the editor.
+
+Verification: 226 frontend tests and 223 native tests passed (two existing capture
+tests ignored), plus TypeScript and a full Tauri build. `scripts/studio-import-check.mjs`
+opens a standalone fixture, adds zoom and a drawn source-coordinate mask through
+the real editor, verifies save/reopen, exports through the native compositor and
+checks OCR. It also confirms that imported-source deletion is rejected and the
+original SHA-256 remains identical. Runtime evidence is in the OS temp folder
+`glint-import-check-ho4np4`.
+
+The reported `Glint 2026-07-02 at 12.26.46.mp4` was opened successfully with the
+Studio panel, Zoom and Masks & focus. Its SHA-256 matched before and after import.

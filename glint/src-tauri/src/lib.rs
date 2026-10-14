@@ -399,6 +399,7 @@ pub fn run() {
             crate::recorder::trim::recorder_trim_waveform,
             recorder::recorder_open_trim,
             recorder::studio::studio_load,
+            recorder::studio::studio_import,
             recorder::studio::studio_save,
             recorder::studio_export::studio_export,
             recorder::studio_export::studio_export_cancel,

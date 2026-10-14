@@ -10,14 +10,15 @@ export function StudioZoomControls({segments,selected,time,duration,onChange,onS
   events:StudioEvents;
 }) {
   const active=segments.find(s=>s.id===selected);
+  const hasClicks=events.events.some(e=>e.kind==='click'),hasCursor=events.events.some(e=>e.kind==='cursor');
   const change=(patch:Partial<ZoomSegment>)=>onChange(segments.map(s=>s.id===selected?{...s,...patch,edited:true}:s));
   return <ControlDisclosure title="Zoom" className="studio-effects-controls">
     <div className="studio-effect-actions">
       <Button size="sm" variant="subtle" icon={Plus} disabled={duration<.1||segments.length>=512} onClick={()=>{const segment=newZoom(time,duration);onChange([...segments,segment]);onSelect(segment.id);}}>Add zoom</Button>
-      <Button size="sm" variant="ghost" icon={WandSparkles} onClick={()=>onChange(regenerateZooms(segments,events,duration))}>{segments.some(s=>s.origin==='auto')?'Regenerate':'Auto zoom'}</Button>
+      <Button size="sm" variant="ghost" icon={WandSparkles} disabled={!hasClicks} title={hasClicks?undefined:'Requires clicks captured during a Studio recording'} onClick={()=>onChange(regenerateZooms(segments,events,duration))}>{segments.some(s=>s.origin==='auto')?'Regenerate':'Auto zoom'}</Button>
       {active&&<Button size="sm" variant="ghost" icon={Trash2} onClick={()=>{onChange(segments.filter(s=>s.id!==active.id));onSelect(null);}}>Delete</Button>}
     </div>
-    <p className="look-hint">Auto zoom groups nearby clicks. Manual and hand-edited zooms are kept.</p>
+    <p className="look-hint">{hasClicks?'Auto zoom groups nearby clicks. Manual and hand-edited zooms are kept.':'No recorded clicks are available. Use Add zoom to choose when and where to zoom.'}</p>
     {segments.length>0&&<Select portal ariaLabel="Selected zoom" value={selected??""} options={[{value:"",label:"Select a zoom"},...segments.map((s,i)=>({value:s.id,label:`Zoom ${i+1} · ${s.start.toFixed(1)}–${s.end.toFixed(1)} s`}))]} onChange={id=>onSelect(id||null)} />}
     {active?<>
       <div className="studio-crop-grid">
@@ -25,7 +26,7 @@ export function StudioZoomControls({segments,selected,time,duration,onChange,onS
         <div className="studio-crop-field"><span className="look-label">End</span><NumberInput ariaLabel="Zoom end" value={active.end} min={active.start+.1} max={duration} step={.1} unit="s" onChange={end=>change({end,transitionStart:undefined,transitionEnd:undefined})}/></div>
       </div>
       <LookSlider label="Scale" ariaLabel="Zoom scale" value={active.scale} min={1.2} max={3} step={.1} unit="×" onChange={scale=>change({scale})}/>
-      <div className="look-row"><span className="look-label">Focus</span><div className="look-control"><Select portal ariaLabel="Zoom focus mode" value={active.mode} options={[{value:"fixed",label:"Fixed point"},{value:"follow-cursor",label:"Follow cursor"}]} onChange={mode=>change({mode:mode as ZoomSegment['mode']})}/></div></div>
+      <div className="look-row"><span className="look-label">Focus</span><div className="look-control"><Select portal ariaLabel="Zoom focus mode" value={active.mode} options={[{value:"fixed",label:"Fixed point"},...(hasCursor?[{value:"follow-cursor",label:"Follow cursor"}]:[])]} onChange={mode=>change({mode:mode as ZoomSegment['mode']})}/></div></div>
       {active.mode==="fixed"&&<>
         <LookSlider label="Horizontal" ariaLabel="Zoom horizontal focus" value={active.focus.x*100} unit="%" onChange={x=>change({focus:{...active.focus,x:clamp(x/100,0,1)}})}/>
         <LookSlider label="Vertical" ariaLabel="Zoom vertical focus" value={active.focus.y*100} unit="%" onChange={y=>change({focus:{...active.focus,y:clamp(y/100,0,1)}})}/>

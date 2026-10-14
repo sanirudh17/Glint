@@ -18,6 +18,7 @@ export interface StudioProject {
   clips: Clip[]; fadeIn: number; fadeOut: number; cam: CamPlacement | null;
   zoomSegments: ZoomSegment[]; masks: MaskSegment[];
   importedMarkers?:string[];
+  importedVideo?:boolean;
   deleteSourceAfterExport?:boolean;
   motionBlur?:MotionBlur;
 }
