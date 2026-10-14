@@ -17,7 +17,8 @@ const DASH = [12, 8];
 interface Props {
   anno: Annotation;
   draggable: boolean;
-  baseImage: HTMLImageElement;
+  baseImage: HTMLImageElement|HTMLCanvasElement;
+  layerImage?:HTMLImageElement;
   baseWidth: number;
   baseHeight: number;
   /** Hide the Konva node — used to make room for the DOM textarea while a text
@@ -28,7 +29,7 @@ interface Props {
   onDragStart: () => void;
 }
 
-export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeight, hidden, onSelect, onChange, onDragStart }: Props) {
+export function AnnotationNode({ anno, draggable, baseImage, layerImage, baseWidth, baseHeight, hidden, onSelect, onChange, onDragStart }: Props) {
   const common = {
     id: anno.id,
     draggable,
@@ -44,6 +45,7 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
   };
 
   switch (anno.type) {
+    case 'image': return <KonvaImage {...common} image={layerImage} x={anno.x} y={anno.y} width={anno.w} height={anno.h} onTransformEnd={e=>{const n=e.target;const w=Math.max(1,n.width()*n.scaleX()),h=Math.max(1,n.height()*n.scaleY());n.scaleX(1);n.scaleY(1);onChange({x:n.x(),y:n.y(),w,h});}}/>;
     case "arrow": {
       const a = anno as TwoPointAnno;
       return (
@@ -259,7 +261,7 @@ function BlurRegion({
   a, baseImage, baseWidth, baseHeight, draggable, onSelect, onDragStart, onChange,
 }: {
   a: BoxAnno;
-  baseImage: HTMLImageElement;
+  baseImage: HTMLImageElement|HTMLCanvasElement;
   baseWidth: number;
   baseHeight: number;
   draggable: boolean;
@@ -321,7 +323,7 @@ function RedactRegion({
   a, baseImage, baseWidth, baseHeight, draggable, onSelect, onDragStart, onChange,
 }: {
   a: BoxAnno;
-  baseImage: HTMLImageElement;
+  baseImage: HTMLImageElement|HTMLCanvasElement;
   baseWidth: number;
   baseHeight: number;
   draggable: boolean;

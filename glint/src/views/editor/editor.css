@@ -392,6 +392,10 @@
   overflow-y: auto;
 }
 .frame-row { display: flex; flex-direction: column; gap: var(--s2); }
+.editor-image-list { display:flex; flex-direction:column; gap:var(--s2); }
+.editor-image-list > button { display:block; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.editor-image-list > button.is-active { color:var(--accent); background:var(--bg-elev2); }
+.editor-layer-actions { display:flex; gap:var(--s2); }
 .frame-label {
   font-size: var(--fz-xs);
   color: var(--text-dim);

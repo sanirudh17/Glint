@@ -12,12 +12,14 @@ import { StyleBar } from "./editor/StyleBar";
 import { ExportBar } from "./editor/ExportBar";
 import { ProjectBar } from "./editor/ProjectBar";
 import { FramePanel } from "./editor/FramePanel";
+import {ImagesPanel} from './editor/ImagesPanel';
 import { CornersPanel } from "./editor/CornersPanel";
 import { ShortcutCheatsheet } from "./editor/ShortcutCheatsheet";
 import type { ToolId } from "../editor/model";
 import "./editor/editor.css";
 
 export default function EditorView() {
+  const [imagesOpen,setImagesOpen]=useState(false);
   const base = useEditorStore((s) => s.base);
   const loadDoc = useEditorStore((s) => s.loadDoc);
   const reset = useEditorStore((s) => s.reset);
@@ -224,9 +226,10 @@ export default function EditorView() {
         <ProjectBar />
         <StyleBar />
         <div className="editor-frame-slot">
+          <button className={`editor-export-btn${imagesOpen?' editor-export-btn--primary':''}`} aria-pressed={imagesOpen} onClick={()=>setImagesOpen(!imagesOpen)} disabled={!base}>Images</button>
           <button
             className={`editor-export-btn${frameEnabled ? " editor-export-btn--primary" : ""}`}
-            onClick={() => toggleFrame()}
+            onClick={() => {setImagesOpen(false);toggleFrame();}}
             title="Frame & background"
             aria-pressed={frameEnabled}
             disabled={!base}
@@ -256,8 +259,9 @@ export default function EditorView() {
         ) : (
           <div className="editor-stage" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }} />
         )}
-        {frameEnabled && <FramePanel />}
-        {!frameEnabled && cornersOpen && <CornersPanel />}
+        {imagesOpen&&<ImagesPanel/>}
+        {!imagesOpen&&frameEnabled && <FramePanel />}
+        {!imagesOpen&&!frameEnabled && cornersOpen && <CornersPanel />}
       </div>
       <ShortcutCheatsheet open={cheatsheetOpen} onClose={() => setCheatsheetOpen(false)} />
     </div>

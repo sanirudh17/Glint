@@ -362,6 +362,7 @@ pub fn run() {
             editor_open_from_last,
             editor_open_capture,
             editor_source,
+            editor::layers::editor_read_layer,
             editor_copy,
             editor_save,
             editor_flatten_temp,

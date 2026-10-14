@@ -31,3 +31,4 @@ pub struct PendingOpen(pub Mutex<bool>);
 pub mod commands;
 pub mod document;
 pub mod window;
+pub mod layers;

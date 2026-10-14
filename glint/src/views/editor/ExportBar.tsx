@@ -12,7 +12,7 @@ import { editorCopy, editorSave, editorFlattenTemp, editorDone, dragOut } from "
  * (fit-to-viewport) stage back up to the full framed composition's native pixels.
  */
 function flatten(stage: Konva.Stage): string {
-  const { base, crop, frame } = useEditorStore.getState();
+  const { base, crop, frame, canvasSize } = useEditorStore.getState();
   if (!base) return "";
 
   // Guard against a not-yet-laid-out stage: a zero width would make pixelRatio
@@ -25,7 +25,7 @@ function flatten(stage: Konva.Stage): string {
   const hadNodes = tr ? tr.nodes() : [];
   if (tr) { tr.nodes([]); tr.getLayer()?.batchDraw(); }
 
-  const layout = computeLayout(base.width, base.height, crop, frame);
+  const layout = computeLayout(canvasSize?.width??base.width, canvasSize?.height??base.height, crop, frame);
   const pixelRatio = exportPixelRatio(layout, stageW); // native resolution
   let url: string;
   try {

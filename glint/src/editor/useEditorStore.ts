@@ -28,7 +28,7 @@ import { DEFAULT_LOOK, hydrateLook, type LookConfig, type WindowChrome } from ".
 export type FrameConfig = LookConfig;
 
 /** One step of undo/redo history: annotations + crop + frame + the standalone corner trim. */
-interface DocSnapshot { annotations: Annotation[]; crop: Crop | null; frame: FrameConfig; cornerRadius: number }
+interface DocSnapshot { annotations: Annotation[]; crop: Crop | null; frame: FrameConfig; cornerRadius: number; canvasSize: {width:number;height:number}|null }
 
 /** The serializable editor document persisted to / loaded from a `.glint` file. */
 export interface SerializedDoc {
@@ -38,6 +38,7 @@ export interface SerializedDoc {
   /** Standalone image corner rounding (0–100 %); trims the screenshot's corners to
       transparent on export, independent of the decorative frame. Optional for legacy docs. */
   cornerRadius?: number;
+  canvasSize?: {width:number;height:number}|null;
 }
 
 export const DEFAULT_FRAME: FrameConfig = DEFAULT_LOOK;
@@ -55,6 +56,7 @@ interface EditorState {
   /** Standalone image corner rounding (0–100 %) — rounds + trims the screenshot,
       no frame decoration. Governs the image clip when the frame is off. */
   cornerRadius: number;
+  canvasSize: {width:number;height:number}|null;
   past: DocSnapshot[];
   future: DocSnapshot[];
   projectPath: string | null;
@@ -110,6 +112,7 @@ interface EditorState {
   /** Set the standalone image corner radius (0–100 %). History-free — the UI
       checkpoints on the slider's pointer-down, like the frame sliders. */
   setCornerRadius: (v: number) => void;
+  setCanvasSize: (size:{width:number;height:number})=>void;
   undo: () => void;
   redo: () => void;
 }
@@ -134,6 +137,7 @@ const INITIAL = {
   crop: null as Crop | null,
   frame: freshFrame(),
   cornerRadius: 0,
+  canvasSize: null,
   past: [] as DocSnapshot[],
   future: [] as DocSnapshot[],
   projectPath: null as string | null,
@@ -149,6 +153,7 @@ const snapshot = (s: EditorState): DocSnapshot => ({
   crop: s.crop,
   frame: s.frame,
   cornerRadius: s.cornerRadius,
+  canvasSize: s.canvasSize,
 });
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -164,6 +169,7 @@ export const useEditorStore = create<EditorState>((set) => ({
       crop: doc?.crop ?? null,
       frame: mergeFrame(doc?.frame),
       cornerRadius: doc?.cornerRadius ?? 0,
+      canvasSize: doc?.canvasSize ?? null,
       picking: false,
       past: [],
       future: [],
@@ -316,6 +322,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   // Standalone image corner trim. History-free (the Corners slider checkpoints on
   // pointer-down); cornerRadius rides in the undo snapshot so undo restores it.
   setCornerRadius: (v) => set({ cornerRadius: v, dirty: true }),
+  setCanvasSize: canvasSize => set({canvasSize, crop:null, dirty:true}),
 
   undo: () =>
     set((s) =>
