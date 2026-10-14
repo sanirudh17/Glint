@@ -358,16 +358,16 @@ fn text(image: &mut RgbImage, label: &str, x: i32, y: i32, scale: u32, c: [u8; 3
         }
     }
 }
+#[cfg(test)]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Gradient {
     id: String,
-    angle_deg: f64,
     stops: Vec<Stop>,
 }
+#[cfg(test)]
 #[derive(Deserialize)]
 struct Stop {
-    offset: f64,
     color: String,
 }
 pub struct Renderer {
@@ -415,42 +415,7 @@ impl Renderer {
                     plate.pixels_mut().for_each(|p| *p = Rgb(c));
                 }
                 "gradient" => {
-                    let gradients: Vec<Gradient> =
-                        serde_json::from_str(include_str!("../../../src/look/gradients.json"))
-                            .map_err(|e| e.to_string())?;
-                    let g = gradients
-                        .iter()
-                        .find(|g| Some(g.id.as_str()) == look.background["gradientId"].as_str())
-                        .unwrap_or(&gradients[0]);
-                    let stops: Vec<_> = g
-                        .stops
-                        .iter()
-                        .map(|s| Ok((s.offset, color(&s.color)?)))
-                        .collect::<Result<_, String>>()?;
-                    let dx = g.angle_deg.to_radians().cos();
-                    let dy = g.angle_deg.to_radians().sin();
-                    let len = dx.abs() * l.width as f64 + dy.abs() * l.height as f64;
-                    for (x, y, p) in plate.enumerate_pixels_mut() {
-                        let t = (((x as f64 - l.width as f64 / 2.) * dx
-                            + (y as f64 - l.height as f64 / 2.) * dy)
-                            / len
-                            + 0.5)
-                            .clamp(0., 1.);
-                        let a = stops.iter().rev().find(|s| s.0 <= t).unwrap_or(&stops[0]);
-                        let b = stops
-                            .iter()
-                            .find(|s| s.0 >= t)
-                            .unwrap_or(stops.last().unwrap());
-                        let f = if b.0 > a.0 {
-                            (t - a.0) / (b.0 - a.0)
-                        } else {
-                            0.
-                        };
-                        for i in 0..3 {
-                            p[i] =
-                                (a.1[i] as f64 + (b.1[i] as f64 - a.1[i] as f64) * f).round() as u8;
-                        }
-                    }
+                    super::look_gradient::paint(&look.background, &mut plate)?;
                 }
                 "image" => {
                     use base64::Engine;

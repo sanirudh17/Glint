@@ -1,11 +1,11 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, forwardRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, forwardRef } from "react";
 import { Stage, Layer, Group, Rect, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
 import { Minus, Plus, Maximize2 } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { newId, nextStepNumber, eraseAt, snapAngle, resolveSpotlightDim, type Annotation, type BoxAnno, type TextAnno } from "../../editor/model";
 import { computeLayout, resolveRadiusPx } from "../../editor/composition";
-import { getGradient, konvaGradient } from "../../editor/gradients";
+import { gradientCanvas } from "../../look/gradientRender";
 import { AnnotationNode } from "./AnnotationNode";
 import { SpotlightDimLayer } from "./SpotlightDimLayer";
 import { sampleColorAt } from "../../editor/eyedropper";
@@ -140,6 +140,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const layout = base ? computeLayout(base.width, base.height, crop, frame) : null;
   const compW = layout?.compositionW ?? 1;
   const compH = layout?.compositionH ?? 1;
+  const gradientPlate = useMemo(() => frame.enabled && frame.background.type === 'gradient' ? gradientCanvas(frame.background, compW, compH) : null, [frame.enabled, frame.background, compW, compH]);
   // "fit" resolves against the current viewport (responsive); an absolute zoom is used
   // as-is. Everything downstream (drawing math, overlays, eraser cursor) uses `scale`,
   // so introducing user zoom is just a change to this one value.
@@ -672,15 +673,15 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         {/* Background fill (gradient/solid). Transparent → no rect → alpha in export. */}
         {frame.enabled && frame.background.type !== "transparent" && (
           <Layer listening={false}>
-            <Rect
+            {frame.background.type === 'gradient' ? <KonvaImage image={gradientPlate ?? undefined} width={compW} height={compH}/> : <Rect
               x={0}
               y={0}
               width={compW}
               height={compH}
               {...(frame.background.type === "solid"
                 ? { fill: frame.background.color }
-                : frame.background.type === "gradient" ? konvaGradient(getGradient(frame.background.gradientId), compW, compH) : { fillPatternImage: backgroundImage ?? undefined, fillPatternScale: backgroundImage ? { x: Math.max(compW / backgroundImage.width, compH / backgroundImage.height), y: Math.max(compW / backgroundImage.width, compH / backgroundImage.height) } : undefined })}
-            />
+                : { fillPatternImage: backgroundImage ?? undefined, fillPatternScale: backgroundImage ? { x: Math.max(compW / backgroundImage.width, compH / backgroundImage.height), y: Math.max(compW / backgroundImage.width, compH / backgroundImage.height) } : undefined })}
+            />}
           </Layer>
         )}
 

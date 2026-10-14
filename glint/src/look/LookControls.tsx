@@ -1,12 +1,14 @@
 import { useState } from "react";
 import { ImagePlus } from "lucide-react";
 import { Select, ColorControl, ControlDisclosure } from "../components/ui";
-import { cssGradient, GRADIENTS } from "../editor/gradients";
+import { GRADIENTS, type GradientStop } from "../editor/gradients";
+import { GradientControls } from "./GradientControls";
 import { cloneLook, type AspectId, type LookConfig } from "./model";
 import { savePreset, useLookPresets } from "./presets";
 
-export function LookControls({ look, onChange, checkpoint = () => {}, video = false }: {
+export function LookControls({ look, onChange, checkpoint = () => {}, video = false, onSample }: {
   look: LookConfig; onChange: (patch: Partial<LookConfig>) => void; checkpoint?: () => void; video?: boolean;
+  onSample?:()=>GradientStop[];
 }) {
   const presets = useLookPresets();
   const [name, setName] = useState("");
@@ -40,11 +42,7 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
         }} />
     </div></div>
     {bg.type === "solid" && <div className="look-row"><span className="look-label">Color</span><div className="look-control"><ColorControl ariaLabel="Background color" value={bg.color} onChange={(color) => change({ background: { type: "solid", color } })} /></div></div>}
-    {bg.type === "gradient" && <div className="look-gradient-grid">{GRADIENTS.map((g) => <button type="button" key={g.id}
-      title={g.label} aria-label={g.label} aria-pressed={bg.gradientId === g.id}
-      className={`look-gradient${bg.gradientId === g.id ? " is-active" : ""}`}
-      style={{ background: cssGradient(g) }} // taste-skill-ignore: previews the user-selected media gradient
-      onClick={() => change({ background: { type: "gradient", gradientId: g.id } })} />)}</div>}
+    {bg.type === "gradient" && <GradientControls background={bg} checkpoint={checkpoint} onSample={onSample} onChange={background=>{setPresetId('');onChange({background});}}/>}
     {bg.type === "image" && <label className="look-image-picker"><ImagePlus size={16} strokeWidth={1.6} />{bg.dataUrl ? "Replace background image" : "Choose background image"}
       <input aria-label="Background image" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => {
         const file = e.target.files?.[0]; if (!file) return;

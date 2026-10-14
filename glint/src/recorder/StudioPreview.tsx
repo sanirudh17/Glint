@@ -1,6 +1,6 @@
 import { cursorAt, drawCursorLayer, followSourcePoint, smoothPath } from "./studioCursor";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { getGradient, konvaGradient } from "../editor/gradients";
+import { gradientCanvas } from "../look/gradientRender";
 import { resolveRadiusPx } from "../editor/composition";
 import { studioLayout } from "./studioLayout";
 import type { StudioData } from "./studioModel";
@@ -25,6 +25,10 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
   useEffect(()=>{setMarker(null);if(pickingFocus)ref.current?.focus({preventScroll:true});},[pickingFocus]);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const background = studio.project.look.background;
+  const gradientPlate = useMemo(() => {
+    const l=studioLayout(width,height,studio.project.crop,studio.project.look,960);
+    return background.type==='gradient' ? gradientCanvas(background,l.width,l.height) : null;
+  },[background,width,height,studio.project.crop,studio.project.look]);
   useEffect(() => {
     setImage(null); if (background.type !== "image" || !background.dataUrl) return;
     let active = true; const img = new Image(); img.onload = () => { if (active) setImage(img); }; img.src = background.dataUrl;
@@ -44,9 +48,7 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
         ctx.resetTransform(); ctx.fillStyle = "#000"; ctx.fillRect(0, 0, w, h); ctx.scale(scale, scale);
         if (look.enabled && background.type === "solid") { ctx.fillStyle = background.color; ctx.fillRect(0, 0, l.compositionW, l.compositionH); }
         if (look.enabled && background.type === "gradient") {
-          const g = getGradient(background.gradientId), props = konvaGradient(g, l.compositionW, l.compositionH);
-          const start = props.fillLinearGradientStartPoint, end = props.fillLinearGradientEndPoint;
-          const gradient = ctx.createLinearGradient(start.x, start.y, end.x, end.y); g.stops.forEach((s) => gradient.addColorStop(s.offset, s.color)); ctx.fillStyle = gradient; ctx.fillRect(0, 0, l.compositionW, l.compositionH);
+          if(gradientPlate)ctx.drawImage(gradientPlate,0,0,l.compositionW,l.compositionH);
         }
         if (look.enabled && background.type === "image" && image) {
           const cover = Math.max(l.compositionW / image.width, l.compositionH / image.height);
@@ -119,7 +121,7 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [studio, video, camVideo, cam, width, height, background, image, path, effectEvents]);
+  }, [studio, video, camVideo, cam, width, height, background, image, path, effectEvents, gradientPlate]);
   const pointAt=(clientX:number,clientY:number)=>{
     const canvas=ref.current;if(!canvas||video.current?.seeking)return null;
     const rect=canvas.getBoundingClientRect();

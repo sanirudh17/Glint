@@ -3,7 +3,7 @@ import { GRADIENTS } from "../editor/gradients";
 export type AspectId = "auto" | "1:1" | "16:9" | "4:3" | "9:16" | "4:5";
 export type LookBackground =
   | { type: "solid"; color: string }
-  | { type: "gradient"; gradientId: string }
+  | { type: "gradient"; gradientId: string; angleDeg?: number; kind?: "linear" | "radial" | "conic" | "mesh"; stops?: { offset: number; color: string }[]; grain?: number }
   | { type: "image"; dataUrl: string }
   | { type: "transparent" };
 export interface WindowChrome {

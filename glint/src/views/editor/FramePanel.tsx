@@ -1,6 +1,7 @@
 import { LookControls } from "../../look/LookControls";
 import "../../look/look.css";
 import { useEditorStore } from "../../editor/useEditorStore";
+import { paletteFromPixels } from "../../look/gradientRender";
 
 /**
  * Right-docked frame controls: background type (solid/gradient/transparent),
@@ -18,10 +19,15 @@ export function FramePanel() {
   const resetCrop = useEditorStore((s) => s.resetCrop);
   const pushHistory = useEditorStore((s) => s.pushHistory);
   const chrome = frame.chrome;
+  const sample = () => {
+    const base=useEditorStore.getState().base,canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;
+    const ctx=canvas.getContext('2d')!;if(base)ctx.drawImage(base.image,0,0,64,64);
+    return paletteFromPixels(ctx.getImageData(0,0,64,64).data);
+  };
 
   return (
     <aside className="frame-panel" aria-label="Frame">
-      <LookControls look={frame} onChange={setFrame} checkpoint={pushHistory} />
+      <LookControls look={frame} onChange={setFrame} checkpoint={pushHistory} onSample={sample} />
 
       <div className="frame-row">
         <span className="frame-label">Window</span>
