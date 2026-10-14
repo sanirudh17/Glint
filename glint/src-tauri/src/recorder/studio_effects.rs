@@ -30,6 +30,7 @@ pub struct Zoom {
     pub scale: f64,
     pub mode: String,
     pub focus: Focus,
+    pub follow_offset: Option<Focus>,
     pub ease: String,
     pub ease_in: f64,
     pub ease_out: f64,
@@ -57,6 +58,7 @@ pub fn validate_zooms(segments: &[Zoom], duration: f64) -> Result<(), String> {
             || !(1.2..=3.).contains(&s.scale)
             || !(0.0..=1.).contains(&s.focus.x)
             || !(0.0..=1.).contains(&s.focus.y)
+            || s.follow_offset.as_ref().is_some_and(|p|!p.x.is_finite()||!p.y.is_finite()||!(-1.0..=1.0).contains(&p.x)||!(-1.0..=1.0).contains(&p.y))
             || !(0.0..=2.).contains(&s.ease_in)
             || !(0.0..=2.).contains(&s.ease_out)
             || !matches!(s.mode.as_str(), "fixed" | "follow-cursor")
@@ -140,7 +142,7 @@ pub fn zoom_at(
     let (w, h) = (crop.w / scale, crop.h / scale);
     let focus = if s.mode == "follow-cursor" {
         cursor
-            .map(|p| (p.x, p.y))
+            .map(|p| (p.x+s.follow_offset.as_ref().map_or(0.,|o|o.x*source_w), p.y+s.follow_offset.as_ref().map_or(0.,|o|o.y*source_h)))
             .unwrap_or((s.focus.x * source_w, s.focus.y * source_h))
     } else {
         (s.focus.x * source_w, s.focus.y * source_h)
@@ -170,6 +172,13 @@ pub fn zoom_at(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn a_picked_follow_offset_moves_the_camera_without_losing_the_cursor() {
+        let s:Zoom=serde_json::from_value(serde_json::json!({"id":"one","start":0.,"end":4.,"scale":2.,"mode":"follow-cursor","focus":{"x":0.6,"y":0.5},"followOffset":{"x":0.1,"y":0.},"ease":"gentle","easeIn":0.4,"easeOut":0.4,"origin":"manual","edited":true})).unwrap();
+        validate_zooms(std::slice::from_ref(&s),12.).unwrap();
+        let v=zoom_at(&[s],1.,Crop{x:0.,y:0.,w:640.,h:360.},640.,360.,Some(Follow{x:320.,y:180.,latest_x:320.,latest_y:180.}));
+        assert!((v.x-224.).abs()<0.001);assert_eq!(v.y,90.);assert!(320.>v.x&&320.<v.x+v.w);
+    }
     #[test]
     fn source_focus_is_clamped_through_zoom_easing() {
         let s:Zoom=serde_json::from_value(serde_json::json!({"id":"one","start":0.,"end":4.,"scale":2.,"mode":"fixed","focus":{"x":1.,"y":1.},"ease":"gentle","easeIn":0.4,"easeOut":0.4,"origin":"manual","edited":true})).unwrap();

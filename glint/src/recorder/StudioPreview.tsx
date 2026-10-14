@@ -9,15 +9,20 @@ import { toPixels } from "./camOverlay";
 import { zoomAt } from "./studioEffects";
 import { applyPreviewMasks } from "./studioMasks";
 import {DEFAULT_MOTION,motionTimes} from './studioMotion';
+import {Crosshair} from 'lucide-react';
+import {previewFocus,type FocusPoint} from './studioFocus';
 
-export function StudioPreview({ studio, video, camVideo, cam, width, height, pickingFocus=false, onFocus }: {
+export function StudioPreview({ studio, video, camVideo, cam, width, height, pickingFocus=false, onFocus,onAim }: {
   studio: StudioData; video: RefObject<HTMLVideoElement | null>; camVideo: RefObject<HTMLVideoElement | null>;
   cam: CamPlacement | null; width: number; height: number;
   pickingFocus?:boolean;onFocus?:(point:{x:number;y:number})=>void;
+  onAim?:(point:FocusPoint|null)=>void;
 }) {
   const path = useMemo(() => smoothPath(studio.events.events, studio.project.cursor.smoothing), [studio.events, studio.project.cursor.smoothing]);
   const effectEvents = useMemo(() => ({ ...studio.events, events: studio.events.events.filter((e) => e.kind !== "cursor") }), [studio.events]);
   const ref = useRef<HTMLCanvasElement>(null);
+  const [marker,setMarker]=useState<{left:number;top:number;point:FocusPoint}|null>(null);
+  useEffect(()=>{setMarker(null);if(pickingFocus)ref.current?.focus({preventScroll:true});},[pickingFocus]);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const background = studio.project.look.background;
   useEffect(() => {
@@ -50,9 +55,9 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
         const radius = look.enabled ? resolveRadiusPx(look.radius, l.contentW, l.contentH) : 0;
         const top = l.contentY - l.chromeH, cardH = l.contentH + l.chromeH;
         ctx.save();
-        if (look.enabled && look.shadow > 0) {
-          const edge = Math.max(l.contentW, l.contentH), t = look.shadow / 100;
-          ctx.shadowColor = look.shadowColor ?? "#000"; ctx.shadowBlur = (0.02 + t * .1) * edge * scale; ctx.shadowOffsetY = (.01 + t * .05) * edge * scale;
+        if (look.enabled && look.shadow > 0) { // taste-skill-ignore: user-selected media framing effect
+          const edge = Math.max(l.contentW, l.contentH), t = look.shadow / 100; // taste-skill-ignore: user-selected video framing shadow
+          ctx.shadowColor = look.shadowColor ?? "#000"; ctx.shadowBlur = (0.02 + t * .1) * edge * scale; ctx.shadowOffsetY = (.01 + t * .05) * edge * scale; // taste-skill-ignore: rendered media effect
           ctx.globalAlpha = .2 + t * .5;
         }
         ctx.beginPath(); ctx.roundRect(l.contentX, top, l.contentW, cardH, radius); ctx.fillStyle = "#000"; ctx.fill(); ctx.restore();
@@ -115,18 +120,21 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [studio, video, camVideo, cam, width, height, background, image, path, effectEvents]);
-  return <><canvas ref={ref} className={`studio-preview${pickingFocus?' is-picking':''}`} aria-label="Studio video preview" onClick={e=>{
-    if(!pickingFocus||!onFocus)return;
-    const canvas=e.currentTarget,rect=canvas.getBoundingClientRect();
-    const fit=Math.min((rect.width-40)/canvas.width,(rect.height-40)/canvas.height);
-    const originX=rect.x+20+(rect.width-40-canvas.width*fit)/2,originY=rect.y+20+(rect.height-40-canvas.height*fit)/2;
+  const pointAt=(clientX:number,clientY:number)=>{
+    const canvas=ref.current;if(!canvas||video.current?.seeking)return null;
+    const rect=canvas.getBoundingClientRect();
     const {layout:l,scale}=studioLayout(width,height,studio.project.crop,studio.project.look,960);
-    const px=(e.clientX-originX)/fit/scale-l.contentX,py=(e.clientY-originY)/fit/scale-l.contentY;
-    if(px<0||py<0||px>l.contentW||py>l.contentH)return;
     const t=video.current?.currentTime??0;
     const view=zoomAt(studio.project.zoomSegments,t,{x:l.cropX,y:l.cropY,w:l.contentW,h:l.contentH},width,height,followSourcePoint(path,t,studio.events,width,height));
-    onFocus({x:(view.x+px/l.contentW*view.w)/width,y:(view.y+py/l.contentH*view.h)/height});
-  }}/>{pickingFocus&&<span className="studio-preview-instruction">Click the video to set zoom focus</span>}</>;
+    return previewFocus({x:clientX,y:clientY},rect,canvas,l,scale,view,{width,height});
+  };
+  return <><canvas ref={ref} className={`studio-preview${pickingFocus?' is-picking':''}`} aria-label="Studio video preview" tabIndex={pickingFocus?0:undefined} data-editor-control={pickingFocus?true:undefined}
+    onPointerMove={e=>{if(!pickingFocus)return;const point=pointAt(e.clientX,e.clientY);onAim?.(point);const r=e.currentTarget.getBoundingClientRect();setMarker(point?{left:e.clientX-r.x,top:e.clientY-r.y,point}:null);}}
+    onPointerLeave={()=>{if(pickingFocus){setMarker(null);onAim?.(null);}}}
+    onClick={e=>{if(!pickingFocus)return;const point=pointAt(e.clientX,e.clientY);if(point)onFocus?.(point);}}
+    onKeyDown={e=>{if(pickingFocus&&e.key==='Enter'&&marker){e.preventDefault();onFocus?.(marker.point);}}}/>
+    {pickingFocus&&marker&&<span className="studio-focus-target" style={{left:marker.left,top:marker.top}} aria-hidden><Crosshair size={22} strokeWidth={1.6}/></span>}
+    {pickingFocus&&<span className="studio-preview-instruction">Move to aim · Click to apply · Esc to cancel</span>}</>;
 }
 
 function paintCamera(ctx:CanvasRenderingContext2D,cam:CamPlacement,video:HTMLVideoElement,width:number,height:number) {

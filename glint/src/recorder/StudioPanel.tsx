@@ -10,11 +10,13 @@ import type { StudioEvents,StudioProject } from "./studioModel";
 import { StudioZoomControls } from "./StudioZoomControls";
 import { StudioMaskControls } from "./StudioMaskControls";
 import {DEFAULT_MOTION} from './studioMotion';
+import type {FocusPoint} from './studioFocus';
 
-export function StudioPanel({ project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave, time, duration, selectedZoom, onSelectZoom, onPickZoom, events, selectedMask, onSelectMask, drawingMask, onDrawMask, onSeek }: {
+export function StudioPanel({ project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave, time, duration, selectedZoom, onSelectZoom, onPickZoom, events, selectedMask, onSelectMask, drawingMask, onDrawMask, onSeek,focusAim,pickingFocus }: {
   project: StudioProject; path: string; width: number; height: number; saveStatus: string;
   exportMessage: string | null; exporting: boolean; cam: CamPlacement | null;
   onCamChange: (cam: CamPlacement) => void; onChange: (patch: Partial<StudioProject>) => void; onSave: () => void;
+  focusAim:FocusPoint|null;pickingFocus:boolean;
   time:number;duration:number;selectedZoom:string|null;onSelectZoom:(id:string|null)=>void;onPickZoom:()=>void;
   events:StudioEvents;
   selectedMask:string|null;onSelectMask:(id:string|null)=>void;drawingMask:boolean;onDrawMask:()=>void;onSeek:(time:number)=>void;
@@ -41,7 +43,7 @@ export function StudioPanel({ project, path, width, height, saveStatus, exportMe
       : <p className="studio-export-error" role="alert">{exportMessage}</p>)}
     <fieldset className="studio-panel-controls" disabled={exporting}>
       <LookControls video look={project.look} onChange={(patch) => onChange({ look: { ...project.look, ...patch } })} />
-      <StudioZoomControls segments={project.zoomSegments} selected={selectedZoom} time={time} duration={duration} events={events} onChange={zoomSegments=>onChange({zoomSegments})} onSelect={onSelectZoom} onPick={onPickZoom}/>
+      <StudioZoomControls segments={project.zoomSegments} selected={selectedZoom} time={time} duration={duration} events={events} width={width} height={height} smoothing={project.cursor.smoothing} aim={focusAim} picking={pickingFocus} onChange={zoomSegments=>onChange({zoomSegments})} onSelect={onSelectZoom} onPick={onPickZoom}/>
       <StudioMaskControls masks={project.masks} selected={selectedMask} time={time} duration={duration} width={width} height={height} drawing={drawingMask} onDraw={onDrawMask} onChange={masks=>onChange({masks})} onSelect={onSelectMask} onSeek={onSeek}/>
       {project.masks.length>0&&!project.importedVideo&&<div className="look-row"><span className="look-label">Delete source after export</span><Switch ariaLabel="Delete unmasked source after export" checked={project.deleteSourceAfterExport??false} onChange={deleteSourceAfterExport=>onChange({deleteSourceAfterExport})}/></div>}
       {hasCursor?<CursorControls cursor={project.cursor} onChange={(patch) => onChange({ cursor: { ...project.cursor, ...patch } })} />

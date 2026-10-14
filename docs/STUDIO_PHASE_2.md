@@ -131,3 +131,23 @@ original SHA-256 remains identical. Runtime evidence is in the OS temp folder
 
 The reported `Glint 2026-07-02 at 12.26.46.mp4` was opened successfully with the
 Studio panel, Zoom and Masks & focus. Its SHA-256 matched before and after import.
+
+## Follow-up: live focus picking in both zoom modes
+
+Horizontal and vertical focus sliders are visible in Fixed point and Follow cursor.
+During playback, Follow cursor shows its current source position, including any
+chosen framing adjustment. Switching to Fixed point freezes the current position.
+
+Pick focus in preview pauses the video. Moving the mouse updates a target and both
+readouts; these are temporary and never autosave. Clicking or pressing Enter applies
+the point; Escape or Cancel picking discards it without closing the editor. A fixed
+point stays locked. A follow point sets framing relative to the recorded cursor,
+which continues moving through playback. Crop/zoom mapping and source bounds apply
+in both modes. Existing projects with no framing adjustment behave as before.
+
+230 frontend tests, 224 native tests (two existing capture tests ignored), TypeScript
+and a full Tauri build passed. `scripts/studio-focus-check.mjs` exercises mouse
+aiming, unsaved hover, Escape, click, timeline scrubbing and save/reopen in the real
+editor for both modes. It also compares two decoded native exports to verify that
+the chosen follow framing affects the output. Artifacts are in OS temp folder
+`glint-focus-check-Ua6TO0`.

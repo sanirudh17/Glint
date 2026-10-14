@@ -3,15 +3,23 @@ import { Button, ControlDisclosure, NumberInput, Select } from "../components/ui
 import { LookSlider } from "../look/LookControls";
 import { clamp, newZoom, splitZoom, type ZoomSegment } from "./studioEffects";
 import { regenerateZooms } from "./studioAutoZoom";
+import {useMemo} from 'react';
+import {smoothPath,followSourcePoint} from './studioCursor';
+import {zoomFocus,setZoomFocus,type FocusPoint} from './studioFocus';
 import type { StudioEvents } from "./studioModel";
-export function StudioZoomControls({segments,selected,time,duration,onChange,onSelect,onPick,events}: {
+export function StudioZoomControls({segments,selected,time,duration,onChange,onSelect,onPick,events,width,height,smoothing,aim,picking}: {
   segments:ZoomSegment[];selected:string|null;time:number;duration:number;
   onChange:(segments:ZoomSegment[])=>void;onSelect:(id:string|null)=>void;onPick:()=>void;
   events:StudioEvents;
+  width:number;height:number;smoothing:number;aim:FocusPoint|null;picking:boolean;
 }) {
   const active=segments.find(s=>s.id===selected);
+  const path=useMemo(()=>smoothPath(events.events,smoothing),[events,smoothing]);
+  const cursor=followSourcePoint(path,time,events,width,height);
+  const focus=aim??(active?zoomFocus(active,cursor,width,height):{x:.5,y:.5});
   const hasClicks=events.events.some(e=>e.kind==='click'),hasCursor=events.events.some(e=>e.kind==='cursor');
   const change=(patch:Partial<ZoomSegment>)=>onChange(segments.map(s=>s.id===selected?{...s,...patch,edited:true}:s));
+  const changeFocus=(point:FocusPoint)=>onChange(segments.map(s=>s.id===selected?setZoomFocus(s,point,cursor,width,height):s));
   return <ControlDisclosure title="Zoom" className="studio-effects-controls">
     <div className="studio-effect-actions">
       <Button size="sm" variant="subtle" icon={Plus} disabled={duration<.1||segments.length>=512} onClick={()=>{const segment=newZoom(time,duration);onChange([...segments,segment]);onSelect(segment.id);}}>Add zoom</Button>
@@ -26,12 +34,11 @@ export function StudioZoomControls({segments,selected,time,duration,onChange,onS
         <div className="studio-crop-field"><span className="look-label">End</span><NumberInput ariaLabel="Zoom end" value={active.end} min={active.start+.1} max={duration} step={.1} unit="s" onChange={end=>change({end,transitionStart:undefined,transitionEnd:undefined})}/></div>
       </div>
       <LookSlider label="Scale" ariaLabel="Zoom scale" value={active.scale} min={1.2} max={3} step={.1} unit="×" onChange={scale=>change({scale})}/>
-      <div className="look-row"><span className="look-label">Focus</span><div className="look-control"><Select portal ariaLabel="Zoom focus mode" value={active.mode} options={[{value:"fixed",label:"Fixed point"},...(hasCursor?[{value:"follow-cursor",label:"Follow cursor"}]:[])]} onChange={mode=>change({mode:mode as ZoomSegment['mode']})}/></div></div>
-      {active.mode==="fixed"&&<>
-        <LookSlider label="Horizontal" ariaLabel="Zoom horizontal focus" value={active.focus.x*100} unit="%" onChange={x=>change({focus:{...active.focus,x:clamp(x/100,0,1)}})}/>
-        <LookSlider label="Vertical" ariaLabel="Zoom vertical focus" value={active.focus.y*100} unit="%" onChange={y=>change({focus:{...active.focus,y:clamp(y/100,0,1)}})}/>
-        <Button size="sm" variant="ghost" icon={Crosshair} onClick={onPick}>Pick focus in preview</Button>
-      </>}
+      <div className="look-row"><span className="look-label">Focus</span><div className="look-control"><Select portal ariaLabel="Zoom focus mode" value={active.mode} options={[{value:"fixed",label:"Fixed point"},...(hasCursor?[{value:"follow-cursor",label:"Follow cursor"}]:[])]} onChange={mode=>change({mode:mode as ZoomSegment['mode'],...(mode==='fixed'?{focus}: {})})}/></div></div>
+      <LookSlider label="Horizontal" ariaLabel="Zoom horizontal focus" value={focus.x*100} unit="%" onChange={x=>changeFocus({...focus,x:clamp(x/100,0,1)})}/>
+      <LookSlider label="Vertical" ariaLabel="Zoom vertical focus" value={focus.y*100} unit="%" onChange={y=>changeFocus({...focus,y:clamp(y/100,0,1)})}/>
+      <Button size="sm" variant="ghost" icon={Crosshair} aria-pressed={picking} onClick={onPick}>{picking?'Cancel picking':'Pick focus in preview'}</Button>
+      {active.mode==='follow-cursor'&&<p className="look-hint">Position follows the recorded cursor. Pick a point to adjust its framing.</p>}
       <div className="look-row"><span className="look-label">Easing</span><div className="look-control"><Select portal ariaLabel="Zoom easing" value={active.ease} options={[{value:"gentle",label:"Gentle"},{value:"snappy",label:"Snappy"},{value:"slow",label:"Slow"}]} onChange={ease=>{const seconds={gentle:.4,snappy:.3,slow:.5}[ease]!;change({ease:ease as ZoomSegment['ease'],easeIn:seconds,easeOut:seconds});}}/></div></div>
       <Button size="sm" variant="ghost" icon={Scissors} disabled={time<=active.start+.05||time>=active.end-.05} onClick={()=>onChange(segments.flatMap(s=>s.id===active.id?splitZoom(s,time):[s]))}>Split at playhead</Button>
     </>:<p className="look-hint">Add a zoom at the playhead, then drag its timeline segment to move or trim it.</p>}

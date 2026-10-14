@@ -2,6 +2,8 @@ import { StudioPanel } from "./StudioPanel";
 import { StudioEffectTrack } from "./StudioEffectTrack";
 import { StudioMaskOverlay } from "./StudioMaskOverlay";
 import { newMask,setMaskKeyframe } from "./studioMasks";
+import {setZoomFocus,type FocusPoint} from './studioFocus';
+import {smoothPath,followSourcePoint} from './studioCursor';
 import "../look/look.css";
 import { StudioPreview } from "./StudioPreview";
 import { studioLoad, studioImport, studioSave, studioExport, studioExportCancel,studioDiscardSource } from "../lib/studio";
@@ -40,6 +42,7 @@ const ZOOMS = [1, 2, 4, 8];
 export function TrimView() {
   const [selectedZoom,setSelectedZoom]=useState<string|null>(null);
   const [pickingFocus,setPickingFocus]=useState(false);
+  const [focusAim,setFocusAim]=useState<FocusPoint|null>(null);
   const [selectedMask,setSelectedMask]=useState<string|null>(null);
   const [drawingMask,setDrawingMask]=useState(false);
   const [studio, setStudio] = useState<StudioData | null>(null);
@@ -98,6 +101,13 @@ export function TrimView() {
   const pendingRef = useRef<number | null>(null);
 
   const duration = probe?.duration_secs ?? 0;
+  const selectedZoomMode=studio?.project.zoomSegments.find(s=>s.id===selectedZoom)?.mode;
+  useEffect(()=>{setPickingFocus(false);setFocusAim(null);},[selectedZoom,selectedZoomMode,target?.path,playhead]);
+  useEffect(()=>{
+    if(!pickingFocus)return;
+    const cancel=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();setPickingFocus(false);setFocusAim(null);}};
+    window.addEventListener('keydown',cancel,true);return()=>window.removeEventListener('keydown',cancel,true);
+  },[pickingFocus]);
   const fps = probe?.fps && probe.fps > 0 ? probe.fps : 30;
   const ranges = keepRanges(clips);
   const outDur = outputDuration(clips);
@@ -499,7 +509,11 @@ export function TrimView() {
       <div className="trim-preview-row">
       <div className={`trim-stage${studio ? " studio-stage" : ""}`}>
         {studio && probe && <StudioPreview studio={studio} video={videoRef} camVideo={camVideoRef} cam={cam} width={probe.width} height={probe.height} pickingFocus={pickingFocus}
-          onFocus={focus=>{setStudio(data=>data&&({...data,project:{...data.project,zoomSegments:data.project.zoomSegments.map(s=>s.id===selectedZoom?{...s,focus,edited:true}:s)}}));setPickingFocus(false);}} />}
+          onAim={setFocusAim} onFocus={focus=>{
+            const t=videoRef.current?.currentTime??playhead;
+            setStudio(data=>{if(!data)return data;const cursor=followSourcePoint(smoothPath(data.events.events,data.project.cursor.smoothing),t,data.events,probe.width,probe.height);
+              return {...data,project:{...data.project,zoomSegments:data.project.zoomSegments.map(s=>s.id===selectedZoom?setZoomFocus(s,focus,cursor,probe.width,probe.height):s)}};});setPickingFocus(false);setFocusAim(null);
+          }} />}
         {studio&&probe&&<StudioMaskOverlay studio={studio} width={probe.width} height={probe.height} time={playhead} selected={selectedMask} drawing={drawingMask} video={videoRef}
           onPause={()=>{videoRef.current?.pause();setPlaying(false);}}
           onDraw={rect=>{const mask=newMask(rect,playhead,duration);setStudio(data=>data&&({...data,project:{...data.project,masks:[...data.project.masks,mask]}}));setSelectedMask(mask.id);setDrawingMask(false);}}
@@ -530,10 +544,10 @@ export function TrimView() {
       </div>
 
       {studio && probe && target && <StudioPanel project={studio.project} path={target.path} width={probe.width} height={probe.height}
-        time={playhead} duration={duration} events={studio.events} selectedZoom={selectedZoom} onSelectZoom={setSelectedZoom} onPickZoom={()=>{setSelectedMask(null);setDrawingMask(false);setPickingFocus(value=>!value);}}
+        time={playhead} duration={duration} events={studio.events} selectedZoom={selectedZoom} onSelectZoom={setSelectedZoom} focusAim={focusAim} pickingFocus={pickingFocus} onPickZoom={()=>{videoRef.current?.pause();setPlaying(false);setSelectedMask(null);setDrawingMask(false);setFocusAim(null);setPickingFocus(value=>!value);}}
         selectedMask={selectedMask} onSelectMask={setSelectedMask} drawingMask={drawingMask} onDrawMask={()=>{videoRef.current?.pause();setPickingFocus(false);setSelectedMask(null);setDrawingMask(value=>!value);}} onSeek={time=>{scrub(time,'start');scrub(time,'end');}}
         saveStatus={saveStatus} exportMessage={exportMessage} exporting={exporting !== null} cam={cam} onCamChange={setCam}
-        onChange={(patch) => setStudio((data) => data && ({ ...data, project: { ...data.project, ...patch } }))}
+        onChange={(patch) => {if(patch.zoomSegments){setPickingFocus(false);setFocusAim(null);}setStudio((data) => data && ({ ...data, project: { ...data.project, ...patch } }));}}
         onSave={() => void flushSave()} />}
 
       </div>

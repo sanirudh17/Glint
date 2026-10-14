@@ -7,6 +7,7 @@ export interface ZoomSegment {
   ease: ZoomEase; easeIn: number; easeOut: number;
   origin: "manual" | "auto" | "marker"; edited: boolean;
   transitionStart?: number; transitionEnd?: number;
+  followOffset?: {x:number;y:number};
 }
 export const effectId = () => crypto.randomUUID();
 export const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
@@ -27,7 +28,7 @@ export function zoomAt(segments: ZoomSegment[], t: number, crop: Crop, sourceW: 
   const out = segment.easeOut > 0 ? easeValue((end - t) / segment.easeOut, segment.ease) : 1;
   const scale = 1 + (segment.scale - 1) * Math.min(into, out);
   const w = crop.w / scale, h = crop.h / scale;
-  const focus = segment.mode === "follow-cursor" && cursor ? cursor : { x: segment.focus.x * sourceW, y: segment.focus.y * sourceH };
+  const focus = segment.mode === "follow-cursor" && cursor ? {x:cursor.x+(segment.followOffset?.x??0)*sourceW,y:cursor.y+(segment.followOffset?.y??0)*sourceH} : { x: segment.focus.x * sourceW, y: segment.focus.y * sourceH };
   let x=clamp(focus.x-w/2,crop.x,crop.x+crop.w-w),y=clamp(focus.y-h/2,crop.y,crop.y+crop.h-h);
   if(segment.mode==='follow-cursor'&&cursor?.latestX!==undefined&&cursor.latestY!==undefined) {
     x=clamp(clamp(x,cursor.latestX-w*.9,cursor.latestX-w*.1),crop.x,crop.x+crop.w-w);
@@ -48,6 +49,7 @@ export function validateZooms(segments: ZoomSegment[], duration: number): boolea
     && s.easeIn >= 0 && s.easeIn <= 2 && s.easeOut >= 0 && s.easeOut <= 2
     && ["gentle","snappy","slow"].includes(s.ease) && ["fixed","follow-cursor"].includes(s.mode)
     && ["manual","auto","marker"].includes(s.origin)
+    && (s.followOffset===undefined||[s.followOffset.x,s.followOffset.y].every(v=>Number.isFinite(v)&&v>=-1&&v<=1))
     && (s.transitionStart === undefined || Number.isFinite(s.transitionStart) && s.transitionStart <= s.start)
     && (s.transitionEnd === undefined || Number.isFinite(s.transitionEnd) && s.transitionEnd >= s.end));
 }

@@ -256,6 +256,7 @@
 .studio-export-error { color: var(--danger); font-size: var(--fz-sm); line-height: var(--lh-base); overflow-wrap: anywhere; margin-bottom: 20px; }
 .studio-stage > .trim-video, .studio-stage > .trim-cam-layer { visibility: hidden; }
 .studio-preview.is-picking { cursor: crosshair; }
+.studio-focus-target { position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--bg-elev2);color:var(--accent);pointer-events:none; }
 .studio-preview-instruction { position:absolute;bottom:28px;left:50%;transform:translateX(-50%);padding:8px 12px;border-radius:var(--r2);background:var(--bg-elev2);color:var(--text);font-size:var(--fz-sm);pointer-events:none; }
 .studio-effects-controls > summary { color:var(--text);font-size:var(--fz-lg);font-weight:700; }
 .studio-effect-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
