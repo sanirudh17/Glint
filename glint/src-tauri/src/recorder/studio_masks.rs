@@ -27,7 +27,7 @@ pub struct Mask {
     pub color: String,
     #[serde(default)]
     pub opacity: Option<f64>,
-    #[serde(default,rename="blurOutside")]
+    #[serde(default, rename = "blurOutside")]
     pub blur_outside: bool,
 }
 pub fn validate(masks: &[Mask], duration: f64, width: f64, height: f64) -> Result<(), String> {
@@ -44,7 +44,7 @@ pub fn validate(masks: &[Mask], duration: f64, width: f64, height: f64) -> Resul
             || m.end > duration + 0.05
             || !(8.0..=80.0).contains(&m.strength)
             || !matches!(m.kind.as_str(), "blur" | "pixelate" | "solid" | "highlight")
-            || m.opacity.is_some_and(|value|!(0.0..=1.0).contains(&value))
+            || m.opacity.is_some_and(|value| !(0.0..=1.0).contains(&value))
             || m.keyframes.is_empty()
             || m.keyframes.len() > 512
         {
@@ -92,7 +92,10 @@ pub fn rect_at(mask: &Mask, t: f64) -> Rect {
 }
 pub fn apply(raw: &mut [u8], width: u32, height: u32, masks: &[Mask], t: f64) {
     let stride = width as usize * 3;
-    for mask in masks.iter().filter(|m| m.start <= t && t < m.end && m.kind!="highlight") {
+    for mask in masks
+        .iter()
+        .filter(|m| m.start <= t && t < m.end && m.kind != "highlight")
+    {
         let r = rect_at(mask, t);
         let x = r.x.floor().max(0.) as usize;
         let y = r.y.floor().max(0.) as usize;
@@ -149,18 +152,41 @@ pub fn apply(raw: &mut [u8], width: u32, height: u32, masks: &[Mask], t: f64) {
             }
         }
     }
-    for mask in masks.iter().filter(|m|m.start<=t&&t<m.end&&m.kind=="highlight") {
-        let r=rect_at(mask,t);
-        let inside=|x:usize,y:usize|x as f64>=r.x&&y as f64>=r.y&&(x as f64)<r.x+r.w&&(y as f64)<r.y+r.h;
+    for mask in masks
+        .iter()
+        .filter(|m| m.start <= t && t < m.end && m.kind == "highlight")
+    {
+        let r = rect_at(mask, t);
+        let inside = |x: usize, y: usize| {
+            x as f64 >= r.x && y as f64 >= r.y && (x as f64) < r.x + r.w && (y as f64) < r.y + r.h
+        };
         if mask.blur_outside {
             for channel in 0..3 {
-                let gray=GrayImage::from_fn(width,height,|x,y|Luma([raw[y as usize*stride+x as usize*3+channel]]));
-                let blurred=blur_shadow(gray,mask.strength/2.);
-                for y in 0..height as usize {for x in 0..width as usize {if !inside(x,y){raw[y*stride+x*3+channel]=blurred.get_pixel(x as u32,y as u32)[0];}}}
+                let gray = GrayImage::from_fn(width, height, |x, y| {
+                    Luma([raw[y as usize * stride + x as usize * 3 + channel]])
+                });
+                let blurred = blur_shadow(gray, mask.strength / 2.);
+                for y in 0..height as usize {
+                    for x in 0..width as usize {
+                        if !inside(x, y) {
+                            raw[y * stride + x * 3 + channel] =
+                                blurred.get_pixel(x as u32, y as u32)[0];
+                        }
+                    }
+                }
             }
         }
-        let factor=1.-mask.opacity.unwrap_or(0.55);
-        for y in 0..height as usize {for x in 0..width as usize {if !inside(x,y){let i=y*stride+x*3;for channel in 0..3 {raw[i+channel]=(raw[i+channel] as f64*factor).round() as u8;}}}}
+        let factor = 1. - mask.opacity.unwrap_or(0.55);
+        for y in 0..height as usize {
+            for x in 0..width as usize {
+                if !inside(x, y) {
+                    let i = y * stride + x * 3;
+                    for channel in 0..3 {
+                        raw[i + channel] = (raw[i + channel] as f64 * factor).round() as u8;
+                    }
+                }
+            }
+        }
     }
 }
 #[cfg(test)]
@@ -194,10 +220,24 @@ mod tests {
     }
     #[test]
     fn highlight_never_restores_pixels_rewritten_by_privacy_masks() {
-        let privacy=mask("solid");let mut focus=mask("solid");focus.id="focus".into();focus.kind="highlight".into();focus.opacity=Some(0.5);focus.blur_outside=true;
-        focus.keyframes[0].rect=Rect{x:15.,y:12.,w:20.,h:14.};
-        let mut bytes=vec![255u8;100*60*3];apply(&mut bytes,100,60,&[focus,privacy],1.);
-        assert_eq!(&bytes[(20*100+20)*3..(20*100+20)*3+3],&[18,52,86]);
-        assert!(bytes[0]<255);
+        let privacy = mask("solid");
+        let mut focus = mask("solid");
+        focus.id = "focus".into();
+        focus.kind = "highlight".into();
+        focus.opacity = Some(0.5);
+        focus.blur_outside = true;
+        focus.keyframes[0].rect = Rect {
+            x: 15.,
+            y: 12.,
+            w: 20.,
+            h: 14.,
+        };
+        let mut bytes = vec![255u8; 100 * 60 * 3];
+        apply(&mut bytes, 100, 60, &[focus, privacy], 1.);
+        assert_eq!(
+            &bytes[(20 * 100 + 20) * 3..(20 * 100 + 20) * 3 + 3],
+            &[18, 52, 86]
+        );
+        assert!(bytes[0] < 255);
     }
 }

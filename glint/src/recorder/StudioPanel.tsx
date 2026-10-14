@@ -9,6 +9,7 @@ import { clampPlacement, type CamPlacement } from "./camOverlay";
 import type { StudioEvents,StudioProject } from "./studioModel";
 import { StudioZoomControls } from "./StudioZoomControls";
 import { StudioMaskControls } from "./StudioMaskControls";
+import {DEFAULT_MOTION} from './studioMotion';
 
 export function StudioPanel({ project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave, time, duration, selectedZoom, onSelectZoom, onPickZoom, events, selectedMask, onSelectMask, drawingMask, onDrawMask, onSeek }: {
   project: StudioProject; path: string; width: number; height: number; saveStatus: string;
@@ -40,6 +41,11 @@ export function StudioPanel({ project, path, width, height, saveStatus, exportMe
       <StudioMaskControls masks={project.masks} selected={selectedMask} time={time} duration={duration} width={width} height={height} drawing={drawingMask} onDraw={onDrawMask} onChange={masks=>onChange({masks})} onSelect={onSelectMask} onSeek={onSeek}/>
       {project.masks.length>0&&<div className="look-row"><span className="look-label">Delete source after export</span><Switch ariaLabel="Delete unmasked source after export" checked={project.deleteSourceAfterExport??false} onChange={deleteSourceAfterExport=>onChange({deleteSourceAfterExport})}/></div>}
       <CursorControls cursor={project.cursor} onChange={(patch) => onChange({ cursor: { ...project.cursor, ...patch } })} />
+      <ControlDisclosure title="Motion blur" className="studio-effects-controls">
+        <div className="look-row"><span className="look-label">Motion blur</span><Switch ariaLabel="Enable motion blur" checked={project.motionBlur?.enabled??false} onChange={enabled=>onChange({motionBlur:{...(project.motionBlur??DEFAULT_MOTION),enabled}})}/></div>
+        {project.motionBlur?.enabled&&<LookSlider label="Amount" ariaLabel="Motion blur amount" value={project.motionBlur.intensity*100} unit="%" onChange={value=>onChange({motionBlur:{...project.motionBlur!,intensity:value/100}})}/>}
+        <p className="look-hint">Light blur on fast zoom, pan and cursor movement. More blur adds rendering work.</p>
+      </ControlDisclosure>
       <ControlDisclosure title="Crop source video" className="studio-crop">
         <p className="look-hint">Source: {width} × {height} px. Crop stays inside the source. Press Enter or leave a field to apply.</p>
         <div className="studio-crop-grid">

@@ -3,6 +3,20 @@ use super::studio_render::Crop;
 use serde::Deserialize;
 
 #[derive(Clone, Debug, Deserialize)]
+pub struct Motion {
+    pub enabled: bool,
+    pub intensity: f64,
+}
+impl Default for Motion {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            intensity: 0.35,
+        }
+    }
+}
+
+#[derive(Clone, Debug, Deserialize)]
 pub struct Focus {
     pub x: f64,
     pub y: f64,

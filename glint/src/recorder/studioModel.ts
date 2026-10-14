@@ -6,6 +6,7 @@ import { reserveClipIds } from "./trimModel";
 import { validateZooms, type ZoomSegment } from "./studioEffects";
 import { importZoomMarkers } from "./studioMarkers";
 import { validateMasks,type MaskSegment } from "./studioMasks";
+import type {MotionBlur} from './studioMotion';
 import type { CamPlacement } from "./camOverlay";
 export interface CursorConfig {
   visible: boolean; smoothing: number; size: number; style: "arrow" | "dot";
@@ -18,6 +19,7 @@ export interface StudioProject {
   zoomSegments: ZoomSegment[]; masks: MaskSegment[];
   importedMarkers?:string[];
   deleteSourceAfterExport?:boolean;
+  motionBlur?:MotionBlur;
 }
 export interface InputEvent {
   t: number; kind: "cursor" | "click" | "key" | "marker"; x?: number; y?: number;
@@ -35,6 +37,7 @@ export function hydrateProject(raw: StudioProject, duration: number, events?:Stu
   reserveClipIds(raw.clips);
   if (!validateZooms(raw.zoomSegments ?? [], duration)) throw new Error("The Studio zoom settings are invalid.");
   if(!validateMasks(raw.masks??[],duration,size?.width,size?.height))throw new Error('The Studio masks are invalid.');
+  if(raw.motionBlur&&(typeof raw.motionBlur.enabled!=='boolean'||!Number.isFinite(raw.motionBlur.intensity)||raw.motionBlur.intensity<0||raw.motionBlur.intensity>1))throw new Error('The motion blur settings are invalid.');
   const project:StudioProject={ ...raw, version: 2, look: hydrateLook(raw.look), cursor: { ...DEFAULT_CURSOR, ...raw.cursor }, crop: raw.crop ?? null, cam: raw.cam ?? null, fadeIn: raw.fadeIn ?? 0, fadeOut: raw.fadeOut ?? 0, zoomSegments: raw.zoomSegments ?? [], masks: raw.masks ?? [] };
   return events ? {...project,...importZoomMarkers(project.zoomSegments,project.importedMarkers??[],events,duration)} : project;
 }

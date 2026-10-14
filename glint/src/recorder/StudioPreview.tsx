@@ -1,4 +1,4 @@
-import { drawCursorLayer, followSourcePoint, smoothPath } from "./studioCursor";
+import { cursorAt, drawCursorLayer, followSourcePoint, smoothPath } from "./studioCursor";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { getGradient, konvaGradient } from "../editor/gradients";
 import { resolveRadiusPx } from "../editor/composition";
@@ -8,6 +8,7 @@ import type { CamPlacement } from "./camOverlay";
 import { toPixels } from "./camOverlay";
 import { zoomAt } from "./studioEffects";
 import { applyPreviewMasks } from "./studioMasks";
+import {DEFAULT_MOTION,motionTimes} from './studioMotion';
 
 export function StudioPreview({ studio, video, camVideo, cam, width, height, pickingFocus=false, onFocus }: {
   studio: StudioData; video: RefObject<HTMLVideoElement | null>; camVideo: RefObject<HTMLVideoElement | null>;
@@ -58,17 +59,27 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
         ctx.save(); ctx.beginPath(); ctx.roundRect(l.contentX, top, l.contentW, cardH, radius); ctx.clip();
         const cursor = followSourcePoint(path,v.currentTime,studio.events,width,height);
         const view = zoomAt(studio.project.zoomSegments, v.currentTime, { x:l.cropX,y:l.cropY,w:l.contentW,h:l.contentH },width,height,cursor);
+        const previous=zoomAt(studio.project.zoomSegments,Math.max(0,v.currentTime-1/60),{x:l.cropX,y:l.cropY,w:l.contentW,h:l.contentH},width,height,followSourcePoint(path,Math.max(0,v.currentTime-1/60),studio.events,width,height));
+        const motion=studio.project.motionBlur??DEFAULT_MOTION;
+        const times=motionTimes(motion,v.currentTime,Math.abs(view.x-previous.x)+Math.abs(view.y-previous.y)+Math.abs(view.w-previous.w)/2+Math.abs(view.h-previous.h)/2);
         ctx.save(); ctx.translate(l.contentX,l.contentY); ctx.scale(l.contentW/view.w,l.contentH/view.h);
         const hasMasks=studio.project.masks.length>0;
-        if(hasMasks&&maskedTime!==v.currentTime) {
+        const sourceCanvas=hasMasks||motion.enabled&&cam?.visible;
+        if(sourceCanvas&&maskedTime!==v.currentTime) {
           maskedSource.width=width;maskedSource.height=height;const source=maskedSource.getContext('2d')!;
           source.drawImage(v,0,0,width,height);
           if(cam?.visible&&camVideo.current&&camVideo.current.readyState>=2)paintCamera(source,cam,camVideo.current,width,height);
           applyPreviewMasks(source,studio.project.masks,Math.min(v.currentTime,Math.max(0,v.duration-1e-7)),width,height,maskScratch);
           maskedTime=v.currentTime;
         }
-        ctx.drawImage(hasMasks?maskedSource:v, view.x, view.y, view.w, view.h, 0, 0, view.w, view.h);
-        if (!hasMasks && cam?.visible && camVideo.current && camVideo.current.readyState >= 2) {
+        if(times.length>1) {
+          for(const index of [2,1,0]) {
+            const time=times[index],pose=zoomAt(studio.project.zoomSegments,time,{x:l.cropX,y:l.cropY,w:l.contentW,h:l.contentH},width,height,followSourcePoint(path,time,studio.events,width,height));
+            ctx.globalAlpha=index===2?1:index===1?.75:.6;
+            ctx.drawImage(sourceCanvas?maskedSource:v,pose.x,pose.y,pose.w,pose.h,0,0,view.w,view.h);
+          }ctx.globalAlpha=1;
+        } else ctx.drawImage(sourceCanvas?maskedSource:v, view.x, view.y, view.w, view.h, 0, 0, view.w, view.h);
+        if (!sourceCanvas && cam?.visible && camVideo.current && camVideo.current.readyState >= 2) {
           const box = toPixels(cam, width, height, width / height);
           ctx.save(); ctx.translate(box.x - view.x, box.y - view.y);
           ctx.beginPath(); ctx.roundRect(0, 0, box.w, box.h, cam.shape === "circle" ? box.w / 2 : cam.shape === "rect" ? 0 : box.w * .14); ctx.clip();
@@ -76,7 +87,15 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
           const sw = native > ratio ? cv.videoHeight * ratio : cv.videoWidth, sh = native > ratio ? cv.videoHeight : cv.videoWidth / ratio;
           ctx.drawImage(cv, (cv.videoWidth - sw) / 2, (cv.videoHeight - sh) / 2, sw, sh, 0, 0, box.w, box.h); ctx.restore();
         }
-        drawCursorLayer(ctx, v.currentTime, path, effectEvents, studio.project.cursor, { ...l,contentX:0,contentY:0,contentW:view.w,contentH:view.h,cropX:view.x,cropY:view.y }, width, height);
+        const cursorLayout={ ...l,contentX:0,contentY:0,contentW:view.w,contentH:view.h,cropX:view.x,cropY:view.y };
+        const a=cursorAt(path,v.currentTime),b=cursorAt(path,Math.max(0,v.currentTime-1/60));
+        const movement=a&&b?Math.hypot(a.x-b.x,a.y-b.y)*width/studio.events.geometry.width:0;
+        if(motion.enabled&&motion.intensity>0&&movement>8) {
+          for(const [offset,alpha] of [[motion.intensity/60,.1],[motion.intensity/120,.25]]) {
+            ctx.save();ctx.globalAlpha=alpha;drawCursorLayer(ctx,Math.max(0,v.currentTime-offset),path,effectEvents,{...studio.project.cursor,clicks:false,keystrokes:false},cursorLayout,width,height);ctx.restore();
+          }
+        }
+        drawCursorLayer(ctx, v.currentTime, path, effectEvents, studio.project.cursor, cursorLayout, width, height);
         ctx.restore();
         if (l.chromeH > 0) {
           ctx.fillStyle = look.chrome.theme === "dark" ? "#25272c" : "#eeeeee"; ctx.fillRect(l.contentX, top, l.contentW, l.chromeH);

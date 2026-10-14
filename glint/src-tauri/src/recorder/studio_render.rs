@@ -3,7 +3,7 @@ use super::{
     ffmpeg::{self, VideoEncoder},
     studio::Events,
     studio_cursor::{self, CursorConfig, Mapping, Point},
-    studio_effects::{self, Zoom},
+    studio_effects::{self, Motion, Zoom},
     studio_masks::{self, Mask},
     trim::{self, CamOverlay, KeepSegment},
 };
@@ -71,6 +71,8 @@ pub struct Project {
     pub zoom_segments: Vec<Zoom>,
     #[serde(default)]
     pub masks: Vec<Mask>,
+    #[serde(default)]
+    pub motion_blur: Option<Motion>,
 }
 impl Project {
     pub fn segments(&self, duration: f64) -> Result<Vec<KeepSegment>, String> {
@@ -80,6 +82,13 @@ impl Project {
         self.cursor.validate()?;
         studio_effects::validate_zooms(&self.zoom_segments, duration)?;
         studio_masks::validate(&self.masks, duration, f64::INFINITY, f64::INFINITY)?;
+        if self
+            .motion_blur
+            .as_ref()
+            .is_some_and(|m| !(0.0..=1.0).contains(&m.intensity))
+        {
+            return Err("Invalid motion blur".into());
+        }
         for n in [self.look.padding, self.look.radius, self.look.shadow] {
             if !(0.0..=100.0).contains(&n) {
                 return Err("Invalid look settings".into());
@@ -374,6 +383,7 @@ pub struct Renderer {
     source_w: u32,
     source_h: u32,
     masks: Vec<Mask>,
+    motion: Motion,
 }
 impl Renderer {
     pub fn new(
@@ -637,6 +647,7 @@ impl Renderer {
             source_w,
             source_h,
             masks: project.masks.clone(),
+            motion: project.motion_blur.clone().unwrap_or_default(),
         })
     }
     fn allowed(&self, x: i32, y: i32) -> bool {
@@ -654,15 +665,7 @@ impl Renderer {
     pub fn frame(&self, raw: &[u8], t: f64, out: &mut RgbImage) {
         self.compose(raw, t, out, self.mapping, 1.);
     }
-    pub fn source_frame(&self, raw: &[u8], t: f64, content: &mut [u8], out: &mut RgbImage) {
-        let masked = if self.masks.iter().any(|m| m.start <= t && t < m.end) {
-            let mut pixels = raw.to_vec();
-            studio_masks::apply(&mut pixels, self.source_w, self.source_h, &self.masks, t);
-            Some(pixels)
-        } else {
-            None
-        };
-        let raw = masked.as_deref().unwrap_or(raw);
+    fn view_at(&self, t: f64) -> studio_effects::View {
         let g = &self.effects.geometry;
         let mut follow = (0., 0.);
         let mut count = 0.;
@@ -684,43 +687,90 @@ impl Renderer {
                 latest_y: (p.y - g.y as f64) * self.source_h as f64 / g.height as f64,
             });
         let l = self.layout;
-        let view = studio_effects::zoom_at(
+        studio_effects::zoom_at(
             &self.zooms,
             t,
             l.crop,
             self.source_w as f64,
             self.source_h as f64,
             cursor,
-        );
-        let horizontal: Vec<_> = (0..l.content_w)
-            .map(|x| {
-                let px = (view.x + (x as f64 + 0.5) * view.w / l.content_w as f64 - 0.5)
-                    .clamp(0., self.source_w as f64 - 1.);
-                let a = px.floor() as usize;
-                (
-                    a,
-                    (a + 1).min(self.source_w as usize - 1),
-                    (px - a as f64) as f32,
-                )
-            })
-            .collect();
-        for y in 0..l.content_h as usize {
-            let py = (view.y + (y as f64 + 0.5) * view.h / l.content_h as f64 - 0.5)
-                .clamp(0., self.source_h as f64 - 1.);
-            let ya = py.floor() as usize;
-            let yb = (ya + 1).min(self.source_h as usize - 1);
-            let fy = (py - ya as f64) as f32;
-            for (x, (xa, xb, fx)) in horizontal.iter().copied().enumerate() {
-                let a = (ya * self.source_w as usize + xa) * 3;
-                let b = (ya * self.source_w as usize + xb) * 3;
-                let c = (yb * self.source_w as usize + xa) * 3;
-                let d = (yb * self.source_w as usize + xb) * 3;
-                let dest = (y * l.content_w as usize + x) * 3;
-                for channel in 0..3 {
-                    let top = raw[a + channel] as f32 * (1. - fx) + raw[b + channel] as f32 * fx;
-                    let bottom = raw[c + channel] as f32 * (1. - fx) + raw[d + channel] as f32 * fx;
-                    content[dest + channel] = (top * (1. - fy) + bottom * fy).round() as u8;
+        )
+    }
+    pub fn source_frame(&self, raw: &[u8], t: f64, content: &mut [u8], out: &mut RgbImage) {
+        // Every shutter pose uses these same CURRENT masked pixels. Blending old
+        // decoded video could reveal a secret when a mask begins or moves.
+        let masked = if self.masks.iter().any(|m| m.start <= t && t < m.end) {
+            let mut pixels = raw.to_vec();
+            studio_masks::apply(&mut pixels, self.source_w, self.source_h, &self.masks, t);
+            Some(pixels)
+        } else {
+            None
+        };
+        let raw = masked.as_deref().unwrap_or(raw);
+        let l = self.layout;
+        let view = self.view_at(t);
+        let previous = self.view_at((t - 1. / 60.).max(0.));
+        let travel = (view.x - previous.x).abs()
+            + (view.y - previous.y).abs()
+            + (view.w - previous.w).abs() / 2.
+            + (view.h - previous.h).abs() / 2.;
+        let poses = if self.motion.enabled && self.motion.intensity > 0. && travel > 2. {
+            vec![
+                (view, 6u16),
+                (self.view_at((t - self.motion.intensity / 120.).max(0.)), 3),
+                (self.view_at((t - self.motion.intensity / 60.).max(0.)), 1),
+            ]
+        } else {
+            vec![(view, 10)]
+        };
+        let mut accumulator = if poses.len() > 1 {
+            Some(vec![0u16; content.len()])
+        } else {
+            None
+        };
+        for (pose, weight) in poses {
+            let horizontal: Vec<_> = (0..l.content_w)
+                .map(|x| {
+                    let px = (pose.x + (x as f64 + 0.5) * pose.w / l.content_w as f64 - 0.5)
+                        .clamp(0., self.source_w as f64 - 1.);
+                    let a = px.floor() as usize;
+                    (
+                        a,
+                        (a + 1).min(self.source_w as usize - 1),
+                        (px - a as f64) as f32,
+                    )
+                })
+                .collect();
+            for y in 0..l.content_h as usize {
+                let py = (pose.y + (y as f64 + 0.5) * pose.h / l.content_h as f64 - 0.5)
+                    .clamp(0., self.source_h as f64 - 1.);
+                let ya = py.floor() as usize;
+                let yb = (ya + 1).min(self.source_h as usize - 1);
+                let fy = (py - ya as f64) as f32;
+                for (x, (xa, xb, fx)) in horizontal.iter().copied().enumerate() {
+                    let a = (ya * self.source_w as usize + xa) * 3;
+                    let b = (ya * self.source_w as usize + xb) * 3;
+                    let c = (yb * self.source_w as usize + xa) * 3;
+                    let d = (yb * self.source_w as usize + xb) * 3;
+                    let dest = (y * l.content_w as usize + x) * 3;
+                    for channel in 0..3 {
+                        let top =
+                            raw[a + channel] as f32 * (1. - fx) + raw[b + channel] as f32 * fx;
+                        let bottom =
+                            raw[c + channel] as f32 * (1. - fx) + raw[d + channel] as f32 * fx;
+                        let value = (top * (1. - fy) + bottom * fy).round() as u8;
+                        if let Some(sum) = accumulator.as_mut() {
+                            sum[dest + channel] += value as u16 * weight;
+                        } else {
+                            content[dest + channel] = value;
+                        }
+                    }
                 }
+            }
+        }
+        if let Some(sum) = accumulator {
+            for (dest, value) in content.iter_mut().zip(sum) {
+                *dest = ((value + 5) / 10) as u8;
             }
         }
         let mapping = Mapping {
@@ -741,9 +791,29 @@ impl Renderer {
             out.as_mut()[dst..dst + n].copy_from_slice(&raw[src..src + n]);
         }
         let c = &self.cursor;
+        let mut samples = Vec::new();
         if let Some(p) = studio_cursor::point_at(&self.path, t)
             .filter(|p| c.visible && (!c.hide_idle || t - p.moved_at < c.idle_seconds))
         {
+            let old = studio_cursor::point_at(&self.path, (t - 1. / 60.).max(0.));
+            let moving = old.is_some_and(|old| {
+                (p.x - old.x).hypot(p.y - old.y) * self.source_w as f64
+                    / self.effects.geometry.width as f64
+                    > 8.
+            });
+            if self.motion.enabled && self.motion.intensity > 0. && moving {
+                for (offset, alpha) in [
+                    (self.motion.intensity / 60., 0.1),
+                    (self.motion.intensity / 120., 0.25),
+                ] {
+                    if let Some(point) = studio_cursor::point_at(&self.path, (t - offset).max(0.)) {
+                        samples.push((point, alpha));
+                    }
+                }
+            }
+            samples.push((p, 1.));
+        }
+        for (p, alpha) in samples {
             let (x, y) = m.point(p.x, p.y, &self.effects);
             let size = c.size * l.scale * zoom;
             if m.inside(x, y) {
@@ -787,7 +857,7 @@ impl Renderer {
                                     px,
                                     py,
                                     if edge { [23, 26, 32] } else { [255, 255, 255] },
-                                    1.,
+                                    alpha,
                                 );
                             }
                         }
@@ -1088,7 +1158,13 @@ fn encode(
     let progress_idx = args.iter().position(|s| s == "-progress").unwrap();
     args.drain(progress_idx..progress_idx + 2);
     let graph_idx = args.iter().position(|s| s == "-filter_complex").unwrap() + 1;
-    let source_mode = !spec.project.zoom_segments.is_empty() || !spec.project.masks.is_empty();
+    let source_mode = !spec.project.zoom_segments.is_empty()
+        || !spec.project.masks.is_empty()
+        || spec
+            .project
+            .motion_blur
+            .as_ref()
+            .is_some_and(|m| m.enabled && m.intensity > 0.);
     args[graph_idx] = if source_mode {
         format!(
             "{};[edited]fps={},format=rgb24[outv]",
@@ -1583,5 +1659,28 @@ mod tests {
                 2.
             ) < 2.
         );
+    }
+    #[test]
+    fn motion_shutter_cannot_reveal_unmasked_pixels_when_a_mask_starts() {
+        let (mut project, events) = background_fixture();
+        project.look.enabled = false;
+        project.zoom_segments=serde_json::from_value(serde_json::json!([{"id":"zoom","start":0.,"end":2.,"scale":2.,"mode":"fixed","focus":{"x":0.5,"y":0.5},"ease":"gentle","easeIn":0.4,"easeOut":0.4,"origin":"manual","edited":true}])).unwrap();
+        project.masks=serde_json::from_value(serde_json::json!([{"id":"mask","start":0.15,"end":2.,"type":"solid","keyframes":[{"t":0.15,"x":135.,"y":80.,"w":50.,"h":40.}],"strength":28.,"color":"#123456"}])).unwrap();
+        let raw = vec![255u8; 320 * 200 * 3];
+        let mut content = vec![0; raw.len()];
+        let mut plain = RgbImage::new(320, 200);
+        Renderer::new(&project, &events, 320, 200)
+            .unwrap()
+            .source_frame(&raw, 0.15, &mut content, &mut plain);
+        project.motion_blur = Some(Motion {
+            enabled: true,
+            intensity: 1.,
+        });
+        let mut blurred = RgbImage::new(320, 200);
+        Renderer::new(&project, &events, 320, 200)
+            .unwrap()
+            .source_frame(&raw, 0.15, &mut content, &mut blurred);
+        assert_eq!(blurred.get_pixel(160, 100).0, [18, 52, 86]);
+        assert_ne!(blurred.as_raw(), plain.as_raw());
     }
 }

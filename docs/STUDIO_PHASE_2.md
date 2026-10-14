@@ -34,7 +34,9 @@ No new libraries, cloud services or bundled media are needed.
   sharing limited to the finished export. Thumbnail names are unique per path.
 - 2.5: keyframed highlights dim and optionally blur outside the chosen source
   rectangle. Privacy masks are applied first, so highlights cannot restore them.
-- 2.6: pending.
+- 2.6: optional, off-by-default light shutter blur for fast zoom/pan and cursor
+  movement. Every transform sample uses the current masked source, preventing
+  unmasked history from leaking when a privacy mask begins or moves.
 
 ## Final acceptance
 
