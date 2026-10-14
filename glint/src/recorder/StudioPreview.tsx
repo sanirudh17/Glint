@@ -1,6 +1,8 @@
 import { cursorAt, drawCursorLayer, followSourcePoint, smoothPath } from "./studioCursor";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { gradientCanvas } from "../look/gradientRender";
+import {useRasterImage} from '../look/useRasterImage';
+import {watermarkPlacement} from '../look/sizing';
 import { resolveRadiusPx } from "../editor/composition";
 import { studioLayout } from "./studioLayout";
 import type { StudioData } from "./studioModel";
@@ -25,6 +27,7 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
   useEffect(()=>{setMarker(null);if(pickingFocus)ref.current?.focus({preventScroll:true});},[pickingFocus]);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const background = studio.project.look.background;
+  const watermark=useRasterImage(studio.project.look.watermark?.dataUrl);
   const gradientPlate = useMemo(() => {
     const l=studioLayout(width,height,studio.project.crop,studio.project.look,960);
     return background.type==='gradient' ? gradientCanvas(background,l.width,l.height) : null;
@@ -116,12 +119,13 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
         if (look.enabled && (look.border?.width ?? 0) > 0) {
           ctx.beginPath(); ctx.roundRect(l.contentX, top, l.contentW, cardH, radius); ctx.strokeStyle = look.border!.color; ctx.lineWidth = look.border!.width; ctx.setLineDash(look.border!.style === "dashed" ? [8, 6] : []); ctx.stroke(); ctx.setLineDash([]);
         }
+        if(look.enabled&&look.watermark&&watermark) {const b=watermarkPlacement(l.compositionW,l.compositionH,look.watermark);ctx.save();ctx.globalAlpha=look.watermark.opacity;ctx.drawImage(watermark,b.x,b.y,b.w,b.h);ctx.restore();}
       }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [studio, video, camVideo, cam, width, height, background, image, path, effectEvents, gradientPlate]);
+  }, [studio, video, camVideo, cam, width, height, background, image, path, effectEvents, gradientPlate,watermark]);
   const pointAt=(clientX:number,clientY:number)=>{
     const canvas=ref.current;if(!canvas||video.current?.seeking)return null;
     const rect=canvas.getBoundingClientRect();

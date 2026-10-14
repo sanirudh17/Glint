@@ -35,6 +35,8 @@ pub struct Border {
     pub color: String,
     pub style: String,
 }
+#[derive(Clone,Debug,Deserialize)]
+pub struct OutputSize { pub width:u32,pub height:u32 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Look {
@@ -47,6 +49,8 @@ pub struct Look {
     pub chrome: Value,
     pub shadow_color: Option<String>,
     pub border: Option<Border>,
+    pub output_size: Option<OutputSize>,
+    pub watermark: Option<Value>,
 }
 #[derive(Clone, Debug, Deserialize)]
 pub struct Clip {
@@ -96,7 +100,7 @@ impl Project {
         }
         if !matches!(
             self.look.aspect.as_str(),
-            "auto" | "1:1" | "16:9" | "4:3" | "9:16" | "4:5"
+            "auto" | "1:1" | "16:9" | "4:3" | "9:16" | "4:5" | "3:2" | "1.91:1"
         ) {
             return Err("Invalid aspect".into());
         }
@@ -151,6 +155,8 @@ pub fn layout(w: u32, h: u32, crop: Option<Crop>, look: &Look) -> Result<Layout,
         w: w as f64,
         h: h as f64,
     });
+    let output=look.output_size.as_ref().filter(|_|look.enabled);
+    if output.is_some_and(|s|!(16..=4096).contains(&s.width)||!(16..=4096).contains(&s.height)){return Err("Output dimensions must be between 16 and 4096 pixels".into());}
     if [c.x, c.y, c.w, c.h].iter().any(|v| !v.is_finite())
         || c.x < 0.
         || c.y < 0.
@@ -179,19 +185,21 @@ pub fn layout(w: u32, h: u32, crop: Option<Crop>, look: &Look) -> Result<Layout,
             "4:3" => Some(4. / 3.),
             "9:16" => Some(9. / 16.),
             "4:5" => Some(4. / 5.),
+            "3:2" => Some(3. / 2.),
+            "1.91:1" => Some(1.91),
             _ => None,
         }
     } else {
         None
     };
-    if let Some(r) = ratio {
+    if let Some(r) = output.map(|s|s.width as f64/s.height as f64).or(ratio) {
         if cw / ch < r {
-            cw = (ch * r).round();
+            cw = if output.is_some(){ch*r}else{(ch * r).round()};
         } else {
-            ch = (cw / r).round();
+            ch = if output.is_some(){cw/r}else{(cw / r).round()};
         }
     }
-    let scale = (1920. / cw.max(ch)).min(1.);
+    let scale = output.map(|s|s.width as f64/cw).unwrap_or_else(||(1920. / cw.max(ch)).min(1.));
     let even = |v: f64| ((v * scale / 2.).round() as u32 * 2).max(2);
     let x = ((cw - c.w) / 2.).round();
     let y = ((ch - chrome - c.h) / 2.).round() + chrome;
@@ -384,6 +392,7 @@ pub struct Renderer {
     source_h: u32,
     masks: Vec<Mask>,
     motion: Motion,
+    watermark: Vec<(u32,u32,[u8;3],f64)>,
 }
 impl Renderer {
     pub fn new(
@@ -613,6 +622,7 @@ impl Renderer {
             source_h,
             masks: project.masks.clone(),
             motion: project.motion_blur.clone().unwrap_or_default(),
+            watermark: super::look_watermark::pixels(look.watermark.as_ref().filter(|_|look.enabled),l.width,l.height)?,
         })
     }
     fn allowed(&self, x: i32, y: i32) -> bool {
@@ -897,6 +907,7 @@ impl Renderer {
         for (x, y, c) in &self.border {
             out.put_pixel(*x, *y, Rgb(*c));
         }
+        for(x,y,c,alpha) in &self.watermark {let p=out.get_pixel_mut(*x,*y);for k in 0..3{p[k]=(p[k] as f64*(1.-alpha)+c[k] as f64*alpha).round() as u8;}}
     }
 }
 pub fn source_time(segments: &[KeepSegment], t: f64) -> f64 {
@@ -1276,6 +1287,15 @@ fn encode(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn named_output_sizes_preserve_card_geometry_and_exact_even_dimensions(){
+        let (mut p, _)=background_fixture();
+        for(width,height) in [(1200,630),(1080,1350),(1290,2796)]{
+            p.look.output_size=Some(OutputSize{width,height});let l=layout(320,200,None,&p.look).unwrap();
+            assert_eq!((l.width,l.height),(width,height));assert!(l.x+l.content_w<=l.width);assert!(l.y+l.content_h<=l.height);
+        }
+        p.look.output_size=Some(OutputSize{width:0,height:100});assert!(layout(320,200,None,&p.look).is_err());
+    }
     fn background_fixture() -> (Project, Events) {
         let mut project: Project =
             serde_json::from_value(super::super::studio::initial_project(2.)).unwrap();

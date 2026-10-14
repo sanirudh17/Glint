@@ -29,7 +29,11 @@ function flatten(stage: Konva.Stage): string {
   const pixelRatio = exportPixelRatio(layout, stageW); // native resolution
   let url: string;
   try {
-    url = stage.toDataURL({ pixelRatio, mimeType: "image/png" });
+    if(frame.enabled&&frame.outputSize) {
+      const image=stage.toCanvas({pixelRatio:frame.outputSize.width/layout.compositionW});
+      const output=document.createElement('canvas');output.width=frame.outputSize.width;output.height=frame.outputSize.height;
+      output.getContext('2d')!.drawImage(image,0,0,output.width,output.height);url=output.toDataURL('image/png');
+    } else url = stage.toDataURL({ pixelRatio, mimeType: "image/png" });
   } finally {
     // Always restore Transformer nodes even if toDataURL throws.
     if (tr) { tr.nodes(hadNodes); tr.getLayer()?.batchDraw(); }

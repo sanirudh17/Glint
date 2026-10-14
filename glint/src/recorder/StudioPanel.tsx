@@ -42,7 +42,7 @@ export function StudioPanel({ project, path, width, height, saveStatus, exportMe
       ? <ExportResult path={exportMessage.slice(10)} />
       : <p className="studio-export-error" role="alert">{exportMessage}</p>)}
     <fieldset className="studio-panel-controls" disabled={exporting}>
-      <LookControls video look={project.look} onChange={(patch) => onChange({ look: { ...project.look, ...patch } })} />
+      <LookControls video look={project.look} dimensions={{width:crop.w,height:crop.h}} onChange={(patch) => onChange({ look: { ...project.look, ...patch } })} />
       <StudioZoomControls segments={project.zoomSegments} selected={selectedZoom} time={time} duration={duration} events={events} width={width} height={height} smoothing={project.cursor.smoothing} aim={focusAim} picking={pickingFocus} onChange={zoomSegments=>onChange({zoomSegments})} onSelect={onSelectZoom} onPick={onPickZoom}/>
       <StudioMaskControls masks={project.masks} selected={selectedMask} time={time} duration={duration} width={width} height={height} drawing={drawingMask} onDraw={onDrawMask} onChange={masks=>onChange({masks})} onSelect={onSelectMask} onSeek={onSeek}/>
       {project.masks.length>0&&!project.importedVideo&&<div className="look-row"><span className="look-label">Delete source after export</span><Switch ariaLabel="Delete unmasked source after export" checked={project.deleteSourceAfterExport??false} onChange={deleteSourceAfterExport=>onChange({deleteSourceAfterExport})}/></div>}

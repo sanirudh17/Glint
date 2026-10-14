@@ -6,6 +6,8 @@ import { useEditorStore } from "../../editor/useEditorStore";
 import { newId, nextStepNumber, eraseAt, snapAngle, resolveSpotlightDim, type Annotation, type BoxAnno, type TextAnno } from "../../editor/model";
 import { computeLayout, resolveRadiusPx } from "../../editor/composition";
 import { gradientCanvas } from "../../look/gradientRender";
+import {useRasterImage} from '../../look/useRasterImage';
+import {watermarkPlacement} from '../../look/sizing';
 import { AnnotationNode } from "./AnnotationNode";
 import { SpotlightDimLayer } from "./SpotlightDimLayer";
 import { sampleColorAt } from "../../editor/eyedropper";
@@ -59,6 +61,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const selectedId = useEditorStore((s) => s.selectedId);
   const crop = useEditorStore((s) => s.crop);
   const frame = useEditorStore((s) => s.frame);
+  const watermark=useRasterImage(frame.watermark?.dataUrl);
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
     setBackgroundImage(null);
@@ -786,6 +789,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
             onTransformStart={() => pushHistory()}
           />
         </Layer>
+        {frame.enabled&&frame.watermark&&watermark&&<Layer listening={false}><KonvaImage image={watermark} {...(()=>{const b=watermarkPlacement(compW,compH,frame.watermark);return {x:b.x,y:b.y,width:b.w,height:b.h};})()} opacity={frame.watermark.opacity}/></Layer>}
       </Stage>
       </div>
       </div>

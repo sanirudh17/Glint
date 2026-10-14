@@ -19,6 +19,7 @@ export function FramePanel() {
   const resetCrop = useEditorStore((s) => s.resetCrop);
   const pushHistory = useEditorStore((s) => s.pushHistory);
   const chrome = frame.chrome;
+  const base = useEditorStore((s)=>s.base);
   const sample = () => {
     const base=useEditorStore.getState().base,canvas=document.createElement('canvas');canvas.width=64;canvas.height=64;
     const ctx=canvas.getContext('2d')!;if(base)ctx.drawImage(base.image,0,0,64,64);
@@ -27,7 +28,7 @@ export function FramePanel() {
 
   return (
     <aside className="frame-panel" aria-label="Frame">
-      <LookControls look={frame} onChange={setFrame} checkpoint={pushHistory} onSample={sample} />
+      <LookControls look={frame} onChange={setFrame} checkpoint={pushHistory} onSample={sample} dimensions={base?{width:crop?.w??base.width,height:crop?.h??base.height}:undefined}/>
 
       <div className="frame-row">
         <span className="frame-label">Window</span>

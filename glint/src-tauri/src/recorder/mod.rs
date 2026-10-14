@@ -15,6 +15,7 @@ pub mod studio_effects;
 pub mod studio_masks;
 pub mod studio_render;
 mod look_gradient;
+mod look_watermark;
 pub mod studio_export;
 pub mod windows;
 
