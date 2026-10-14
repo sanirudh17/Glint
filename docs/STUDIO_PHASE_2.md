@@ -24,7 +24,8 @@ No new libraries, cloud services or bundled media are needed.
 
 - 2.1: zoom segment model, easing, source-clamped focus, follow cursor, split,
   inspector and draggable timeline track; preview and native export.
-- 2.2: pending.
+- 2.2: deterministic click clustering, isolated-click rejection, bounded spans,
+  minimum gaps, travel-away exit and regeneration preserving all hand edits.
 - 2.3: pending.
 - 2.4: pending.
 - 2.5: pending.

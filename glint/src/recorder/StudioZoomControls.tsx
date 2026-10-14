@@ -1,18 +1,23 @@
-import { Crosshair, Plus, Scissors, Trash2 } from "lucide-react";
+import { Crosshair, Plus, Scissors, Trash2, WandSparkles } from "lucide-react";
 import { Button, ControlDisclosure, NumberInput, Select } from "../components/ui";
 import { LookSlider } from "../look/LookControls";
 import { clamp, newZoom, splitZoom, type ZoomSegment } from "./studioEffects";
-export function StudioZoomControls({segments,selected,time,duration,onChange,onSelect,onPick}: {
+import { regenerateZooms } from "./studioAutoZoom";
+import type { StudioEvents } from "./studioModel";
+export function StudioZoomControls({segments,selected,time,duration,onChange,onSelect,onPick,events}: {
   segments:ZoomSegment[];selected:string|null;time:number;duration:number;
   onChange:(segments:ZoomSegment[])=>void;onSelect:(id:string|null)=>void;onPick:()=>void;
+  events:StudioEvents;
 }) {
   const active=segments.find(s=>s.id===selected);
   const change=(patch:Partial<ZoomSegment>)=>onChange(segments.map(s=>s.id===selected?{...s,...patch,edited:true}:s));
   return <ControlDisclosure title="Zoom" className="studio-effects-controls">
     <div className="studio-effect-actions">
-      <Button size="sm" variant="subtle" icon={Plus} onClick={()=>{const segment=newZoom(time,duration);onChange([...segments,segment]);onSelect(segment.id);}}>Add zoom</Button>
+      <Button size="sm" variant="subtle" icon={Plus} disabled={duration<.1||segments.length>=512} onClick={()=>{const segment=newZoom(time,duration);onChange([...segments,segment]);onSelect(segment.id);}}>Add zoom</Button>
+      <Button size="sm" variant="ghost" icon={WandSparkles} onClick={()=>onChange(regenerateZooms(segments,events,duration))}>{segments.some(s=>s.origin==='auto')?'Regenerate':'Auto zoom'}</Button>
       {active&&<Button size="sm" variant="ghost" icon={Trash2} onClick={()=>{onChange(segments.filter(s=>s.id!==active.id));onSelect(null);}}>Delete</Button>}
     </div>
+    <p className="look-hint">Auto zoom groups nearby clicks. Manual and hand-edited zooms are kept.</p>
     {segments.length>0&&<Select portal ariaLabel="Selected zoom" value={selected??""} options={[{value:"",label:"Select a zoom"},...segments.map((s,i)=>({value:s.id,label:`Zoom ${i+1} · ${s.start.toFixed(1)}–${s.end.toFixed(1)} s`}))]} onChange={id=>onSelect(id||null)} />}
     {active?<>
       <div className="studio-crop-grid">

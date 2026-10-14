@@ -513,7 +513,7 @@ export function TrimView() {
       </div>
 
       {studio && probe && target && <StudioPanel project={studio.project} path={target.path} width={probe.width} height={probe.height}
-        time={playhead} duration={duration} selectedZoom={selectedZoom} onSelectZoom={setSelectedZoom} onPickZoom={()=>setPickingFocus(value=>!value)}
+        time={playhead} duration={duration} events={studio.events} selectedZoom={selectedZoom} onSelectZoom={setSelectedZoom} onPickZoom={()=>setPickingFocus(value=>!value)}
         saveStatus={saveStatus} exportMessage={exportMessage} exporting={exporting !== null} cam={cam} onCamChange={setCam}
         onChange={(patch) => setStudio((data) => data && ({ ...data, project: { ...data.project, ...patch } }))}
         onSave={() => void flushSave()} />}
