@@ -9,6 +9,7 @@ pub mod fx;
 pub mod pipes;
 pub mod thumb;
 pub mod trim;
+pub mod studio;
 pub mod windows;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -190,6 +191,7 @@ pub struct ActiveRecording {
     /// Active recording FX (click/keystroke/cursor). The overlay + hooks live here.
     pub fx_cfg: fx::FxConfig,
     pub fx: Option<fx::FxSession>,
+    pub studio: Option<studio::StudioCapture>,
 }
 
 /// `{out_dir}/{stem}.part{idx}.mp4` — per-segment temp file beside the final output.
@@ -226,6 +228,7 @@ async fn spawn_segment(
     cfg: AudioConfig,
     controls: &AudioControls,
     draw_mouse: bool,
+    event_clock: Option<studio::EventClock>,
 ) -> Result<Segment, String> {
     use tokio::io::AsyncWriteExt;
 
@@ -290,7 +293,11 @@ async fn spawn_segment(
     // `want_audio` is the recording's intent (system or mic enabled), not how many
     // sources actually connected this segment — so a segment whose sources all failed
     // still gets a silent aac track and stays concat-copy compatible with audio segments.
-    let args = ffmpeg::build_ffmpeg_args(engine, &target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse, encoder, resolution, quality);
+    let mut args = ffmpeg::build_ffmpeg_args(engine, &target, fps, path, &inputs, cfg.system || cfg.mic, draw_mouse, encoder, resolution, quality);
+    if let Some(clock)=event_clock.as_ref() {
+        clock.arm();
+        let output=args.pop().unwrap(); args.extend(["-progress".into(),"pipe:1".into(),"-stats_period".into(),"0.05".into(),output]);
+    }
     log::info!(
         "[rec] segment {seg_index}: engine={engine:?} encoder={encoder:?} fps={fps} resolution={resolution} quality={quality}"
     );
@@ -336,6 +343,23 @@ async fn spawn_segment(
         }
     }
 
+    let rx_ev = if let Some(clock)=event_clock {
+        let (tx,forward)=tokio::sync::mpsc::channel(32);
+        tauri::async_runtime::spawn(async move {
+            let mut rx=rx_ev;
+            while let Some(event)=rx.recv().await {
+                match event {
+                    CommandEvent::Stdout(bytes) => {
+                        for line in String::from_utf8_lossy(&bytes).split_whitespace() {
+                            if let Some(value)=line.strip_prefix("out_time_us=") { if let Ok(us)=value.parse::<f64>() {clock.sync(us/1_000_000.0);} }
+                        }
+                    }
+                    event => {let _=tx.send(event).await;}
+                }
+            }
+        });
+        forward
+    } else {rx_ev};
     Ok(Segment { child, rx: rx_ev, path: path.to_string(), audio: audio_caps })
 }
 
@@ -483,6 +507,7 @@ pub fn rec_hud_dismiss(app: tauri::AppHandle) {
 #[derive(Serialize)]
 pub struct RecorderStatusDto {
     pub recording: bool,
+    pub studio_mode: bool,
     pub elapsed_secs: u64,
     pub system: bool,
     pub mic: bool,
@@ -665,6 +690,7 @@ pub async fn recorder_start(
     spotlight: Option<bool>,
     cursor_hide: Option<bool>,
     cursor_size: Option<String>,
+    studio_mode: Option<bool>,
 ) -> Result<(), String> {
     // Already recording? Ignore (single recording in R1).
     if app.state::<RecorderState>().0.lock().unwrap().is_some() {
@@ -703,7 +729,7 @@ pub async fn recorder_start(
     // Dismiss a lingering post-recording HUD from a previous take.
     windows::close_rec_hud(&app);
 
-    let target = match mode.as_str() {
+    let mut target = match mode.as_str() {
         "fullscreen" => RecordTarget::Fullscreen,
         "region" => {
             let (x, y, w, h) = (x.unwrap_or(0), y.unwrap_or(0), w.unwrap_or(0), h.unwrap_or(0));
@@ -727,7 +753,16 @@ pub async fn recorder_start(
         let _ = app.emit("glint-toast", "Couldn't start the recorder");
         e.to_string()
     })?;
-    let out = dir.join(recording_filename(chrono::Local::now()));
+    let studio_mode=studio_mode.unwrap_or(false);
+    let geometry=if studio_mode {Some(studio::geometry(&app,target)?)} else {None};
+    if studio_mode && matches!(target,RecordTarget::Fullscreen) {
+        let g=geometry.as_ref().unwrap(); target=RecordTarget::Region{x:g.x,y:g.y,w:ffmpeg::even(g.width),h:ffmpeg::even(g.height)};
+    }
+    let name=recording_filename(chrono::Local::now());
+    let mut studio_capture=if let Some(g)=geometry {Some(studio::StudioCapture::create(studio::folder_for(&dir,&name),g)?)} else {None};
+    if let Some(capture)=studio_capture.as_mut() {capture.hooks=Some(fx::hooks::start_studio_hooks(app.clone(),capture.sink.clone())?);}
+    let clock=studio_capture.as_ref().map(|capture|capture.sink.clock.clone());
+    let out = studio_capture.as_ref().map(|capture|capture.folder.join("video.mp4")).unwrap_or_else(||dir.join(name));
     let out_str = out.to_string_lossy().to_string();
 
     let (width, height) = match target {
@@ -843,6 +878,7 @@ pub async fn recorder_start(
         cam_path: None,
         fx_cfg,
         fx: None,
+        studio: studio_capture,
     });
     let _ = windows::build_control_bar(&app);
 
@@ -852,12 +888,12 @@ pub async fn recorder_start(
     // Bring segment 0 up. If a hardware encoder passed the probe but still fails to start a
     // real segment, demote the whole session to libx264 and retry once — the "recording
     // never breaks" guarantee. Later segments inherit the demoted encoder via rec.encoder.
-    let seg0_result = match spawn_segment(&app, engine, encoder, target, fps, &resolution, &quality, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await {
+    let seg0_result = match spawn_segment(&app, engine, encoder, target, fps, &resolution, &quality, &segment_path(&out_str, 0), 0, audio_cfg, &controls, !studio_mode && fx_cfg.draw_mouse(), clock.clone()).await {
         Ok(s) => Ok(s),
         Err(e) if encoder != ffmpeg::VideoEncoder::Libx264 => {
             log::warn!("segment 0 failed on {encoder:?} ({e}); falling back to libx264");
             encoder = ffmpeg::VideoEncoder::Libx264;
-            spawn_segment(&app, engine, encoder, target, fps, &resolution, &quality, &segment_path(&out_str, 0), 0, audio_cfg, &controls, fx_cfg.draw_mouse()).await
+            spawn_segment(&app, engine, encoder, target, fps, &resolution, &quality, &segment_path(&out_str, 0), 0, audio_cfg, &controls, !studio_mode && fx_cfg.draw_mouse(), clock.clone()).await
         }
         Err(e) => Err(e),
     };
@@ -875,6 +911,9 @@ pub async fn recorder_start(
     };
     // ffmpeg is capturing now — drop the countdown. Its disappearance is the user's
     // real "go" signal, aligned with genuine capture (see the countdown note above).
+    if let Some(clock)=clock.as_ref() {
+        for _ in 0..40 {if clock.stamp().is_some() {break;} tokio::time::sleep(std::time::Duration::from_millis(50)).await;}
+    }
     windows::close_countdown(&app);
 
     // Patch in the running span + accurate per-source availability. Decide under
@@ -910,7 +949,7 @@ pub async fn recorder_start(
     // earlier) so the overlay never lands in the countdown frames. Stored on the
     // active recording so stop/cancel can tear it down. If the recording was
     // stopped/canceled during ffmpeg init, the slot is gone — stop the session.
-    if fx_cfg.needs_overlay() {
+    if !studio_mode && fx_cfg.needs_overlay() {
         let session = fx::start(&app, target, fx_cfg);
         let stash = {
             let state = app.state::<RecorderState>();
@@ -977,13 +1016,17 @@ pub async fn recorder_pause(app: tauri::AppHandle) -> Result<(), String> {
             Some(rec) if rec.current.is_some() => {
                 let seg = rec.current.take().unwrap();
                 rec.done.push(seg.path.clone());
+                if let Some(studio)=rec.studio.as_ref() {studio.sink.clock.pause();}
                 Some(seg)
             }
             _ => None,
         }
     };
     let seg = seg.ok_or("not recording, or already paused")?;
+    let path=seg.path.clone();
     finish_segment(seg).await;
+    let clock=app.state::<RecorderState>().0.lock().unwrap().as_ref().and_then(|rec|rec.studio.as_ref().map(|s|s.sink.clock.clone()));
+    if let Some(clock)=clock {let probe=trim::recorder_trim_probe(app.clone(),path).await?;clock.finish_span(probe.duration_secs);}
     // Mirror the pause to the webcam recorder so both timelines stay aligned.
     let _ = app.emit_to(windows::CAM_LABEL, "rec-cam-record-pause", ());
     let _ = app.emit("recorder-paused", ());
@@ -1001,14 +1044,14 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
             // `current.is_none()` also holds during the preliminary start state (seg0
             // not up yet); require a completed span so resume can't run mid-init.
             Some(rec) if rec.current.is_none() && !rec.done.is_empty() => {
-                Some((rec.engine, rec.encoder, rec.target, rec.fps, rec.resolution.clone(), rec.quality.clone(), rec.out_path.clone(), rec.seg_index, rec.audio_cfg, rec.controls.clone()))
+                Some((rec.engine, rec.encoder, rec.target, rec.fps, rec.resolution.clone(), rec.quality.clone(), rec.out_path.clone(), rec.seg_index, rec.audio_cfg, rec.controls.clone(), rec.studio.as_ref().map(|s|s.sink.clock.clone()), rec.studio.is_none() && rec.fx_cfg.draw_mouse()))
             }
             _ => None,
         }
     };
-    let (engine, encoder, target, fps, resolution, quality, out_path, idx, cfg, controls) = info.ok_or("not paused")?;
+    let (engine, encoder, target, fps, resolution, quality, out_path, idx, cfg, controls, clock, draw_mouse) = info.ok_or("not paused")?;
     let path = segment_path(&out_path, idx);
-    let seg = spawn_segment(&app, engine, encoder, target, fps, &resolution, &quality, &path, idx, cfg, &controls, true).await
+    let seg = spawn_segment(&app, engine, encoder, target, fps, &resolution, &quality, &path, idx, cfg, &controls, draw_mouse, clock).await
         .inspect_err(|_e| {
             let _ = app.emit("glint-toast", "Couldn't resume recording");
         })?;
@@ -1048,7 +1091,7 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     }
     windows::close_cam_bubble(&app);
     let rec = rec.ok_or("not recording")?;
-    let ActiveRecording { out_path, width, height, mut done, current, fx, .. } = rec;
+    let ActiveRecording { out_path, width, height, mut done, current, fx, studio, .. } = rec;
     // Tear down FX (unhook input, destroy overlay) now that the recording is ending.
     if let Some(session) = fx { session.stop(&app); }
 
@@ -1077,6 +1120,12 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
         return Ok(());
     }
 
+    let studio_folder=if let Some(studio)=studio {
+        let folder=studio.finish()?;
+        let probe=trim::recorder_trim_probe(app.clone(),out_path.clone()).await?;
+        studio::write_project(&folder,&studio::initial_project(probe.duration_secs))?;
+        Some(folder)
+    } else {None};
     let thumb_path = thumb::extract_thumb(&app, &out_path).await;
     let row = crate::db::NewCapture {
         kind: "recording".into(),
@@ -1104,6 +1153,10 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     let _ = app.emit("capture-saved", ());
     let _ = app.emit("recorder-stopped", ());
 
+    if studio_folder.is_some() {
+        recorder_open_trim(app.clone(),rec_id.unwrap_or(-1),out_path.clone()).await?;
+        return Ok(());
+    }
     // Post-recording HUD: a floating panel with the new video's thumbnail + quick
     // drag-out / Open / Reveal / Copy-path actions (CleanShot-style), so the user
     // can act on the recording without opening the Library. Only on a real save.
@@ -1127,7 +1180,7 @@ pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     windows::close_control_bar(&app);
     windows::close_cam_bubble(&app);
     windows::close_countdown(&app); // in case cancel races the countdown
-    if let Some(ActiveRecording { mut done, current, out_path, fx, cam_path, .. }) = rec {
+    if let Some(ActiveRecording { mut done, current, out_path, fx, cam_path, studio, .. }) = rec {
         // Tear down FX (unhook input, destroy overlay) on discard.
         if let Some(session) = fx { session.stop(&app); }
         // Drop any partial webcam sidecar + placement written before cancel.
@@ -1150,6 +1203,12 @@ pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
             let _ = std::fs::remove_file(s);
         }
         let _ = std::fs::remove_file(&out_path);
+        if let Some(studio)=studio {
+            let folder=studio.finish()?;
+            // Only remove known files in this newly-created project folder.
+            for name in ["events.json","project.json","video.cam.webm","video.cam.json"] {let _=std::fs::remove_file(folder.join(name));}
+            let _=std::fs::remove_dir(folder);
+        }
     }
     let _ = app.emit("recorder-stopped", ());
     Ok(())
@@ -1194,6 +1253,7 @@ pub async fn recorder_set_fx(app: tauri::AppHandle, effect: String, on: bool) ->
         let state = app.state::<RecorderState>();
         let mut guard = state.0.lock().unwrap();
         let rec = guard.as_mut().ok_or("not recording")?;
+        if rec.studio.is_some() { return Err("Studio effects are edited after recording".into()); }
         let had_overlay = rec.fx_cfg.needs_overlay();
         match effect.as_str() {
             "click_viz" => rec.fx_cfg.click_viz = on,
@@ -1296,6 +1356,7 @@ pub fn recorder_status(app: tauri::AppHandle) -> Option<RecorderStatusDto> {
     let guard = state.0.lock().unwrap();
     guard.as_ref().map(|r| RecorderStatusDto {
         recording: true,
+        studio_mode: r.studio.is_some(),
         elapsed_secs: r.started.elapsed().as_secs(),
         system: r.sys_avail,
         mic: r.mic_avail,

@@ -74,6 +74,7 @@ export function RegionSelect() {
   // Audio-source intent for THIS recording, seeded from saved settings. The chips
   // hold local state only — they don't persist back (Settings owns the default).
   const settings = useAppStore((s) => s.settings);
+  const [studioMode, setStudioMode] = useState(false);
   const [sys, setSys] = useState(true);
   const [mic, setMic] = useState(false);
   const [cam, setCam] = useState(false);
@@ -92,6 +93,7 @@ export function RegionSelect() {
   // whenever Rust re-opens the pre-warmed selector (`rec-select-reset`), so a reused
   // window always reflects the latest saved defaults. Setters are stable → no deps.
   const applySeed = useCallback((s: Settings) => {
+    setStudioMode(false);
     setSys(s.record_system_audio ?? true);
     setMic(s.record_microphone ?? false);
     const movable = s.record_webcam_movable ?? false;
@@ -147,7 +149,7 @@ export function RegionSelect() {
   // Click/keystroke/spotlight are no longer chips here (they're live in the pill +
   // defaulted in Settings) but still flow through from the saved defaults so a user
   // who turned them on in Settings starts recording with them on.
-  const fxOpts = { click_viz: clickViz, keystrokes, spotlight, cursor_hide: cursorHide, cursor_size: cursorSize };
+  const fxOpts = { studio_mode: studioMode, click_viz: clickViz, keystrokes, spotlight, cursor_hide: cursorHide, cursor_size: cursorSize };
 
   // Cursor is one control with four mutually-exclusive states (a capture-time choice —
   // it sets how gdigrab draws the pointer, so it can't change mid-recording). Hide and
@@ -190,13 +192,13 @@ export function RegionSelect() {
       w: Math.round(rect.w * env.scale),
       h: Math.round(rect.h * env.scale),
     }, { system: sys, mic, webcam: cam, webcamMovable: camMovable }, fxOpts).catch(() => { /* a toast already surfaces start failures */ });
-  }, [rect, env, sys, mic, cam, camMovable, clickViz, keystrokes, spotlight, cursorHide, cursorSize]);
+  }, [rect, env, sys, mic, cam, camMovable, clickViz, keystrokes, spotlight, cursorHide, cursorSize, studioMode]);
 
   const confirmFullscreen = useCallback(() => {
     if (confirmed.current) return;
     confirmed.current = true;
     recorderStartFullscreen({ system: sys, mic, webcam: cam, webcamMovable: camMovable }, fxOpts).catch(() => { /* toast surfaces failures */ });
-  }, [sys, mic, cam, camMovable, clickViz, keystrokes, spotlight, cursorHide, cursorSize]);
+  }, [sys, mic, cam, camMovable, clickViz, keystrokes, spotlight, cursorHide, cursorSize, studioMode]);
 
   // Esc cancels (closing is safe — no follow-up IPC). Enter confirms the region.
   useEffect(() => {
@@ -297,6 +299,7 @@ export function RegionSelect() {
                 : "Drag to select a region · Esc to cancel"}
         </span>
         <div className="rec-sel-chipgroup">
+          <button className={`rec-sel-chip${studioMode ? "" : " rec-sel-chip--off"}`} aria-pressed={studioMode} onPointerDown={(e) => e.stopPropagation()} onClick={() => setStudioMode((v) => !v)} title="Record an editable project with cursor and effects saved separately">Studio mode</button>
           <button
             className={`rec-sel-chip${sys ? "" : " rec-sel-chip--off"}`}
             onPointerDown={(e) => e.stopPropagation()}

@@ -393,6 +393,8 @@ pub fn run() {
             crate::recorder::trim::recorder_trim_export,
             crate::recorder::trim::recorder_trim_waveform,
             recorder::recorder_open_trim,
+            recorder::studio::studio_load,
+            recorder::studio::studio_save,
             recorder::recorder_trim_target,
             crate::ocr::commands::ocr_result,
             crate::ocr::commands::ocr_extract_capture,

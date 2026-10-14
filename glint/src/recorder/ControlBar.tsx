@@ -13,6 +13,7 @@ export function mmss(total: number): string {
 
 export function ControlBar() {
   const barRef = useRef<HTMLDivElement>(null);
+  const [studioMode, setStudioMode] = useState(false);
   const [secs, setSecs] = useState(0);
   const [paused, setPaused] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -36,6 +37,7 @@ export function ControlBar() {
     const load = () =>
       recorderStatus().then((s) => {
         if (s) {
+          setStudioMode(s.studio_mode);
           setAudio({ system: s.system, mic: s.mic, sysMuted: s.system_muted, micMuted: s.mic_muted });
           setCamOn(s.webcam);
           setFx({ clickViz: s.click_viz, keystrokes: s.keystrokes, spotlight: s.spotlight });
@@ -188,7 +190,7 @@ export function ControlBar() {
       >
         {camOn ? <Video size={13} /> : <VideoOff size={13} />}
       </button>
-      {fx && (
+      {fx && !studioMode && (
         <>
           <button
             className={`rec-atog${fx.clickViz ? "" : " rec-atog--off"}`}

@@ -3,6 +3,7 @@ import { invoke } from "@tauri-apps/api/core";
 
 export interface RecorderStatus {
   recording: boolean;
+  studio_mode: boolean;
   elapsed_secs: number;
   system: boolean;
   mic: boolean;
@@ -17,6 +18,7 @@ export interface RecorderStatus {
 }
 
 export interface FxOpts {
+  studio_mode?: boolean;
   click_viz?: boolean;
   keystrokes?: boolean;
   spotlight?: boolean;
@@ -28,6 +30,7 @@ export interface FxOpts {
 // These MUST be camelCase or the multi-word args silently arrive as None (false) —
 // which is exactly why click/hide/size effects didn't apply at recording start.
 const fxPayload = (fx?: FxOpts) => ({
+  studioMode: fx?.studio_mode ?? false,
   clickViz: fx?.click_viz ?? false,
   keystrokes: fx?.keystrokes ?? false,
   spotlight: fx?.spotlight ?? false,

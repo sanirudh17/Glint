@@ -4,7 +4,7 @@
 //! Tauri event to the overlay and return immediately. Keylogger-shaped but LOCAL —
 //! events only drive on-screen chips, never persisted or sent.
 
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use tauri::{AppHandle, Emitter};
 use windows::Win32::Foundation::{LPARAM, LRESULT, WPARAM};
 use windows::Win32::UI::WindowsAndMessaging::{
@@ -26,6 +26,7 @@ thread_local! {
     static CFG: Cell<super::FxConfig> = const { Cell::new(super::FxConfig {
         click_viz: false, keystrokes: false, spotlight: false, cursor_hide: false, cursor_size: 0,
     }) };
+    static STUDIO: RefCell<Option<crate::recorder::studio::EventSink>> = const { RefCell::new(None) };
     static LAST_MOVE: Cell<u64> = const { Cell::new(0) };
 }
 
@@ -36,7 +37,15 @@ fn now_ms() -> u64 {
     SystemTime::now().duration_since(UNIX_EPOCH).map(|d| d.as_millis() as u64).unwrap_or(0)
 }
 
-fn emit(event: &str, payload: serde_json::Value) {
+fn emit(event: &str, mut payload: serde_json::Value) {
+    let persisted=STUDIO.with(|s| {
+        if let Some(sink)=s.borrow().as_ref() {
+            payload["kind"]=serde_json::json!(match event { "fx-cursor" => "cursor", "fx-click" => "click", _ => "key" });
+            sink.push(payload.clone()); true
+        } else {false}
+    });
+    if persisted {return;}
+
     APP.with(|a| {
         // take/replace so we borrow the AppHandle without moving the Cell's contents away.
         if let Some(app) = a.take() {
@@ -151,7 +160,7 @@ unsafe extern "system" fn mouse_proc(code: i32, wparam: WPARAM, lparam: LPARAM) 
                 if cfg.spotlight || cfg.cursor_hide || cfg.cursor_size > 0 {
                     let now = now_ms();
                     let last = LAST_MOVE.with(|l| l.get());
-                    if throttle_ok(last, now, MOVE_GAP_MS) {
+                    if throttle_ok(last, now, if STUDIO.with(|s|s.borrow().is_some()) {8} else {MOVE_GAP_MS}) {
                         LAST_MOVE.with(|l| l.set(now));
                         emit("fx-cursor", serde_json::json!({ "x": x, "y": y }));
                     }
@@ -191,7 +200,8 @@ pub struct HookHandle {
 
 impl HookHandle {
     /// Signal the pump thread to quit and join it (unhooks on the way out).
-    pub fn stop(mut self) {
+    pub fn stop(mut self) {self.shutdown();}
+    fn shutdown(&mut self) {
         unsafe {
             let _ = PostThreadMessageW(self.thread_id, WM_QUIT, WPARAM(0), LPARAM(0));
         }
@@ -201,16 +211,27 @@ impl HookHandle {
     }
 }
 
+impl Drop for HookHandle { fn drop(&mut self) {if self.join.is_some() {self.shutdown();}} }
+
 /// Install the hooks on a fresh thread and run its message pump. Returns a handle
 /// whose `stop()` cleanly unhooks + joins.
 pub fn start_hooks(app: AppHandle, cfg: super::FxConfig) -> HookHandle {
+    install_hooks(app, cfg, None).expect("Quick hook thread failed")
+}
+
+pub fn start_studio_hooks(app: AppHandle, sink: crate::recorder::studio::EventSink) -> Result<HookHandle,String> {
+    install_hooks(app, super::FxConfig {click_viz:true,keystrokes:true,spotlight:true,cursor_hide:false,cursor_size:0}, Some(sink))
+}
+fn install_hooks(app: AppHandle, cfg: super::FxConfig, sink: Option<crate::recorder::studio::EventSink>) -> Result<HookHandle,String> {
     let (tx, rx) = std::sync::mpsc::channel::<u32>();
     let join = std::thread::spawn(move || {
         APP.with(|a| a.set(Some(app)));
         CFG.with(|c| c.set(cfg));
+        let studio = sink.is_some();
+        STUDIO.with(|s| *s.borrow_mut()=sink);
         // Publish our thread id so the caller can PostThreadMessage(WM_QUIT).
         let tid = unsafe { windows::Win32::System::Threading::GetCurrentThreadId() };
-        let _ = tx.send(tid);
+
 
         // Only hook what's needed. In particular the KEYBOARD hook is installed
         // solely when keystroke display is on — we never watch the keyboard for the
@@ -234,13 +255,28 @@ pub fn start_hooks(app: AppHandle, cfg: super::FxConfig) -> HookHandle {
             log::warn!("fx: keyboard hook failed to install");
         }
 
+        // Create the message queue before publishing the thread id (stop can race startup).
+        unsafe { let mut msg=MSG::default(); let _=windows::Win32::UI::WindowsAndMessaging::PeekMessageW(&mut msg,None,0,0,windows::Win32::UI::WindowsAndMessaging::PM_NOREMOVE); }
+        if studio && (mouse.is_none() || keyboard.is_none()) {
+            unsafe { if let Some(h)=mouse {let _=UnhookWindowsHookEx(h);} if let Some(h)=keyboard {let _=UnhookWindowsHookEx(h);} }
+            STUDIO.with(|s| *s.borrow_mut()=None); return;
+        }
+        let _=tx.send(tid);
+        let timer=if studio {unsafe {windows::Win32::UI::WindowsAndMessaging::SetTimer(None,0,8,None)}} else {0};
         // Standard LL-hook message pump. GetMessageW returns 0 on WM_QUIT → exit.
         unsafe {
             let mut msg = MSG::default();
             while GetMessageW(&mut msg, None, 0, 0).0 > 0 {
+                if studio && msg.message == windows::Win32::UI::WindowsAndMessaging::WM_TIMER {
+                    let mut point=windows::Win32::Foundation::POINT::default();
+                    if windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut point).is_ok() {
+                        emit("fx-cursor",serde_json::json!({"x":point.x,"y":point.y}));
+                    }
+                }
                 let _ = TranslateMessage(&msg);
                 DispatchMessageW(&msg);
             }
+            if timer != 0 {let _=windows::Win32::UI::WindowsAndMessaging::KillTimer(None,timer);}
             if let Some(h) = mouse {
                 let _ = UnhookWindowsHookEx(h);
             }
@@ -248,12 +284,13 @@ pub fn start_hooks(app: AppHandle, cfg: super::FxConfig) -> HookHandle {
                 let _ = UnhookWindowsHookEx(h);
             }
         }
+        STUDIO.with(|s| *s.borrow_mut()=None);
         APP.with(|a| {
             a.take();
         });
     });
-    let thread_id = rx.recv().unwrap_or(0);
-    HookHandle { thread_id, join: Some(join) }
+    let thread_id = rx.recv().map_err(|_|"Couldn't install Studio input hooks".to_string())?;
+    Ok(HookHandle { thread_id, join: Some(join) })
 }
 
 #[cfg(test)]
