@@ -2,8 +2,9 @@ import { clamp,effectId } from "./studioEffects";
 export interface SourceRect {x:number;y:number;w:number;h:number}
 export interface MaskKeyframe extends SourceRect {t:number}
 export interface MaskSegment {
-  id:string;start:number;end:number;type:'blur'|'pixelate'|'solid';
+  id:string;start:number;end:number;type:'blur'|'pixelate'|'solid'|'highlight';
   keyframes:MaskKeyframe[];strength:number;color:string;
+  opacity?:number;blurOutside?:boolean;
 }
 export function sourceRect(rect:SourceRect,width:number,height:number):SourceRect {
   const x=clamp(rect.x,0,Math.max(0,width-2)),y=clamp(rect.y,0,Math.max(0,height-2));
@@ -35,13 +36,16 @@ export function copyMaskAt(mask:MaskSegment,time:number,duration:number):MaskSeg
 export function validateMasks(masks:MaskSegment[],duration:number,width=Infinity,height=Infinity):boolean {
   return masks.length<=512&&new Set(masks.map(m=>m.id)).size===masks.length&&masks.every(m=>
     typeof m.id==='string'&&[m.start,m.end,m.strength].every(Number.isFinite)&&m.start>=0&&m.end>m.start&&m.end<=duration+.05
-    &&['blur','pixelate','solid'].includes(m.type)&&m.strength>=8&&m.strength<=80&&/^#[0-9a-f]{6}$/i.test(m.color)
+    &&['blur','pixelate','solid','highlight'].includes(m.type)&&m.strength>=8&&m.strength<=80&&/^#[0-9a-f]{6}$/i.test(m.color)
+    &&(m.opacity===undefined||Number.isFinite(m.opacity)&&m.opacity>=0&&m.opacity<=1)
+    &&(m.blurOutside===undefined||typeof m.blurOutside==='boolean')
     &&Array.isArray(m.keyframes)&&m.keyframes.length>0&&m.keyframes.length<=512&&new Set(m.keyframes.map(p=>p.t)).size===m.keyframes.length
     &&m.keyframes.every(p=>[p.t,p.x,p.y,p.w,p.h].every(Number.isFinite)&&p.t>=0&&p.t<=duration+.05&&p.x>=0&&p.y>=0&&p.w>=2&&p.h>=2&&p.x+p.w<=width+.01&&p.y+p.h<=height+.01));
 }
 /** Masks mutate an offscreen source canvas before the source is cropped or zoomed. */
 export function applyPreviewMasks(ctx:CanvasRenderingContext2D,masks:MaskSegment[],time:number,width:number,height:number,scratch:HTMLCanvasElement) {
-  for(const mask of masks.filter(m=>m.start<=time&&time<m.end)) {
+  const active=masks.filter(m=>m.start<=time&&time<m.end);
+  for(const mask of active.filter(m=>m.type!=='highlight')) {
     const r=sourceRect(maskAt(mask,time),width,height),x=Math.floor(r.x),y=Math.floor(r.y),w=Math.min(width-x,Math.ceil(r.w)),h=Math.min(height-y,Math.ceil(r.h));
     const temp=scratch.getContext('2d')!;
     if(mask.type==='solid') {ctx.fillStyle=mask.color;ctx.fillRect(x,y,w,h);continue;}
@@ -59,5 +63,12 @@ export function applyPreviewMasks(ctx:CanvasRenderingContext2D,masks:MaskSegment
     if(mask.type==='blur') {ctx.fillStyle=mask.color;ctx.fillRect(x,y,w,h);ctx.filter=`blur(${mask.strength/2}px)`;ctx.drawImage(scratch,x-pad,y-pad);}
     else ctx.drawImage(scratch,0,0,scratch.width,scratch.height,x,y,w,h);
     ctx.restore();
+  }
+  for(const mask of active.filter(m=>m.type==='highlight')) {
+    const r=sourceRect(maskAt(mask,time),width,height);
+    if(mask.blurOutside) {scratch.width=width;scratch.height=height;scratch.getContext('2d')!.drawImage(ctx.canvas,0,0);}
+    ctx.save();ctx.beginPath();ctx.rect(0,0,width,height);ctx.rect(r.x,r.y,r.w,r.h);ctx.clip('evenodd');
+    if(mask.blurOutside) {ctx.filter=`blur(${mask.strength/2}px)`;ctx.drawImage(scratch,0,0);ctx.filter='none';}
+    ctx.fillStyle=`rgba(0,0,0,${mask.opacity??.55})`;ctx.fillRect(0,0,width,height);ctx.restore();
   }
 }

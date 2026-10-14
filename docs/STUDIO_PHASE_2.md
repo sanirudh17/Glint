@@ -32,7 +32,8 @@ No new libraries, cloud services or bundled media are needed.
   resizing in preview, timeline trimming, duplicate/copy/split and whole-clip
   defaults. A privacy note and explicitly confirmed source-deletion option keep
   sharing limited to the finished export. Thumbnail names are unique per path.
-- 2.5: pending.
+- 2.5: keyframed highlights dim and optionally blur outside the chosen source
+  rectangle. Privacy masks are applied first, so highlights cannot restore them.
 - 2.6: pending.
 
 ## Final acceptance

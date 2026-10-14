@@ -19,3 +19,8 @@ it('rejects masks outside the source and clamps UI edits to the actual source si
   expect(validateMasks([mask],10,1920,1080)).toBe(false);
   expect(sourceRect({x:0,y:0,w:2000,h:1080},1920,1080)).toEqual({x:0,y:0,w:1920,h:1080});
 });
+it('highlight effects reuse keyframes, splitting and validation without being redaction',()=>{
+  const mask={...newMask({x:100,y:50,w:200,h:80},0,10),type:'highlight' as const,opacity:.55,blurOutside:true};
+  expect(validateMasks([mask],10,1920,1080)).toBe(true);expect(splitMask(mask,5)).toHaveLength(2);
+  expect(validateMasks([{...mask,opacity:2}],10,1920,1080)).toBe(false);
+});
