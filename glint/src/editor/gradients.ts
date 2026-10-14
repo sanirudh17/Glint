@@ -13,6 +13,11 @@ export function getGradient(id: string): GradientPreset {
   return GRADIENTS.find((g) => g.id === id) ?? GRADIENTS[0];
 }
 
+/** CSS measures clockwise from up; the canvas measures clockwise from right. */
+export function cssGradient(preset: GradientPreset): string {
+  return `linear-gradient(${preset.angleDeg + 90}deg, ${preset.stops.map((s) => `${s.color} ${s.offset * 100}%`).join(", ")})`;
+}
+
 export function konvaGradient(preset: GradientPreset, w: number, h: number): {
   fillLinearGradientStartPoint: { x: number; y: number };
   fillLinearGradientEndPoint: { x: number; y: number };

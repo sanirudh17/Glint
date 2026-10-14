@@ -6,7 +6,7 @@ use super::{
     trim::{self, CamOverlay, KeepSegment},
 };
 use font8x8::UnicodeFonts;
-use image::{Rgb, RgbImage};
+use image::{GrayImage, Luma, Rgb, RgbImage};
 use serde::Deserialize;
 use serde_json::Value;
 use std::{
@@ -211,6 +211,102 @@ fn sdf(x: f64, y: f64, w: f64, h: f64, r: f64) -> f64 {
     let qy = (y - h / 2.).abs() - (h / 2. - r);
     qx.max(0.).hypot(qy.max(0.)) + qx.max(qy).min(0.) - r
 }
+// Distance clockwise along the rounded outline, matching a canvas [8, 6] dash.
+fn outline_distance(x: f64, y: f64, w: f64, h: f64, r: f64) -> f64 {
+    let horizontal = w - 2. * r;
+    let vertical = h - 2. * r;
+    let arc = std::f64::consts::FRAC_PI_2 * r;
+    if r > 0. {
+        if x > w - r && y < r {
+            return horizontal + ((y - r).atan2(x - w + r) + std::f64::consts::FRAC_PI_2) * r;
+        }
+        if x > w - r && y > h - r {
+            return horizontal + arc + vertical + (y - h + r).atan2(x - w + r) * r;
+        }
+        if x < r && y > h - r {
+            return 2. * horizontal
+                + 2. * arc
+                + vertical
+                + ((y - h + r).atan2(x - r) - std::f64::consts::FRAC_PI_2) * r;
+        }
+        if x < r && y < r {
+            return 2. * horizontal
+                + 3. * arc
+                + 2. * vertical
+                + ((y - r).atan2(x - r) + std::f64::consts::PI) * r;
+        }
+    }
+    let sides = [
+        (y.abs(), 0),
+        ((w - x).abs(), 1),
+        ((h - y).abs(), 2),
+        (x.abs(), 3),
+    ];
+    match sides.iter().min_by(|a, b| a.0.total_cmp(&b.0)).unwrap().1 {
+        0 => x - r,
+        1 => horizontal + arc + y - r,
+        2 => horizontal + 2. * arc + vertical + w - r - x,
+        _ => 2. * horizontal + 3. * arc + vertical + h - r - y,
+    }
+}
+// Three separable box passes approximate a Gaussian without a radius-sized
+// convolution at every pixel. This is cached once, independent of clip length.
+fn blur_shadow(mask: GrayImage, sigma: f64) -> GrayImage {
+    let (w, h) = (mask.width() as usize, mask.height() as usize);
+    let ideal = (4. * sigma * sigma + 1.).sqrt();
+    let lower = (ideal.floor() as usize).max(1) | 1;
+    let lower = if lower as f64 > ideal {
+        lower.saturating_sub(2).max(1)
+    } else {
+        lower
+    };
+    let upper = lower + 2;
+    let count = ((12. * sigma * sigma - 3. * (lower * lower) as f64 - 12. * lower as f64 - 9.)
+        / (-4. * lower as f64 - 4.))
+        .round()
+        .clamp(0., 3.) as usize;
+    let mut pixels: Vec<f32> = mask.into_raw().into_iter().map(|n| n as f32).collect();
+    let mut temporary = vec![0f32; pixels.len()];
+    for pass in 0..3 {
+        let radius = (if pass < count { lower } else { upper }) / 2;
+        if radius == 0 {
+            continue;
+        }
+        let divisor = (radius * 2 + 1) as f32;
+        for y in 0..h {
+            let row = y * w;
+            let mut sum = pixels[row] * radius as f32;
+            for x in 0..=radius {
+                sum += pixels[row + x.min(w - 1)];
+            }
+            for x in 0..w {
+                temporary[row + x] = sum / divisor;
+                sum += pixels[row + (x + radius + 1).min(w - 1)]
+                    - pixels[row + x.saturating_sub(radius)];
+            }
+        }
+        for x in 0..w {
+            let mut sum = temporary[x] * radius as f32;
+            for y in 0..=radius {
+                sum += temporary[y.min(h - 1) * w + x];
+            }
+            for y in 0..h {
+                pixels[y * w + x] = sum / divisor;
+                sum += temporary[(y + radius + 1).min(h - 1) * w + x]
+                    - temporary[y.saturating_sub(radius) * w + x];
+            }
+        }
+    }
+    GrayImage::from_raw(
+        w as u32,
+        h as u32,
+        pixels
+            .into_iter()
+            .map(|n| n.round().clamp(0., 255.) as u8)
+            .collect(),
+    )
+    .unwrap()
+}
 fn blend(image: &mut RgbImage, x: i32, y: i32, c: [u8; 3], alpha: f64) {
     if x < 0 || y < 0 || x >= image.width() as i32 || y >= image.height() as i32 {
         return;
@@ -346,7 +442,14 @@ impl Renderer {
                     limits.max_image_width = Some(16000);
                     limits.max_image_height = Some(16000);
                     reader.limits(limits);
-                    let img = reader.decode().map_err(|e| e.to_string())?.to_rgb8();
+                    let rgba = reader.decode().map_err(|e| e.to_string())?.to_rgba8();
+                    // Premultiply over MP4 black before resizing. Transparent RGB
+                    // must not bleed into visible pixels during interpolation.
+                    let img = RgbImage::from_fn(rgba.width(), rgba.height(), |x, y| {
+                        let pixel = rgba.get_pixel(x, y);
+                        let alpha = pixel[3] as f64 / 255.;
+                        Rgb([0, 1, 2].map(|i| (pixel[i] as f64 * alpha).round() as u8))
+                    });
                     let scale = (l.width as f64 / img.width() as f64)
                         .max(l.height as f64 / img.height() as f64);
                     let img = image::imageops::resize(
@@ -371,17 +474,24 @@ impl Renderer {
             let offset = (0.01 + t * 0.05) * edge;
             let opacity = 0.2 + t * 0.5;
             let c = color(look.shadow_color.as_deref().unwrap_or("#000000"))?;
+            // Blur the card's alpha mask, as Canvas does in the preview. A distance
+            // falloff made exported shadows much darker and broader at the edge.
+            let halo = (sigma * 3. + offset.abs()).ceil() as u32 + 1;
+            let mut mask = GrayImage::new(l.width + halo * 2, l.height + halo * 2);
+            for (x, y, pixel) in mask.enumerate_pixels_mut() {
+                let distance = sdf(
+                    x as f64 - halo as f64 - l.x as f64,
+                    y as f64 - halo as f64 - top as f64 - offset,
+                    l.content_w as f64,
+                    card_h as f64,
+                    l.radius,
+                );
+                *pixel = Luma([((0.5 - distance).clamp(0., 1.) * 255.).round() as u8]);
+            }
+            let mask = blur_shadow(mask, sigma);
             for y in 0..l.height {
                 for x in 0..l.width {
-                    let d = sdf(
-                        x as f64 - l.x as f64,
-                        y as f64 - top as f64 - offset,
-                        l.content_w as f64,
-                        card_h as f64,
-                        l.radius,
-                    )
-                    .max(0.);
-                    let alpha = opacity * (-d * d / (2. * sigma * sigma)).exp();
+                    let alpha = opacity * mask.get_pixel(x + halo, y + halo)[0] as f64 / 255.;
                     blend(&mut plate, x as i32, y as i32, c, alpha);
                 }
             }
@@ -457,17 +567,26 @@ impl Renderer {
             .filter(|b| look.enabled && b.width > 0.)
         {
             let c = color(&b.color)?;
-            let width = b.width * l.scale;
-            for y in top..top + card_h {
-                for x in l.x..l.x + l.content_w {
-                    let d = sdf(
-                        (x - l.x) as f64,
-                        (y - top) as f64,
-                        l.content_w as f64,
-                        card_h as f64,
-                        l.radius,
-                    );
-                    if d <= 0. && d >= -width && (b.style != "dashed" || (x + y) % 14 < 8) {
+            let half_width = b.width * l.scale / 2.;
+            let left = (l.x as f64 - half_width).floor().max(0.) as u32;
+            let upper = (top as f64 - half_width).floor().max(0.) as u32;
+            let right = (l.x as f64 + l.content_w as f64 + half_width)
+                .ceil()
+                .min(l.width as f64) as u32;
+            let bottom = (top as f64 + card_h as f64 + half_width)
+                .ceil()
+                .min(l.height as f64) as u32;
+            for y in upper..bottom {
+                for x in left..right {
+                    let px = x as f64 - l.x as f64;
+                    let py = y as f64 - top as f64;
+                    let d = sdf(px, py, l.content_w as f64, card_h as f64, l.radius);
+                    let distance =
+                        outline_distance(px, py, l.content_w as f64, card_h as f64, l.radius)
+                            / l.scale;
+                    if d.abs() <= half_width
+                        && (b.style != "dashed" || distance.rem_euclid(14.) < 8.)
+                    {
                         border.push((x, y, c));
                     }
                 }
@@ -866,7 +985,7 @@ fn encode(
     args.drain(progress_idx..progress_idx + 2);
     let graph_idx = args.iter().position(|s| s == "-filter_complex").unwrap() + 1;
     args[graph_idx] = format!(
-        "{};[edited]crop={}:{}:{}:{},scale={}:{},fps={},format=rgb24[outv]",
+        "{};[edited]crop={}:{}:{}:{}:exact=1,scale={}:{},fps={},format=rgb24[outv]",
         args[graph_idx].replace("[outv]", "[edited]"),
         l.crop.w,
         l.crop.h,
@@ -990,6 +1109,200 @@ fn encode(
 #[cfg(test)]
 mod tests {
     use super::*;
+    fn background_fixture() -> (Project, Events) {
+        let mut project: Project =
+            serde_json::from_value(super::super::studio::initial_project(2.)).unwrap();
+        project.look.shadow = 0.;
+        project.look.radius = 0.;
+        project.look.padding = 40.;
+        project.cursor.visible = false;
+        project.cursor.clicks = false;
+        project.cursor.keystrokes = false;
+        let events = serde_json::from_value(serde_json::json!({
+            "version":1,"geometry":{"x":0,"y":0,"width":320,"height":200,"monitorX":0,"monitorY":0,"monitorWidth":320,"monitorHeight":200,"dpiScale":1.0},"events":[]
+        })).unwrap();
+        (project, events)
+    }
+    fn render_fixture(project: &Project, events: &Events) -> (Layout, RgbImage) {
+        let renderer = Renderer::new(project, events, 320, 200).unwrap();
+        let l = renderer.layout;
+        let raw: Vec<u8> = [180, 80, 40]
+            .into_iter()
+            .cycle()
+            .take(l.content_w as usize * l.content_h as usize * 3)
+            .collect();
+        let mut frame = RgbImage::new(l.width, l.height);
+        renderer.frame(&raw, 0., &mut frame);
+        (l, frame)
+    }
+
+    #[test]
+    fn all_solid_colors_and_gradients_reach_the_export_pixels() {
+        let (mut project, events) = background_fixture();
+        for hex in [
+            "#000000", "#ffffff", "#ff0000", "#00ff00", "#0000ff", "#a12b7c", "#0a0a0a",
+        ] {
+            project.look.background = serde_json::json!({"type":"solid","color":hex});
+            let (_, frame) = render_fixture(&project, &events);
+            assert_eq!(frame.get_pixel(0, 0).0, color(hex).unwrap());
+        }
+        let gradients: Vec<Gradient> =
+            serde_json::from_str(include_str!("../../../src/look/gradients.json")).unwrap();
+        for g in gradients {
+            project.look.background = serde_json::json!({"type":"gradient","gradientId":g.id});
+            let (l, frame) = render_fixture(&project, &events);
+            for (x, y, stop) in [
+                (l.width - 1, 0, &g.stops[0]),
+                (0, l.height - 1, g.stops.last().unwrap()),
+            ] {
+                let expected = color(&stop.color).unwrap();
+                for (actual, expected) in frame.get_pixel(x, y).0.into_iter().zip(expected) {
+                    assert!(
+                        (actual as i16 - expected as i16).abs() <= 2,
+                        "gradient {} endpoint differs",
+                        g.id
+                    );
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn transparent_and_alpha_images_flatten_over_mp4_black() {
+        use base64::Engine;
+        let (mut project, events) = background_fixture();
+        project.look.background = serde_json::json!({"type":"transparent"});
+        assert_eq!(
+            render_fixture(&project, &events).1.get_pixel(0, 0).0,
+            [0, 0, 0]
+        );
+        for (alpha, expected) in [(0, [0, 0, 0]), (128, [100, 50, 25]), (255, [200, 100, 50])] {
+            let image = image::RgbaImage::from_pixel(2, 2, image::Rgba([200, 100, 50, alpha]));
+            let mut png = std::io::Cursor::new(Vec::new());
+            image::DynamicImage::ImageRgba8(image)
+                .write_to(&mut png, image::ImageFormat::Png)
+                .unwrap();
+            let data = base64::engine::general_purpose::STANDARD.encode(png.into_inner());
+            project.look.background = serde_json::json!({"type":"image","dataUrl":format!("data:image/png;base64,{data}")});
+            assert_eq!(
+                render_fixture(&project, &events).1.get_pixel(0, 0).0,
+                expected
+            );
+        }
+        let mut image = image::RgbaImage::from_pixel(2, 1, image::Rgba([255, 0, 0, 0]));
+        image.put_pixel(1, 0, image::Rgba([0, 255, 0, 255]));
+        let mut png = std::io::Cursor::new(Vec::new());
+        image::DynamicImage::ImageRgba8(image)
+            .write_to(&mut png, image::ImageFormat::Png)
+            .unwrap();
+        let data = base64::engine::general_purpose::STANDARD.encode(png.into_inner());
+        project.look.background =
+            serde_json::json!({"type":"image","dataUrl":format!("data:image/png;base64,{data}")});
+        let (_, frame) = render_fixture(&project, &events);
+        // Invisible red must never bleed into the scaled visible green edge.
+        for x in 0..frame.width() {
+            assert_eq!(frame.get_pixel(x, 0)[0], 0);
+        }
+    }
+
+    #[test]
+    fn shadow_blur_preserves_uniform_masks_and_spreads_an_impulse_symmetrically() {
+        let uniform = blur_shadow(GrayImage::from_pixel(40, 40, Luma([255])), 5.);
+        assert!(uniform.pixels().all(|p| p[0] == 255));
+        let mut mask = GrayImage::new(41, 41);
+        mask.put_pixel(20, 20, Luma([255]));
+        let blurred = blur_shadow(mask, 2.);
+        assert!(blurred.get_pixel(20, 20)[0] > 0 && blurred.get_pixel(20, 20)[0] < 255);
+        for offset in 0..10 {
+            assert_eq!(
+                blurred.get_pixel(20 + offset, 20),
+                blurred.get_pixel(20 - offset, 20)
+            );
+            assert_eq!(
+                blurred.get_pixel(20 + offset, 20),
+                blurred.get_pixel(20, 20 + offset)
+            );
+        }
+        let total: u32 = blurred.pixels().map(|p| p[0] as u32).sum();
+        assert!((200..=300).contains(&total));
+    }
+
+    #[test]
+    fn radius_shadow_color_and_border_width_style_change_the_expected_pixels() {
+        let (mut project, events) = background_fixture();
+        project.look.background = serde_json::json!({"type":"solid","color":"#ffffff"});
+        let (l, square) = render_fixture(&project, &events);
+        assert_eq!(square.get_pixel(l.x + 1, l.y + 1).0, [180, 80, 40]);
+        project.look.radius = 100.;
+        assert_eq!(
+            render_fixture(&project, &events)
+                .1
+                .get_pixel(l.x + 1, l.y + 1)
+                .0,
+            [255, 255, 255]
+        );
+        project.look.radius = 0.;
+        project.look.shadow = 100.;
+        project.look.shadow_color = Some("#0000ff".into());
+        let (_, shadow) = render_fixture(&project, &events);
+        let pixel = shadow
+            .get_pixel(l.x + l.content_w / 2, l.y + l.content_h + 8)
+            .0;
+        assert!(pixel[0] < 255 && pixel[1] < 255 && pixel[2] == 255);
+        project.look.shadow = 0.;
+        project.look.border = Some(Border {
+            width: 4.,
+            color: "#00ff00".into(),
+            style: "solid".into(),
+        });
+        let (_, bordered) = render_fixture(&project, &events);
+        assert_eq!(bordered.get_pixel(l.x + 16, l.y - 1).0, [0, 255, 0]);
+        assert_eq!(bordered.get_pixel(l.x + 16, l.y - 3).0, [255, 255, 255]);
+        project.look.border.as_mut().unwrap().width = 16.;
+        assert_eq!(
+            render_fixture(&project, &events)
+                .1
+                .get_pixel(l.x + 16, l.y - 3)
+                .0,
+            [0, 255, 0]
+        );
+        project.look.border.as_mut().unwrap().style = "dashed".into();
+        let (_, dashed) = render_fixture(&project, &events);
+        assert_eq!(dashed.get_pixel(l.x + 2, l.y - 1).0, [0, 255, 0]);
+        assert_eq!(dashed.get_pixel(l.x + 10, l.y - 1).0, [255, 255, 255]);
+    }
+
+    #[test]
+    fn every_aspect_and_padding_extreme_stays_even_and_contains_the_content() {
+        let (mut project, _) = background_fixture();
+        for aspect in ["auto", "1:1", "16:9", "4:3", "9:16", "4:5"] {
+            project.look.aspect = aspect.into();
+            for padding in [0., 40., 100.] {
+                project.look.padding = padding;
+                let l = layout(1920, 1080, None, &project.look).unwrap();
+                assert_eq!(l.width % 2, 0);
+                assert_eq!(l.height % 2, 0);
+                assert!(l.x + l.content_w <= l.width && l.y + l.content_h <= l.height);
+                if aspect != "auto" {
+                    let (w, h) = aspect.split_once(':').unwrap();
+                    let ratio = w.parse::<f64>().unwrap() / h.parse::<f64>().unwrap();
+                    assert!((l.width as f64 / l.height as f64 - ratio).abs() < 0.003);
+                }
+            }
+        }
+        assert!(layout(
+            1920,
+            1080,
+            Some(Crop {
+                x: 0.,
+                y: 0.,
+                w: 2000.,
+                h: 1080.
+            }),
+            &project.look
+        )
+        .is_err());
+    }
     #[test]
     fn timeline_time_follows_reorder_and_speed() {
         let s = [
@@ -1032,18 +1345,31 @@ mod tests {
 
     #[test]
     fn golden_frame_pixels_preserve_crop_cursor_and_click_toggles() {
-        let mut p: Project = serde_json::from_value(super::super::studio::initial_project(2.)).unwrap();
+        let mut p: Project =
+            serde_json::from_value(super::super::studio::initial_project(2.)).unwrap();
         p.look.background = serde_json::json!({"type":"solid","color":"#102030"});
         p.look.shadow = 0.;
-        p.crop = Some(Crop { x: 100., y: 50., w: 320., h: 200. });
-        p.cursor.style = "dot".into(); p.cursor.smoothing = 0.; p.cursor.hide_idle = false; p.cursor.clicks = false;
+        p.crop = Some(Crop {
+            x: 100.,
+            y: 50.,
+            w: 320.,
+            h: 200.,
+        });
+        p.cursor.style = "dot".into();
+        p.cursor.smoothing = 0.;
+        p.cursor.hide_idle = false;
+        p.cursor.clicks = false;
         let events: Events = serde_json::from_value(serde_json::json!({
             "version":1,"geometry":{"x":-640,"y":0,"width":1280,"height":800,"monitorX":-640,"monitorY":0,"monitorWidth":1280,"monitorHeight":800,"dpiScale":2.0},
             "events":[{"t":0.0,"kind":"cursor","x":-200,"y":300},{"t":0.0,"kind":"click","x":-200,"y":300,"button":"left"}]
         })).unwrap();
         let renderer = Renderer::new(&p, &events, 640, 400).unwrap();
         let l = renderer.layout;
-        let raw: Vec<u8> = [180, 80, 40].into_iter().cycle().take(l.content_w as usize * l.content_h as usize * 3).collect();
+        let raw: Vec<u8> = [180, 80, 40]
+            .into_iter()
+            .cycle()
+            .take(l.content_w as usize * l.content_h as usize * 3)
+            .collect();
         let mut frame = RgbImage::new(l.width, l.height);
         renderer.frame(&raw, 0.15, &mut frame);
         assert_eq!(frame.get_pixel(0, 0).0, [16, 32, 48]);
@@ -1051,10 +1377,14 @@ mod tests {
         assert_eq!(frame.get_pixel(50, 50).0, [180, 80, 40]);
         assert_eq!(frame.get_pixel(152, 132).0, [255, 255, 255]);
         p.cursor.visible = false;
-        Renderer::new(&p, &events, 640, 400).unwrap().frame(&raw, 0.15, &mut frame);
+        Renderer::new(&p, &events, 640, 400)
+            .unwrap()
+            .frame(&raw, 0.15, &mut frame);
         assert_eq!(frame.get_pixel(152, 132).0, [180, 80, 40]);
         p.cursor.clicks = true;
-        Renderer::new(&p, &events, 640, 400).unwrap().frame(&raw, 0.15, &mut frame);
+        Renderer::new(&p, &events, 640, 400)
+            .unwrap()
+            .frame(&raw, 0.15, &mut frame);
         assert_eq!(frame.get_pixel(171, 132).0, [113, 143, 183]);
     }
 }

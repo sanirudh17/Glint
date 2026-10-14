@@ -11,13 +11,13 @@ export function NumberInput({ value, onChange, min = 0, max, step = 1, unit, ari
   const [draft, setDraft] = useState(String(value));
   useEffect(() => setDraft(String(value)), [value]);
   const clamp = (number: number) => Math.min(max, Math.max(min, Math.round(number / step) * step));
+  const number = draft.trim() ? Number(draft) : value;
+  const pending = Number.isFinite(number) ? clamp(number) : value;
   const commit = () => {
-    const number = draft.trim() ? Number(draft) : value;
-    const next = Number.isFinite(number) ? clamp(number) : value;
-    setDraft(String(next)); onChange(next);
+    setDraft(String(pending)); onChange(pending);
   };
   const bump = (direction: number) => {
-    const next = clamp(value + direction * step);
+    const next = clamp(pending + direction * step);
     setDraft(String(next)); onChange(next);
   };
   return <div className="g-number-input" data-editor-control>
@@ -27,15 +27,14 @@ export function NumberInput({ value, onChange, min = 0, max, step = 1, unit, ari
       onChange={(e) => {
         const next = e.target.value; if (!/^-?\d*(?:\.\d*)?$/.test(next)) return;
         setDraft(next);
-        const number = Number(next);
-        if (next.trim() && Number.isFinite(number) && number >= min && number <= max) onChange(clamp(number));
       }}
       onKeyDown={(e) => {
         if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); bump((e.key === "ArrowUp" ? 1 : -1) * (e.shiftKey ? 10 : 1)); }
         if (e.key === "Enter") { e.preventDefault(); commit(); }
+        if (e.key === "Escape") { e.preventDefault(); setDraft(String(value)); }
       }} />
     {unit && <span className="g-number-unit" aria-hidden>{unit}</span>}
-    <button type="button" disabled={disabled || value <= min} aria-label={`Decrease ${ariaLabel.toLowerCase()}`} onClick={() => bump(-1)}><Minus size={12} /></button>
-    <button type="button" disabled={disabled || value >= max} aria-label={`Increase ${ariaLabel.toLowerCase()}`} onClick={() => bump(1)}><Plus size={12} /></button>
+    <button type="button" disabled={disabled || pending <= min} aria-label={`Decrease ${ariaLabel.toLowerCase()}`} onClick={() => bump(-1)}><Minus size={12} /></button>
+    <button type="button" disabled={disabled || pending >= max} aria-label={`Increase ${ariaLabel.toLowerCase()}`} onClick={() => bump(1)}><Plus size={12} /></button>
   </div>;
 }

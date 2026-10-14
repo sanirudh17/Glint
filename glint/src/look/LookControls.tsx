@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { ImagePlus } from "lucide-react";
 import { Select, ColorControl, ControlDisclosure } from "../components/ui";
-import { GRADIENTS } from "../editor/gradients";
+import { cssGradient, GRADIENTS } from "../editor/gradients";
 import { cloneLook, type AspectId, type LookConfig } from "./model";
 import { savePreset, useLookPresets } from "./presets";
 
@@ -43,13 +43,25 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
     {bg.type === "gradient" && <div className="look-gradient-grid">{GRADIENTS.map((g) => <button type="button" key={g.id}
       title={g.label} aria-label={g.label} aria-pressed={bg.gradientId === g.id}
       className={`look-gradient${bg.gradientId === g.id ? " is-active" : ""}`}
-      style={{ background: `linear-gradient(135deg, ${g.stops[0].color}, ${g.stops[g.stops.length - 1].color})` }} // taste-skill-ignore: previews the user-selected media gradient
+      style={{ background: cssGradient(g) }} // taste-skill-ignore: previews the user-selected media gradient
       onClick={() => change({ background: { type: "gradient", gradientId: g.id } })} />)}</div>}
     {bg.type === "image" && <label className="look-image-picker"><ImagePlus size={16} strokeWidth={1.6} />{bg.dataUrl ? "Replace background image" : "Choose background image"}
       <input aria-label="Background image" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => {
         const file = e.target.files?.[0]; if (!file) return;
         if (file.size > 15 * 1024 * 1024) { setError("Choose an image smaller than 15 MB."); return; }
-        const reader = new FileReader(); reader.onload = () => change({ background: { type: "image", dataUrl: String(reader.result) } }); reader.readAsDataURL(file);
+        const reader = new FileReader();
+        reader.onerror = () => setError("This image could not be read. Choose another file.");
+        reader.onload = () => {
+          const dataUrl = String(reader.result), image = new Image();
+          image.onerror = () => setError("Choose a valid PNG, JPEG or WebP image.");
+          image.onload = () => {
+            if (image.width > 16000 || image.height > 16000) { setError("Choose an image with each side under 16,000 px."); return; }
+            setError(null); change({ background: { type: "image", dataUrl } });
+          };
+          image.src = dataUrl;
+        };
+        reader.readAsDataURL(file);
+        e.target.value = "";
       }} />
     </label>}
     {(["padding", "radius", "shadow"] as const).map((key) => <LookSlider key={key} label={key[0].toUpperCase() + key.slice(1)} // taste-skill-ignore: media shadow strength control

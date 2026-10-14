@@ -38,8 +38,8 @@ and use a compact inspector with a hover-only themed scrollbar.
 
 ## Acceptance evidence
 
-- Frontend production build passes; 204 frontend tests pass.
-- Native build passes; 207 native tests pass, with two existing
+- Frontend production build passes; 206 frontend tests pass.
+- Native build passes; 212 native tests pass, with two existing
   display-dependent tests skipped. A frame-pixel regression checks rounded
   corners and physical-to-source cursor alignment with crop/DPI and effect toggles.
 - The real Tauri app opened the generated Studio folder and exported a 60-second
@@ -51,6 +51,20 @@ and use a compact inspector with a hover-only themed scrollbar.
   reopening, reordered cuts/speed time mapping, and negative monitor origins.
 - Taste source lint and Impeccable's detector pass for the new controls. The
   inspector was reviewed in the real WebView2 app, preserving Glint's design.
+- Final crop regression verified in the real app: typing `2000` does not apply
+  `2`, `20` or `200`; Enter clamps to the 1920 px source limit, and a valid 800 px
+  crop applies on blur. Numeric steppers remain immediate.
+- Background pixel regressions cover solid colors, all 16 gradient endpoints,
+  transparent MP4 black, opaque/semitransparent/transparent image pixels,
+  radius, shadow color, centered solid/dashed border widths and all aspects.
+- Corrected gradient swatch direction, PNG alpha flattening, odd-pixel FFmpeg
+  crop precision, dashed border spacing and export shadow intensity.
+- Real WebView2 checks confirmed every background mode, image upload, color and
+  framing slider, border style and aspect updates the saved project. Four short
+  exports (solid, gradient with shadow/dashed border, transparent, alpha image
+  with odd-pixel crop) passed output-size and encoded-color checks. The final
+  shadow uses a cached linear-time blur; the 0.5-second square fixture completed
+  in 4.32 seconds including hardware probing and thumbnail generation.
 
 **Manual acceptance is pending the user's checklist below. Phase 2 has not started.**
 

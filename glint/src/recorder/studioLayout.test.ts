@@ -6,3 +6,7 @@ it("clamps source crops and exports even portrait dimensions", () => {
   const l = studioLayout(1920, 1080, null, { ...DEFAULT_LOOK, enabled: true, aspect: "9:16" });
   expect(l.width).toBe(1080); expect(l.height).toBe(1920);
 });
+it("limits an oversized crop to the remaining source instead of shrinking to a partial typed value", () => {
+  expect(clampCrop({ x: 0, y: 0, w: 2000, h: 1080 }, 1920, 1080)).toEqual({ x: 0, y: 0, w: 1920, h: 1080 });
+  expect(clampCrop({ x: 101, y: 51, w: 2000, h: 2000 }, 1920, 1080)).toEqual({ x: 101, y: 51, w: 1819, h: 1029 });
+});

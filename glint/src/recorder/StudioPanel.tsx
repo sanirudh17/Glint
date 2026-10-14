@@ -33,6 +33,7 @@ export function StudioPanel({ project, path, width, height, saveStatus, exportMe
       <LookControls video look={project.look} onChange={(patch) => onChange({ look: { ...project.look, ...patch } })} />
       <CursorControls cursor={project.cursor} onChange={(patch) => onChange({ cursor: { ...project.cursor, ...patch } })} />
       <ControlDisclosure title="Crop source video" className="studio-crop">
+        <p className="look-hint">Source: {width} × {height} px. Crop stays inside the source. Press Enter or leave a field to apply.</p>
         <div className="studio-crop-grid">
           {(["x", "y", "w", "h"] as const).map((key) => {
             const label = { x: "Left", y: "Top", w: "Width", h: "Height" }[key];
