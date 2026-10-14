@@ -1,4 +1,5 @@
-import { useState, useRef, useEffect, useId } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useId } from "react";
+import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
 import "./ui.css";
 
@@ -16,6 +17,8 @@ export interface SelectProps {
   /** When true, the control is inert and styled as unavailable. */
   disabled?: boolean;
   className?: string;
+  /** Float outside a scrolling inspector, keeping the app's themed menu styling. */
+  portal?: boolean;
 }
 
 export function Select({
@@ -25,10 +28,12 @@ export function Select({
   ariaLabel,
   disabled = false,
   className = "",
+  portal = false,
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [placement, setPlacement] = useState<"bottom" | "top">("bottom");
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
+  const [menuPosition, setMenuPosition] = useState<React.CSSProperties>({});
   const wrapRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
   const triggerRef = useRef<HTMLButtonElement>(null);
@@ -41,7 +46,7 @@ export function Select({
     if (!isOpen) return;
 
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
-      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node) && !listRef.current?.contains(e.target as Node)) {
         setIsOpen(false);
       }
     };
@@ -59,6 +64,21 @@ export function Select({
       window.removeEventListener("blur", handleWindowBlur);
     };
   }, [isOpen]);
+
+  useLayoutEffect(() => {
+    if (!isOpen || !portal) return;
+    const place = () => {
+      const rect = triggerRef.current?.getBoundingClientRect(); if (!rect) return;
+      const below = window.innerHeight - rect.bottom - 12;
+      const above = rect.top - 12;
+      const up = below < 180 && above > below;
+      setMenuPosition({ position: "fixed", left: rect.left, width: rect.width, right: "auto",
+        top: up ? "auto" : rect.bottom + 6, bottom: up ? window.innerHeight - rect.top + 6 : "auto",
+        maxHeight: Math.min(240, Math.max(80, up ? above : below)) });
+    };
+    place(); window.addEventListener("resize", place); document.addEventListener("scroll", place, true);
+    return () => { window.removeEventListener("resize", place); document.removeEventListener("scroll", place, true); };
+  }, [isOpen, portal]);
 
   // Keep highlighted option scrolled into view
   useEffect(() => {
@@ -115,10 +135,12 @@ export function Select({
 
     switch (e.key) {
       case "Escape":
-      case "Tab":
         e.preventDefault();
         setIsOpen(false);
         triggerRef.current?.focus();
+        break;
+      case "Tab":
+        setIsOpen(false);
         break;
       case "ArrowDown": {
         e.preventDefault();
@@ -141,6 +163,24 @@ export function Select({
     }
   };
 
+  const menu = isOpen && (
+    <div ref={listRef} id={listId}
+      className={`g-select-dropdown ${!portal && placement === "top" ? "g-select-dropdown--top" : ""}`}
+      style={portal ? menuPosition : undefined} role="listbox" aria-label={ariaLabel}
+      data-editor-control>
+      {options.map((opt, index) => {
+        const isSelected = opt.value === value;
+        const isHighlighted = index === highlightedIndex;
+        return <div key={opt.value} id={`${listId}-${index}`} role="option" aria-selected={isSelected}
+          className={`g-select-option ${isSelected ? "g-select-option--selected" : ""} ${isHighlighted ? "g-select-option--highlighted" : ""}`}
+          onClick={() => handleSelect(opt.value)} onMouseEnter={() => setHighlightedIndex(index)}>
+          <span className="g-select-option-label">{opt.label}</span>
+          {isSelected && <span className="g-select-option-check" aria-hidden="true"><Check size={13} strokeWidth={2.2} /></span>}
+        </div>;
+      })}
+    </div>
+  );
+
   return (
     <div
       ref={wrapRef}
@@ -155,6 +195,7 @@ export function Select({
         aria-haspopup="listbox"
         aria-expanded={isOpen}
         aria-controls={isOpen ? listId : undefined}
+        aria-activedescendant={isOpen && highlightedIndex >= 0 ? `${listId}-${highlightedIndex}` : undefined}
         disabled={disabled}
         onClick={handleToggle}
       >
@@ -164,37 +205,7 @@ export function Select({
         </span>
       </button>
 
-      {isOpen && (
-        <div
-          ref={listRef}
-          id={listId}
-          className={`g-select-dropdown ${placement === "top" ? "g-select-dropdown--top" : ""}`}
-          role="listbox"
-          aria-label={ariaLabel}
-        >
-          {options.map((opt, index) => {
-            const isSelected = opt.value === value;
-            const isHighlighted = index === highlightedIndex;
-            return (
-              <div
-                key={opt.value}
-                role="option"
-                aria-selected={isSelected}
-                className={`g-select-option ${isSelected ? "g-select-option--selected" : ""} ${isHighlighted ? "g-select-option--highlighted" : ""}`}
-                onClick={() => handleSelect(opt.value)}
-                onMouseEnter={() => setHighlightedIndex(index)}
-              >
-                <span className="g-select-option-label">{opt.label}</span>
-                {isSelected && (
-                  <span className="g-select-option-check" aria-hidden="true">
-                    <Check size={13} strokeWidth={2.2} />
-                  </span>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
+      {portal ? createPortal(menu, document.body) : menu}
     </div>
   );
 }

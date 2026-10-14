@@ -15,3 +15,8 @@ pub fn copy_text(s: &str) -> Result<(), String> {
     let mut cb = arboard::Clipboard::new().map_err(|e| e.to_string())?;
     cb.set_text(s.to_owned()).map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+pub fn clipboard_copy_text(text: String) -> Result<(), String> {
+    copy_text(&text)
+}

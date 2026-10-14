@@ -5,12 +5,13 @@ interface SwitchProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   label?: string;
+  ariaLabel?: string;
   id?: string;
   /** When true, the control is inert and styled as unavailable. */
   disabled?: boolean;
 }
 
-export function Switch({ checked, onChange, label, id, disabled = false }: SwitchProps) {
+export function Switch({ checked, onChange, label, ariaLabel, id, disabled = false }: SwitchProps) {
   const generatedId = useId();
   const inputId = id ?? `g-switch-${generatedId}`;
   return (
@@ -27,6 +28,7 @@ export function Switch({ checked, onChange, label, id, disabled = false }: Switc
           onChange={(e) => onChange(e.currentTarget.checked)}
           role="switch"
           aria-checked={checked}
+          aria-label={ariaLabel ?? label}
         />
       </div>
       {label && <span className="g-switch-label">{label}</span>}

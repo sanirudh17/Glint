@@ -381,7 +381,7 @@
 
 /* ── Frame panel (right dock) ────────────────────────────────────────────── */
 .frame-panel {
-  width: 240px;
+  width: 280px;
   flex-shrink: 0;
   display: flex;
   flex-direction: column;

@@ -24,10 +24,51 @@ gradient expansion and other later phases remain out of scope.
 
 ## Tasks
 
-- 1.0: shared LookConfig and cross-window named preset store; frontend build and 197 tests pass.
-- 1.1: compositor comparison and decision pending.
-- 1.2–1.6: pending.
+- 1.0: shared LookConfig, shared controls, cross-window named preset store.
+- 1.1: measured compositor comparison; cached Rust CPU composition selected.
+- 1.2: cursor-free Studio capture, local event stream, pause-aware video timestamps.
+- 1.3: versioned project folders, reopen, autosave, persisted timeline/camera settings.
+- 1.4: video look, shared presets, source crop, custom shadow/border, canvas preview.
+- 1.5: editable cursor smoothing/style/size/idle hiding, click size, click/key toggles.
+- 1.6: MP4 export with hardware probes and x264 retry, progress/cancel, atomic output.
+
+Requested UI refinements reuse Settings' themed Select/Switch components, add
+color swatches and custom numeric controls, separate export filename/folder,
+and use a compact inspector with a hover-only themed scrollbar.
 
 ## Acceptance evidence
 
-Pending implementation and integration checks. No criterion is claimed complete yet.
+- Frontend production build passes; 204 frontend tests pass.
+- Native build passes; 207 native tests pass, with two existing
+  display-dependent tests skipped. A frame-pixel regression checks rounded
+  corners and physical-to-source cursor alignment with crop/DPI and effect toggles.
+- The real Tauri app opened the generated Studio folder and exported a 60-second
+  1920x1080/60fps MP4 in 33.995 seconds using **AMF hardware encoding**.
+- Six synchronized flash/beep markers were generated at 0, 10, 20, 30, 40 and
+  50 seconds. Exported audio onsets stayed within 21.25 ms of those timestamps;
+  there was no accumulating audio drift. Video duration was 60.000 seconds.
+- Source/preset/project logic tests cover crop round-trip, unique ids after
+  reopening, reordered cuts/speed time mapping, and negative monitor origins.
+- Taste source lint and Impeccable's detector pass for the new controls. The
+  inspector was reviewed in the real WebView2 app, preserving Glint's design.
+
+**Manual acceptance is pending the user's checklist below. Phase 2 has not started.**
+
+## Manual closing checklist
+
+- [ ] Studio panel is compact; scrollbar is hidden at rest and themed on hover.
+- [ ] Dropdowns, switches, color swatches and crop steppers work in dark/light themes.
+- [ ] Studio recording saves video/events/project, excludes baked cursor/effects,
+  handles pause/resume, and opens its editor on Stop.
+- [ ] Solid/gradient/image looks, padding, rounding, shadow/borders and all aspects
+  match preview and exported MP4.
+- [ ] Cursor smoothing/style/size/idle hiding and click/key toggles affect export.
+- [ ] Crop keeps the cursor aligned; cuts, speed, reorder and camera overlay work.
+- [ ] Close/reopen preserves every edit; a preset saved in either editor loads in both.
+- [ ] A real 60-second 1080p60 recording exports with audio aligned from start to end.
+- [ ] Cancelling export stops rendering and leaves the source/project intact.
+- [ ] Quick recording and existing screenshot documents behave as before.
+
+No Phase 1 feature was intentionally cut. Manual recorder/device combinations and
+final user acceptance remain to be confirmed. Generated validation media stays
+outside the repository in the OS temp folder; no large assets were added.

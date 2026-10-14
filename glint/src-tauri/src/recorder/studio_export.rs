@@ -1,0 +1,159 @@
+use super::{
+    studio,
+    studio_render::{self, ExportSpec, Project},
+    trim,
+};
+use std::{
+    path::PathBuf,
+    sync::{
+        atomic::{AtomicBool, Ordering},
+        Arc, Mutex,
+    },
+};
+use tauri::{Emitter, Manager};
+use tauri_plugin_shell::ShellExt;
+
+#[derive(Default)]
+pub struct ExportState(pub Mutex<Option<Arc<AtomicBool>>>);
+#[tauri::command]
+pub fn studio_export_cancel(app: tauri::AppHandle) {
+    if let Some(cancel) = app.state::<ExportState>().0.lock().unwrap().as_ref() {
+        cancel.store(true, Ordering::Relaxed);
+    }
+}
+
+#[tauri::command(async)]
+pub async fn studio_export(
+    app: tauri::AppHandle,
+    path: String,
+    project: serde_json::Value,
+) -> Result<String, String> {
+    if !studio::is_studio_video(&path) {
+        return Err("This file is not a Studio project".into());
+    }
+    let cancel = Arc::new(AtomicBool::new(false));
+    {
+        let state = app.state::<ExportState>();
+        let mut slot = state.0.lock().unwrap();
+        if slot.is_some() {
+            return Err("An export is already running".into());
+        }
+        *slot = Some(cancel.clone());
+    }
+    let result = perform(&app, &path, project, cancel).await;
+    *app.state::<ExportState>().0.lock().unwrap() = None;
+    result
+}
+async fn perform(
+    app: &tauri::AppHandle,
+    path: &str,
+    project: serde_json::Value,
+    cancel: Arc<AtomicBool>,
+) -> Result<String, String> {
+    let data: Project = serde_json::from_value(project.clone()).map_err(|e| e.to_string())?;
+    let probe = trim::recorder_trim_probe(app.clone(), path.to_string()).await?;
+    data.segments(probe.duration_secs)?;
+    let folder = PathBuf::from(path).parent().unwrap().to_owned();
+    studio::write_project(&folder, &project)?;
+    let events: studio::Events = serde_json::from_slice(
+        &std::fs::read(folder.join("events.json")).map_err(|e| e.to_string())?,
+    )
+    .map_err(|e| e.to_string())?;
+    let command: std::process::Command = app
+        .shell()
+        .sidecar("ffmpeg")
+        .map_err(|e| e.to_string())?
+        .into();
+    let binary = PathBuf::from(command.get_program());
+    let name = folder.file_stem().unwrap().to_string_lossy();
+    let parent = folder.parent().unwrap();
+    let output = crate::paths::dedupe(parent, &format!("{name} (Studio).mp4"), |p| p.exists());
+    let tmp = folder.join("export.partial.mp4");
+    let cam_path = super::cam::cam_sidecar_path(path);
+    let cam = if probe.has_cam {
+        data.cam.as_ref().filter(|c| c["visible"] == true).map(|c| {
+            let nx = c["x"].as_f64().unwrap_or(0.7).clamp(0., 1.);
+            let ny = c["y"].as_f64().unwrap_or(0.7).clamp(0., 1.);
+            let d = c["diameter"].as_f64().unwrap_or(0.18).clamp(0.06, 0.6);
+            let shape = c["shape"].as_str().unwrap_or("circle").to_string();
+            let w = (d * probe.width as f64 / 2.).round() * 2.;
+            let h = if matches!(shape.as_str(), "circle" | "square") {
+                w
+            } else {
+                (w / (probe.width as f64 / probe.height as f64) / 2.).round() * 2.
+            };
+            trim::CamOverlay {
+                x: (nx * probe.width as f64 / 2.).round() * 2.,
+                y: (ny * probe.height as f64 / 2.).round() * 2.,
+                w,
+                h,
+                shape,
+            }
+        })
+    } else {
+        None
+    };
+    let worker_cancel = cancel.clone();
+    let path = path.to_string();
+    let app_progress = app.clone();
+    let tmp_render = tmp.clone();
+    let render = tauri::async_runtime::spawn_blocking(move || {
+        let cam_string = cam_path.to_string_lossy();
+        let spec = ExportSpec {
+            binary: &binary,
+            source: &path,
+            output: &tmp_render,
+            project: &data,
+            events: &events,
+            width: probe.width,
+            height: probe.height,
+            fps: probe.fps,
+            duration: probe.duration_secs,
+            audio: probe.has_audio,
+            cam: cam.as_ref().map(|_| cam_string.as_ref()),
+            cam_overlay: cam,
+        };
+        studio_render::export(&spec, worker_cancel, |pct| {
+            let _ = app_progress.emit_to(super::windows::TRIM_LABEL, "rec-trim-progress", pct);
+        })
+    })
+    .await
+    .map_err(|e| e.to_string())
+    .and_then(|r| r);
+    if let Err(e) = render {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(e);
+    }
+    if std::fs::metadata(&tmp)
+        .map(|m| m.len() < 1024)
+        .unwrap_or(true)
+    {
+        let _ = std::fs::remove_file(&tmp);
+        return Err("Export produced no video".into());
+    }
+    if cancel.load(Ordering::Relaxed) {
+        let _ = std::fs::remove_file(&tmp);
+        return Err("Export cancelled".into());
+    }
+    // A fresh path and a same-volume rename publish the finished file atomically.
+    std::fs::rename(&tmp, &output).map_err(|e| e.to_string())?;
+    let output = output.to_string_lossy().to_string();
+    let thumb = super::thumb::extract_thumb(app, &output).await;
+    let exported = trim::recorder_trim_probe(app.clone(), output.clone()).await?;
+    let row = crate::db::NewCapture {
+        kind: "recording".into(),
+        path: output.clone(),
+        thumb_path: thumb,
+        width: Some(exported.width as i64),
+        height: Some(exported.height as i64),
+        bytes: std::fs::metadata(&output).ok().map(|m| m.len() as i64),
+        created_at: chrono::Local::now().timestamp(),
+    };
+    {
+        let db = app.state::<crate::Db>();
+        let conn = db.0.lock().unwrap();
+        let _ = crate::db::insert_capture(&conn, &row);
+    }
+    let _ = app.emit("capture-saved", ());
+    Ok(output)
+}

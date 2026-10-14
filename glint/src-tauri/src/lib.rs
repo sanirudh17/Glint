@@ -123,6 +123,7 @@ pub fn run() {
         .manage(crate::recorder::RecorderState::default())
         .manage(crate::recorder::RecorderHud::default())
         .manage(crate::recorder::RecorderTrimState::default())
+        .manage(crate::recorder::studio_export::ExportState::default())
         .manage(crate::ocr::OcrState::default())
         .setup(|app| {
             tray::build(app.handle())?;
@@ -292,6 +293,9 @@ pub fn run() {
                     let _ = window.hide();
                     let _ = window.emit("editor-close", ());
                 } else if label == crate::recorder::windows::TRIM_LABEL {
+                    if window.state::<crate::recorder::studio_export::ExportState>().0.lock().unwrap().is_some() {
+                        api.prevent_close(); return;
+                    }
                     // Keep the trim webview ALIVE: hide instead of destroy.
                     // Notify frontend so it resets the video player.
                     api.prevent_close();
@@ -316,6 +320,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            clipboard::clipboard_copy_text,
             settings_get_all,
             settings_set,
             settings_set_hotkey,
@@ -395,6 +400,8 @@ pub fn run() {
             recorder::recorder_open_trim,
             recorder::studio::studio_load,
             recorder::studio::studio_save,
+            recorder::studio_export::studio_export,
+            recorder::studio_export::studio_export_cancel,
             recorder::recorder_trim_target,
             crate::ocr::commands::ocr_result,
             crate::ocr::commands::ocr_extract_capture,

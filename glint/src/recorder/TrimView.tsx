@@ -1,9 +1,7 @@
-import { CursorControls } from "./CursorControls";
-import { LookControls } from "../look/LookControls";
+import { StudioPanel } from "./StudioPanel";
 import "../look/look.css";
 import { StudioPreview } from "./StudioPreview";
-import { clampCrop } from "./studioLayout";
-import { studioLoad, studioSave } from "../lib/studio";
+import { studioLoad, studioSave, studioExport, studioExportCancel } from "../lib/studio";
 import { hydrateProject, type StudioData, type StudioProject } from "./studioModel";
 /** TrimView.tsx — recording trim window (#/rec-trim): player + multi-cut timeline. */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -38,13 +36,14 @@ const ZOOMS = [1, 2, 4, 8];
 export function TrimView() {
   const [studio, setStudio] = useState<StudioData | null>(null);
   const [saveStatus, setSaveStatus] = useState("Saved");
+  const [exportMessage, setExportMessage] = useState<string | null>(null);
   const autosaveRef = useRef<{ path: string; project: StudioProject } | null>(null);
   const saveQueueRef = useRef(Promise.resolve());
   const loadGeneration = useRef(0);
   const flushSave = useCallback(() => {
     const pending = autosaveRef.current; if (!pending) return Promise.resolve();
     autosaveRef.current = null;
-    setSaveStatus("Saving?");
+    setSaveStatus("Saving…");
     saveQueueRef.current = saveQueueRef.current.catch(() => {}).then(() => studioSave(pending.path, pending.project))
       .then(() => { setSaveStatus("Saved"); }).catch((error) => { autosaveRef.current = autosaveRef.current ?? pending; setSaveStatus(`Save failed: ${String(error)}`); });
     return saveQueueRef.current;
@@ -149,7 +148,7 @@ export function TrimView() {
   const loadTarget = useCallback(() => {
     void flushSave();
     const generation = ++loadGeneration.current;
-    setStudio(null);
+    setStudio(null); setExportMessage(null);
     setUndoStack([]); setRedoStack([]); setPlayhead(0); setPlaying(false);
     setSrc(null);
     setTarget(null);
@@ -196,6 +195,8 @@ export function TrimView() {
   useEffect(() => {
     void loadTarget();
   }, [loadTarget]);
+
+  useEffect(() => { void getCurrentWindow().setTitle(studio ? "Glint Studio" : "Glint — Trim recording").catch(() => {}); }, [studio !== null]);
 
   // Safety valve: if the video never reaches canplay (corrupt file edge cases),
   // reveal the UI anyway after a grace period so it can't stay blank.
@@ -432,6 +433,7 @@ export function TrimView() {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.defaultPrevented || (e.target instanceof HTMLElement && e.target.closest("[data-editor-control]"))) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
       if (exporting !== null) return; // export is modal — ignore edit/transport keys
       if (e.key === " ") { e.preventDefault(); togglePlay(); }
@@ -453,7 +455,13 @@ export function TrimView() {
 
   const save = (mode: "copy" | "overwrite") => {
     if (!target || !probe || !canSave) return;
-    setExporting(0);
+    setExporting(0); setExportMessage(null);
+    if (studio) {
+      const project = { ...studio.project, ...edit, cam };
+      void flushSave().then(() => studioExport(target.path, project)).then((path) => { setExportMessage(`Exported: ${path}`); })
+        .catch((error) => setExportMessage(String(error))).finally(() => setExporting(null));
+      return;
+    }
     // Bake the webcam overlay only when it's present and visible; else export as before.
     const useCam = probe.has_cam && !!cam?.visible;
     const camPath = useCam ? camSiblingPath(target.path) : null;
@@ -499,16 +507,11 @@ export function TrimView() {
         )}
       </div>
 
-      {studio && <aside className="studio-panel" aria-label="Studio settings"><h2>Studio</h2><p role="status">{saveStatus}</p>
-        <LookControls video look={studio.project.look} onChange={(patch) => setStudio((data) => data && ({ ...data, project: { ...data.project, look: { ...data.project.look, ...patch } } }))} />
-        <CursorControls cursor={studio.project.cursor} onChange={(patch) => setStudio((data) => data && ({ ...data, project: { ...data.project, cursor: { ...data.project.cursor, ...patch } } }))} />
-        {probe && <details className="studio-crop"><summary>Crop source video</summary>
-          {(["x", "y", "w", "h"] as const).map((key) => <label key={key}>{({x:"Left",y:"Top",w:"Width",h:"Height"})[key]}<input aria-label={`Crop ${key}`} type="number" min={key === "w" || key === "h" ? 2 : 0} max={key === "x" || key === "w" ? probe.width : probe.height} value={(studio.project.crop ?? { x: 0, y: 0, w: probe.width, h: probe.height })[key]} onChange={(e) => setStudio((data) => data && ({ ...data, project: { ...data.project, crop: clampCrop({ ...(data.project.crop ?? { x: 0, y: 0, w: probe.width, h: probe.height }), [key]: Number(e.target.value) }, probe.width, probe.height) } }))} /></label>)}
-          <button className="trim-btn" onClick={() => setStudio((data) => data && ({ ...data, project: { ...data.project, crop: null } }))}>Reset crop</button>
-        </details>}
-        {cam && <details className="studio-crop"><summary>Camera position</summary>{(["x", "y", "diameter"] as const).map((key) => <label key={key}>{key}<input aria-label={`Camera ${key}`} type="range" min="0" max="1" step="0.01" value={cam[key]} onChange={(e) => setCam((c) => c && clampPlacement({ ...c, [key]: Number(e.target.value) }))} /></label>)}</details>}
-        <button className="trim-btn" onClick={() => void flushSave()}>Save project</button>
-      </aside>}
+      {studio && probe && target && <StudioPanel project={studio.project} path={target.path} width={probe.width} height={probe.height}
+        saveStatus={saveStatus} exportMessage={exportMessage} exporting={exporting !== null} cam={cam} onCamChange={setCam}
+        onChange={(patch) => setStudio((data) => data && ({ ...data, project: { ...data.project, ...patch } }))}
+        onSave={() => void flushSave()} />}
+
       </div>
       <div className="trim-transport">
         <button className="trim-iconbtn" onClick={togglePlay} title="Play/Pause (Space)">
@@ -575,12 +578,12 @@ export function TrimView() {
         </div>
         <span className="trim-spacer" />
         {exporting !== null ? (
-          <div className="trim-progress"><div className="trim-progress-fill" style={{ width: `${exporting}%` }} /><span>Exporting… {exporting}%</span></div>
+          <><div className="trim-progress"><div className="trim-progress-fill" style={{ width: `${exporting}%` }} /><span>Exporting… {exporting}%</span></div>{studio && <button className="trim-btn" onClick={() => void studioExportCancel()}>Cancel export</button>}</>
         ) : (
           <>
             <button className="trim-btn" onClick={requestClose}>Cancel</button>
-            <button className="trim-btn" disabled={!canSave} onClick={() => save("overwrite")}>Overwrite</button>
-            <button className="trim-btn trim-btn--primary" disabled={!canSave} onClick={() => save("copy")}>Save copy</button>
+            {!studio && <button className="trim-btn" disabled={!canSave} onClick={() => save("overwrite")}>Overwrite</button>}
+            <button className="trim-btn trim-btn--primary" disabled={!canSave} onClick={() => save("copy")}>{studio ? "Export MP4" : "Save copy"}</button>
           </>
         )}
       </div>

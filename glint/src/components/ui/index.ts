@@ -8,3 +8,6 @@ export { Card } from "./Card";
 export { Tooltip } from "./Tooltip";
 export { EmptyState } from "./EmptyState";
 export { ToastHost } from "./Toast";
+export { NumberInput } from "./NumberInput";
+export { ColorControl } from "./ColorControl";
+export { ControlDisclosure } from "./ControlDisclosure";
