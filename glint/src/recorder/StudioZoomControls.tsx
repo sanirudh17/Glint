@@ -1,0 +1,33 @@
+import { Crosshair, Plus, Scissors, Trash2 } from "lucide-react";
+import { Button, ControlDisclosure, NumberInput, Select } from "../components/ui";
+import { LookSlider } from "../look/LookControls";
+import { clamp, newZoom, splitZoom, type ZoomSegment } from "./studioEffects";
+export function StudioZoomControls({segments,selected,time,duration,onChange,onSelect,onPick}: {
+  segments:ZoomSegment[];selected:string|null;time:number;duration:number;
+  onChange:(segments:ZoomSegment[])=>void;onSelect:(id:string|null)=>void;onPick:()=>void;
+}) {
+  const active=segments.find(s=>s.id===selected);
+  const change=(patch:Partial<ZoomSegment>)=>onChange(segments.map(s=>s.id===selected?{...s,...patch,edited:true}:s));
+  return <ControlDisclosure title="Zoom" className="studio-effects-controls">
+    <div className="studio-effect-actions">
+      <Button size="sm" variant="subtle" icon={Plus} onClick={()=>{const segment=newZoom(time,duration);onChange([...segments,segment]);onSelect(segment.id);}}>Add zoom</Button>
+      {active&&<Button size="sm" variant="ghost" icon={Trash2} onClick={()=>{onChange(segments.filter(s=>s.id!==active.id));onSelect(null);}}>Delete</Button>}
+    </div>
+    {segments.length>0&&<Select portal ariaLabel="Selected zoom" value={selected??""} options={[{value:"",label:"Select a zoom"},...segments.map((s,i)=>({value:s.id,label:`Zoom ${i+1} · ${s.start.toFixed(1)}–${s.end.toFixed(1)} s`}))]} onChange={id=>onSelect(id||null)} />}
+    {active?<>
+      <div className="studio-crop-grid">
+        <div className="studio-crop-field"><span className="look-label">Start</span><NumberInput ariaLabel="Zoom start" value={active.start} min={0} max={active.end-.1} step={.1} unit="s" onChange={start=>change({start,transitionStart:undefined,transitionEnd:undefined})}/></div>
+        <div className="studio-crop-field"><span className="look-label">End</span><NumberInput ariaLabel="Zoom end" value={active.end} min={active.start+.1} max={duration} step={.1} unit="s" onChange={end=>change({end,transitionStart:undefined,transitionEnd:undefined})}/></div>
+      </div>
+      <LookSlider label="Scale" ariaLabel="Zoom scale" value={active.scale} min={1.2} max={3} step={.1} unit="×" onChange={scale=>change({scale})}/>
+      <div className="look-row"><span className="look-label">Focus</span><div className="look-control"><Select portal ariaLabel="Zoom focus mode" value={active.mode} options={[{value:"fixed",label:"Fixed point"},{value:"follow-cursor",label:"Follow cursor"}]} onChange={mode=>change({mode:mode as ZoomSegment['mode']})}/></div></div>
+      {active.mode==="fixed"&&<>
+        <LookSlider label="Horizontal" ariaLabel="Zoom horizontal focus" value={active.focus.x*100} unit="%" onChange={x=>change({focus:{...active.focus,x:clamp(x/100,0,1)}})}/>
+        <LookSlider label="Vertical" ariaLabel="Zoom vertical focus" value={active.focus.y*100} unit="%" onChange={y=>change({focus:{...active.focus,y:clamp(y/100,0,1)}})}/>
+        <Button size="sm" variant="ghost" icon={Crosshair} onClick={onPick}>Pick focus in preview</Button>
+      </>}
+      <div className="look-row"><span className="look-label">Easing</span><div className="look-control"><Select portal ariaLabel="Zoom easing" value={active.ease} options={[{value:"gentle",label:"Gentle"},{value:"snappy",label:"Snappy"},{value:"slow",label:"Slow"}]} onChange={ease=>{const seconds={gentle:.4,snappy:.3,slow:.5}[ease]!;change({ease:ease as ZoomSegment['ease'],easeIn:seconds,easeOut:seconds});}}/></div></div>
+      <Button size="sm" variant="ghost" icon={Scissors} disabled={time<=active.start+.05||time>=active.end-.05} onClick={()=>onChange(segments.flatMap(s=>s.id===active.id?splitZoom(s,time):[s]))}>Split at playhead</Button>
+    </>:<p className="look-hint">Add a zoom at the playhead, then drag its timeline segment to move or trim it.</p>}
+  </ControlDisclosure>;
+}

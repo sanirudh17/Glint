@@ -255,6 +255,20 @@
 .studio-export-actions .g-btn { padding-left: 6px; padding-right: 6px; font-size: var(--fz-xs); }
 .studio-export-error { color: var(--danger); font-size: var(--fz-sm); line-height: var(--lh-base); overflow-wrap: anywhere; margin-bottom: 20px; }
 .studio-stage > .trim-video, .studio-stage > .trim-cam-layer { visibility: hidden; }
+.studio-preview.is-picking { cursor: crosshair; }
+.studio-preview-instruction { position:absolute;bottom:28px;left:50%;transform:translateX(-50%);padding:8px 12px;border-radius:var(--r2);background:var(--bg-elev2);color:var(--text);font-size:var(--fz-sm);pointer-events:none; }
+.studio-effects-controls > summary { color:var(--text);font-size:var(--fz-lg);font-weight:700; }
+.studio-effect-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
+.studio-effect-track-row { display:flex;align-items:center;gap:8px;padding:3px 12px;min-height:28px; }
+.studio-effect-track-label { flex:none;width:36px;color:var(--text-dim);font-size:var(--fz-xs); }
+.studio-effect-track { position:relative;flex:1;height:24px;overflow:hidden;background:var(--bg-elev2);border-radius:var(--r1); }
+.studio-effect-track-content { height:100%;position:relative; }
+.studio-effect-segment { position:absolute;top:2px;bottom:2px;min-width:14px;display:flex;align-items:stretch;background:var(--accent-subtle);border:1px solid var(--border-strong);border-radius:3px;touch-action:none; }
+.studio-effect-segment.is-selected { border-color:var(--accent); }
+.studio-effect-name { flex:1;min-width:0;background:transparent;border:0;color:var(--text-dim);font:inherit;font-size:var(--fz-xs);cursor:grab;padding:0 2px;overflow:hidden; }
+.studio-effect-handle { flex:none;width:5px;border:0;background:transparent;padding:0;cursor:ew-resize; }
+.studio-effect-handle:hover { background:var(--accent); }
+.studio-effect-name:focus-visible, .studio-effect-handle:focus-visible { outline:1px solid var(--accent);outline-offset:1px; }
 .studio-preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 20px; box-sizing: border-box; }
 @media (max-width: 1000px) { .studio-panel { width: 312px; padding: 24px 20px; } }
 @media (max-width: 760px) { .studio-panel { width: 292px; padding: 20px 16px; } .look-control, .look-slider-control { width: 154px; } .trim-actions { flex-wrap: wrap; gap: 8px; } }

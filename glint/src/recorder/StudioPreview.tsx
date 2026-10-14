@@ -1,4 +1,4 @@
-import { drawCursorLayer, smoothPath } from "./studioCursor";
+import { drawCursorLayer, followSourcePoint, smoothPath } from "./studioCursor";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { getGradient, konvaGradient } from "../editor/gradients";
 import { resolveRadiusPx } from "../editor/composition";
@@ -6,10 +6,12 @@ import { studioLayout } from "./studioLayout";
 import type { StudioData } from "./studioModel";
 import type { CamPlacement } from "./camOverlay";
 import { toPixels } from "./camOverlay";
+import { zoomAt } from "./studioEffects";
 
-export function StudioPreview({ studio, video, camVideo, cam, width, height }: {
+export function StudioPreview({ studio, video, camVideo, cam, width, height, pickingFocus=false, onFocus }: {
   studio: StudioData; video: RefObject<HTMLVideoElement | null>; camVideo: RefObject<HTMLVideoElement | null>;
   cam: CamPlacement | null; width: number; height: number;
+  pickingFocus?:boolean;onFocus?:(point:{x:number;y:number})=>void;
 }) {
   const path = useMemo(() => smoothPath(studio.events.events, studio.project.cursor.smoothing), [studio.events, studio.project.cursor.smoothing]);
   const effectEvents = useMemo(() => ({ ...studio.events, events: studio.events.events.filter((e) => e.kind !== "cursor") }), [studio.events]);
@@ -51,16 +53,20 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height }: {
         }
         ctx.beginPath(); ctx.roundRect(l.contentX, top, l.contentW, cardH, radius); ctx.fillStyle = "#000"; ctx.fill(); ctx.restore();
         ctx.save(); ctx.beginPath(); ctx.roundRect(l.contentX, top, l.contentW, cardH, radius); ctx.clip();
-        ctx.drawImage(v, l.cropX, l.cropY, l.contentW, l.contentH, l.contentX, l.contentY, l.contentW, l.contentH);
+        const cursor = followSourcePoint(path,v.currentTime,studio.events,width,height);
+        const view = zoomAt(studio.project.zoomSegments, v.currentTime, { x:l.cropX,y:l.cropY,w:l.contentW,h:l.contentH },width,height,cursor);
+        ctx.save(); ctx.translate(l.contentX,l.contentY); ctx.scale(l.contentW/view.w,l.contentH/view.h);
+        ctx.drawImage(v, view.x, view.y, view.w, view.h, 0, 0, view.w, view.h);
         if (cam?.visible && camVideo.current && camVideo.current.readyState >= 2) {
           const box = toPixels(cam, width, height, width / height);
-          ctx.save(); ctx.translate(l.contentX - l.cropX + box.x, l.contentY - l.cropY + box.y);
+          ctx.save(); ctx.translate(box.x - view.x, box.y - view.y);
           ctx.beginPath(); ctx.roundRect(0, 0, box.w, box.h, cam.shape === "circle" ? box.w / 2 : cam.shape === "rect" ? 0 : box.w * .14); ctx.clip();
           const cv = camVideo.current, ratio = box.w / box.h, native = cv.videoWidth / cv.videoHeight;
           const sw = native > ratio ? cv.videoHeight * ratio : cv.videoWidth, sh = native > ratio ? cv.videoHeight : cv.videoWidth / ratio;
           ctx.drawImage(cv, (cv.videoWidth - sw) / 2, (cv.videoHeight - sh) / 2, sw, sh, 0, 0, box.w, box.h); ctx.restore();
         }
-        drawCursorLayer(ctx, v.currentTime, path, effectEvents, studio.project.cursor, l, width, height);
+        drawCursorLayer(ctx, v.currentTime, path, effectEvents, studio.project.cursor, { ...l,contentX:0,contentY:0,contentW:view.w,contentH:view.h,cropX:view.x,cropY:view.y }, width, height);
+        ctx.restore();
         if (l.chromeH > 0) {
           ctx.fillStyle = look.chrome.theme === "dark" ? "#25272c" : "#eeeeee"; ctx.fillRect(l.contentX, top, l.contentW, l.chromeH);
           ctx.fillStyle = look.chrome.theme === "dark" ? "#ffffff" : "#202020"; ctx.font = `${l.chromeH * .35}px sans-serif`; ctx.textAlign = "center";
@@ -76,5 +82,16 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height }: {
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
   }, [studio, video, camVideo, cam, width, height, background, image, path, effectEvents]);
-  return <canvas ref={ref} className="studio-preview" aria-label="Studio video preview" />;
+  return <><canvas ref={ref} className={`studio-preview${pickingFocus?' is-picking':''}`} aria-label="Studio video preview" onClick={e=>{
+    if(!pickingFocus||!onFocus)return;
+    const canvas=e.currentTarget,rect=canvas.getBoundingClientRect();
+    const fit=Math.min((rect.width-40)/canvas.width,(rect.height-40)/canvas.height);
+    const originX=rect.x+20+(rect.width-40-canvas.width*fit)/2,originY=rect.y+20+(rect.height-40-canvas.height*fit)/2;
+    const {layout:l,scale}=studioLayout(width,height,studio.project.crop,studio.project.look,960);
+    const px=(e.clientX-originX)/fit/scale-l.contentX,py=(e.clientY-originY)/fit/scale-l.contentY;
+    if(px<0||py<0||px>l.contentW||py>l.contentH)return;
+    const t=video.current?.currentTime??0;
+    const view=zoomAt(studio.project.zoomSegments,t,{x:l.cropX,y:l.cropY,w:l.contentW,h:l.contentH},width,height,followSourcePoint(path,t,studio.events,width,height));
+    onFocus({x:(view.x+px/l.contentW*view.w)/width,y:(view.y+py/l.contentH*view.h)/height});
+  }}/>{pickingFocus&&<span className="studio-preview-instruction">Click the video to set zoom focus</span>}</>;
 }

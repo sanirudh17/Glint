@@ -26,6 +26,12 @@ export function sourcePoint(x: number, y: number, events: StudioEvents, width: n
   const g = events.geometry;
   return { x: (x - g.x) * width / g.width, y: (y - g.y) * height / g.height };
 }
+export function followSourcePoint(path: CursorPoint[], t:number, events:StudioEvents, width:number, height:number) {
+  const positions = Array.from({length:5},(_,i)=>cursorAt(path,Math.max(0,t-i*.035))).filter(p=>p!==null);
+  if(!positions.length)return null;
+  const latest=sourcePoint(positions[0].x,positions[0].y,events,width,height);
+  return {...sourcePoint(positions.reduce((sum,p)=>sum+p.x,0)/positions.length,positions.reduce((sum,p)=>sum+p.y,0)/positions.length,events,width,height),latestX:latest.x,latestY:latest.y};
+}
 export function drawCursorLayer(ctx: CanvasRenderingContext2D, t: number, path: CursorPoint[], events: StudioEvents, config: CursorConfig, layout: Layout, width: number, height: number) {
   const l = layout;
   const inside = (p: { x: number; y: number }) => p.x >= l.cropX && p.x < l.cropX + l.contentW && p.y >= l.cropY && p.y < l.cropY + l.contentH;

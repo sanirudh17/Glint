@@ -7,11 +7,13 @@ import { CursorControls } from "./CursorControls";
 import { clampCrop } from "./studioLayout";
 import { clampPlacement, type CamPlacement } from "./camOverlay";
 import type { StudioProject } from "./studioModel";
+import { StudioZoomControls } from "./StudioZoomControls";
 
-export function StudioPanel({ project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave }: {
+export function StudioPanel({ project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave, time, duration, selectedZoom, onSelectZoom, onPickZoom }: {
   project: StudioProject; path: string; width: number; height: number; saveStatus: string;
   exportMessage: string | null; exporting: boolean; cam: CamPlacement | null;
   onCamChange: (cam: CamPlacement) => void; onChange: (patch: Partial<StudioProject>) => void; onSave: () => void;
+  time:number;duration:number;selectedZoom:string|null;onSelectZoom:(id:string|null)=>void;onPickZoom:()=>void;
 }) {
   const parts = path.split(/[\\/]/);
   const name = (parts[parts.length - 2] ?? "Recording").replace(/\.glint-studio$/, "");
@@ -31,6 +33,7 @@ export function StudioPanel({ project, path, width, height, saveStatus, exportMe
       : <p className="studio-export-error" role="alert">{exportMessage}</p>)}
     <fieldset className="studio-panel-controls" disabled={exporting}>
       <LookControls video look={project.look} onChange={(patch) => onChange({ look: { ...project.look, ...patch } })} />
+      <StudioZoomControls segments={project.zoomSegments} selected={selectedZoom} time={time} duration={duration} onChange={zoomSegments=>onChange({zoomSegments})} onSelect={onSelectZoom} onPick={onPickZoom}/>
       <CursorControls cursor={project.cursor} onChange={(patch) => onChange({ cursor: { ...project.cursor, ...patch } })} />
       <ControlDisclosure title="Crop source video" className="studio-crop">
         <p className="look-hint">Source: {width} × {height} px. Crop stays inside the source. Press Enter or leave a field to apply.</p>

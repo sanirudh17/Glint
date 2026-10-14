@@ -89,7 +89,7 @@ pub fn initial_project(duration:f64)->serde_json::Value {
         "crop":null,"clips":[{"id":1,"start":0.0,"end":duration,"kept":true,"speed":1.0,"order":0}],"fadeIn":0.0,"fadeOut":0.0,"cam":null,"zoomSegments":[],"masks":[]})
 }
 pub fn write_project(folder:&Path,project:&serde_json::Value)->Result<(),String> {
-    if project.get("version").and_then(|v|v.as_u64())!=Some(1) {return Err("Unsupported Studio project version".into());}
+    if !matches!(project.get("version").and_then(|v|v.as_u64()),Some(1|2)) {return Err("Unsupported Studio project version".into());}
     let tmp=folder.join("project.pending");let dest=folder.join("project.json");
     let bytes=serde_json::to_vec_pretty(project).map_err(|e|e.to_string())?;
     let mut file=File::create(&tmp).map_err(|e|e.to_string())?;file.write_all(&bytes).map_err(|e|e.to_string())?;file.sync_all().map_err(|e|e.to_string())?;drop(file);
@@ -109,7 +109,7 @@ pub fn studio_load(path:String)->Result<Option<serde_json::Value>,String> {
     if !is_studio_video(&path) {return Ok(None);}
     let dir=Path::new(&path).parent().unwrap();
     let project:serde_json::Value=serde_json::from_slice(&std::fs::read(dir.join("project.json")).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
-    if project["version"]!=1 {return Err("Unsupported Studio project version".into());}
+    if project["version"]!=1 && project["version"]!=2 {return Err("Unsupported Studio project version".into());}
     let events:Events=serde_json::from_slice(&std::fs::read(dir.join("events.json")).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
     Ok(Some(serde_json::json!({"project":project,"events":events})))
 }

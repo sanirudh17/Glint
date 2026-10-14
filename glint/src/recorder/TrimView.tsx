@@ -1,4 +1,5 @@
 import { StudioPanel } from "./StudioPanel";
+import { StudioEffectTrack } from "./StudioEffectTrack";
 import "../look/look.css";
 import { StudioPreview } from "./StudioPreview";
 import { studioLoad, studioSave, studioExport, studioExportCancel } from "../lib/studio";
@@ -34,6 +35,8 @@ const EPS = 1e-4;
 const ZOOMS = [1, 2, 4, 8];
 
 export function TrimView() {
+  const [selectedZoom,setSelectedZoom]=useState<string|null>(null);
+  const [pickingFocus,setPickingFocus]=useState(false);
   const [studio, setStudio] = useState<StudioData | null>(null);
   const [saveStatus, setSaveStatus] = useState("Saved");
   const [exportMessage, setExportMessage] = useState<string | null>(null);
@@ -149,6 +152,7 @@ export function TrimView() {
     void flushSave();
     const generation = ++loadGeneration.current;
     setStudio(null); setExportMessage(null);
+    setSelectedZoom(null);setPickingFocus(false);
     setUndoStack([]); setRedoStack([]); setPlayhead(0); setPlaying(false);
     setSrc(null);
     setTarget(null);
@@ -481,7 +485,8 @@ export function TrimView() {
     <div className={`trim-root${booting ? " is-booting" : ""}`}>
       <div className="trim-preview-row">
       <div className={`trim-stage${studio ? " studio-stage" : ""}`}>
-        {studio && probe && <StudioPreview studio={studio} video={videoRef} camVideo={camVideoRef} cam={cam} width={probe.width} height={probe.height} />}
+        {studio && probe && <StudioPreview studio={studio} video={videoRef} camVideo={camVideoRef} cam={cam} width={probe.width} height={probe.height} pickingFocus={pickingFocus}
+          onFocus={focus=>{setStudio(data=>data&&({...data,project:{...data.project,zoomSegments:data.project.zoomSegments.map(s=>s.id===selectedZoom?{...s,focus,edited:true}:s)}}));setPickingFocus(false);}} />}
         {src && (
           <video
             ref={videoRef}
@@ -508,6 +513,7 @@ export function TrimView() {
       </div>
 
       {studio && probe && target && <StudioPanel project={studio.project} path={target.path} width={probe.width} height={probe.height}
+        time={playhead} duration={duration} selectedZoom={selectedZoom} onSelectZoom={setSelectedZoom} onPickZoom={()=>setPickingFocus(value=>!value)}
         saveStatus={saveStatus} exportMessage={exportMessage} exporting={exporting !== null} cam={cam} onCamChange={setCam}
         onChange={(patch) => setStudio((data) => data && ({ ...data, project: { ...data.project, ...patch } }))}
         onSave={() => void flushSave()} />}
@@ -549,6 +555,10 @@ export function TrimView() {
           zoom={zoom} viewStart={viewStart}
         />
       )}
+
+      {studio&&probe&&<StudioEffectTrack label="Zoom" segments={studio.project.zoomSegments} duration={duration} zoom={zoom} viewStart={viewStart} selected={selectedZoom} disabled={exporting!==null}
+        onSelect={setSelectedZoom} onDelete={id=>setStudio(data=>data&&({...data,project:{...data.project,zoomSegments:data.project.zoomSegments.filter(s=>s.id!==id)}}))}
+        onRange={(id,start,end)=>setStudio(data=>data&&({...data,project:{...data.project,zoomSegments:data.project.zoomSegments.map(s=>s.id===id?{...s,start,end,edited:true,transitionStart:undefined,transitionEnd:undefined}:s)}}))}/>}
 
       <TrimFilmstrip clips={clips} disabled={exporting !== null} selectedId={selectedId} onReorder={doReorder} onSelect={selectClip} />
 

@@ -11,6 +11,7 @@ pub mod thumb;
 pub mod trim;
 pub mod studio;
 pub mod studio_cursor;
+pub mod studio_effects;
 pub mod studio_render;
 pub mod studio_export;
 pub mod windows;

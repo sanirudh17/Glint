@@ -3,6 +3,7 @@ use super::{
     ffmpeg::{self, VideoEncoder},
     studio::Events,
     studio_cursor::{self, CursorConfig, Mapping, Point},
+    studio_effects::{self, Zoom},
     trim::{self, CamOverlay, KeepSegment},
 };
 use font8x8::UnicodeFonts;
@@ -65,13 +66,16 @@ pub struct Project {
     pub fade_in: f64,
     pub fade_out: f64,
     pub cam: Option<Value>,
+    #[serde(default)]
+    pub zoom_segments: Vec<Zoom>,
 }
 impl Project {
     pub fn segments(&self, duration: f64) -> Result<Vec<KeepSegment>, String> {
-        if self.version != 1 {
+        if self.version != 1 && self.version != 2 {
             return Err("Unsupported Studio project version".into());
         }
         self.cursor.validate()?;
+        studio_effects::validate_zooms(&self.zoom_segments, duration)?;
         for n in [self.look.padding, self.look.radius, self.look.shadow] {
             if !(0.0..=100.0).contains(&n) {
                 return Err("Invalid look settings".into());
@@ -362,6 +366,9 @@ pub struct Renderer {
     effects: Events,
     mapping: Mapping,
     cursor: CursorConfig,
+    zooms: Vec<Zoom>,
+    source_w: u32,
+    source_h: u32,
 }
 impl Renderer {
     pub fn new(
@@ -615,6 +622,9 @@ impl Renderer {
             effects,
             mapping,
             cursor: project.cursor.clone(),
+            zooms: project.zoom_segments.clone(),
+            source_w,
+            source_h,
         })
     }
     fn allowed(&self, x: i32, y: i32) -> bool {
@@ -630,6 +640,78 @@ impl Renderer {
         x >= l.x as i32 + a as i32 && x < l.x as i32 + b as i32
     }
     pub fn frame(&self, raw: &[u8], t: f64, out: &mut RgbImage) {
+        self.compose(raw, t, out, self.mapping, 1.);
+    }
+    pub fn source_frame(&self, raw: &[u8], t: f64, content: &mut [u8], out: &mut RgbImage) {
+        let g = &self.effects.geometry;
+        let mut follow = (0., 0.);
+        let mut count = 0.;
+        for offset in 0..5 {
+            if let Some(p) =
+                studio_cursor::point_at(&self.path, (t - offset as f64 * 0.035).max(0.))
+            {
+                follow.0 += (p.x - g.x as f64) * self.source_w as f64 / g.width as f64;
+                follow.1 += (p.y - g.y as f64) * self.source_h as f64 / g.height as f64;
+                count += 1.;
+            }
+        }
+        let cursor = studio_cursor::point_at(&self.path, t)
+            .filter(|_| count > 0.)
+            .map(|p| studio_effects::Follow {
+                x: follow.0 / count,
+                y: follow.1 / count,
+                latest_x: (p.x - g.x as f64) * self.source_w as f64 / g.width as f64,
+                latest_y: (p.y - g.y as f64) * self.source_h as f64 / g.height as f64,
+            });
+        let l = self.layout;
+        let view = studio_effects::zoom_at(
+            &self.zooms,
+            t,
+            l.crop,
+            self.source_w as f64,
+            self.source_h as f64,
+            cursor,
+        );
+        let horizontal: Vec<_> = (0..l.content_w)
+            .map(|x| {
+                let px = (view.x + (x as f64 + 0.5) * view.w / l.content_w as f64 - 0.5)
+                    .clamp(0., self.source_w as f64 - 1.);
+                let a = px.floor() as usize;
+                (
+                    a,
+                    (a + 1).min(self.source_w as usize - 1),
+                    (px - a as f64) as f32,
+                )
+            })
+            .collect();
+        for y in 0..l.content_h as usize {
+            let py = (view.y + (y as f64 + 0.5) * view.h / l.content_h as f64 - 0.5)
+                .clamp(0., self.source_h as f64 - 1.);
+            let ya = py.floor() as usize;
+            let yb = (ya + 1).min(self.source_h as usize - 1);
+            let fy = (py - ya as f64) as f32;
+            for (x, (xa, xb, fx)) in horizontal.iter().copied().enumerate() {
+                let a = (ya * self.source_w as usize + xa) * 3;
+                let b = (ya * self.source_w as usize + xb) * 3;
+                let c = (yb * self.source_w as usize + xa) * 3;
+                let d = (yb * self.source_w as usize + xb) * 3;
+                let dest = (y * l.content_w as usize + x) * 3;
+                for channel in 0..3 {
+                    let top = raw[a + channel] as f32 * (1. - fx) + raw[b + channel] as f32 * fx;
+                    let bottom = raw[c + channel] as f32 * (1. - fx) + raw[d + channel] as f32 * fx;
+                    content[dest + channel] = (top * (1. - fy) + bottom * fy).round() as u8;
+                }
+            }
+        }
+        let mapping = Mapping {
+            crop_x: view.x,
+            crop_y: view.y,
+            scale: l.scale * view.scale,
+            ..self.mapping
+        };
+        self.compose(content, t, out, mapping, view.scale);
+    }
+    fn compose(&self, raw: &[u8], t: f64, out: &mut RgbImage, m: Mapping, zoom: f64) {
         out.as_mut().copy_from_slice(self.plate.as_raw());
         let l = self.layout;
         for (y, (a, b)) in self.spans.iter().copied().enumerate() {
@@ -638,13 +720,12 @@ impl Renderer {
             let n = (b - a) as usize * 3;
             out.as_mut()[dst..dst + n].copy_from_slice(&raw[src..src + n]);
         }
-        let m = self.mapping;
         let c = &self.cursor;
         if let Some(p) = studio_cursor::point_at(&self.path, t)
             .filter(|p| c.visible && (!c.hide_idle || t - p.moved_at < c.idle_seconds))
         {
             let (x, y) = m.point(p.x, p.y, &self.effects);
-            let size = c.size * l.scale;
+            let size = c.size * l.scale * zoom;
             if m.inside(x, y) {
                 let polygon = [
                     (0., 0.),
@@ -705,7 +786,7 @@ impl Renderer {
                 if let (Some(ex), Some(ey)) = (e.data["x"].as_f64(), e.data["y"].as_f64()) {
                     let (x, y) = m.point(ex, ey, &self.effects);
                     let age = t - e.t;
-                    let r = c.click_size * l.scale * (0.3 + age / 0.45 * 0.7);
+                    let r = c.click_size * l.scale * zoom * (0.3 + age / 0.45 * 0.7);
                     let rgb = if e.data["button"] == "right" {
                         [255, 182, 96]
                     } else {
@@ -735,12 +816,12 @@ impl Renderer {
                     .unwrap_or_default();
                 labels.push(e.data["text"].as_str().unwrap_or(""));
                 let label = labels.join(" + ");
-                let font = (3. * l.scale).round().max(1.) as u32;
+                let font = (3. * l.scale * zoom).round().max(1.) as u32;
                 let bw = (label.chars().count() as u32 * 8 * font + 32)
                     .min(l.content_w.saturating_sub(16));
                 let bx = l.x + (l.content_w - bw) / 2;
-                let by = (l.y + l.content_h).saturating_sub((64. * l.scale) as u32);
-                let bh = (42. * l.scale).round().max(12.) as u32;
+                let by = (l.y + l.content_h).saturating_sub((64. * l.scale * zoom) as u32);
+                let bh = (42. * l.scale * zoom).round().max(12.) as u32;
                 for y in by..by + bh {
                     for x in bx..bx + bw {
                         if self.allowed(x as i32, y as i32) {
@@ -984,17 +1065,26 @@ fn encode(
     let progress_idx = args.iter().position(|s| s == "-progress").unwrap();
     args.drain(progress_idx..progress_idx + 2);
     let graph_idx = args.iter().position(|s| s == "-filter_complex").unwrap() + 1;
-    args[graph_idx] = format!(
-        "{};[edited]crop={}:{}:{}:{}:exact=1,scale={}:{},fps={},format=rgb24[outv]",
-        args[graph_idx].replace("[outv]", "[edited]"),
-        l.crop.w,
-        l.crop.h,
-        l.crop.x,
-        l.crop.y,
-        l.content_w,
-        l.content_h,
-        fps
-    );
+    let source_mode = !spec.project.zoom_segments.is_empty();
+    args[graph_idx] = if source_mode {
+        format!(
+            "{};[edited]fps={},format=rgb24[outv]",
+            args[graph_idx].replace("[outv]", "[edited]"),
+            fps
+        )
+    } else {
+        format!(
+            "{};[edited]crop={}:{}:{}:{}:exact=1,scale={}:{},fps={},format=rgb24[outv]",
+            args[graph_idx].replace("[outv]", "[edited]"),
+            l.crop.w,
+            l.crop.h,
+            l.crop.x,
+            l.crop.y,
+            l.content_w,
+            l.content_h,
+            fps
+        )
+    };
     args.extend([
         "-filter_complex_threads".into(),
         "2".into(),
@@ -1070,7 +1160,15 @@ fn encode(
     let encode_errors = stderr(&mut encode);
     let encode = children.push(encode);
     children.watch(cancel.clone());
-    let mut input = vec![0u8; l.content_w as usize * l.content_h as usize * 3];
+    let mut input = vec![
+        0u8;
+        if source_mode {
+            spec.width as usize * spec.height as usize * 3
+        } else {
+            l.content_w as usize * l.content_h as usize * 3
+        }
+    ];
+    let mut content = vec![0u8; l.content_w as usize * l.content_h as usize * 3];
     let mut frame = RgbImage::new(l.width, l.height);
     let mut n = 0u64;
     loop {
@@ -1082,7 +1180,12 @@ fn encode(
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
             Err(e) => return Err(e.to_string()),
         }
-        renderer.frame(&input, source_time(&segments, n as f64 / fps), &mut frame);
+        let time = source_time(&segments, n as f64 / fps);
+        if source_mode {
+            renderer.source_frame(&input, time, &mut content, &mut frame);
+        } else {
+            renderer.frame(&input, time, &mut frame);
+        }
         output
             .write_all(frame.as_raw())
             .map_err(|e| format!("Encoder stopped: {e}"))?;
@@ -1398,17 +1501,40 @@ mod tests {
         events.events = serde_json::from_value(serde_json::json!([
             {"t":0.,"kind":"cursor","x":50.,"y":50.},
             {"t":0.1,"kind":"cursor","x":250.,"y":150.}
-        ])).unwrap();
+        ]))
+        .unwrap();
         project.cursor.smoothing = 0.;
         let renderer = Renderer::new(&project, &events, 320, 200).unwrap();
-        let raw: Vec<u8> = [180, 80, 40].into_iter().cycle().take(320 * 200 * 3).collect();
+        let raw: Vec<u8> = [180, 80, 40]
+            .into_iter()
+            .cycle()
+            .take(320 * 200 * 3)
+            .collect();
         let mut direct = RgbImage::new(320, 200);
         renderer.frame(&raw, 0.1, &mut direct);
         project.cursor.smoothing = 1.;
         let mut smooth = RgbImage::new(320, 200);
-        Renderer::new(&project, &events, 320, 200).unwrap().frame(&raw, 0.1, &mut smooth);
+        Renderer::new(&project, &events, 320, 200)
+            .unwrap()
+            .frame(&raw, 0.1, &mut smooth);
         assert_eq!(direct.get_pixel(250, 150).0, [255, 255, 255]);
         assert_eq!(smooth.get_pixel(250, 150).0, [180, 80, 40]);
         assert_eq!(smooth.get_pixel(129, 89).0, [255, 255, 255]);
+    }
+    #[test]
+    fn zoom_samples_source_pixels_and_keeps_the_card_size_fixed() {
+        let (mut project, events) = background_fixture();
+        project.look.enabled = false;
+        project.zoom_segments=serde_json::from_value(serde_json::json!([{"id":"zoom","start":0.,"end":2.,"scale":2.,"mode":"fixed","focus":{"x":0.5,"y":0.5},"ease":"gentle","easeIn":0.4,"easeOut":0.4,"origin":"manual","edited":true}])).unwrap();
+        let renderer = Renderer::new(&project, &events, 320, 200).unwrap();
+        let raw: Vec<u8> = (0..200)
+            .flat_map(|y| (0..320).flat_map(move |x| [x as u8, y as u8, 0]))
+            .collect();
+        let mut content = vec![0u8; 320 * 200 * 3];
+        let mut frame = RgbImage::new(320, 200);
+        renderer.source_frame(&raw, 1., &mut content, &mut frame);
+        assert_eq!(frame.dimensions(), (320, 200));
+        assert_eq!(frame.get_pixel(0, 0).0, [80, 50, 0]);
+        assert_eq!(frame.get_pixel(160, 100).0, [160, 100, 0]);
     }
 }
