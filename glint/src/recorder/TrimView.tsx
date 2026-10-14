@@ -1,3 +1,5 @@
+import { studioLoad, studioSave } from "../lib/studio";
+import { hydrateProject, type StudioData, type StudioProject } from "./studioModel";
 /** TrimView.tsx — recording trim window (#/rec-trim): player + multi-cut timeline. */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc } from "@tauri-apps/api/core";
@@ -29,6 +31,19 @@ const EPS = 1e-4;
 const ZOOMS = [1, 2, 4, 8];
 
 export function TrimView() {
+  const [studio, setStudio] = useState<StudioData | null>(null);
+  const [saveStatus, setSaveStatus] = useState("Saved");
+  const autosaveRef = useRef<{ path: string; project: StudioProject } | null>(null);
+  const saveQueueRef = useRef(Promise.resolve());
+  const loadGeneration = useRef(0);
+  const flushSave = useCallback(() => {
+    const pending = autosaveRef.current; if (!pending) return Promise.resolve();
+    autosaveRef.current = null;
+    setSaveStatus("Saving?");
+    saveQueueRef.current = saveQueueRef.current.catch(() => {}).then(() => studioSave(pending.path, pending.project))
+      .then(() => { setSaveStatus("Saved"); }).catch((error) => { autosaveRef.current = autosaveRef.current ?? pending; setSaveStatus(`Save failed: ${String(error)}`); });
+    return saveQueueRef.current;
+  }, []);
   const videoRef = useRef<HTMLVideoElement>(null);
   const [target, setTarget] = useState<{ id: number; path: string } | null>(null);
   const [src, setSrc] = useState<string | null>(null);
@@ -107,7 +122,7 @@ export function TrimView() {
   const camEdit = !!(probe?.has_cam && cam?.visible);
   // Any real edit (cuts / speed / fades / reorder / cam) — gates both Save and the
   // "play from start" affordance, which is pointless with nothing changed.
-  const hasEdit = !noop || camEdit;
+  const hasEdit = !noop || camEdit || studio !== null;
   const canSave = clips.length > 0 && keptCount(clips) > 0 && hasEdit && exporting === null;
 
   // The selected block: the clip clicked on the timeline (sticky). Falls back to none once
@@ -127,6 +142,10 @@ export function TrimView() {
   // RecorderTrimState and emits this event instead of rebuilding the webview. Each run
   // resets the full edit state for the new recording.
   const loadTarget = useCallback(() => {
+    void flushSave();
+    const generation = ++loadGeneration.current;
+    setStudio(null);
+    setUndoStack([]); setRedoStack([]); setPlayhead(0); setPlaying(false);
     setSrc(null);
     setTarget(null);
     setProbe(null);
@@ -138,14 +157,18 @@ export function TrimView() {
     setMediaReady(false);
     setEdit({ clips: [], fadeIn: 0, fadeOut: 0 });
     trimTarget().then(async (t) => {
-      if (!t) { return; }
+      if (!t || generation !== loadGeneration.current) { return; }
       setTarget(t);
       setSrc(convertFileSrc(t.path));
       try {
         const p = await trimProbe(t.path);
+        const data = await studioLoad(t.path);
+        if (generation !== loadGeneration.current) return;
+        const project = data ? hydrateProject(data.project, p.duration_secs) : null;
+        if (data && project) setStudio({ ...data, project });
         setProbe(p);
-        const clips0 = initClips(p.duration_secs);
-        setEdit({ clips: clips0, fadeIn: 0, fadeOut: 0 });
+        const clips0 = project?.clips ?? initClips(p.duration_secs);
+        setEdit({ clips: clips0, fadeIn: project?.fadeIn ?? 0, fadeOut: project?.fadeOut ?? 0 });
         setSelectedId(clips0[0]?.id ?? null); // start with the whole clip selected
         if (p.has_audio) {
           // Extra buckets so zoomed-in detail resolves (at 8× ≈ 150 bars across the track).
@@ -159,11 +182,11 @@ export function TrimView() {
           const placed = p.cam_d > 0
             ? clampPlacement({ x: p.cam_x, y: p.cam_y, diameter: p.cam_d, visible: true, shape })
             : { ...DEFAULT_PLACEMENT, shape };
-          setCam(placed);
+          setCam(project?.cam ?? placed);
         }
-      } catch { setErr("Couldn't read the recording."); }
-    }).catch(() => setErr("Couldn't open the recording."));
-  }, []);
+      } catch (error) { if (generation === loadGeneration.current) setErr(`Couldn't read the recording: ${String(error)}`); }
+    }).catch(() => { if (generation === loadGeneration.current) setErr("Couldn't open the recording."); });
+  }, [flushSave]);
 
   useEffect(() => {
     void loadTarget();
@@ -187,6 +210,8 @@ export function TrimView() {
   // When closed/hidden, wipe previous video and media state from DOM buffer.
   useEffect(() => {
     const un = listen("rec-trim-close", () => {
+      void flushSave(); ++loadGeneration.current;
+      setStudio(null);
       setSrc(null);
       setTarget(null);
       setProbe(null);
@@ -198,6 +223,16 @@ export function TrimView() {
     });
     return () => { un.then((f) => f()).catch(() => {}); };
   }, []);
+
+  useEffect(() => {
+    if (!studio || !target || !edit.clips.length) return;
+    const project = { ...studio.project, ...edit, cam };
+    autosaveRef.current = { path: target.path, project };
+    setSaveStatus("Unsaved");
+    const timeout = window.setTimeout(() => { void flushSave(); }, 350);
+    return () => window.clearTimeout(timeout);
+  }, [studio, target, edit, cam, flushSave]);
+  useEffect(() => () => { void flushSave(); }, [flushSave]);
 
   useEffect(() => {
     const un = listen<number>("rec-trim-progress", (e) => setExporting(Math.round(e.payload)));
@@ -385,12 +420,14 @@ export function TrimView() {
   // history; undoing back to the start empties it). Never closes mid-export.
   const requestClose = useCallback(() => {
     if (exporting !== null) return;
+    if (studio) { void flushSave().then(() => { if (!autosaveRef.current) void getCurrentWindow().close(); }); return; }
     if (undoStack.length > 0 && !window.confirm("Discard your trim edits?")) return;
     getCurrentWindow().close().catch(() => {});
-  }, [exporting, undoStack.length]);
+  }, [exporting, undoStack.length, studio, flushSave]);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
       if (exporting !== null) return; // export is modal — ignore edit/transport keys
       if (e.key === " ") { e.preventDefault(); togglePlay(); }
       else if (e.key.toLowerCase() === "s") { e.preventDefault(); doSplit(); }
@@ -429,6 +466,7 @@ export function TrimView() {
 
   return (
     <div className={`trim-root${booting ? " is-booting" : ""}`}>
+      <div className="trim-preview-row">
       <div className="trim-stage">
         {src && (
           <video
@@ -455,6 +493,8 @@ export function TrimView() {
         )}
       </div>
 
+      {studio && <aside className="studio-panel" aria-label="Studio settings"><h2>Studio</h2><p role="status">{saveStatus}</p><p>Timeline changes are saved to this project.</p><button className="trim-btn" onClick={() => void flushSave()}>Save project</button></aside>}
+      </div>
       <div className="trim-transport">
         <button className="trim-iconbtn" onClick={togglePlay} title="Play/Pause (Space)">
           {playing ? <Pause size={16} /> : <Play size={16} />}

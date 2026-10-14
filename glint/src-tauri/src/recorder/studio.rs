@@ -104,7 +104,7 @@ pub fn write_project(folder:&Path,project:&serde_json::Value)->Result<(),String>
     #[cfg(not(windows))] std::fs::rename(&tmp,&dest).map_err(|e|e.to_string())?;
     Ok(())
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn studio_load(path:String)->Result<Option<serde_json::Value>,String> {
     if !is_studio_video(&path) {return Ok(None);}
     let dir=Path::new(&path).parent().unwrap();
@@ -113,7 +113,7 @@ pub fn studio_load(path:String)->Result<Option<serde_json::Value>,String> {
     let events:Events=serde_json::from_slice(&std::fs::read(dir.join("events.json")).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
     Ok(Some(serde_json::json!({"project":project,"events":events})))
 }
-#[tauri::command]
+#[tauri::command(async)]
 pub fn studio_save(path:String,project:serde_json::Value)->Result<(),String> {
     if !is_studio_video(&path) {return Err("This video is not a Studio project".into());}
     write_project(Path::new(&path).parent().unwrap(),&project)

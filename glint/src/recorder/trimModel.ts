@@ -3,6 +3,10 @@
 export type Clip = { id: number; start: number; end: number; kept: boolean; speed: number; order: number };
 
 let nextId = 1;
+/** Reopened projects retain ids; keep new split ids above the persisted range. */
+export function reserveClipIds(clips: Clip[]): void {
+  nextId = Math.max(nextId, ...clips.map((c) => c.id + 1));
+}
 const mk = (start: number, end: number, kept: boolean, speed: number, order: number): Clip =>
   ({ id: nextId++, start, end, kept, speed, order });
 
