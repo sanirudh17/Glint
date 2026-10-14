@@ -1,3 +1,4 @@
+import { CursorControls } from "./CursorControls";
 import { LookControls } from "../look/LookControls";
 import "../look/look.css";
 import { StudioPreview } from "./StudioPreview";
@@ -500,6 +501,7 @@ export function TrimView() {
 
       {studio && <aside className="studio-panel" aria-label="Studio settings"><h2>Studio</h2><p role="status">{saveStatus}</p>
         <LookControls video look={studio.project.look} onChange={(patch) => setStudio((data) => data && ({ ...data, project: { ...data.project, look: { ...data.project.look, ...patch } } }))} />
+        <CursorControls cursor={studio.project.cursor} onChange={(patch) => setStudio((data) => data && ({ ...data, project: { ...data.project, cursor: { ...data.project.cursor, ...patch } } }))} />
         {probe && <details className="studio-crop"><summary>Crop source video</summary>
           {(["x", "y", "w", "h"] as const).map((key) => <label key={key}>{({x:"Left",y:"Top",w:"Width",h:"Height"})[key]}<input aria-label={`Crop ${key}`} type="number" min={key === "w" || key === "h" ? 2 : 0} max={key === "x" || key === "w" ? probe.width : probe.height} value={(studio.project.crop ?? { x: 0, y: 0, w: probe.width, h: probe.height })[key]} onChange={(e) => setStudio((data) => data && ({ ...data, project: { ...data.project, crop: clampCrop({ ...(data.project.crop ?? { x: 0, y: 0, w: probe.width, h: probe.height }), [key]: Number(e.target.value) }, probe.width, probe.height) } }))} /></label>)}
           <button className="trim-btn" onClick={() => setStudio((data) => data && ({ ...data, project: { ...data.project, crop: null } }))}>Reset crop</button>

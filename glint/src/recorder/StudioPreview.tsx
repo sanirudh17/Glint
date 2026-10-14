@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, type RefObject } from "react";
+import { drawCursorLayer, smoothPath } from "./studioCursor";
+import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import { getGradient, konvaGradient } from "../editor/gradients";
 import { resolveRadiusPx } from "../editor/composition";
 import { studioLayout } from "./studioLayout";
@@ -10,6 +11,8 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height }: {
   studio: StudioData; video: RefObject<HTMLVideoElement | null>; camVideo: RefObject<HTMLVideoElement | null>;
   cam: CamPlacement | null; width: number; height: number;
 }) {
+  const path = useMemo(() => smoothPath(studio.events.events, studio.project.cursor.smoothing), [studio.events, studio.project.cursor.smoothing]);
+  const effectEvents = useMemo(() => ({ ...studio.events, events: studio.events.events.filter((e) => e.kind !== "cursor") }), [studio.events]);
   const ref = useRef<HTMLCanvasElement>(null);
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const background = studio.project.look.background;
@@ -57,6 +60,7 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height }: {
           const sw = native > ratio ? cv.videoHeight * ratio : cv.videoWidth, sh = native > ratio ? cv.videoHeight : cv.videoWidth / ratio;
           ctx.drawImage(cv, (cv.videoWidth - sw) / 2, (cv.videoHeight - sh) / 2, sw, sh, 0, 0, box.w, box.h); ctx.restore();
         }
+        drawCursorLayer(ctx, v.currentTime, path, effectEvents, studio.project.cursor, l, width, height);
         if (l.chromeH > 0) {
           ctx.fillStyle = look.chrome.theme === "dark" ? "#25272c" : "#eeeeee"; ctx.fillRect(l.contentX, top, l.contentW, l.chromeH);
           ctx.fillStyle = look.chrome.theme === "dark" ? "#ffffff" : "#202020"; ctx.font = `${l.chromeH * .35}px sans-serif`; ctx.textAlign = "center";
@@ -71,6 +75,6 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height }: {
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [studio, video, camVideo, cam, width, height, background, image]);
+  }, [studio, video, camVideo, cam, width, height, background, image, path, effectEvents]);
   return <canvas ref={ref} className="studio-preview" aria-label="Studio video preview" />;
 }
