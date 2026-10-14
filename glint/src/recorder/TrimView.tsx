@@ -1,3 +1,7 @@
+import { LookControls } from "../look/LookControls";
+import "../look/look.css";
+import { StudioPreview } from "./StudioPreview";
+import { clampCrop } from "./studioLayout";
 import { studioLoad, studioSave } from "../lib/studio";
 import { hydrateProject, type StudioData, type StudioProject } from "./studioModel";
 /** TrimView.tsx — recording trim window (#/rec-trim): player + multi-cut timeline. */
@@ -467,7 +471,8 @@ export function TrimView() {
   return (
     <div className={`trim-root${booting ? " is-booting" : ""}`}>
       <div className="trim-preview-row">
-      <div className="trim-stage">
+      <div className={`trim-stage${studio ? " studio-stage" : ""}`}>
+        {studio && probe && <StudioPreview studio={studio} video={videoRef} camVideo={camVideoRef} cam={cam} width={probe.width} height={probe.height} />}
         {src && (
           <video
             ref={videoRef}
@@ -493,7 +498,15 @@ export function TrimView() {
         )}
       </div>
 
-      {studio && <aside className="studio-panel" aria-label="Studio settings"><h2>Studio</h2><p role="status">{saveStatus}</p><p>Timeline changes are saved to this project.</p><button className="trim-btn" onClick={() => void flushSave()}>Save project</button></aside>}
+      {studio && <aside className="studio-panel" aria-label="Studio settings"><h2>Studio</h2><p role="status">{saveStatus}</p>
+        <LookControls video look={studio.project.look} onChange={(patch) => setStudio((data) => data && ({ ...data, project: { ...data.project, look: { ...data.project.look, ...patch } } }))} />
+        {probe && <details className="studio-crop"><summary>Crop source video</summary>
+          {(["x", "y", "w", "h"] as const).map((key) => <label key={key}>{({x:"Left",y:"Top",w:"Width",h:"Height"})[key]}<input aria-label={`Crop ${key}`} type="number" min={key === "w" || key === "h" ? 2 : 0} max={key === "x" || key === "w" ? probe.width : probe.height} value={(studio.project.crop ?? { x: 0, y: 0, w: probe.width, h: probe.height })[key]} onChange={(e) => setStudio((data) => data && ({ ...data, project: { ...data.project, crop: clampCrop({ ...(data.project.crop ?? { x: 0, y: 0, w: probe.width, h: probe.height }), [key]: Number(e.target.value) }, probe.width, probe.height) } }))} /></label>)}
+          <button className="trim-btn" onClick={() => setStudio((data) => data && ({ ...data, project: { ...data.project, crop: null } }))}>Reset crop</button>
+        </details>}
+        {cam && <details className="studio-crop"><summary>Camera position</summary>{(["x", "y", "diameter"] as const).map((key) => <label key={key}>{key}<input aria-label={`Camera ${key}`} type="range" min="0" max="1" step="0.01" value={cam[key]} onChange={(e) => setCam((c) => c && clampPlacement({ ...c, [key]: Number(e.target.value) }))} /></label>)}</details>}
+        <button className="trim-btn" onClick={() => void flushSave()}>Save project</button>
+      </aside>}
       </div>
       <div className="trim-transport">
         <button className="trim-iconbtn" onClick={togglePlay} title="Play/Pause (Space)">
