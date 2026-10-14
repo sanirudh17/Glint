@@ -1301,6 +1301,10 @@ pub async fn recorder_set_fx(app: tauri::AppHandle, effect: String, on: bool) ->
 /// harmless no-op. Cheap + thread-safe — only the window *build* is thread-sensitive.
 fn prepare_trim_target(app: &tauri::AppHandle, id: i64, path: String) {
     let _ = app.asset_protocol_scope().allow_file(&path);
+    let camera = cam::cam_sidecar_path(&path);
+    if camera.is_file() {
+        let _ = app.asset_protocol_scope().allow_file(camera);
+    }
     *app.state::<RecorderTrimState>().0.lock().unwrap() = Some(TrimTarget { id, path });
 }
 

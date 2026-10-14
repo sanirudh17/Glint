@@ -28,10 +28,10 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
   useEffect(() => {
     let raf = 0;
     const maskedSource=document.createElement('canvas'),maskScratch=document.createElement('canvas');
-    let maskedTime=NaN;
+    let maskedTime=NaN,maskedCamTime=NaN;
     const tick = () => {
       const canvas = ref.current, v = video.current;
-      if (canvas && v && v.readyState >= 2) {
+      if (canvas && v && v.readyState >= 2 && !v.seeking) {
         const { look, crop } = studio.project;
         const { layout: l, scale, width: w, height: h } = studioLayout(width, height, crop, look, 960);
         if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -65,12 +65,15 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
         ctx.save(); ctx.translate(l.contentX,l.contentY); ctx.scale(l.contentW/view.w,l.contentH/view.h);
         const hasMasks=studio.project.masks.length>0;
         const sourceCanvas=hasMasks||motion.enabled&&cam?.visible;
-        if(sourceCanvas&&maskedTime!==v.currentTime) {
+        const cv=camVideo.current;
+        const camTime=cam?.visible&&cv&&cv.readyState>=2&&!cv.seeking?cv.currentTime:-1;
+        if(sourceCanvas&&(maskedTime!==v.currentTime||maskedCamTime!==camTime)) {
           maskedSource.width=width;maskedSource.height=height;const source=maskedSource.getContext('2d')!;
           source.drawImage(v,0,0,width,height);
-          if(cam?.visible&&camVideo.current&&camVideo.current.readyState>=2)paintCamera(source,cam,camVideo.current,width,height);
+          if(cam&&cv&&camTime>=0)paintCamera(source,cam,cv,width,height);
           applyPreviewMasks(source,studio.project.masks,Math.min(v.currentTime,Math.max(0,v.duration-1e-7)),width,height,maskScratch);
           maskedTime=v.currentTime;
+          maskedCamTime=camTime;
         }
         if(times.length>1) {
           for(const index of [2,1,0]) {
