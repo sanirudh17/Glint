@@ -7,7 +7,8 @@
  */
 export interface Crop { x: number; y: number; w: number; h: number }
 
-export type AspectId = "auto" | "1:1" | "16:9" | "4:3";
+import type { AspectId } from "../look/model";
+export type { AspectId } from "../look/model";
 
 /** The frame fields that affect layout (background/colour are irrelevant here). */
 export interface FrameLayoutInput {
@@ -35,6 +36,8 @@ const ASPECT_RATIO: Record<AspectId, number | null> = {
   "1:1": 1,
   "16:9": 16 / 9,
   "4:3": 4 / 3,
+  "9:16": 9 / 16,
+  "4:5": 4 / 5,
 };
 
 // Chrome bar height scales with the screenshot's width so it reads consistently

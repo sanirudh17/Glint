@@ -59,6 +59,15 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const selectedId = useEditorStore((s) => s.selectedId);
   const crop = useEditorStore((s) => s.crop);
   const frame = useEditorStore((s) => s.frame);
+  const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
+  useEffect(() => {
+    setBackgroundImage(null);
+    if (frame.background.type !== "image" || !frame.background.dataUrl) return;
+    let active = true;
+    const img = new Image(); img.onload = () => { if (active) setBackgroundImage(img); };
+    img.src = frame.background.dataUrl;
+    return () => { active = false; };
+  }, [frame.background]);
   const cornerRadius = useEditorStore((s) => s.cornerRadius);
   const select = useEditorStore((s) => s.select);
   const add = useEditorStore((s) => s.add);
@@ -358,7 +367,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
           const longEdge = Math.max(layout.contentW, layout.contentH);
           const t = frame.shadow / 100; // 0..1
           return {
-            shadowColor: "#000",
+            shadowColor: frame.shadowColor ?? "#000",
             shadowBlur: Math.round((0.02 + t * 0.1) * longEdge), // 2%..12% of long edge
             shadowOpacity: 0.2 + t * 0.5, // 0.2..0.7
             shadowOffsetY: Math.round((0.01 + t * 0.05) * longEdge), // 1%..6% of long edge
@@ -670,7 +679,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
               height={compH}
               {...(frame.background.type === "solid"
                 ? { fill: frame.background.color }
-                : konvaGradient(getGradient(frame.background.gradientId), compW, compH))}
+                : frame.background.type === "gradient" ? konvaGradient(getGradient(frame.background.gradientId), compW, compH) : { fillPatternImage: backgroundImage ?? undefined, fillPatternScale: backgroundImage ? { x: Math.max(compW / backgroundImage.width, compH / backgroundImage.height), y: Math.max(compW / backgroundImage.width, compH / backgroundImage.height) } : undefined })}
             />
           </Layer>
         )}
@@ -712,6 +721,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
               crop={{ x: layout.cropX, y: layout.cropY, width: layout.contentW, height: layout.contentH }}
             />
           </Group>
+          {frame.enabled && (frame.border?.width ?? 0) > 0 && <Rect x={layout.contentX} y={cardY} width={layout.contentW} height={cardH} cornerRadius={r} stroke={frame.border?.color} strokeWidth={frame.border?.width} dash={frame.border?.style === "dashed" ? [8, 6] : undefined} />}
           {chromeOn && (
             <WindowChrome
               x={layout.contentX}

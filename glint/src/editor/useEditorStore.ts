@@ -12,7 +12,6 @@ import {
   type ToolId,
 } from "./model";
 import type { Crop } from "./composition";
-import { GRADIENTS } from "./gradients";
 import { loadToolStyles, saveToolStyles } from "./toolStylePersistence";
 
 /** Non-serializable base image for the live session (5c persists annotations only). */
@@ -24,32 +23,9 @@ export interface EditorBase {
   captureId: number | null;
 }
 
-export type FrameBackground =
-  | { type: "solid"; color: string }
-  | { type: "gradient"; gradientId: string }
-  | { type: "transparent" };
-
-export interface WindowChrome {
-  style: "none" | "window" | "browser";
-  theme: "light" | "dark";
-  /** Decorative window-control buttons: macOS traffic lights (left) or Windows
-      caption buttons (right). Applies to both Window and Browser styles. */
-  buttons: "none" | "mac" | "windows";
-  /** Centered title text (Window style). Empty → no title drawn. */
-  title: string;
-  /** Address-bar text (Browser style). Empty → empty pill. */
-  url: string;
-}
-
-export interface FrameConfig {
-  enabled: boolean;
-  background: FrameBackground;
-  padding: number;
-  radius: number;
-  shadow: number;
-  aspect: "auto" | "1:1" | "16:9" | "4:3";
-  chrome: WindowChrome;
-}
+export type { LookBackground as FrameBackground, WindowChrome } from "../look/model";
+import { DEFAULT_LOOK, hydrateLook, type LookConfig, type WindowChrome } from "../look/model";
+export type FrameConfig = LookConfig;
 
 /** One step of undo/redo history: annotations + crop + frame + the standalone corner trim. */
 interface DocSnapshot { annotations: Annotation[]; crop: Crop | null; frame: FrameConfig; cornerRadius: number }
@@ -64,15 +40,7 @@ export interface SerializedDoc {
   cornerRadius?: number;
 }
 
-export const DEFAULT_FRAME: FrameConfig = {
-  enabled: false,
-  background: { type: "gradient", gradientId: GRADIENTS[0].id },
-  padding: 40,
-  radius: 12,
-  shadow: 35,
-  aspect: "auto",
-  chrome: { style: "none", theme: "light", buttons: "mac", title: "", url: "" },
-};
+export const DEFAULT_FRAME: FrameConfig = DEFAULT_LOOK;
 
 interface EditorState {
   base: EditorBase | null;
@@ -154,15 +122,7 @@ const freshFrame = (): FrameConfig => ({
 });
 
 /** Merge a loaded frame over defaults so a partial/legacy doc still hydrates safely. */
-const mergeFrame = (f: FrameConfig | undefined): FrameConfig =>
-  f
-    ? {
-        ...DEFAULT_FRAME,
-        ...f,
-        background: f.background ? { ...f.background } : { ...DEFAULT_FRAME.background },
-        chrome: { ...DEFAULT_FRAME.chrome, ...(f.chrome ?? {}) },
-      }
-    : freshFrame();
+const mergeFrame = (f: FrameConfig | undefined): FrameConfig => hydrateLook(f);
 
 const INITIAL = {
   base: null as EditorBase | null,
