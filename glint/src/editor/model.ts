@@ -38,6 +38,8 @@ export interface Style {
   redactStyle?: "solid" | "pixelate";
   /** spotlight tool: bright-region shape. "rect" (default) or "ellipse". */
   region?: "rect" | "ellipse";
+  curve?:number;
+  textPreset?:"plain"|"heading"|"label"|"code";
 }
 
 interface Base {

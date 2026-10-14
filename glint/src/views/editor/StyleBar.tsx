@@ -1,4 +1,7 @@
-import { ArrowLeftRight, Pipette } from "lucide-react";
+import { ArrowLeftRight, Pipette,ChevronUp,ChevronDown } from "lucide-react";
+import {Select,NumberInput} from '../../components/ui';
+import {textPreset} from '../../editor/annotationStyles';
+import type {Style} from '../../editor/model';
 import { useEditorStore } from "../../editor/useEditorStore";
 import { PALETTE as COLORS } from "../../editor/palette";
 
@@ -77,6 +80,7 @@ export function StyleBar() {
   if (tool === "select" && !selectedAnno) {
     return <div className="editor-stylebar" role="toolbar" aria-label="Style" />;
   }
+  if(effType==='image')return <div className="editor-stylebar" role="toolbar" aria-label="Style"><span className="editor-status">Image layer · drag or resize on canvas</span></div>;
 
   // Eraser has no color/stroke — only a footprint size. Show just that so the
   // S/M/L controls unambiguously mean the eraser radius (not pen thickness).
@@ -219,16 +223,9 @@ export function StyleBar() {
           <ArrowLeftRight size={15} strokeWidth={1.5} />
         </button>
       )}
+      {isArrow&&<label className="editor-bend"><span>Bend</span><input type="range" min={-100} max={100} value={Math.round((eff.curve??0)*100)} aria-label="Arrow bend" onPointerDown={()=>{if(selectedAnno)useEditorStore.getState().pushHistory();}} onChange={e=>{const curve=Number(e.target.value)/100;setStyle({curve});patchSelected({curve},false);}}/></label>}
       {isText && (
-        <input
-          className="editor-fontsize"
-          type="number"
-          min={8}
-          max={120}
-          value={eff.fontSize}
-          onChange={(e) => applyFontSize(Number(e.currentTarget.value) || 24)}
-          aria-label="Font size"
-        />
+        <><div className="editor-text-preset"><Select portal ariaLabel="Text style" value={eff.textPreset??'plain'} options={['plain','heading','label','code'].map(value=>({value,label:value[0].toUpperCase()+value.slice(1)}))} onChange={preset=>{const patch=textPreset(preset as NonNullable<Style['textPreset']>);setStyle(patch);patchSelected(patch);}}/></div><div className="editor-text-size"><NumberInput min={8} max={120} ariaLabel="Font size" value={eff.fontSize} onChange={value=>{if(value!==eff.fontSize){if(selectedAnno)useEditorStore.getState().pushHistory();applyFontSize(value);}}}/></div></>
       )}
       {isRedact && (
         <div className="editor-widths" role="group" aria-label="Redaction style">
@@ -280,6 +277,7 @@ export function StyleBar() {
           />
         </>
       )}
+      {selectedAnno&&<div className="editor-layer-actions" role="group" aria-label="Annotation layer order"><button className="editor-width" aria-label="Bring annotation forward" title="Bring forward" disabled={annotations.filter(a=>a.type!=='image').slice(-1)[0]?.id===selectedAnno.id} onClick={()=>useEditorStore.getState().bringForward(selectedAnno.id)}><ChevronUp size={16}/></button><button className="editor-width" aria-label="Send annotation backward" title="Send backward" disabled={annotations.find(a=>a.type!=='image')?.id===selectedAnno.id} onClick={()=>useEditorStore.getState().sendBackward(selectedAnno.id)}><ChevronDown size={16}/></button></div>}
     </div>
   );
 }

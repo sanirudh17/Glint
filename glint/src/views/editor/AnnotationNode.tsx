@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
-import { Arrow, Line, Rect, Ellipse, Text, Group, Image as KonvaImage, Circle } from "react-konva";
+import { Arrow, Line, Rect, Ellipse, Text, Group, Image as KonvaImage, Circle,Label,Tag } from "react-konva";
+import {arrowPoints} from '../../editor/annotationStyles';
 import Konva from "konva";
 import type { Annotation, BoxAnno, FreehandAnno, StepAnno, TextAnno, TwoPointAnno } from "../../editor/model";
 
@@ -52,7 +53,8 @@ export function AnnotationNode({ anno, draggable, baseImage, layerImage, baseWid
         <Arrow
           {...common}
           x={0} y={0}
-          points={[a.x1, a.y1, a.x2, a.y2]}
+          points={arrowPoints(a)}
+          tension={(a.style.curve??0)!==0?0.5:0}
           stroke={a.style.color}
           fill={a.style.color}
           strokeWidth={a.style.strokeWidth}
@@ -61,6 +63,7 @@ export function AnnotationNode({ anno, draggable, baseImage, layerImage, baseWid
           pointerLength={10 + a.style.strokeWidth}
           pointerWidth={10 + a.style.strokeWidth}
           hitStrokeWidth={Math.max(12, a.style.strokeWidth)}
+          onTransformEnd={e=>{const n=e.target,t=n.getTransform(),first=t.point({x:a.x1,y:a.y1}),last=t.point({x:a.x2,y:a.y2});n.scaleX(1);n.scaleY(1);n.position({x:0,y:0});onChange({x1:first.x,y1:first.y,x2:last.x,y2:last.y});}}
         />
       );
     }
@@ -133,11 +136,13 @@ export function AnnotationNode({ anno, draggable, baseImage, layerImage, baseWid
     }
     case "text": {
       const a = anno as TextAnno;
+      if(a.style.textPreset==='label')return <Label {...common} x={a.x} y={a.y}><Tag fill="#20242c" cornerRadius={5}/><Text id={a.id} text={a.text||' '} fontSize={a.style.fontSize} fill={a.style.color} padding={8} fontStyle="bold"/></Label>;
       return (
         <Text
           {...common}
           x={a.x} y={a.y} text={a.text || " "}
           fontSize={a.style.fontSize} fill={a.style.color}
+          fontFamily={a.style.textPreset==='code'?'Courier New':undefined} fontStyle={a.style.textPreset==='heading'?'bold':'normal'}
         />
       );
     }
