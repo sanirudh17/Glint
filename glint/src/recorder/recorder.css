@@ -28,6 +28,7 @@
 .rec-dot { width: 10px; height: 10px; border-radius: 50%; background: #ff3b30; flex: none; }
 .rec-dot--paused { background: #f5a623; }
 .rec-time { font-variant-numeric: tabular-nums; min-width: 44px; }
+.rec-studio-mode { color:var(--text-dim);font-size:var(--fz-xs);padding:0 4px; }
 /* One icon set: 1.5px stroke throughout the pill (filled transport glyphs
    keep their fill; the stroke only trims their edge). */
 .rec-bar svg { stroke-width: 1.5; }

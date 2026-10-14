@@ -2,7 +2,8 @@
 //! run on a dedicated thread with a Win32 message pump (LL hooks require a message
 //! loop on the installing thread). Callbacks stay non-blocking: they emit a small
 //! Tauri event to the overlay and return immediately. Keylogger-shaped but LOCAL —
-//! events only drive on-screen chips, never persisted or sent.
+//! Quick events only drive on-screen chips. Studio events persist locally in
+//! the editable sidecar; neither mode sends input events over the network.
 
 use std::cell::{Cell, RefCell};
 use tauri::{AppHandle, Emitter};
@@ -28,6 +29,18 @@ thread_local! {
     }) };
     static STUDIO: RefCell<Option<crate::recorder::studio::EventSink>> = const { RefCell::new(None) };
     static LAST_MOVE: Cell<u64> = const { Cell::new(0) };
+    static MARKER_HELD: Cell<bool> = const { Cell::new(false) };
+}
+
+// Emit once per press; consume repeats and release so the target app does not
+// receive Studio's marker shortcut. Quick-mode input never enters this path.
+pub fn marker_action(vk:u32,down:bool,modifiers:&[&str],held:&mut bool)->(bool,bool) {
+    if vk!=0x5A {return (false,false);}
+    if !down {let consumed=*held;*held=false;return (false,consumed);}
+    if *held {return (false,true);}
+    if modifiers.contains(&"Ctrl")&&modifiers.contains(&"Alt") {
+        *held=true;return (true,true);
+    } (false,false)
 }
 
 const MOVE_GAP_MS: u64 = 16; // ~60 Hz cursor emits
@@ -40,7 +53,7 @@ fn now_ms() -> u64 {
 fn emit(event: &str, mut payload: serde_json::Value) {
     let persisted=STUDIO.with(|s| {
         if let Some(sink)=s.borrow().as_ref() {
-            payload["kind"]=serde_json::json!(match event { "fx-cursor" => "cursor", "fx-click" => "click", _ => "key" });
+            payload["kind"]=serde_json::json!(match event { "fx-cursor" => "cursor", "fx-click" => "click", "fx-marker"=>"marker", _ => "key" });
             sink.push(payload.clone()); true
         } else {false}
     });
@@ -179,8 +192,18 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
         let down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
         let up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
         if down || up {
+            let mods=current_modifiers(info.vkCode,down);
+            if STUDIO.with(|sink|sink.borrow().is_some()) {
+                let (mark,consume)=MARKER_HELD.with(|held|{let mut value=held.get();let result=marker_action(info.vkCode,down,&mods,&mut value);held.set(value);result});
+                if mark {
+                    let mut point=windows::Win32::Foundation::POINT::default();
+                    if windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut point).is_ok() {
+                        emit("fx-marker",serde_json::json!({"x":point.x,"y":point.y}));
+                    }
+                }
+                if consume {return LRESULT(1);}
+            }
             if let Some((label, is_mod)) = super::keymap::vk_label(info.vkCode) {
-                let mods = current_modifiers(info.vkCode, down);
                 emit("fx-key", serde_json::json!({
                     "text": label,
                     "isModifier": is_mod,
@@ -295,7 +318,17 @@ fn install_hooks(app: AppHandle, cfg: super::FxConfig, sink: Option<crate::recor
 
 #[cfg(test)]
 mod tests {
-    use super::throttle_ok;
+    use super::{throttle_ok,marker_action};
+
+    #[test]
+    fn marker_chord_ignores_repeats_and_releases_the_capture() {
+        let mut held=false;
+        assert_eq!(marker_action(0x5A,true,&["Ctrl"],&mut held),(false,false));
+        assert_eq!(marker_action(0x5A,true,&["Ctrl","Alt"],&mut held),(true,true));
+        assert_eq!(marker_action(0x5A,true,&["Ctrl","Alt"],&mut held),(false,true));
+        assert_eq!(marker_action(0x5A,false,&[],&mut held),(false,true));
+        assert!(!held);
+    }
 
     #[test]
     fn throttle_allows_after_gap() {

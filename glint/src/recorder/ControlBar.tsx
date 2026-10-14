@@ -162,6 +162,7 @@ export function ControlBar() {
       {hint && <div className="rec-tip">{hint}</div>}
       <span className={`rec-dot${paused ? " rec-dot--paused" : ""}`} aria-hidden />
       <span className="rec-time">{mmss(secs)}</span>
+      {studioMode&&<span className="rec-studio-mode" {...tip("Ctrl+Alt+Z marks a zoom while recording")} title="Ctrl+Alt+Z marks a zoom">Studio</span>}
       {audio?.system && (
         <button
           className={`rec-atog${audio.sysMuted ? " rec-atog--off" : ""}`}

@@ -172,7 +172,7 @@ export function TrimView() {
         const p = await trimProbe(t.path);
         const data = await studioLoad(t.path);
         if (generation !== loadGeneration.current) return;
-        const project = data ? hydrateProject(data.project, p.duration_secs) : null;
+        const project = data ? hydrateProject(data.project, p.duration_secs, data.events) : null;
         if (data && project) setStudio({ ...data, project });
         setProbe(p);
         const clips0 = project?.clips ?? initClips(p.duration_secs);

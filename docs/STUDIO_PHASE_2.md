@@ -26,7 +26,8 @@ No new libraries, cloud services or bundled media are needed.
   inspector and draggable timeline track; preview and native export.
 - 2.2: deterministic click clustering, isolated-click rejection, bounded spans,
   minimum gaps, travel-away exit and regeneration preserving all hand edits.
-- 2.3: pending.
+- 2.3: Ctrl+Alt+Z records a pause-aware Studio zoom marker, once per press.
+  Import into the editor is idempotent; deleted marker zooms stay deleted.
 - 2.4: pending.
 - 2.5: pending.
 - 2.6: pending.
