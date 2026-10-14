@@ -1,0 +1,11 @@
+{
+  "duration": 60,
+  "fps": 60,
+  "source": "1920x1080",
+  "content": "1600x900",
+  "output": "1920x1080",
+  "graph_seconds": "exceeded 120-second timebox",
+  "rust_seconds": 28.182,
+  "artifacts": "C:\\Users\\sanir\\AppData\\Local\\Temp\\glint-studio-spike-_van3rn8",
+  "note": "CPU prototype uses a cached background and row spans; graph recomputes RGBA corner mask and shadow. Final pipeline must add cached soft shadow and layers."
+}
