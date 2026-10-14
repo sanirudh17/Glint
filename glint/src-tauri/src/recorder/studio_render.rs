@@ -1387,4 +1387,28 @@ mod tests {
             .frame(&raw, 0.15, &mut frame);
         assert_eq!(frame.get_pixel(171, 132).0, [113, 143, 183]);
     }
+
+    #[test]
+    fn changing_smoothing_changes_the_rendered_cursor_during_movement() {
+        let (mut project, mut events) = background_fixture();
+        project.look.enabled = false;
+        project.cursor.visible = true;
+        project.cursor.hide_idle = false;
+        project.cursor.style = "dot".into();
+        events.events = serde_json::from_value(serde_json::json!([
+            {"t":0.,"kind":"cursor","x":50.,"y":50.},
+            {"t":0.1,"kind":"cursor","x":250.,"y":150.}
+        ])).unwrap();
+        project.cursor.smoothing = 0.;
+        let renderer = Renderer::new(&project, &events, 320, 200).unwrap();
+        let raw: Vec<u8> = [180, 80, 40].into_iter().cycle().take(320 * 200 * 3).collect();
+        let mut direct = RgbImage::new(320, 200);
+        renderer.frame(&raw, 0.1, &mut direct);
+        project.cursor.smoothing = 1.;
+        let mut smooth = RgbImage::new(320, 200);
+        Renderer::new(&project, &events, 320, 200).unwrap().frame(&raw, 0.1, &mut smooth);
+        assert_eq!(direct.get_pixel(250, 150).0, [255, 255, 255]);
+        assert_eq!(smooth.get_pixel(250, 150).0, [180, 80, 40]);
+        assert_eq!(smooth.get_pixel(129, 89).0, [255, 255, 255]);
+    }
 }
