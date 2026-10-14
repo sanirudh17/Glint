@@ -28,7 +28,10 @@ No new libraries, cloud services or bundled media are needed.
   minimum gaps, travel-away exit and regeneration preserving all hand edits.
 - 2.3: Ctrl+Alt+Z records a pause-aware Studio zoom marker, once per press.
   Import into the editor is idempotent; deleted marker zooms stay deleted.
-- 2.4: pending.
+- 2.4: source-pixel blur/pixelate/solid masks, keyframed rectangles, drawing and
+  resizing in preview, timeline trimming, duplicate/copy/split and whole-clip
+  defaults. A privacy note and explicitly confirmed source-deletion option keep
+  sharing limited to the finished export. Thumbnail names are unique per path.
 - 2.5: pending.
 - 2.6: pending.
 

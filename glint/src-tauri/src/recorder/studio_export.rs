@@ -15,6 +15,90 @@ use tauri_plugin_shell::ShellExt;
 
 #[derive(Default)]
 pub struct ExportState(pub Mutex<Option<Arc<AtomicBool>>>);
+
+#[tauri::command(async)]
+pub fn studio_discard_source(
+    app: tauri::AppHandle,
+    path: String,
+    export_path: String,
+) -> Result<(), String> {
+    use rusqlite::OptionalExtension;
+    if app.state::<ExportState>().0.lock().unwrap().is_some() {
+        return Err("Wait for export to finish".into());
+    }
+    if !studio::is_studio_video(&path) {
+        return Err("Not a Studio source".into());
+    }
+    let source = PathBuf::from(&path)
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let folder = source.parent().ok_or("Missing project folder")?;
+    let parent = folder.parent().ok_or("Missing project parent")?;
+    let exported = PathBuf::from(&export_path)
+        .canonicalize()
+        .map_err(|e| e.to_string())?;
+    let prefix = format!("{} (Studio)", folder.file_stem().unwrap().to_string_lossy());
+    if exported.parent() != Some(parent)
+        || !exported
+            .file_name()
+            .unwrap()
+            .to_string_lossy()
+            .starts_with(&prefix)
+        || exported.extension().is_none_or(|e| e != "mp4")
+        || std::fs::metadata(&exported)
+            .map_err(|e| e.to_string())?
+            .len()
+            < 1024
+    {
+        return Err("Keep a finished Studio export before deleting the source".into());
+    }
+    let thumb: Option<String> = {
+        let db = app.state::<crate::Db>();
+        let conn = db.0.lock().unwrap();
+        conn.query_row(
+            "SELECT thumb_path FROM captures WHERE path=?1",
+            [&path],
+            |r| r.get(0),
+        )
+        .optional()
+        .map_err(|e| e.to_string())?
+        .flatten()
+    };
+    let mut files = vec![
+        source.clone(),
+        folder.join("events.json"),
+        super::cam::cam_sidecar_path(&path),
+    ];
+    if let Some(thumb) = thumb {
+        let thumb = PathBuf::from(thumb);
+        if thumb.exists() {
+            let resolved = thumb.canonicalize().map_err(|e| e.to_string())?;
+            let allowed = crate::paths::thumbs_dir(
+                &app.path().app_local_data_dir().map_err(|e| e.to_string())?,
+            )
+            .canonicalize()
+            .map_err(|e| e.to_string())?;
+            if !resolved.starts_with(allowed) {
+                return Err("Source thumbnail is outside the cache".into());
+            }
+            files.push(resolved);
+        }
+    }
+    for file in files {
+        if file.exists() {
+            std::fs::remove_file(&file).map_err(|e| e.to_string())?;
+        }
+    }
+    {
+        let db = app.state::<crate::Db>();
+        db.0.lock()
+            .unwrap()
+            .execute("DELETE FROM captures WHERE path=?1", [&path])
+            .map_err(|e| e.to_string())?;
+    }
+    let _ = app.emit("capture-saved", ());
+    Ok(())
+}
 #[tauri::command]
 pub fn studio_export_cancel(app: tauri::AppHandle) {
     if let Some(cancel) = app.state::<ExportState>().0.lock().unwrap().as_ref() {

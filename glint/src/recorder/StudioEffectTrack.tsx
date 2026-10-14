@@ -7,6 +7,7 @@ export function StudioEffectTrack({ label, segments, duration, zoom, viewStart, 
 }) {
   const track = useRef<HTMLDivElement>(null);
   const drag = useRef<{segment:TimedEffect;edge:string;pointer:number;x:number;secondsPerPixel:number}|null>(null);
+  const minimumSpan=Math.min(.1,duration/2);
   return <div className="studio-effect-track-row" data-editor-control>
     <span className="studio-effect-track-label">{label}</span>
     <div ref={track} className="studio-effect-track" aria-label={`${label} timeline`}>
@@ -20,8 +21,8 @@ export function StudioEffectTrack({ label, segments, duration, zoom, viewStart, 
           }} onPointerMove={e=>{
             const d=drag.current;if(!d||d.pointer!==e.pointerId)return;
             const delta=(e.clientX-d.x)*d.secondsPerPixel,span=d.segment.end-d.segment.start;
-            const start=d.edge==="end"?d.segment.start:clamp(d.segment.start+delta,0,d.edge==="start"?d.segment.end-.1:duration-span);
-            const end=d.edge==="start"?d.segment.end:d.edge==="end"?clamp(d.segment.end+delta,start+.1,duration):start+span;
+            const start=d.edge==="end"?d.segment.start:clamp(d.segment.start+delta,0,d.edge==="start"?d.segment.end-minimumSpan:duration-span);
+            const end=d.edge==="start"?d.segment.end:d.edge==="end"?clamp(d.segment.end+delta,start+minimumSpan,duration):start+span;
             onRange(s.id,start,end);
           }} onPointerUp={e=>{drag.current=null;e.currentTarget.releasePointerCapture(e.pointerId);}}
           onPointerCancel={()=>{const d=drag.current;if(d)onRange(s.id,d.segment.start,d.segment.end);drag.current=null;}}>

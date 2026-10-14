@@ -1,8 +1,11 @@
 import { StudioPanel } from "./StudioPanel";
 import { StudioEffectTrack } from "./StudioEffectTrack";
+import { StudioMaskOverlay } from "./StudioMaskOverlay";
+import { newMask,setMaskKeyframe } from "./studioMasks";
 import "../look/look.css";
 import { StudioPreview } from "./StudioPreview";
-import { studioLoad, studioSave, studioExport, studioExportCancel } from "../lib/studio";
+import { studioLoad, studioSave, studioExport, studioExportCancel,studioDiscardSource } from "../lib/studio";
+import {confirm} from '@tauri-apps/plugin-dialog';
 import { hydrateProject, type StudioData, type StudioProject } from "./studioModel";
 /** TrimView.tsx — recording trim window (#/rec-trim): player + multi-cut timeline. */
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -37,6 +40,8 @@ const ZOOMS = [1, 2, 4, 8];
 export function TrimView() {
   const [selectedZoom,setSelectedZoom]=useState<string|null>(null);
   const [pickingFocus,setPickingFocus]=useState(false);
+  const [selectedMask,setSelectedMask]=useState<string|null>(null);
+  const [drawingMask,setDrawingMask]=useState(false);
   const [studio, setStudio] = useState<StudioData | null>(null);
   const [saveStatus, setSaveStatus] = useState("Saved");
   const [exportMessage, setExportMessage] = useState<string | null>(null);
@@ -153,6 +158,7 @@ export function TrimView() {
     const generation = ++loadGeneration.current;
     setStudio(null); setExportMessage(null);
     setSelectedZoom(null);setPickingFocus(false);
+    setSelectedMask(null);setDrawingMask(false);
     setUndoStack([]); setRedoStack([]); setPlayhead(0); setPlaying(false);
     setSrc(null);
     setTarget(null);
@@ -172,7 +178,7 @@ export function TrimView() {
         const p = await trimProbe(t.path);
         const data = await studioLoad(t.path);
         if (generation !== loadGeneration.current) return;
-        const project = data ? hydrateProject(data.project, p.duration_secs, data.events) : null;
+        const project = data ? hydrateProject(data.project, p.duration_secs, data.events, p) : null;
         if (data && project) setStudio({ ...data, project });
         setProbe(p);
         const clips0 = project?.clips ?? initClips(p.duration_secs);
@@ -462,7 +468,14 @@ export function TrimView() {
     setExporting(0); setExportMessage(null);
     if (studio) {
       const project = { ...studio.project, ...edit, cam };
-      void flushSave().then(() => studioExport(target.path, project)).then((path) => { setExportMessage(`Exported: ${path}`); })
+      void flushSave().then(() => studioExport(target.path, project)).then(async(path) => {
+        setExportMessage(`Exported: ${path}`);
+        if(project.deleteSourceAfterExport&&await confirm('Your exported MP4 is saved. Delete the unmasked recording, camera track and input events? The original recording cannot be restored.',{title:'Delete unmasked source?',kind:'warning',okLabel:'Delete source',cancelLabel:'Keep source'})) {
+          videoRef.current?.pause();videoRef.current?.removeAttribute('src');videoRef.current?.load();
+          camVideoRef.current?.pause();camVideoRef.current?.removeAttribute('src');camVideoRef.current?.load();
+          await studioDiscardSource(target.path,path);await getCurrentWindow().close();
+        }
+      })
         .catch((error) => setExportMessage(String(error))).finally(() => setExporting(null));
       return;
     }
@@ -487,6 +500,10 @@ export function TrimView() {
       <div className={`trim-stage${studio ? " studio-stage" : ""}`}>
         {studio && probe && <StudioPreview studio={studio} video={videoRef} camVideo={camVideoRef} cam={cam} width={probe.width} height={probe.height} pickingFocus={pickingFocus}
           onFocus={focus=>{setStudio(data=>data&&({...data,project:{...data.project,zoomSegments:data.project.zoomSegments.map(s=>s.id===selectedZoom?{...s,focus,edited:true}:s)}}));setPickingFocus(false);}} />}
+        {studio&&probe&&<StudioMaskOverlay studio={studio} width={probe.width} height={probe.height} time={playhead} selected={selectedMask} drawing={drawingMask} video={videoRef}
+          onPause={()=>{videoRef.current?.pause();setPlaying(false);}}
+          onDraw={rect=>{const mask=newMask(rect,playhead,duration);setStudio(data=>data&&({...data,project:{...data.project,masks:[...data.project.masks,mask]}}));setSelectedMask(mask.id);setDrawingMask(false);}}
+          onRect={rect=>setStudio(data=>data&&({...data,project:{...data.project,masks:data.project.masks.map(m=>m.id===selectedMask?setMaskKeyframe(m,rect,playhead):m)}}))}/>}
         {src && (
           <video
             ref={videoRef}
@@ -513,7 +530,8 @@ export function TrimView() {
       </div>
 
       {studio && probe && target && <StudioPanel project={studio.project} path={target.path} width={probe.width} height={probe.height}
-        time={playhead} duration={duration} events={studio.events} selectedZoom={selectedZoom} onSelectZoom={setSelectedZoom} onPickZoom={()=>setPickingFocus(value=>!value)}
+        time={playhead} duration={duration} events={studio.events} selectedZoom={selectedZoom} onSelectZoom={setSelectedZoom} onPickZoom={()=>{setSelectedMask(null);setDrawingMask(false);setPickingFocus(value=>!value);}}
+        selectedMask={selectedMask} onSelectMask={setSelectedMask} drawingMask={drawingMask} onDrawMask={()=>{videoRef.current?.pause();setPickingFocus(false);setSelectedMask(null);setDrawingMask(value=>!value);}} onSeek={time=>{scrub(time,'start');scrub(time,'end');}}
         saveStatus={saveStatus} exportMessage={exportMessage} exporting={exporting !== null} cam={cam} onCamChange={setCam}
         onChange={(patch) => setStudio((data) => data && ({ ...data, project: { ...data.project, ...patch } }))}
         onSave={() => void flushSave()} />}
@@ -559,6 +577,9 @@ export function TrimView() {
       {studio&&probe&&<StudioEffectTrack label="Zoom" segments={studio.project.zoomSegments} duration={duration} zoom={zoom} viewStart={viewStart} selected={selectedZoom} disabled={exporting!==null}
         onSelect={setSelectedZoom} onDelete={id=>setStudio(data=>data&&({...data,project:{...data.project,zoomSegments:data.project.zoomSegments.filter(s=>s.id!==id)}}))}
         onRange={(id,start,end)=>setStudio(data=>data&&({...data,project:{...data.project,zoomSegments:data.project.zoomSegments.map(s=>s.id===id?{...s,start,end,edited:true,transitionStart:undefined,transitionEnd:undefined}:s)}}))}/>}
+      {studio&&probe&&<StudioEffectTrack label="Masks" segments={studio.project.masks} duration={duration} zoom={zoom} viewStart={viewStart} selected={selectedMask} disabled={exporting!==null}
+        onSelect={setSelectedMask} onDelete={id=>setStudio(data=>data&&({...data,project:{...data.project,masks:data.project.masks.filter(m=>m.id!==id)}}))}
+        onRange={(id,start,end)=>setStudio(data=>data&&({...data,project:{...data.project,masks:data.project.masks.map(m=>m.id===id?{...m,start,end}:m)}}))}/>}
 
       <TrimFilmstrip clips={clips} disabled={exporting !== null} selectedId={selectedId} onReorder={doReorder} onSelect={selectClip} />
 

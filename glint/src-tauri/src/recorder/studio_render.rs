@@ -4,6 +4,7 @@ use super::{
     studio::Events,
     studio_cursor::{self, CursorConfig, Mapping, Point},
     studio_effects::{self, Zoom},
+    studio_masks::{self, Mask},
     trim::{self, CamOverlay, KeepSegment},
 };
 use font8x8::UnicodeFonts;
@@ -68,6 +69,8 @@ pub struct Project {
     pub cam: Option<Value>,
     #[serde(default)]
     pub zoom_segments: Vec<Zoom>,
+    #[serde(default)]
+    pub masks: Vec<Mask>,
 }
 impl Project {
     pub fn segments(&self, duration: f64) -> Result<Vec<KeepSegment>, String> {
@@ -76,6 +79,7 @@ impl Project {
         }
         self.cursor.validate()?;
         studio_effects::validate_zooms(&self.zoom_segments, duration)?;
+        studio_masks::validate(&self.masks, duration, f64::INFINITY, f64::INFINITY)?;
         for n in [self.look.padding, self.look.radius, self.look.shadow] {
             if !(0.0..=100.0).contains(&n) {
                 return Err("Invalid look settings".into());
@@ -199,7 +203,7 @@ pub fn layout(w: u32, h: u32, crop: Option<Crop>, look: &Look) -> Result<Layout,
         },
     })
 }
-fn color(s: &str) -> Result<[u8; 3], String> {
+pub(super) fn color(s: &str) -> Result<[u8; 3], String> {
     let s = s.strip_prefix('#').unwrap_or(s);
     if s.len() != 6 || !s.is_ascii() {
         return Err("Use a six-digit hex color".into());
@@ -255,7 +259,7 @@ fn outline_distance(x: f64, y: f64, w: f64, h: f64, r: f64) -> f64 {
 }
 // Three separable box passes approximate a Gaussian without a radius-sized
 // convolution at every pixel. This is cached once, independent of clip length.
-fn blur_shadow(mask: GrayImage, sigma: f64) -> GrayImage {
+pub(super) fn blur_shadow(mask: GrayImage, sigma: f64) -> GrayImage {
     let (w, h) = (mask.width() as usize, mask.height() as usize);
     let ideal = (4. * sigma * sigma + 1.).sqrt();
     let lower = (ideal.floor() as usize).max(1) | 1;
@@ -369,6 +373,7 @@ pub struct Renderer {
     zooms: Vec<Zoom>,
     source_w: u32,
     source_h: u32,
+    masks: Vec<Mask>,
 }
 impl Renderer {
     pub fn new(
@@ -381,6 +386,12 @@ impl Renderer {
             return Err("Invalid event geometry".into());
         }
         let l = layout(source_w, source_h, project.crop, &project.look)?;
+        studio_masks::validate(
+            &project.masks,
+            f64::INFINITY,
+            source_w as f64,
+            source_h as f64,
+        )?;
         let look = &project.look;
         let mut plate = RgbImage::new(l.width, l.height);
         if look.enabled {
@@ -625,6 +636,7 @@ impl Renderer {
             zooms: project.zoom_segments.clone(),
             source_w,
             source_h,
+            masks: project.masks.clone(),
         })
     }
     fn allowed(&self, x: i32, y: i32) -> bool {
@@ -643,6 +655,14 @@ impl Renderer {
         self.compose(raw, t, out, self.mapping, 1.);
     }
     pub fn source_frame(&self, raw: &[u8], t: f64, content: &mut [u8], out: &mut RgbImage) {
+        let masked = if self.masks.iter().any(|m| m.start <= t && t < m.end) {
+            let mut pixels = raw.to_vec();
+            studio_masks::apply(&mut pixels, self.source_w, self.source_h, &self.masks, t);
+            Some(pixels)
+        } else {
+            None
+        };
+        let raw = masked.as_deref().unwrap_or(raw);
         let g = &self.effects.geometry;
         let mut follow = (0., 0.);
         let mut count = 0.;
@@ -853,7 +873,10 @@ pub fn source_time(segments: &[KeepSegment], t: f64) -> f64 {
         }
         elapsed += duration;
     }
-    segments.last().map(|s| s.end).unwrap_or(0.)
+    segments
+        .last()
+        .map(|s| (s.end - 1e-7).max(s.start))
+        .unwrap_or(0.)
 }
 fn command(binary: &Path) -> Command {
     let mut cmd = Command::new(binary);
@@ -1065,7 +1088,7 @@ fn encode(
     let progress_idx = args.iter().position(|s| s == "-progress").unwrap();
     args.drain(progress_idx..progress_idx + 2);
     let graph_idx = args.iter().position(|s| s == "-filter_complex").unwrap() + 1;
-    let source_mode = !spec.project.zoom_segments.is_empty();
+    let source_mode = !spec.project.zoom_segments.is_empty() || !spec.project.masks.is_empty();
     args[graph_idx] = if source_mode {
         format!(
             "{};[edited]fps={},format=rgb24[outv]",
@@ -1536,5 +1559,29 @@ mod tests {
         assert_eq!(frame.dimensions(), (320, 200));
         assert_eq!(frame.get_pixel(0, 0).0, [80, 50, 0]);
         assert_eq!(frame.get_pixel(160, 100).0, [160, 100, 0]);
+    }
+    #[test]
+    fn source_mask_remains_attached_before_zoom_resampling() {
+        let (mut project, events) = background_fixture();
+        project.look.enabled = false;
+        project.zoom_segments=serde_json::from_value(serde_json::json!([{"id":"zoom","start":0.,"end":2.,"scale":2.,"mode":"fixed","focus":{"x":0.5,"y":0.5},"ease":"gentle","easeIn":0.4,"easeOut":0.4,"origin":"manual","edited":true}])).unwrap();
+        project.masks=serde_json::from_value(serde_json::json!([{"id":"mask","start":0.,"end":2.,"type":"solid","keyframes":[{"t":0.,"x":150.,"y":90.,"w":20.,"h":20.}],"strength":28.,"color":"#123456"}])).unwrap();
+        let renderer = Renderer::new(&project, &events, 320, 200).unwrap();
+        let raw = vec![255u8; 320 * 200 * 3];
+        let mut content = vec![0; raw.len()];
+        let mut frame = RgbImage::new(320, 200);
+        renderer.source_frame(&raw, 1., &mut content, &mut frame);
+        assert_eq!(frame.get_pixel(160, 100).0, [18, 52, 86]);
+        assert_eq!(frame.get_pixel(100, 100).0, [255, 255, 255]);
+        assert!(
+            source_time(
+                &[KeepSegment {
+                    start: 0.,
+                    end: 2.,
+                    speed: 1.
+                }],
+                2.
+            ) < 2.
+        );
     }
 }

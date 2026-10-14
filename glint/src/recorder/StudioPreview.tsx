@@ -7,6 +7,7 @@ import type { StudioData } from "./studioModel";
 import type { CamPlacement } from "./camOverlay";
 import { toPixels } from "./camOverlay";
 import { zoomAt } from "./studioEffects";
+import { applyPreviewMasks } from "./studioMasks";
 
 export function StudioPreview({ studio, video, camVideo, cam, width, height, pickingFocus=false, onFocus }: {
   studio: StudioData; video: RefObject<HTMLVideoElement | null>; camVideo: RefObject<HTMLVideoElement | null>;
@@ -25,6 +26,8 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
   }, [background]);
   useEffect(() => {
     let raf = 0;
+    const maskedSource=document.createElement('canvas'),maskScratch=document.createElement('canvas');
+    let maskedTime=NaN;
     const tick = () => {
       const canvas = ref.current, v = video.current;
       if (canvas && v && v.readyState >= 2) {
@@ -56,8 +59,16 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
         const cursor = followSourcePoint(path,v.currentTime,studio.events,width,height);
         const view = zoomAt(studio.project.zoomSegments, v.currentTime, { x:l.cropX,y:l.cropY,w:l.contentW,h:l.contentH },width,height,cursor);
         ctx.save(); ctx.translate(l.contentX,l.contentY); ctx.scale(l.contentW/view.w,l.contentH/view.h);
-        ctx.drawImage(v, view.x, view.y, view.w, view.h, 0, 0, view.w, view.h);
-        if (cam?.visible && camVideo.current && camVideo.current.readyState >= 2) {
+        const hasMasks=studio.project.masks.length>0;
+        if(hasMasks&&maskedTime!==v.currentTime) {
+          maskedSource.width=width;maskedSource.height=height;const source=maskedSource.getContext('2d')!;
+          source.drawImage(v,0,0,width,height);
+          if(cam?.visible&&camVideo.current&&camVideo.current.readyState>=2)paintCamera(source,cam,camVideo.current,width,height);
+          applyPreviewMasks(source,studio.project.masks,Math.min(v.currentTime,Math.max(0,v.duration-1e-7)),width,height,maskScratch);
+          maskedTime=v.currentTime;
+        }
+        ctx.drawImage(hasMasks?maskedSource:v, view.x, view.y, view.w, view.h, 0, 0, view.w, view.h);
+        if (!hasMasks && cam?.visible && camVideo.current && camVideo.current.readyState >= 2) {
           const box = toPixels(cam, width, height, width / height);
           ctx.save(); ctx.translate(box.x - view.x, box.y - view.y);
           ctx.beginPath(); ctx.roundRect(0, 0, box.w, box.h, cam.shape === "circle" ? box.w / 2 : cam.shape === "rect" ? 0 : box.w * .14); ctx.clip();
@@ -94,4 +105,12 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
     const view=zoomAt(studio.project.zoomSegments,t,{x:l.cropX,y:l.cropY,w:l.contentW,h:l.contentH},width,height,followSourcePoint(path,t,studio.events,width,height));
     onFocus({x:(view.x+px/l.contentW*view.w)/width,y:(view.y+py/l.contentH*view.h)/height});
   }}/>{pickingFocus&&<span className="studio-preview-instruction">Click the video to set zoom focus</span>}</>;
+}
+
+function paintCamera(ctx:CanvasRenderingContext2D,cam:CamPlacement,video:HTMLVideoElement,width:number,height:number) {
+  const box=toPixels(cam,width,height,width/height);ctx.save();ctx.translate(box.x,box.y);
+  ctx.beginPath();ctx.roundRect(0,0,box.w,box.h,cam.shape==='circle'?box.w/2:cam.shape==='rect'?0:box.w*.14);ctx.clip();
+  const ratio=box.w/box.h,native=video.videoWidth/video.videoHeight;
+  const sw=native>ratio?video.videoHeight*ratio:video.videoWidth,sh=native>ratio?video.videoHeight:video.videoWidth/ratio;
+  ctx.drawImage(video,(video.videoWidth-sw)/2,(video.videoHeight-sh)/2,sw,sh,0,0,box.w,box.h);ctx.restore();
 }

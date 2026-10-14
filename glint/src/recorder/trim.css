@@ -269,6 +269,17 @@
 .studio-effect-handle { flex:none;width:5px;border:0;background:transparent;padding:0;cursor:ew-resize; }
 .studio-effect-handle:hover { background:var(--accent); }
 .studio-effect-name:focus-visible, .studio-effect-handle:focus-visible { outline:1px solid var(--accent);outline-offset:1px; }
+.studio-mask-overlay { position:absolute;inset:0;pointer-events:none;overflow:hidden; }
+.studio-mask-overlay.is-drawing { pointer-events:auto;cursor:crosshair; }
+.studio-mask-selection { position:absolute;border:1px solid var(--accent);pointer-events:auto;cursor:move;box-sizing:border-box;touch-action:none; }
+.studio-mask-corner { position:absolute;width:16px;height:16px;background:transparent;border:0;padding:0; }
+.studio-mask-corner::after { content:'';position:absolute;inset:5px;background:var(--accent);border:1px solid var(--bg-frame); }
+.studio-mask-corner.is-nw { left:-8px;top:-8px;cursor:nwse-resize; }
+.studio-mask-corner.is-ne { right:-8px;top:-8px;cursor:nesw-resize; }
+.studio-mask-corner.is-sw { left:-8px;bottom:-8px;cursor:nesw-resize; }
+.studio-mask-corner.is-se { right:-8px;bottom:-8px;cursor:nwse-resize; }
+.studio-mask-corner:focus-visible { outline:1px solid var(--accent); }
+.studio-privacy-note { color:var(--text-dim);font-size:var(--fz-sm);line-height:var(--lh-base);padding-left:10px;border-left:2px solid var(--border-strong); }
 .studio-preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 20px; box-sizing: border-box; }
 @media (max-width: 1000px) { .studio-panel { width: 312px; padding: 24px 20px; } }
 @media (max-width: 760px) { .studio-panel { width: 292px; padding: 20px 16px; } .look-control, .look-slider-control { width: 154px; } .trim-actions { flex-wrap: wrap; gap: 8px; } }

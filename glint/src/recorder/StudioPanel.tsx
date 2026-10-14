@@ -1,20 +1,22 @@
 import { useState } from "react";
 import { Check, Copy, FolderOpen, Save } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
-import { Button, ControlDisclosure, NumberInput } from "../components/ui";
+import { Button, ControlDisclosure, NumberInput,Switch } from "../components/ui";
 import { LookControls, LookSlider } from "../look/LookControls";
 import { CursorControls } from "./CursorControls";
 import { clampCrop } from "./studioLayout";
 import { clampPlacement, type CamPlacement } from "./camOverlay";
 import type { StudioEvents,StudioProject } from "./studioModel";
 import { StudioZoomControls } from "./StudioZoomControls";
+import { StudioMaskControls } from "./StudioMaskControls";
 
-export function StudioPanel({ project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave, time, duration, selectedZoom, onSelectZoom, onPickZoom, events }: {
+export function StudioPanel({ project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave, time, duration, selectedZoom, onSelectZoom, onPickZoom, events, selectedMask, onSelectMask, drawingMask, onDrawMask, onSeek }: {
   project: StudioProject; path: string; width: number; height: number; saveStatus: string;
   exportMessage: string | null; exporting: boolean; cam: CamPlacement | null;
   onCamChange: (cam: CamPlacement) => void; onChange: (patch: Partial<StudioProject>) => void; onSave: () => void;
   time:number;duration:number;selectedZoom:string|null;onSelectZoom:(id:string|null)=>void;onPickZoom:()=>void;
   events:StudioEvents;
+  selectedMask:string|null;onSelectMask:(id:string|null)=>void;drawingMask:boolean;onDrawMask:()=>void;onSeek:(time:number)=>void;
 }) {
   const parts = path.split(/[\\/]/);
   const name = (parts[parts.length - 2] ?? "Recording").replace(/\.glint-studio$/, "");
@@ -35,6 +37,8 @@ export function StudioPanel({ project, path, width, height, saveStatus, exportMe
     <fieldset className="studio-panel-controls" disabled={exporting}>
       <LookControls video look={project.look} onChange={(patch) => onChange({ look: { ...project.look, ...patch } })} />
       <StudioZoomControls segments={project.zoomSegments} selected={selectedZoom} time={time} duration={duration} events={events} onChange={zoomSegments=>onChange({zoomSegments})} onSelect={onSelectZoom} onPick={onPickZoom}/>
+      <StudioMaskControls masks={project.masks} selected={selectedMask} time={time} duration={duration} width={width} height={height} drawing={drawingMask} onDraw={onDrawMask} onChange={masks=>onChange({masks})} onSelect={onSelectMask} onSeek={onSeek}/>
+      {project.masks.length>0&&<div className="look-row"><span className="look-label">Delete source after export</span><Switch ariaLabel="Delete unmasked source after export" checked={project.deleteSourceAfterExport??false} onChange={deleteSourceAfterExport=>onChange({deleteSourceAfterExport})}/></div>}
       <CursorControls cursor={project.cursor} onChange={(patch) => onChange({ cursor: { ...project.cursor, ...patch } })} />
       <ControlDisclosure title="Crop source video" className="studio-crop">
         <p className="look-hint">Source: {width} × {height} px. Crop stays inside the source. Press Enter or leave a field to apply.</p>

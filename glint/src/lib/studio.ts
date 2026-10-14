@@ -5,3 +5,4 @@ export const studioSave = (path: string, project: StudioProject) => invoke<void>
 
 export const studioExport = (path: string, project: StudioProject) => invoke<string>("studio_export", { path, project });
 export const studioExportCancel = () => invoke<void>("studio_export_cancel");
+export const studioDiscardSource = (path:string,exportPath:string) => invoke<void>('studio_discard_source',{path,exportPath});

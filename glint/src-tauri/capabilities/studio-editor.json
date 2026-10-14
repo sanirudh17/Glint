@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "studio-editor",
+  "description": "Confirm deletion of a Studio source only after its export is saved.",
+  "windows": ["rec-trim"],
+  "permissions": ["dialog:allow-message"]
+}
