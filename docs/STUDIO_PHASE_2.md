@@ -40,12 +40,63 @@ No new libraries, cloud services or bundled media are needed.
 
 ## Final acceptance
 
-- [ ] Auto-zoom generation is sensible; manual and edited generated zooms survive regeneration.
-- [ ] A source-coordinate API-key mask stays attached through zoom; extracted export
+- [x] Auto-zoom generation is sensible; manual and edited generated zooms survive regeneration.
+- [x] A source-coordinate API-key mask stays attached through zoom; extracted export
   frames have no readable key in local OCR.
-- [ ] A real export with at least 20 zooms and five masks completes without errors.
-- [ ] Privacy note explains that projects retain the unmasked source; deletion or baking is available.
-- [ ] Version 1 projects reopen and all Phase 2 edits survive save/reopen.
+- [x] A real export with at least 20 zooms and five masks completes without errors.
+- [x] Privacy note explains that projects retain the unmasked source; deletion or baking is available.
+- [x] Version 1 projects reopen and all Phase 2 edits survive save/reopen.
+
+## Verification evidence
+
+Validated on 2026-10-14 in the actual rebuilt Tauri/WebView2 app. A separate
+validation app identifier kept the installed app and its settings independent.
+
+- 225 frontend tests passed. They cover zoom easing/splitting/focus limits,
+  follow-cursor stabilization, automatic click groups and preservation of edited
+  generated segments, marker import, mask keyframes and motion samples.
+- 221 native tests passed; two existing desktop-capture tests remain ignored.
+  Native checks include source-pixel redaction, transformed cursor positions,
+  mask validation, highlighting and compatibility with version 1 projects.
+- TypeScript and the full Tauri debug build passed. Existing unused prewarm and
+  frontend bundle-size warnings remain.
+- The real editor generated four auto-zoom groups from four click pairs. A manual
+  segment survived regeneration unchanged. Drawing a mask mapped its rectangle
+  to the expected source pixels within one pixel and defaulted to the entire
+  12-second source.
+- The synthetic source contained a readable fake API key. Blur, pixelate and
+  solid exports each passed OCR at 0, 0.15, 0.5, 1 and 2.8 seconds through a 2×
+  zoom. The blur case also enabled maximum motion blur. OCR still read the
+  unmasked fixture heading at the start, while none of the frames revealed the
+  key. This evidence applies to the tested mask strength and coverage.
+- A 12-second, 640×360, 15 fps fixture with 22 zooms and five simultaneous masks
+  produced a complete 754×424 MP4 with audio. The final checked run took 11.13 seconds,
+  including export setup and probing. This is a stability check; the Phase 1
+  1080p60 performance/audio evidence remains in `STUDIO_PHASE_1.md`.
+- Saved zoom/mask arrays reopened unchanged. A version 1 project hydrated to
+  version 2 while preserving its look and clips.
+- Source deletion rejected an unrelated export and retained the source. With
+  its own finished export present, a disposable test project deleted its source
+  and input events while preserving the MP4. The UI option is off by default and
+  asks for confirmation after successful export.
+- Fixed external camera-track file access and paused masked-preview caching.
+  The regression loads a camera track outside `Videos/Glint`, delays its readiness,
+  and verifies that its frame appears without playing or seeking the source.
+  A solid source mask also covered that camera in a real export.
+- Inspected the zoom and mask controls in the native desktop viewport and at
+  1280×800. They retain the accepted compact controls and themed components.
+  Taste source lint passed with zero failures and zero warnings.
+
+Reproducible local checks are in `scripts/studio-phase2-fixture.py`,
+`scripts/studio-phase2-acceptance.mjs` and `scripts/studio-phase2-camera-check.mjs`.
+The fixture generator prints its temporary root; pass that root to the two Node
+scripts while the rebuilt editor is open with WebView2 debugging bound to
+`127.0.0.1:9227`. Generated media, OCR results and screenshots remain outside Git.
+The checked artifacts are in the OS temp folder `glint-phase2-tulyuzov`.
+
+**Phase 2 acceptance is complete.** Tasks 2.1–2.6 have individual commits on
+`phase-2-studio-zoom-masks`; the Phase 1 checkpoint remains on
+`phase-1-studio-core`. Main has not been merged or rewritten.
 
 Loupe zoom is explicitly optional in the plan; the required whole-frame zoom is
 implemented first. It is not part of the Phase 2 acceptance gate.

@@ -10,7 +10,7 @@ export async function connectPage(match, port = 9227) {
   let id = 0; const pending = new Map();
   socket.addEventListener('message', e => { const message=JSON.parse(e.data); const waiter=pending.get(message.id); if (waiter) {pending.delete(message.id); message.error ? waiter.reject(new Error(JSON.stringify(message.error))) : waiter.resolve(message.result);} });
   const send = (method, params={}) => new Promise((resolve,reject) => { const key=++id;pending.set(key,{resolve,reject});socket.send(JSON.stringify({id:key,method,params})); });
-  const evaluate = async expression => {const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);return r.result.value;};
+  const evaluate = async expression => {const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.value ?? r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);return r.result.value;};
   return {target,send,evaluate,invoke:(cmd,args={})=>evaluate(`window.__TAURI_INTERNALS__.invoke(${JSON.stringify(cmd)},${JSON.stringify(args)})`),
     screenshot:async path=>{const r=await send('Page.captureScreenshot',{format:'png'});await writeFile(path,Buffer.from(r.data,'base64'));},close:()=>socket.close()};
 }
