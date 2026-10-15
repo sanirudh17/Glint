@@ -1,7 +1,7 @@
 // Small CDP client for the real local WebView2 runtime; no browser dependencies.
 import { writeFile } from 'node:fs/promises';
-export async function pages(port = 9227) { return fetch(`http://127.0.0.1:${port}/json/list`).then(r => r.json()); }
-export async function connectPage(match, port = 9227) {
+export async function pages(port = Number(process.env.GLINT_CDP_PORT ?? 9227)) { return fetch(`http://127.0.0.1:${port}/json/list`).then(r => r.json()); }
+export async function connectPage(match, port = Number(process.env.GLINT_CDP_PORT ?? 9227)) {
   const list = await pages(port);
   const target = list.find(p => p.type === 'page' && (typeof match === 'string' ? p.url.includes(match) : match(p)));
   if (!target) throw new Error(`Page unavailable: ${JSON.stringify(list.map(p => ({title:p.title,url:p.url})))}`);

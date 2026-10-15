@@ -99,6 +99,51 @@ node scripts/screenshot-phase3-interaction.mjs <screenshot-fixture-root>
 
 The fixtures contain fake demo text and generated images only.
 
+## October 15 refinement checks
+
+User testing found missing reset behavior and ambiguous control states. These
+follow-up changes stay within Phase 3:
+
+- `f6c6d3d`: deleting a side-by-side image restores the original source canvas;
+  automatic expansion is tracked through save/reopen and undo. Manually chosen
+  dimensions remain intact, and **Reset canvas size** restores source dimensions.
+  Older side-by-side documents are recognized without a format-version change.
+- `2cbb3ea`: export fields show the actual framed dimensions, use the expanded
+  source canvas, and have **Reset export size**. Selecting Original resolution
+  also clears a fixed aspect. Watermarks retain their default size and offer
+  50–200% sizing in screenshots, Studio preview and native export.
+- `86d1754`: ordinary gradients use canvas paints immediately. Mesh and grain show
+  a current preview immediately while the full-resolution worker finishes; export
+  remains disabled until that result is ready.
+- Panel highlights identify the visible inspector. Returning from Images to Frame
+  keeps the applied frame enabled. Arrow bend has a center mark and snaps to exactly
+  straight near the midpoint; keyboard adjustment works without moving the arrow.
+  The dashed-stroke glyph is centered and layer-order buttons visibly disable at
+  their bounds. The tool rail remains reachable in short windows.
+
+Verification: 248 frontend tests and 228 native tests passed; the same two existing
+display-capture tests remain ignored. The complete screenshot checklist passed
+again, including all 48 gradients, both new aspect ratios, all six exact output
+sizes, Auto Balance, watermark/border, source layers, annotation controls,
+save/reopen and a shared-look native video export. The interaction checks passed
+real drag/resize, drop and source-layer redaction.
+
+`scripts/screenshot-phase3-refinement-check.mjs` additionally checks actual
+overlapping pixels when moving images and annotations forward/backward, automatic
+canvas recovery, resets, straight-arrow snapping and keyboard input, custom
+1234×777 PNG export, original 768×488 export, and watermark sizing/persistence.
+The final 1080p gradient click painted in 18.6 ms in the local validation run
+(timing varies with hardware/load). Dark wide/compact layouts and small/large
+watermarks were inspected; the UI detector reported no findings. At 760×720 the
+tool rail can reach Delete and the document has no horizontal overflow.
+
+Follow-up artifacts: OS temp folder `glint-phase3-RUPANp`, including `result.json`,
+`interaction-result.json`, `refinement-result.json`, UI captures and PNG exports.
+Checks used a separate app identifier/database and debugging port so the user's
+open app and project were not changed. Set `GLINT_CDP_PORT` to the test instance's
+port when using these scripts; the default remains 9227. No model/runtime or
+Phase 4 work was added.
+
 ## Opening existing screenshots in the current build
 
 Image age does not select an editor version. External PNG/JPEG/WebP images,

@@ -223,7 +223,19 @@ export function StyleBar() {
           <ArrowLeftRight size={15} strokeWidth={1.5} />
         </button>
       )}
-      {isArrow&&<label className="editor-bend"><span>Bend</span><span className="editor-bend-track"><input type="range" min={-100} max={100} value={Math.round((eff.curve??0)*100)} aria-label="Arrow bend" aria-valuetext={(eff.curve??0)===0?'Straight':`${Math.round((eff.curve??0)*100)}% bend`} title="Center snaps to a straight arrow" onPointerDown={()=>{if(selectedAnno)useEditorStore.getState().pushHistory();}} onKeyDown={e=>{e.stopPropagation();if(e.key.startsWith('Arrow')&&selectedAnno)useEditorStore.getState().pushHistory();}} onChange={e=>{const curve=snapArrowBend(Number(e.target.value));setStyle({curve});patchSelected({curve},false);}}/></span></label>}
+      {isArrow&&<label className="editor-bend"><span>Bend</span><span className="editor-bend-track">
+        <input type="range" min={-100} max={100} value={Math.round((eff.curve??0)*100)} aria-label="Arrow bend"
+          aria-valuetext={(eff.curve??0)===0?'Straight':`${Math.round((eff.curve??0)*100)}% bend`} title="Center snaps to a straight arrow"
+          onPointerDown={()=>{if(selectedAnno)useEditorStore.getState().pushHistory();}}
+          onKeyDown={e=>{
+            if(!e.key.startsWith('Arrow'))return;
+            e.stopPropagation();
+            e.preventDefault();if(selectedAnno)useEditorStore.getState().pushHistory();
+            const direction=e.key==='ArrowRight'||e.key==='ArrowUp'?1:-1,curve=snapArrowBend(Math.round((eff.curve??0)*100)+direction*10);
+            setStyle({curve});patchSelected({curve},false);
+          }}
+          onChange={e=>{const curve=snapArrowBend(Number(e.target.value));setStyle({curve});patchSelected({curve},false);}}/>
+      </span></label>}
       {isText && (
         <><div className="editor-text-preset"><Select portal ariaLabel="Text style" value={eff.textPreset??'plain'} options={['plain','heading','label','code'].map(value=>({value,label:value[0].toUpperCase()+value.slice(1)}))} onChange={preset=>{const patch=textPreset(preset as NonNullable<Style['textPreset']>);setStyle(patch);patchSelected(patch);}}/></div><div className="editor-text-size"><NumberInput min={8} max={120} ariaLabel="Font size" value={eff.fontSize} onChange={value=>{if(value!==eff.fontSize){if(selectedAnno)useEditorStore.getState().pushHistory();applyFontSize(value);}}}/></div></>
       )}

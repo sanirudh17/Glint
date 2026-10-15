@@ -71,6 +71,7 @@ export default function EditorView() {
         (tag === "INPUT" &&
           !["range", "color", "checkbox", "radio", "button", "submit"].includes(inputType));
       if (isTextEntry) return;
+      if(tag==='INPUT'&&inputType==='range'&&e.key.startsWith('Arrow'))return;
       // `?` (Shift+/) toggles the shortcut cheatsheet — handle before the tool keys.
       if (e.key === "?") {
         e.preventDefault();
