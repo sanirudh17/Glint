@@ -5,7 +5,7 @@ import { GRADIENTS, type GradientStop } from "../editor/gradients";
 import { GradientControls } from "./GradientControls";
 import { cloneLook, type AspectId, type LookConfig } from "./model";
 import { savePreset, useLookPresets } from "./presets";
-import { OUTPUT_SIZES,autoBalance,watermarkImage } from './sizing';
+import { OUTPUT_SIZES,autoBalance,watermarkImage,exportDimensions,originalExportSizing } from './sizing';
 import { NumberInput } from '../components/ui';
 
 export function LookControls({ look, onChange, checkpoint = () => {}, video = false, onSample, dimensions }: {
@@ -21,7 +21,8 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
   const bg = look.background;
   const aspects: AspectId[] = ["auto", "1:1", "16:9", "4:3", "9:16", "4:5", "3:2", "1.91:1"];
   const wm=look.watermark;
-  const setWatermark=(text:string,color=wm?.color??'#ffffff')=>change({watermark:text?{text,color,opacity:wm?.opacity??.75,position:wm?.position??'bottom-right',...watermarkImage(text,color)}:undefined});
+  const output=exportDimensions(dimensions?.width??1920,dimensions?.height??1080,look);
+  const setWatermark=(text:string,color=wm?.color??'#ffffff')=>change({watermark:text?{text,color,size:wm?.size??100,opacity:wm?.opacity??.75,position:wm?.position??'bottom-right',...watermarkImage(text,color)}:undefined});
   return <section className="look-controls" aria-label="Look" data-ui data-editor-control>
     <h3 className="studio-section-title">Look</h3>
     <div className="look-preset-field">
@@ -75,11 +76,12 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
       onChange={(aspect) => change({ aspect: aspect as AspectId,outputSize:undefined })} /></div></div>
     <div className="look-preset-field"><span className="look-label">Output size</span><div><Select portal ariaLabel="Output size preset" value={look.outputSize?OUTPUT_SIZES.find(s=>s.width===look.outputSize?.width&&s.height===look.outputSize?.height)?.id??'custom':''}
       options={[{value:'',label:'Original resolution'},...OUTPUT_SIZES.map(s=>({value:s.id,label:s.label})),...(look.outputSize?[{value:'custom',label:'Custom size'}]:[])]}
-      onChange={id=>{const size=OUTPUT_SIZES.find(s=>s.id===id);change({enabled:true,outputSize:size?{width:size.width,height:size.height}:undefined});}}/></div></div>
-    {look.outputSize&&<p className="look-hint">{look.outputSize.width} ? {look.outputSize.height} px</p>}
+      onChange={id=>{const size=OUTPUT_SIZES.find(s=>s.id===id);change({enabled:true,...(size?{outputSize:{width:size.width,height:size.height}}:originalExportSizing())});}}/></div></div>
+    {look.outputSize&&<p className="look-hint">{look.outputSize.width} × {look.outputSize.height} px</p>}
     <ControlDisclosure title="Advanced look">
-      {!video&&<><div className="look-row"><span className="look-label">Export width</span><div className="look-control"><NumberInput ariaLabel="Export width" min={16} max={4096} value={look.outputSize?.width??dimensions?.width??1920} onChange={width=>change({outputSize:{width,height:look.outputSize?.height??dimensions?.height??1080}})}/></div></div>
-      <div className="look-row"><span className="look-label">Export height</span><div className="look-control"><NumberInput ariaLabel="Export height" min={16} max={4096} value={look.outputSize?.height??dimensions?.height??1080} onChange={height=>change({outputSize:{height,width:look.outputSize?.width??dimensions?.width??1920}})}/></div></div></>}
+      {!video&&<><div className="look-row"><span className="look-label">Export width</span><div className="look-control"><NumberInput ariaLabel="Export width" min={16} max={Math.max(4096,output.width)} value={output.width} onChange={width=>change({outputSize:{width,height:output.height}})}/></div></div>
+      <div className="look-row"><span className="look-label">Export height</span><div className="look-control"><NumberInput ariaLabel="Export height" min={16} max={Math.max(4096,output.height)} value={output.height} onChange={height=>change({outputSize:{height,width:output.width}})}/></div></div>
+      <button type="button" className="g-btn g-btn-subtle g-btn-sm" disabled={!look.outputSize&&look.aspect==='auto'} onClick={()=>change(originalExportSizing())}>Reset export size</button></>}
       <div className="look-row"><span className="look-label">Shadow color</span><div className="look-control"><ColorControl ariaLabel="Shadow color" value={look.shadowColor ?? "#000000"} onChange={(shadowColor) => change({ shadowColor })} /></div></div>
       <LookSlider label="Border" ariaLabel="Border width" max={16} value={look.border?.width ?? 0} unit="px" checkpoint={checkpoint}
         onChange={(width) => change({ border: { width, color: look.border?.color ?? "#ffffff", style: look.border?.style ?? "solid" } })} />
@@ -93,6 +95,7 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
       <label className="look-preset-save"><input aria-label="Watermark text" maxLength={64} placeholder="Your name or label" value={wm?.text??''} onChange={e=>setWatermark(e.target.value)}/></label>
       {wm&&<><div className="look-row"><span className="look-label">Color</span><div className="look-control"><ColorControl ariaLabel="Watermark color" value={wm.color} onChange={color=>setWatermark(wm.text,color)}/></div></div>
       <div className="look-row"><span className="look-label">Position</span><div className="look-control"><Select portal ariaLabel="Watermark position" value={wm.position} options={[{value:'bottom-left',label:'Bottom left'},{value:'bottom-right',label:'Bottom right'}]} onChange={position=>change({watermark:{...wm,position:position as typeof wm.position}})}/></div></div>
+      <LookSlider label="Size" ariaLabel="Watermark size" unit="%" min={50} max={200} step={5} value={wm.size??100} checkpoint={checkpoint} onChange={size=>onChange({watermark:{...wm,size}})}/>
       <LookSlider label="Opacity" ariaLabel="Watermark opacity" unit="%" value={wm.opacity*100} checkpoint={checkpoint} onChange={opacity=>onChange({watermark:{...wm,opacity:opacity/100}})}/></>}
     </ControlDisclosure>
     {video && bg.type === "transparent" && <p className="look-hint">Transparent areas become black in MP4.</p>}

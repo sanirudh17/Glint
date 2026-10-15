@@ -11,7 +11,10 @@ pub fn pixels(wm:Option<&Value>,w:u32,h:u32)->Result<Vec<(u32,u32,[u8;3],f64)>,S
     let mut reader=image::ImageReader::new(std::io::Cursor::new(bytes)).with_guessed_format().map_err(|e|e.to_string())?;
     let mut limits=image::Limits::default();limits.max_image_width=Some(4096);limits.max_image_height=Some(256);reader.limits(limits);
     let image=reader.decode().map_err(|e|e.to_string())?.to_rgba8();
-    let margin=12f64.max(w.min(h) as f64*0.025);let height=12f64.max(w.min(h) as f64*0.035);
+    let size=wm["size"].as_f64().unwrap_or(100.);
+    if !(50. ..=200.).contains(&size){return Err("Invalid watermark size".into());}
+    let margin=12f64.max(w.min(h) as f64*0.025).min(w as f64/4.).min(h as f64/4.);
+    let height=(12f64.max(w.min(h) as f64*0.035)*size/100.).min(h as f64-margin*2.);
     let width=(w as f64-margin*2.).min(height*image.width() as f64/image.height() as f64).max(1.);
     let height=width*image.height() as f64/image.width() as f64;
     let left=if wm["position"].as_str()==Some("bottom-left"){margin}else{w as f64-margin-width};
@@ -26,5 +29,8 @@ mod tests{
         let stamp=image::RgbaImage::from_pixel(100,20,image::Rgba([255,0,0,128]));let mut bytes=std::io::Cursor::new(vec![]);stamp.write_to(&mut bytes,image::ImageFormat::Png).unwrap();
         let wm=serde_json::json!({"dataUrl":format!("data:image/png;base64,{}",base64::engine::general_purpose::STANDARD.encode(bytes.into_inner())),"opacity":0.5,"position":"bottom-left"});
         let p=pixels(Some(&wm),1200,630).unwrap();assert_eq!((p[0].0,p[0].1),(16,592));assert_eq!(p[0].2,[255,0,0]);assert!((p[0].3-128./255.*0.5).abs()<1e-9);
+        let mut large=wm.clone();large["size"]=serde_json::json!(200);
+        let enlarged=pixels(Some(&large),1200,630).unwrap();assert_eq!((enlarged[0].0,enlarged[0].1),(16,570));assert!(enlarged.len()>p.len()*3);
+        large["size"]=serde_json::json!(201);assert!(pixels(Some(&large),1200,630).is_err());
     }
 }

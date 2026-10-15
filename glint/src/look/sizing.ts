@@ -1,4 +1,5 @@
 import type { LookConfig } from './model';
+import {computeLayout} from '../editor/composition';
 export const OUTPUT_SIZES=[
   {id:'og',label:'OG image · 1200 × 630',width:1200,height:630},
   {id:'square',label:'Square post · 1080 × 1080',width:1080,height:1080},
@@ -11,8 +12,14 @@ export const OUTPUT_SIZES=[
 export function autoBalance(width:number,height:number):Partial<LookConfig> {
   return {enabled:true,aspect:'auto',outputSize:undefined,padding:Math.round(40*Math.min(width,height)/Math.max(width,height))};
 }
+export function originalExportSizing():Partial<LookConfig> {return {aspect:'auto',outputSize:undefined};}
+export function exportDimensions(width:number,height:number,look:LookConfig) {
+  const layout=computeLayout(width,height,null,look);
+  return look.outputSize??{width:Math.round(layout.compositionW),height:Math.round(layout.compositionH)};
+}
 export function watermarkPlacement(width:number,height:number,wm:NonNullable<LookConfig['watermark']>) {
-  const margin=Math.max(12,Math.min(width,height)*.025),h=Math.max(12,Math.min(width,height)*.035);
+  const margin=Math.min(width/4,height/4,Math.max(12,Math.min(width,height)*.025));
+  const h=Math.min(height-margin*2,Math.max(12,Math.min(width,height)*.035)*Math.min(2,Math.max(.5,(wm.size??100)/100)));
   const w=Math.min(width-margin*2,h*wm.width/wm.height);
   const resolvedH=w*wm.height/wm.width;
   return {x:wm.position==='bottom-left'?margin:width-margin-w,y:height-margin-resolvedH,w,h:resolvedH};

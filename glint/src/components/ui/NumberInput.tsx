@@ -14,6 +14,7 @@ export function NumberInput({ value, onChange, min = 0, max, step = 1, unit, ari
   const number = draft.trim() ? Number(draft) : value;
   const pending = Number.isFinite(number) ? clamp(number) : value;
   const commit = () => {
+    if(draft===String(value))return;
     setDraft(String(pending)); onChange(pending);
   };
   const bump = (direction: number) => {

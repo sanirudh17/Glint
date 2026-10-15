@@ -25,7 +25,7 @@ export interface LookConfig {
   border?: { width: number; color: string; style: "solid" | "dashed" };
   aspect: AspectId;
   outputSize?: { width:number; height:number };
-  watermark?: { text:string; color:string; opacity:number; position:"bottom-left"|"bottom-right"; dataUrl:string; width:number; height:number };
+  watermark?: { text:string; color:string; opacity:number; size?:number; position:"bottom-left"|"bottom-right"; dataUrl:string; width:number; height:number };
   chrome: WindowChrome;
 }
 export const DEFAULT_LOOK: LookConfig = {
