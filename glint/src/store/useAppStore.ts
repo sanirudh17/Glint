@@ -19,6 +19,8 @@ export interface Settings {
   hotkeys: Record<string, string>;
   auto_save: boolean;
   auto_copy: boolean;
+  index_screenshot_text: boolean;
+  auto_name_captures: boolean;
   open_in_editor: boolean;
   explorer_menu_enabled: boolean;
   record_system_audio: boolean;
@@ -57,6 +59,8 @@ interface AppState {
   setAccent: (hex: string) => Promise<void>;
   setAutoSave: (on: boolean) => Promise<void>;
   setAutoCopy: (on: boolean) => Promise<void>;
+  setIndexScreenshotText:(on:boolean)=>Promise<void>;
+  setAutoNameCaptures:(on:boolean)=>Promise<void>;
   setOpenInEditor: (on: boolean) => Promise<void>;
   setExplorerMenu: (on: boolean) => Promise<void>;
   setRecordSystemAudio: (on: boolean) => Promise<void>;
@@ -224,6 +228,12 @@ export const useAppStore = create<AppState>((set, get) => {
   },
 
   setAutoSave: (on: boolean) => commit("auto_save", on, "Auto-save"),
+  setAutoNameCaptures:(on:boolean)=>commit('auto_name_captures',on,'Automatic capture names'),
+  setIndexScreenshotText:async(on:boolean)=>{
+    await commit('index_screenshot_text',on,'Screenshot text search');
+    if(get().settings?.index_screenshot_text!==on)return;
+    try{await invoke(on?'library_index_start':'library_index_clear');}catch{get().pushToast("Couldn't update the screenshot text index");}
+  },
 
   setAutoCopy: (on: boolean) => commit("auto_copy", on, "Auto-copy"),
 

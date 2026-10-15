@@ -1,7 +1,7 @@
 use std::sync::{Mutex,Arc,atomic::{AtomicBool,Ordering}};
 use tauri::{Manager,Emitter};
 #[derive(Default,Clone,serde::Serialize)]pub struct Progress{pub running:bool,pub done:usize,pub total:usize,pub errors:usize}
-#[derive(Default)]pub struct IndexState{pub running:AtomicBool,pub cancel:Arc<AtomicBool>,pub progress:Mutex<Progress>}
+#[derive(Default)]pub struct IndexState{pub running:AtomicBool,pub rescan:AtomicBool,pub cancel:Arc<AtomicBool>,pub progress:Mutex<Progress>}
 #[tauri::command]pub fn library_index_status(app:tauri::AppHandle)->Progress{app.state::<IndexState>().progress.lock().unwrap().clone()}
 #[tauri::command]pub fn library_index_cancel(app:tauri::AppHandle){app.state::<IndexState>().cancel.store(true,Ordering::Relaxed);}
 #[tauri::command(async)]pub fn library_search_text(app:tauri::AppHandle,query:String)->Result<Vec<i64>,String>{
@@ -16,7 +16,7 @@ use tauri::{Manager,Emitter};
 }
 #[tauri::command]pub fn library_index_start(app:tauri::AppHandle){
     if !app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().index_screenshot_text{return;}
-    let state=app.state::<IndexState>();if state.running.compare_exchange(false,true,Ordering::SeqCst,Ordering::SeqCst).is_err(){return;}
+    let state=app.state::<IndexState>();if state.running.compare_exchange(false,true,Ordering::SeqCst,Ordering::SeqCst).is_err(){state.rescan.store(true,Ordering::SeqCst);return;}
     state.cancel.store(false,Ordering::Relaxed);*state.progress.lock().unwrap()=Progress{running:true,..Progress::default()};
     std::thread::spawn(move||{
         let state=app.state::<IndexState>();
@@ -36,13 +36,14 @@ use tauri::{Manager,Emitter};
                     if state.cancel.load(Ordering::Relaxed){break;}
                     let auto_name=app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().auto_name_captures;
                     let failed=result.is_err();let text=result.unwrap_or_default();
-                    {let db=app.state::<crate::Db>();let conn=db.0.lock().unwrap();if state.cancel.load(Ordering::Relaxed){break;}let _=crate::db::text_index::put(&conn,row.id,&text,&fingerprint,auto_name);}
-                    if failed{state.progress.lock().unwrap().errors+=1;}
+                    let saved={let db=app.state::<crate::Db>();let conn=db.0.lock().unwrap();if state.cancel.load(Ordering::Relaxed){break;}crate::db::text_index::put(&conn,row.id,&text,&fingerprint,auto_name).is_ok()};
+                    if failed||!saved{state.progress.lock().unwrap().errors+=1;}
                 }
             }
             state.progress.lock().unwrap().done+=1;
         }
         state.progress.lock().unwrap().running=false;state.running.store(false,Ordering::SeqCst);
+        if state.rescan.swap(false,Ordering::SeqCst)&&!state.cancel.load(Ordering::Relaxed){library_index_start(app.clone());}
         let _=app.emit("library-indexed",());
     });
 }

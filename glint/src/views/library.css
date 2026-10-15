@@ -24,6 +24,7 @@
   flex-direction: column;
   gap: var(--s4);
 }
+.library-index-status { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--s3); color:var(--text-dim); font-size:var(--fz-sm); }
 
 /* The grid region grows with its content (never shrinks below it) so thumbnails
    keep their full size and the whole view scrolls, rather than the grid squeezing

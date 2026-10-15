@@ -6,6 +6,7 @@ export function AutoSave() {
   const setAutoSave = useAppStore((s) => s.setAutoSave);
   const setAutoCopy = useAppStore((s) => s.setAutoCopy);
   const setOpenInEditor = useAppStore((s) => s.setOpenInEditor);
+  const setIndexScreenshotText=useAppStore(s=>s.setIndexScreenshotText),setAutoNameCaptures=useAppStore(s=>s.setAutoNameCaptures);
 
   return (
     <Section
@@ -29,6 +30,12 @@ export function AutoSave() {
           checked={settings?.open_in_editor ?? false}
           onChange={(v) => setOpenInEditor(v)}
         />
+      </Field>
+      <Field label="Search screenshot text" hint="Read saved screenshots locally when Library opens. Turning this off clears the text index.">
+        <Switch checked={settings?.index_screenshot_text??true} onChange={v=>void setIndexScreenshotText(v)}/>
+      </Field>
+      <Field label="Name captures from text" hint="Use a meaningful OCR line for unnamed captures. Your custom names are preserved.">
+        <Switch checked={settings?.auto_name_captures??true} onChange={v=>void setAutoNameCaptures(v)}/>
       </Field>
     </Section>
   );

@@ -25,7 +25,7 @@ pub fn put(conn:&Connection,id:i64,body:&str,fingerprint:&str,auto_name:bool)->r
     let exists:bool=tx.query_row("SELECT EXISTS(SELECT 1 FROM captures WHERE id=?1 AND deleted_at IS NULL)",[id],|r|r.get(0))?;
     if exists{
         tx.execute("INSERT INTO capture_text(capture_id,body,fingerprint) VALUES(?1,?2,?3) ON CONFLICT(capture_id) DO UPDATE SET body=excluded.body,fingerprint=excluded.fingerprint",params![id,body,fingerprint])?;
-        if auto_name{if let Some(name)=name_from_text(body){tx.execute("UPDATE captures SET title=?2,title_origin='ocr' WHERE id=?1 AND (title IS NULL OR title='') AND title_origin IS NULL",params![id,name])?;}}
+        if auto_name{if let Some(name)=name_from_text(body){tx.execute("UPDATE captures SET title=?2,title_origin='ocr' WHERE id=?1 AND (title_origin='ocr' OR ((title IS NULL OR title='') AND title_origin IS NULL))",params![id,name])?;}}
     }tx.commit()
 }
 pub fn name_from_text(text:&str)->Option<String>{
