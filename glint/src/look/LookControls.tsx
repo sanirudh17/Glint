@@ -73,9 +73,10 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
     <div className="look-row"><span className="look-label">Aspect</span><div className="look-control"><Select portal ariaLabel="Export aspect" value={look.aspect}
       options={aspects.map((aspect) => ({ value: aspect, label: aspect === "auto" ? "Original" : aspect }))}
       onChange={(aspect) => change({ aspect: aspect as AspectId,outputSize:undefined })} /></div></div>
-    <div className="look-row"><span className="look-label">Output size</span><div className="look-control"><Select portal ariaLabel="Output size preset" value={look.outputSize?OUTPUT_SIZES.find(s=>s.width===look.outputSize?.width&&s.height===look.outputSize?.height)?.id??'custom':''}
+    <div className="look-preset-field"><span className="look-label">Output size</span><div><Select portal ariaLabel="Output size preset" value={look.outputSize?OUTPUT_SIZES.find(s=>s.width===look.outputSize?.width&&s.height===look.outputSize?.height)?.id??'custom':''}
       options={[{value:'',label:'Original resolution'},...OUTPUT_SIZES.map(s=>({value:s.id,label:s.label})),...(look.outputSize?[{value:'custom',label:'Custom size'}]:[])]}
       onChange={id=>{const size=OUTPUT_SIZES.find(s=>s.id===id);change({enabled:true,outputSize:size?{width:size.width,height:size.height}:undefined});}}/></div></div>
+    {look.outputSize&&<p className="look-hint">{look.outputSize.width} ? {look.outputSize.height} px</p>}
     <ControlDisclosure title="Advanced look">
       {!video&&<><div className="look-row"><span className="look-label">Export width</span><div className="look-control"><NumberInput ariaLabel="Export width" min={16} max={4096} value={look.outputSize?.width??dimensions?.width??1920} onChange={width=>change({outputSize:{width,height:look.outputSize?.height??dimensions?.height??1080}})}/></div></div>
       <div className="look-row"><span className="look-label">Export height</span><div className="look-control"><NumberInput ariaLabel="Export height" min={16} max={4096} value={look.outputSize?.height??dimensions?.height??1080} onChange={height=>change({outputSize:{height,width:look.outputSize?.width??dimensions?.width??1920}})}/></div></div></>}

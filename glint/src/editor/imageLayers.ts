@@ -1,6 +1,6 @@
 import {DEFAULT_STYLE,newId,type ImageAnno} from './model';
 export function newImageLayer(dataUrl:string,name:string,width:number,height:number,canvasW:number,canvasH:number,x?:number,y?:number):ImageAnno {
-  const scale=Math.min(1,canvasW*.75/width,canvasH*.75/height),w=Math.round(width*scale),h=Math.round(height*scale);
+  const scale=Math.min(1,canvasW*.75/width,canvasH*.75/height),w=Math.max(1,Math.round(width*scale)),h=Math.max(1,Math.round(height*scale));
   return {id:newId(),type:'image',z:0,style:{...DEFAULT_STYLE},dataUrl,name,x:x??Math.round((canvasW-w)/2),y:y??Math.round((canvasH-h)/2),w,h};
 }
 export function sideBySide(width:number,height:number,image:ImageAnno){

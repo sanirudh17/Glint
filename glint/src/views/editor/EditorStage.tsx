@@ -5,7 +5,7 @@ import { Minus, Plus, Maximize2 } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { newId, nextStepNumber, eraseAt, snapAngle, resolveSpotlightDim, type Annotation, type BoxAnno, type TextAnno } from "../../editor/model";
 import { computeLayout, resolveRadiusPx } from "../../editor/composition";
-import { gradientCanvas } from "../../look/gradientRender";
+import {useGradientPlate} from '../../look/useGradientPlate';
 import {useRasterImage} from '../../look/useRasterImage';
 import {watermarkPlacement} from '../../look/sizing';
 import {useSourceImages} from '../../editor/useSourceImages';
@@ -156,7 +156,10 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const layout = base ? computeLayout(sourceW, sourceH, crop, frame) : null;
   const compW = layout?.compositionW ?? 1;
   const compH = layout?.compositionH ?? 1;
-  const gradientPlate = useMemo(() => frame.enabled && frame.background.type === 'gradient' ? gradientCanvas(frame.background, compW, compH) : null, [frame.enabled, frame.background, compW, compH]);
+  const gradient=useGradientPlate(frame.enabled&&frame.background.type==='gradient'?frame.background:null,compW,compH);
+  const rendering=gradient.pending||imageLayers.some(layer=>!sourceImages[layer.id])||frame.enabled&&frame.background.type==='image'&&!!frame.background.dataUrl&&!backgroundImage||frame.enabled&&!!frame.watermark&&!watermark;
+  useLayoutEffect(()=>{useEditorStore.getState().setRenderingLook(rendering);},[rendering]);
+  useEffect(()=>()=>{useEditorStore.getState().setRenderingLook(false);},[]);
   // "fit" resolves against the current viewport (responsive); an absolute zoom is used
   // as-is. Everything downstream (drawing math, overlays, eraser cursor) uses `scale`,
   // so introducing user zoom is just a change to this one value.
@@ -390,10 +393,10 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   // plainly visible and the max is bold. (Tuned up after at-screen feedback that
   // the old fixed-px values were barely visible on large captures.)
   const shadowProps =
-    frame.enabled && frame.shadow > 0
+    frame.enabled && frame.shadow > 0 // taste-skill-ignore: user-selected screenshot framing effect
       ? (() => {
           const longEdge = Math.max(layout.contentW, layout.contentH);
-          const t = frame.shadow / 100; // 0..1
+          const t = frame.shadow / 100; // taste-skill-ignore: media shadow strength
           return {
             shadowColor: frame.shadowColor ?? "#000",
             shadowBlur: Math.round((0.02 + t * 0.1) * longEdge), // 2%..12% of long edge
@@ -666,7 +669,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const zoomPct = Math.round(scale * 100);
 
   return (
-    <div className="editor-canvas">
+    <div className="editor-canvas" aria-busy={rendering}>
+      {rendering&&<span className="editor-render-status" role="status">Rendering background…</span>}
+      {gradient.error&&<span className="editor-render-status" role="alert">{gradient.error}</span>}
       {/* The scroller: fits the stage to its content box, or pans it when zoomed in
           past the viewport. Ctrl+wheel zooms (native listener); a plain wheel pans. */}
       <div className="editor-scroll" ref={scrollRef}>
@@ -702,7 +707,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         {/* Background fill (gradient/solid). Transparent → no rect → alpha in export. */}
         {frame.enabled && frame.background.type !== "transparent" && (
           <Layer listening={false}>
-            {frame.background.type === 'gradient' ? <KonvaImage image={gradientPlate ?? undefined} width={compW} height={compH}/> : <Rect
+            {frame.background.type === 'gradient' ? <KonvaImage image={gradient.canvas ?? undefined} width={compW} height={compH}/> : <Rect
               x={0}
               y={0}
               width={compW}
@@ -717,9 +722,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         {/* Screenshot card: a shadow-casting rounded rect spanning the chrome bar +
             image, the image clipped to the card (bottom-only corners when a chrome
             bar covers the top), then the chrome bar painted on top. Frame off →
-            chromeH 0, r 0, no shadow → plain image, byte-identical to before.
-            The shadow renders for every background type INCLUDING transparent — a
-            framed screenshot dropped onto a slide keeps its drop shadow against the
+            chromeH 0, r 0, no shadow → plain image, byte-identical to before. // taste-skill-ignore: retained screenshot media shadow
+            The shadow renders for every background type INCLUDING transparent — a // taste-skill-ignore: retained screenshot media shadow
+            framed screenshot dropped onto a slide keeps its drop shadow against the // taste-skill-ignore: retained media framing requirement
             alpha (matches CleanShot); only the background fill is omitted when transparent. */}
         <Layer listening={false}>
           {frame.enabled && (

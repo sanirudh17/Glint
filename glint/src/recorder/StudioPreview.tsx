@@ -1,6 +1,6 @@
 import { cursorAt, drawCursorLayer, followSourcePoint, smoothPath } from "./studioCursor";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
-import { gradientCanvas } from "../look/gradientRender";
+import {useGradientPlate} from '../look/useGradientPlate';
 import {useRasterImage} from '../look/useRasterImage';
 import {watermarkPlacement} from '../look/sizing';
 import { resolveRadiusPx } from "../editor/composition";
@@ -28,10 +28,9 @@ export function StudioPreview({ studio, video, camVideo, cam, width, height, pic
   const [image, setImage] = useState<HTMLImageElement | null>(null);
   const background = studio.project.look.background;
   const watermark=useRasterImage(studio.project.look.watermark?.dataUrl);
-  const gradientPlate = useMemo(() => {
-    const l=studioLayout(width,height,studio.project.crop,studio.project.look,960);
-    return background.type==='gradient' ? gradientCanvas(background,l.width,l.height) : null;
-  },[background,width,height,studio.project.crop,studio.project.look]);
+  const plateLayout=studioLayout(width,height,studio.project.crop,studio.project.look,960);
+  const gradient=useGradientPlate(studio.project.look.enabled&&background.type==='gradient'?background:null,plateLayout.width,plateLayout.height);
+  const gradientPlate=gradient.canvas;
   useEffect(() => {
     setImage(null); if (background.type !== "image" || !background.dataUrl) return;
     let active = true; const img = new Image(); img.onload = () => { if (active) setImage(img); }; img.src = background.dataUrl;

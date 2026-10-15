@@ -66,6 +66,8 @@ interface EditorState {
   eraserSize: number;
   /** Eyedropper pick mode: the next canvas click samples a pixel color. */
   picking: boolean;
+  renderingLook:boolean;
+  setRenderingLook:(value:boolean)=>void;
 
   setBase: (b: EditorBase) => void;
   loadDoc: (
@@ -145,6 +147,7 @@ const INITIAL = {
   dirty: false,
   eraserSize: 16,
   picking: false,
+  renderingLook:false,
 };
 
 /** The full reversible doc state for one undo/redo step (annotations + crop + frame). */
@@ -270,6 +273,7 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   setEraserSize: (n) => set({ eraserSize: n }),
   setPicking: (v) => set({ picking: v }),
+  setRenderingLook: renderingLook=>set({renderingLook}),
 
   // Wipe every annotation in one gesture (a single undoable step). No-op — and
   // crucially no spurious history entry — when there's nothing to clear. The

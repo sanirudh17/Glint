@@ -43,6 +43,7 @@ function flatten(stage: Konva.Stage): string {
 
 export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null> }) {
   const base = useEditorStore((s) => s.base);
+  const rendering=useEditorStore(s=>s.renderingLook);
   // Feedback goes through the app's toast host (a clean corner toast) rather than
   // an inline status span — a long "Exported · <filename>" used to wrap inside
   // the toolbar and squash the buttons into a cramped box.
@@ -82,6 +83,7 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
     <div className="editor-exportbar">
       <button
         className="editor-export-btn"
+        disabled={rendering}
         // Press-and-drag: the OS drag must start while the mouse button is held,
         // so this fires on pointer-down (like the HUD/Library drag). onClick
         // fires on release, when there's no held button to attach a drag to —
@@ -91,13 +93,13 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
       >
         <Share2 size={16} strokeWidth={1.5} /> Drag
       </button>
-      <button className="editor-export-btn" onClick={onCopy} title="Copy to clipboard">
+      <button className="editor-export-btn" disabled={rendering} onClick={onCopy} title="Copy to clipboard">
         <Copy size={16} strokeWidth={1.5} /> Copy
       </button>
-      <button className="editor-export-btn" onClick={onSave} title="Export a PNG to the Library">
+      <button className="editor-export-btn" disabled={rendering} onClick={onSave} title="Export a PNG to the Library">
         <Download size={16} strokeWidth={1.5} /> Export
       </button>
-      <button className="editor-export-btn editor-export-btn--primary" onClick={onDone} title="Finish — send to the corner HUD">
+      <button className="editor-export-btn editor-export-btn--primary" disabled={rendering} onClick={onDone} title="Finish — send to the corner HUD">
         <Check size={16} strokeWidth={1.5} /> Done
       </button>
     </div>
