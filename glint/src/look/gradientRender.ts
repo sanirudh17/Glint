@@ -47,7 +47,19 @@ export function gradientPixels(bg: GradientBackground, w: number, h: number): Ui
 }
 export function gradientCanvas(bg: GradientBackground,w: number,h: number): HTMLCanvasElement {
   const canvas=document.createElement('canvas');canvas.width=Math.round(w);canvas.height=Math.round(h);
-  canvas.getContext('2d')!.putImageData(new ImageData(gradientPixels(bg,canvas.width,canvas.height),canvas.width,canvas.height),0,0);
+  const ctx=canvas.getContext('2d')!;
+  if(!bg.grain&&bg.kind!=='mesh') {
+    // Canvas gradients need a single paint. The half-pixel offset preserves
+    // integer-coordinate color sampling used by the native compositor.
+    const angle=(bg.angleDeg??getGradient(bg.gradientId).angleDeg)*Math.PI/180;
+    const x=canvas.width/2+.5,y=canvas.height/2+.5,dx=Math.cos(angle),dy=Math.sin(angle);
+    const length=Math.abs(dx)*canvas.width+Math.abs(dy)*canvas.height;
+    const gradient=bg.kind==='radial'?ctx.createRadialGradient(x,y,0,x,y,Math.hypot(canvas.width,canvas.height)/2)
+      :bg.kind==='conic'?ctx.createConicGradient(angle,x,y)
+      :ctx.createLinearGradient(x-dx*length/2,y-dy*length/2,x+dx*length/2,y+dy*length/2);
+    for(const stop of gradientStops(bg))gradient.addColorStop(stop.offset,stop.color);
+    ctx.fillStyle=gradient;ctx.fillRect(0,0,canvas.width,canvas.height);
+  } else ctx.putImageData(new ImageData(gradientPixels(bg,canvas.width,canvas.height),canvas.width,canvas.height),0,0);
   return canvas;
 }
 /** Quantized palette from a small RGBA sample; favors useful chromatic colors over page white. */
