@@ -125,6 +125,8 @@ pub fn run() {
         .manage(crate::recorder::RecorderTrimState::default())
         .manage(crate::recorder::studio_export::ExportState::default())
         .manage(crate::ocr::OcrState::default())
+        .manage(crate::ocr::privacy::ScanState::default())
+        .manage(crate::ocr::indexing::IndexState::default())
         .setup(|app| {
             tray::build(app.handle())?;
 
@@ -363,6 +365,13 @@ pub fn run() {
             editor_open_capture,
             editor_source,
             editor::layers::editor_read_layer,
+            ocr::privacy::privacy_scan,
+            ocr::privacy::privacy_cancel,
+            ocr::indexing::library_index_start,
+            ocr::indexing::library_index_cancel,
+            ocr::indexing::library_index_status,
+            ocr::indexing::library_search_text,
+            ocr::indexing::library_index_clear,
             editor_copy,
             editor_save,
             editor_flatten_temp,

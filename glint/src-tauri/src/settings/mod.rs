@@ -45,6 +45,8 @@ pub struct Settings {
     pub hotkeys: Hotkeys,
     pub auto_save: bool,
     pub auto_copy: bool,
+    pub index_screenshot_text: bool,
+    pub auto_name_captures: bool,
     pub open_in_editor: bool,
     pub explorer_menu_enabled: bool,
     pub record_system_audio: bool,
@@ -109,6 +111,8 @@ impl Default for Settings {
             hotkeys: Hotkeys::default(),
             auto_save: true,
             auto_copy: true,
+            index_screenshot_text: true,
+            auto_name_captures: true,
             open_in_editor: false,
             explorer_menu_enabled: true,
             record_system_audio: true,
@@ -154,6 +158,8 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         "auto_copy" => {
             s.auto_copy = value.as_bool().ok_or("auto_copy must be boolean")?;
         }
+        "index_screenshot_text"=>{s.index_screenshot_text=value.as_bool().ok_or("index_screenshot_text must be boolean")?;}
+        "auto_name_captures"=>{s.auto_name_captures=value.as_bool().ok_or("auto_name_captures must be boolean")?;}
         "open_in_editor" => {
             s.open_in_editor = value.as_bool().ok_or("open_in_editor must be boolean")?;
         }

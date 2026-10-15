@@ -6,6 +6,9 @@
 
 pub mod commands;
 pub mod window;
+pub mod words;
+pub mod privacy;
+pub mod indexing;
 
 #[derive(Clone, serde::Serialize)]
 pub struct OcrOutput {
