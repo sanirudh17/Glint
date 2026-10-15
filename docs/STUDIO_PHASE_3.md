@@ -1,6 +1,6 @@
 # Phase 3 — Screenshot looks bundle
 
-Status: repository audit and task plan prepared. Implementation has not started.
+Status: complete for the agreed screenshot bundle. Acceptance checks and the final production build passed. Phase 4 has not started.
 Branch: `phase-3-screenshot-looks`, based on Phase 2 commit `1f473b7`.
 
 ## Verified repository paths and assumptions
@@ -29,34 +29,102 @@ Branch: `phase-3-screenshot-looks`, based on Phase 2 commit `1f473b7`.
 
 ## Implementation plan and task commits
 
-1. Expand procedural gradients to 40–60 categorized presets, keeping old IDs and
-   appearance. Add angle, three-stop/radial/conic/mesh choices, optional grain,
-   screenshot color sampling and a blurred-screenshot background. Verify shared
-   preset roundtrips and preview/export agreement.
-2. Extend the existing look controls with Auto Balance, remaining aspect ratios,
-   named output sizes and watermarks. Preserve legacy layout defaults and existing
-   chrome/border behavior.
-3. Add movable image layers, side-by-side arrangement, canvas expansion and resize
-   controls. Include layer content in saved projects and ensure privacy effects
-   operate on the combined source pixels.
-4. Add curved arrow and text style controls and expose existing layer ordering.
-   Keep pen/arrow behavior and document undo/reopen compatibility.
-5. Run focused pure-logic tests, real editor preview/export checks, old-document
-   reopening and a full build. Record evidence and complete the acceptance checklist.
-6. Optional model-based background removal is awaiting a scope decision. The
-   build plan labels it low priority and opt-in, and instructs the agent to ask
-   when a task exceeds its size estimate. It needs a model download, inference
-   runtime, licensing/size verification and local inference validation; it is
-   substantially larger than another screenshot control.
+The user selected the screenshot bundle only. Existing image backgrounds,
+window/browser frames, editable documents, pen/arrow tools and hex magnifier were
+retained. Model-based background removal is explicitly deferred. No model or
+inference dependency was added, and Phase 4 is not authorized by this completion.
+
+| Task | Shipped behavior | Commit |
+| --- | --- | --- |
+| Gradients | 48 presets in five collections; old IDs/colors retained; editable angle, two/three colors, linear/radial/conic/mesh styles, grain and screenshot color matching | `9d3e88a` |
+| Framing and sizes | Auto Balance, 3:2 and 1.91:1, six exact social/export sizes, custom resolution and a text watermark; existing border controls reused | `d84b4b7` |
+| Image composition | File import/drop, movable/resizable image layers, side-by-side layout, canvas expansion, source-layer ordering and embedded save/reopen | `4d9ab11` |
+| Annotation controls | Arrow bend, plain/heading/label/code text styles, themed font sizing and annotation ordering | `97484e5` |
+| Preview and inspector | Worker-based procedural rendering, export readiness, readable image-layer buttons, full-width size choice and explicit pixel dimensions | `2a34749` |
+| Compact editor | Toolbar remains usable at 760 px; source-layer drag/resize commits whole-pixel values | `f91c888` |
+
+Auto Balance uses equal margins of about 10% of the shorter content edge and clears
+fixed aspect/output-size constraints. Canvas dimensions add or trim source space
+at the right/bottom; export dimensions change resolution and framing. Source images
+stay below annotations, so privacy tools can cover the combined pixels.
+
+All new serialized fields are optional. Existing `.glint` documents keep their
+version and layout defaults. Screenshots and Studio still use the existing shared
+look-preset store. Procedural rendering adds a small worker script, not wallpapers.
 
 ## Acceptance checklist
 
-- [ ] Each new option appears correctly in preview and the exported PNG.
-- [ ] Shared looks continue working in Studio preview and native export.
-- [ ] Default choices produce a useful result with one action.
-- [ ] Existing `.glint` documents retain their appearance and editable annotations.
-- [ ] Added image layers and new annotation fields survive save/reopen and undo.
-- [ ] No cloud service, accounts, analytics or bundled wallpaper assets are added.
-- [ ] Optional background-removal scope is explicitly recorded before Phase 3 closes.
+- [x] Each new option appears correctly in preview and the exported PNG.
+- [x] Shared looks continue working in Studio preview and native export.
+- [x] Default choices produce a useful result with one action.
+- [x] Existing `.glint` documents retain their appearance and editable annotations.
+- [x] Added image layers and new annotation fields survive save/reopen and undo.
+- [x] No cloud service, accounts, analytics or bundled wallpaper assets are added.
+- [x] Optional background-removal scope is explicitly recorded before Phase 3 closes.
 
-No Phase 3 feature is marked shipped or cut at this planning checkpoint.
+## Verification evidence
+
+- 243 frontend tests passed. After the final image-geometry change, the focused
+  71 model/store/image-layer tests and TypeScript check passed again.
+- 228 native tests passed; two existing real-display capture tests remain ignored.
+- The final full Tauri debug production build passed. Packaged screenshot worker
+  startup and the Studio backdrop were also checked in that binary.
+- `scripts/screenshot-phase3-check.mjs` passed in the real WebView2 editor, including
+  all 48 preset buttons, gradient geometries/colors/angle/grain, both new ratios,
+  all six exact PNG export sizes, Auto Balance, watermark/border, image composition,
+  four text styles, ordering, save/reopen and a shared-look native MP4 export.
+- `scripts/screenshot-phase3-interaction.mjs` passed real pointer drag/resize,
+  browser image drop, source-layer redaction pixels, persistence and a 1080p mesh
+  responsiveness check. Maximum measured main-thread probe delay was 76.3 ms;
+  the costly mesh computation runs in a worker.
+- Dark desktop and compact light layouts were inspected. All toolbar buttons fit
+  the 760 px viewport after the compact-layout correction.
+- Static UI scan: zero failures; one warning concerns existing em dashes in source
+  comments/copy. Screenshot shadow effects have explicit media-rendering exemptions.
+
+Artifacts: OS temp folder `glint-phase3-1up5dn`, including `result.json`,
+`interaction-result.json`, `production-smoke.json`, exported PNGs, UI captures and the decoded shared-look
+video frame. Test-created Library captures were removed by exact returned paths;
+recent-project settings were restored. No user source media was edited.
+
+For a fresh validation run, first generate a synthetic video fixture with
+`python scripts/studio-phase2-fixture.py`, then pass its root to
+`node scripts/screenshot-phase3-fixture.mjs <video-fixture-root>`. With the app running
+and WebView2 debugging on port 9227, open the generated `Legacy.glint`, then run:
+
+```powershell
+node scripts/screenshot-phase3-check.mjs <screenshot-fixture-root>
+node scripts/screenshot-phase3-interaction.mjs <screenshot-fixture-root>
+```
+
+The fixtures contain fake demo text and generated images only.
+
+## Deferred: optional background removal
+
+No model download, inference runtime, new package dependency or background-removal
+control is part of Phase 3, as explicitly requested.
+
+A small candidate for a later opt-in implementation is **U²-NetP in ONNX format**.
+It would run locally through **ONNX Runtime CPU for Windows x64**, called from the
+Rust backend through its C API. Python/PyTorch would not need to ship in the app.
+
+| Proposed downloadable artifact | Verified size |
+| --- | --- |
+| `u2netp.onnx` from the rembg model release | 4,574,861 bytes, approximately 4.57 MB |
+| Full `onnxruntime-win-x64-1.31.0.zip` CPU release archive | 82,887,349 bytes, approximately 82.89 MB |
+| Combined upstream downloads | Approximately 87.46 MB |
+
+These are upstream archive sizes, not a finalized Glint download budget. A later
+implementation could package only the required runtime files or use a reduced
+operator build; that size must be measured before approval. The model's suitability
+for window screenshots, edge quality, notices and redistribution requirements
+still need review. No inference-quality claim is made here.
+
+Sizes were checked from publisher release metadata on October 14, 2026:
+[rembg model release](https://api.github.com/repos/danielgatis/rembg/releases/tags/v0.0.0),
+[ONNX Runtime v1.31.0 release](https://api.github.com/repos/microsoft/onnxruntime/releases/tags/v1.31.0).
+Runtime integration reference: [ONNX Runtime C/C++ documentation](https://onnxruntime.ai/docs/get-started/with-cpp).
+Model reference: [U²-Net upstream](https://github.com/xuebinqin/U-2-Net).
+
+Phase 4 remains unstarted. The next phase or any background-removal experiment
+requires the user's decision.
