@@ -72,6 +72,8 @@ export const EditorStage = forwardRef<Konva.Stage,{suggestions?:PrivacySuggestio
   const canvasSize=useEditorStore(s=>s.canvasSize);
   const sourceW=canvasSize?.width??base?.width??1,sourceH=canvasSize?.height??base?.height??1;
   const imageLayers=useMemo(()=>annotations.filter((a):a is ImageAnno=>a.type==='image'),[annotations]);
+  const privacyAccent=useAppStore(s=>s.settings?.accent);
+  const suggestionColor=useMemo(()=>getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#29aeb0',[privacyAccent]);
   const sourceImages=useSourceImages(imageLayers);
   const baseCanvas=useMemo(()=>{if(!base)return null;const c=document.createElement('canvas');c.width=sourceW;c.height=sourceH;c.getContext('2d')!.drawImage(base.image,0,0);return c;},[base,sourceW,sourceH]);
   const sourceCanvas=useMemo(()=>{if(!baseCanvas)return null;const c=document.createElement('canvas');c.width=sourceW;c.height=sourceH;const ctx=c.getContext('2d')!;ctx.drawImage(baseCanvas,0,0);for(const layer of imageLayers){const image=sourceImages[layer.id];if(image)ctx.drawImage(image,layer.x,layer.y,layer.w,layer.h);}return c;},[baseCanvas,imageLayers,sourceImages,sourceW,sourceH]);
@@ -828,7 +830,7 @@ export const EditorStage = forwardRef<Konva.Stage,{suggestions?:PrivacySuggestio
           />
         </Layer>
         {frame.enabled&&frame.watermark&&watermark&&<Layer listening={false}><KonvaImage image={watermark} {...(()=>{const b=watermarkPlacement(compW,compH,frame.watermark);return {x:b.x,y:b.y,width:b.w,height:b.h};})()} opacity={frame.watermark.opacity}/></Layer>}
-        {suggestions.length>0&&<Layer name="privacy-suggestions" listening={false} x={offX} y={offY}>{suggestions.map((s,i)=><Rect key={i} x={s.x} y={s.y} width={s.w} height={s.h} stroke="#29aeb0" strokeWidth={2} dash={[6,4]}/>)}</Layer>}
+        {suggestions.length>0&&<Layer name="privacy-suggestions" listening={false} x={offX} y={offY}>{suggestions.map((s,i)=><Rect key={i} x={s.x} y={s.y} width={s.w} height={s.h} stroke={suggestionColor} strokeWidth={2} dash={[6,4]}/>)}</Layer>}
       </Stage>
       </div>
       </div>

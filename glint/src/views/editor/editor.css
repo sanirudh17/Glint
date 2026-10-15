@@ -408,6 +408,8 @@
 .editor-image-list > button { display:block; min-height:34px; padding:6px 10px; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .editor-image-list > button.is-active { color:var(--accent); background:var(--bg-elev2); }
 .editor-layer-actions { display:flex; gap:var(--s2); }
+.privacy-panel > * { flex-shrink:0; }
+.privacy-panel > h3, .privacy-panel > p { margin:0; }
 .privacy-suggestions-list { display:flex; flex-direction:column; gap:var(--s3); list-style:none; padding:0; margin:0; }
 .privacy-suggestions-list > li { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); font-size:var(--fz-sm); }
 .privacy-sharing-note { font-size:var(--fz-sm); line-height:var(--lh-base); color:var(--text-dim); margin:var(--s3) 0 0; }
