@@ -163,6 +163,14 @@
 /* The style bar is the flexible middle: it shrinks and scrolls horizontally so the
    fixed Export/Done buttons on the right are never pushed off-screen. */
 .editor-topbar .editor-stylebar { border-bottom: none; flex: 1 1 0; min-width: 0; overflow-x: auto; }
+.editor-topbar .editor-status { white-space:nowrap; flex:none; }
+@media (max-width:1100px) {
+  .editor-topbar { display:grid; grid-template-columns:minmax(0,1fr) auto; }
+  .editor-projectbar { grid-column:1; grid-row:1; }
+  .editor-exportbar { grid-column:2; grid-row:1; }
+  .editor-frame-slot { grid-column:1; grid-row:2; }
+  .editor-topbar .editor-stylebar { grid-column:2; grid-row:2; max-width:100%; }
+}
 .editor-exportbar, .editor-frame-slot { flex: none; }
 .editor-exportbar {
   display: flex; align-items: center; gap: var(--s2);

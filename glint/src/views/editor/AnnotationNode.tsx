@@ -46,7 +46,7 @@ export function AnnotationNode({ anno, draggable, baseImage, layerImage, baseWid
   };
 
   switch (anno.type) {
-    case 'image': return <KonvaImage {...common} image={layerImage} x={anno.x} y={anno.y} width={anno.w} height={anno.h} onTransformEnd={e=>{const n=e.target;const w=Math.max(1,n.width()*n.scaleX()),h=Math.max(1,n.height()*n.scaleY());n.scaleX(1);n.scaleY(1);onChange({x:n.x(),y:n.y(),w,h});}}/>;
+    case 'image': return <KonvaImage {...common} image={layerImage} x={anno.x} y={anno.y} width={anno.w} height={anno.h} onDragEnd={e=>onChange({x:Math.round(e.target.x()),y:Math.round(e.target.y())})} onTransformEnd={e=>{const n=e.target;const w=Math.max(1,Math.round(n.width()*n.scaleX())),h=Math.max(1,Math.round(n.height()*n.scaleY()));n.scaleX(1);n.scaleY(1);onChange({x:Math.round(n.x()),y:Math.round(n.y()),w,h});}}/>;
     case "arrow": {
       const a = anno as TwoPointAnno;
       return (
