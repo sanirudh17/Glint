@@ -1,6 +1,6 @@
 """Synthetic privacy fixture. Values are fake test data; no user media is read."""
 import json, pathlib, tempfile, base64
-from PIL import Image, ImageDraw, ImageFont
+from PIL import Image, ImageDraw, ImageFont, ImageOps
 root=pathlib.Path(tempfile.mkdtemp(prefix='glint-phase4-'))
 image=Image.new('RGB',(1600,760),'white');draw=ImageDraw.Draw(image)
 font=ImageFont.truetype(r'C:\Windows\Fonts\consola.ttf',32)
@@ -9,6 +9,10 @@ for i,line in enumerate(lines):
     face=font if i<7 else ImageFont.truetype(r'C:\Windows\Fonts\consola.ttf',22)
     draw.text((40,30+i*80),line,fill='black',font=face)
 image.save(root/'source.png')
+for scale in (1, .75, .5):
+    small=image.resize((round(image.width*scale),round(image.height*scale)),Image.Resampling.BICUBIC)
+    for theme in ('light','dark'):
+        (ImageOps.invert(small) if theme=='dark' else small).save(root/f'tokens-{scale}-{theme}.png')
 doc={'annotations':[],'crop':None,'frame':{'enabled':False,'background':{'type':'gradient','gradientId':'dusk'},'padding':40,'radius':12,'shadow':35,'aspect':'auto','chrome':{'style':'none','theme':'light','buttons':'mac','title':'','url':''}}}
 project={'glint':1,'app':'0.1.14','image':{'mime':'image/png','width':1600,'height':760,'dataBase64':base64.b64encode((root/'source.png').read_bytes()).decode()},'doc':doc}
 (root/'Privacy.glint').write_text(json.dumps(project),encoding='utf-8')

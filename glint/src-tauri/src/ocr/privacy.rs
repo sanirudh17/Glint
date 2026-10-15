@@ -46,37 +46,71 @@ pub fn ranges(text: &str) -> Vec<(Range<usize>, &'static str)> {
         ("Card number",Regex::new(r"\b(?:[0-9]{4}[ -]){3}[0-9]{1,7}\b|\b[0-9]{13,19}\b|\b[0-9]{4}[ -][0-9]{6}[ -][0-9]{5}\b").unwrap()),
         ("Email",Regex::new(r"(?i)\b[A-Z0-9.!#$%&'*+/=?^_`{|}~-]+@[A-Z0-9-]+(?:\.[A-Z0-9-]+)+\b").unwrap()),
         ("API key",Regex::new(r"\b(?:sk-(?:proj-)?[A-Za-z0-9_-]{16,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|AIza[A-Za-z0-9_-]{30,}|xox[baprs]-[A-Za-z0-9-]{10,})\b").unwrap()),
-        // OCR can split dots or confuse J/I and Q/@; review remains explicit.
-        ("JWT",Regex::new(r"\bey[JIl][A-Za-z0-9_-]{5,}\.\s*[A-Za-z0-9_@-]{5,}\.\s*[A-Za-z0-9_-]{8,}\b").unwrap()),
+        // Word spacing is normalized below, retaining original offsets for boxes.
+        ("JWT",Regex::new(r"ey[JIl1][A-Za-z0-9_@-]{5,}\.[A-Za-z0-9_@-]{5,}\.[A-Za-z0-9_-]{8,}").unwrap()),
         ("IP address",Regex::new(r"\b(?:[0-9]{1,3}\.){3}[0-9]{1,3}\b|[0-9A-Fa-f]*:[0-9A-Fa-f:]+").unwrap()),
         ("Phone",Regex::new(r"(?:\+?[0-9]{1,3}[ .-]?)?(?:\([0-9]{2,4}\)|[0-9]{2,4})[ .-][0-9]{3,4}[ .-][0-9]{3,4}\b|(?:\+?[0-9]{1,3}[ -])?[0-9]{5}[ -][0-9]{5}\b|\b[0-9]{10,15}\b").unwrap()),
     ]
     });
     let mut found: Vec<(Range<usize>, &str)> = vec![];
     for (kind, re) in PATTERNS.iter() {
-        for m in re.find_iter(text) {
-            if *kind == "Card number" && !luhn(m.as_str()) {
+        let candidates = if *kind == "JWT" {
+            jwt_ocr_ranges(text, re)
+        } else {
+            re.find_iter(text).map(|m| m.range()).collect()
+        };
+        for range in candidates {
+            let value = &text[range.clone()];
+            if *kind == "Card number" && !luhn(value) {
                 continue;
             }
             if *kind == "Phone"
-                && !(7..=15).contains(&m.as_str().bytes().filter(|c| c.is_ascii_digit()).count())
+                && !(7..=15).contains(&value.bytes().filter(|c| c.is_ascii_digit()).count())
             {
                 continue;
             }
-            if *kind == "IP address" && m.as_str().parse::<std::net::IpAddr>().is_err() {
+            if *kind == "IP address" && value.parse::<std::net::IpAddr>().is_err() {
                 continue;
             }
             if found
                 .iter()
-                .any(|(r, _)| r.start < m.end() && m.start() < r.end)
+                .any(|(r, _)| r.start < range.end && range.start < r.end)
             {
                 continue;
             }
-            found.push((m.range(), kind));
+            found.push((range, kind));
         }
     }
     found.sort_by_key(|v| v.0.start);
     found
+}
+
+/// Small screenshot text is often split inside a JWT segment, not only at dots.
+/// Normalize whitespace for matching, then map back to every original OCR word.
+/// Keep the three long segments and recognizable header; ordinary prose and URLs
+/// must not become token suggestions merely because their spaces were removed.
+fn jwt_ocr_ranges(text: &str, pattern: &Regex) -> Vec<Range<usize>> {
+    let mut compact = String::with_capacity(text.len());
+    let mut offsets = Vec::with_capacity(text.len());
+    for (offset, ch) in text.char_indices() {
+        if !ch.is_whitespace() {
+            compact.push(ch);
+            offsets.extend(std::iter::repeat_n(offset, ch.len_utf8()));
+        }
+    }
+    pattern
+        .find_iter(&compact)
+        .filter_map(|m| {
+            let start = offsets[m.start()];
+            // The regex ends in ASCII, so the last mapped character is one byte.
+            let end = offsets[m.end() - 1] + 1;
+            let previous = text[..start].chars().next_back();
+            if previous.is_some_and(|ch| ch.is_alphanumeric() || ch == '_') {
+                return None;
+            }
+            Some(start..end)
+        })
+        .collect()
 }
 pub fn detect(words: &[Word], width: u32, height: u32) -> Vec<Suggestion> {
     let mut out = vec![];
@@ -214,6 +248,51 @@ pub fn privacy_scan(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn detects_jwt_with_ocr_spaces_and_maps_the_entire_original_span() {
+        // Exact OCR error from the half-size composed screenshot regression.
+        let token = "eyIhbGci0i JIUZIINiI9. eyIzdwIiOiIkZW1vIne. ABCDEFGHIIKLMNOP";
+        let text = format!("é Token: {token}");
+        let found = ranges(&text);
+        let jwt = found.iter().find(|v| v.1 == "JWT").unwrap();
+        assert_eq!(&text[jwt.0.clone()], token);
+        let words = [
+            ("Token:", 0.),
+            ("eyIhbGci0i", 60.),
+            ("JIUZIINiI9.", 150.),
+            ("eyIzdwIiOiIkZW1vIne.", 240.),
+            ("ABCDEFGHIIKLMNOP", 410.),
+        ]
+        .map(|(text, x)| Word {
+            text: text.into(),
+            line: "1".into(),
+            x,
+            y: 10.,
+            w: 80.,
+            h: 16.,
+        });
+        let found = detect(&words, 600, 100);
+        let jwt = found.iter().find(|v| v.kind == "JWT").unwrap();
+        assert_eq!((jwt.x, jwt.y, jwt.w, jwt.h), (56., 6., 438., 24.));
+    }
+    #[test]
+    fn jwt_normalization_keeps_structure_and_boundaries() {
+        for text in [
+            "Token: this is ordinary prose with 1234 numbers",
+            "https://example.com/some/path",
+            "moneyJabcdefgh.abcdefgh.abcdefgh",
+            "eyJabcdefgh.onlyTwoSegments",
+            "eyJabc.short.parts",
+        ] {
+            assert!(!ranges(text).iter().any(|v| v.1 == "JWT"), "{text}");
+        }
+        for text in [
+            "eyJhbGciOiJIUzI1NiJ9 . eyJzdWIiOiJkZW1vIn0 . ABCDEFGHIJKLMNOP",
+            "Token: ey1hbGciOiJIUzI1NiJ9.eyJzdWIiOiJkZW1vIn0.ABCDEFGHIJKLMNOP",
+        ] {
+            assert!(ranges(text).iter().any(|v| v.1 == "JWT"), "{text}");
+        }
+    }
     #[test]
     fn recognizes_common_international_formats_and_ipv6_loopback() {
         assert!(ranges("+91 98765 43210").iter().any(|v| v.1 == "Phone"));
