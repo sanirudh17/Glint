@@ -1,6 +1,6 @@
 # Phase 3 — Screenshot looks bundle
 
-Status: complete for the agreed screenshot bundle. Acceptance checks and the final production build passed. Phase 4 has not started.
+Status: complete and accepted by the user after testing. Acceptance checks and the final production build passed. Phase 4 is now authorized; see [Privacy and findability](STUDIO_PHASE_4.md).
 Branch: `phase-3-screenshot-looks`, based on Phase 2 commit `1f473b7`.
 
 ## Verified repository paths and assumptions
@@ -32,7 +32,7 @@ Branch: `phase-3-screenshot-looks`, based on Phase 2 commit `1f473b7`.
 The user selected the screenshot bundle only. Existing image backgrounds,
 window/browser frames, editable documents, pen/arrow tools and hex magnifier were
 retained. Model-based background removal is explicitly deferred. No model or
-inference dependency was added, and Phase 4 is not authorized by this completion.
+inference dependency was added. Phase 4 was authorized separately after the user accepted this bundle.
 
 | Task | Shipped behavior | Commit |
 | --- | --- | --- |
@@ -203,5 +203,5 @@ Sizes were checked from publisher release metadata on October 14, 2026:
 Runtime integration reference: [ONNX Runtime C/C++ documentation](https://onnxruntime.ai/docs/get-started/with-cpp).
 Model reference: [U²-Net upstream](https://github.com/xuebinqin/U-2-Net).
 
-Phase 4 remains unstarted. The next phase or any background-removal experiment
-requires the user's decision.
+Background removal remains deferred. Phase 4's separate authorization does not
+authorize a model download or background-removal experiment.
