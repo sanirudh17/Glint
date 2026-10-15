@@ -99,6 +99,33 @@ node scripts/screenshot-phase3-interaction.mjs <screenshot-fixture-root>
 
 The fixtures contain fake demo text and generated images only.
 
+## Opening existing screenshots in the current build
+
+Image age does not select an editor version. External PNG/JPEG/WebP images,
+Library screenshots and older version-1 `.glint` projects all use the current
+`EditorView` and shared look controls. Older projects retain their saved appearance;
+the new controls are available without converting or overwriting the source.
+
+Explorer's **Open in Glint** menu and the Start Menu shortcut launch an executable,
+not the checked-out Git branch. A September installed copy still shows the old
+editor even when this repository is on the Phase 3 branch. Also, Glint is a
+single-instance app: quit the tray instance before switching between builds.
+
+For development, run from the repository root:
+
+```powershell
+git switch phase-3-screenshot-looks
+cd glint
+npm run tauri -- dev
+```
+
+Keep that terminal running. `target/debug/glint.exe` after a development launch
+depends on the Vite server; it is not a standalone installed build. To build an
+independent executable instead, run `npm run tauri -- build --no-bundle` from
+`glint`; the result is `src-tauri/target/release/glint.exe`. A local installation
+must actually receive that build before its existing shortcut opens the new UI.
+Launch the updated installation once to refresh Explorer's executable path.
+
 ## Deferred: optional background removal
 
 No model download, inference runtime, new package dependency or background-removal
