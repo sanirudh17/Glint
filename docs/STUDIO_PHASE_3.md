@@ -136,6 +136,11 @@ The final 1080p gradient click painted in 18.6 ms in the local validation run
 (timing varies with hardware/load). Dark wide/compact layouts and small/large
 watermarks were inspected; the UI detector reported no findings. At 760×720 the
 tool rail can reach Delete and the document has no horizontal overflow.
+Accelerated gradient samples differed from the reference by at most one RGB level.
+The optimized standalone release build passed and the local installed executable
+was refreshed with a verified rollback copy. Packaged startup reopened the original
+September PNG in the current editor, loaded the mesh worker and enabled export;
+the original PNG's SHA-256 remained unchanged.
 
 Follow-up artifacts: OS temp folder `glint-phase3-RUPANp`, including `result.json`,
 `interaction-result.json`, `refinement-result.json`, UI captures and PNG exports.
