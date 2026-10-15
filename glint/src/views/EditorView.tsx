@@ -226,12 +226,12 @@ export default function EditorView() {
         <ProjectBar />
         <StyleBar />
         <div className="editor-frame-slot">
-          <button className={`editor-export-btn${imagesOpen?' editor-export-btn--primary':''}`} aria-pressed={imagesOpen} onClick={()=>setImagesOpen(!imagesOpen)} disabled={!base}>Images</button>
+          <button className={`editor-export-btn${imagesOpen?' editor-export-btn--primary':''}`} aria-pressed={imagesOpen} onClick={()=>{setCornersOpen(false);setImagesOpen(!imagesOpen);}} disabled={!base}>Images</button>
           <button
-            className={`editor-export-btn${frameEnabled ? " editor-export-btn--primary" : ""}`}
-            onClick={() => {setImagesOpen(false);toggleFrame();}}
+            className={`editor-export-btn${frameEnabled&&!imagesOpen ? " editor-export-btn--primary" : ""}`}
+            onClick={() => {setCornersOpen(false);setImagesOpen(false);toggleFrame(imagesOpen?true:undefined);}}
             title="Frame & background"
-            aria-pressed={frameEnabled}
+            aria-pressed={frameEnabled&&!imagesOpen}
             disabled={!base}
           >
             <FrameIcon size={16} strokeWidth={1.5} /> Frame
@@ -240,10 +240,10 @@ export default function EditorView() {
               Frame on, its Radius governs rounding instead, so hide Corners then. */}
           {!frameEnabled && (
             <button
-              className={`editor-export-btn${cornersOpen ? " editor-export-btn--primary" : ""}`}
-              onClick={() => setCornersOpen((v) => !v)}
+              className={`editor-export-btn${cornersOpen&&!imagesOpen ? " editor-export-btn--primary" : ""}`}
+              onClick={() => {setImagesOpen(false);setCornersOpen((v) => !v);}}
               title="Round the image corners (trims to transparent on export)"
-              aria-pressed={cornersOpen}
+              aria-pressed={cornersOpen&&!imagesOpen}
               disabled={!base}
             >
               <SquareRoundCorner size={16} strokeWidth={1.5} /> Corners

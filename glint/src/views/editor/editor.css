@@ -85,6 +85,8 @@
   color: var(--text-dim); cursor: pointer; font-size: var(--fz-xs); line-height: 1; text-align: center;
 }
 .editor-width--active { border-color: var(--accent); color: var(--text); }
+.editor-width > svg { flex:none; display:block; }
+.editor-width:disabled { opacity:.35; cursor:default; }
 /* Word-labelled toggles (e.g. Solid / Pixel) need room to breathe — the fixed
    28px width is for single letters (S/M/L), not whole words. */
 .editor-toggle {
@@ -404,13 +406,18 @@
 .editor-image-list > button { display:block; min-height:34px; padding:6px 10px; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
 .editor-image-list > button.is-active { color:var(--accent); background:var(--bg-elev2); }
 .editor-layer-actions { display:flex; gap:var(--s2); }
+.frame-panel[aria-label="Images and canvas"] .look-control { width:142px; }
+.frame-panel[aria-label="Images and canvas"] .look-label { min-width:0; }
+.editor-layer-actions > button { display:inline-flex; align-items:center; justify-content:center; min-width:30px; }
 .editor-text-preset { width:116px; flex:none; }
 .editor-text-size { width:100px; flex:none; }
 .editor-bend { display:flex; gap:var(--s2); align-items:center; color:var(--text-dim); font-size:var(--fz-sm); }
-.editor-bend > input { width:72px; accent-color:var(--accent); }
-.editor-bend > input { appearance:none; -webkit-appearance:none; height:20px; background:transparent; cursor:pointer; }
-.editor-bend > input::-webkit-slider-runnable-track { height:4px; border-radius:2px; background:var(--bg-elev3); }
-.editor-bend > input::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; width:12px; height:12px; margin-top:-4px; border-radius:50%; background:var(--accent); }
+.editor-bend input { appearance:none; -webkit-appearance:none; height:20px; background:transparent; cursor:pointer; }
+.editor-bend input::-webkit-slider-runnable-track { height:4px; border-radius:2px; background:var(--bg-elev3); }
+.editor-bend input::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; width:12px; height:12px; margin-top:-4px; border-radius:50%; background:var(--accent); }
+.editor-bend-track { position:relative; display:flex; align-items:center; }
+.editor-bend-track::before { content:""; position:absolute; left:50%; top:5px; height:10px; width:1px; background:var(--text-dim); pointer-events:none; }
+.editor-bend-track > input { position:relative; width:88px; height:20px; padding:0; margin:0; accent-color:var(--accent); cursor:pointer; }
 .editor-render-status { position:absolute; top:var(--s3); left:var(--s4); z-index:10; color:var(--text-dim); background:var(--bg-elev); padding:var(--s2) var(--s3); border-radius:var(--r2); font-size:var(--fz-sm); }
 .editor-export-btn:disabled { opacity:.4; cursor:wait; }
 .frame-label {

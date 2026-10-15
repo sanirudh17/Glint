@@ -1,4 +1,15 @@
-import {DEFAULT_STYLE,newId,type ImageAnno} from './model';
+import {DEFAULT_STYLE,newId,type ImageAnno,type Annotation} from './model';
+export type CanvasSize = {width:number;height:number};
+/** Bounds for automatically expanded source space. Manually sized canvases bypass this. */
+export function fitImageCanvas(base:CanvasSize,annotations:Annotation[]):CanvasSize|null {
+  let width=base.width,height=base.height;
+  for(const a of annotations)if(a.type==='image'){width=Math.max(width,Math.ceil(a.x+a.w));height=Math.max(height,Math.ceil(a.y+a.h));}
+  return width===base.width&&height===base.height?null:{width,height};
+}
+export function isSideBySideCanvas(base:CanvasSize,size:CanvasSize|null|undefined,annotations:Annotation[]):boolean {
+  const gap=Math.round(Math.min(base.width,base.height)*.04);
+  return !!size&&annotations.some(a=>a.type==='image'&&a.x===base.width+gap&&a.y===0&&a.h===base.height&&a.x+a.w===size.width&&size.height===base.height);
+}
 export function newImageLayer(dataUrl:string,name:string,width:number,height:number,canvasW:number,canvasH:number,x?:number,y?:number):ImageAnno {
   const scale=Math.min(1,canvasW*.75/width,canvasH*.75/height),w=Math.max(1,Math.round(width*scale)),h=Math.max(1,Math.round(height*scale));
   return {id:newId(),type:'image',z:0,style:{...DEFAULT_STYLE},dataUrl,name,x:x??Math.round((canvasW-w)/2),y:y??Math.round((canvasH-h)/2),w,h};

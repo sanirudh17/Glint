@@ -18,8 +18,8 @@ export function ProjectBar() {
   const pushToast = useAppStore((s) => s.pushToast);
 
   const doSave = useCallback(async () => {
-    const { projectPath, annotations, crop, frame, cornerRadius, canvasSize } = useEditorStore.getState();
-    const doc = { annotations, crop, frame, cornerRadius, canvasSize };
+    const { projectPath, annotations, crop, frame, cornerRadius, canvasSize,canvasAutoFit } = useEditorStore.getState();
+    const doc = { annotations, crop, frame, cornerRadius, canvasSize,canvasAutoFit };
     let path = projectPath;
     if (!path) {
       path = await pickSavePath(projectName ?? "Untitled.glint");
