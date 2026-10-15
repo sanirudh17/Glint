@@ -15,6 +15,7 @@ import {invoke} from '@tauri-apps/api/core';
 import {addLayer} from './ImagesPanel';
 import {readImageFile} from '../../editor/imageLayers';
 import {useAppStore} from '../../store/useAppStore';
+import {opaqueRedactionColor,type PrivacySuggestion} from '../../editor/privacy';
 import { AnnotationNode } from "./AnnotationNode";
 import { SpotlightDimLayer } from "./SpotlightDimLayer";
 import { sampleColorAt } from "../../editor/eyedropper";
@@ -60,7 +61,7 @@ function bottomRoundedRectPath(ctx: Konva.Context, x: number, y: number, w: numb
   ctx.closePath();
 }
 
-export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, ref) {
+export const EditorStage = forwardRef<Konva.Stage,{suggestions?:PrivacySuggestion[]}>(function EditorStage({suggestions=[]}, ref) {
   const base = useEditorStore((s) => s.base);
   const annotations = useEditorStore((s) => s.annotations);
   const tool = useEditorStore((s) => s.tool);
@@ -74,6 +75,11 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const sourceImages=useSourceImages(imageLayers);
   const baseCanvas=useMemo(()=>{if(!base)return null;const c=document.createElement('canvas');c.width=sourceW;c.height=sourceH;c.getContext('2d')!.drawImage(base.image,0,0);return c;},[base,sourceW,sourceH]);
   const sourceCanvas=useMemo(()=>{if(!baseCanvas)return null;const c=document.createElement('canvas');c.width=sourceW;c.height=sourceH;const ctx=c.getContext('2d')!;ctx.drawImage(baseCanvas,0,0);for(const layer of imageLayers){const image=sourceImages[layer.id];if(image)ctx.drawImage(image,layer.x,layer.y,layer.w,layer.h);}return c;},[baseCanvas,imageLayers,sourceImages,sourceW,sourceH]);
+  const protectedSource=useMemo(()=>{
+    if(!sourceCanvas)return null;const masks=annotations.filter((a):a is BoxAnno=>a.type==='redact'&&a.style.redactStyle!=='pixelate');if(!masks.length)return sourceCanvas;
+    const c=document.createElement('canvas');c.width=sourceW;c.height=sourceH;const ctx=c.getContext('2d')!;ctx.drawImage(sourceCanvas,0,0);
+    for(const a of masks){ctx.fillStyle=opaqueRedactionColor(a.style.color);ctx.fillRect(Math.min(a.x,a.x+a.w),Math.min(a.y,a.y+a.h),Math.abs(a.w),Math.abs(a.h));}return c;
+  },[sourceCanvas,annotations,sourceW,sourceH]);
   const watermark=useRasterImage(frame.watermark?.dataUrl);
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
@@ -787,11 +793,11 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
                 }
               : {})}
           >
-            {imageLayers.map(a=><AnnotationNode key={a.id} anno={a} layerImage={sourceImages[a.id]} draggable={tool==='select'} baseImage={sourceCanvas??base.image} baseWidth={sourceW} baseHeight={sourceH} onSelect={()=>tool==='select'&&select(a.id)} onDragStart={pushHistory} onChange={patch=>update(a.id,patch)}/>)}
+            {imageLayers.map(a=><AnnotationNode key={a.id} anno={a} layerImage={sourceImages[a.id]} draggable={tool==='select'} baseImage={protectedSource??base.image} baseWidth={sourceW} baseHeight={sourceH} onSelect={()=>tool==='select'&&select(a.id)} onDragStart={pushHistory} onChange={patch=>update(a.id,patch)}/>)}
             <SpotlightDimLayer
               regions={annotations.filter((a): a is BoxAnno => a.type === "spotlight")}
               dim={resolveSpotlightDim(annotations, selectedId)}
-              baseImage={sourceCanvas??base.image}
+              baseImage={protectedSource??base.image}
               baseWidth={sourceW}
               baseHeight={sourceH}
             />
@@ -803,7 +809,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
                 // them can't reposition anything — keep them non-draggable rather
                 // than offer a dead gesture that just burns an undo step.
                 draggable={tool === "select" && a.type !== "pen" && a.type !== "highlight"}
-                baseImage={sourceCanvas??base.image}
+                baseImage={protectedSource??base.image}
                 baseWidth={sourceW}
                 baseHeight={sourceH}
                 hidden={a.id === editingId}
@@ -822,6 +828,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
           />
         </Layer>
         {frame.enabled&&frame.watermark&&watermark&&<Layer listening={false}><KonvaImage image={watermark} {...(()=>{const b=watermarkPlacement(compW,compH,frame.watermark);return {x:b.x,y:b.y,width:b.w,height:b.h};})()} opacity={frame.watermark.opacity}/></Layer>}
+        {suggestions.length>0&&<Layer name="privacy-suggestions" listening={false} x={offX} y={offY}>{suggestions.map((s,i)=><Rect key={i} x={s.x} y={s.y} width={s.w} height={s.h} stroke="#29aeb0" strokeWidth={2} dash={[6,4]}/>)}</Layer>}
       </Stage>
       </div>
       </div>

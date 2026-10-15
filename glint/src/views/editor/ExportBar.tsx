@@ -5,6 +5,7 @@ import { useEditorStore } from "../../editor/useEditorStore";
 import { useAppStore } from "../../store/useAppStore";
 import { computeLayout, exportPixelRatio } from "../../editor/composition";
 import { editorCopy, editorSave, editorFlattenTemp, editorDone, dragOut } from "../../lib/editor";
+import {withoutEditorChrome} from '../../editor/privacy';
 
 /**
  * Flatten the stage to base64 PNG (no data-url prefix) at the native composition
@@ -29,16 +30,15 @@ function flatten(stage: Konva.Stage): string {
   const pixelRatio = exportPixelRatio(layout, stageW); // native resolution
   let url: string;
   try {
-    if(frame.enabled&&frame.outputSize) {
+    return withoutEditorChrome(stage,()=>{if(frame.enabled&&frame.outputSize) {
       const image=stage.toCanvas({pixelRatio:frame.outputSize.width/layout.compositionW});
       const output=document.createElement('canvas');output.width=frame.outputSize.width;output.height=frame.outputSize.height;
       output.getContext('2d')!.drawImage(image,0,0,output.width,output.height);url=output.toDataURL('image/png');
-    } else url = stage.toDataURL({ pixelRatio, mimeType: "image/png" });
+    } else url = stage.toDataURL({ pixelRatio, mimeType: "image/png" });return url.split(',')[1]??'';});
   } finally {
     // Always restore Transformer nodes even if toDataURL throws.
     if (tr) { tr.nodes(hadNodes); tr.getLayer()?.batchDraw(); }
   }
-  return url.split(",")[1] ?? "";
 }
 
 export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null> }) {

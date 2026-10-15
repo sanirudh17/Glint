@@ -18,7 +18,7 @@ const ERASER_SIZES: { label: string; value: number }[] = [
   { label: "L", value: 30 },
 ];
 
-export function StyleBar() {
+export function StyleBar({onPrivacy}:{onPrivacy?:()=>void}={}) {
   const style = useEditorStore((s) => s.style);
   const setStyle = useEditorStore((s) => s.setStyle);
   const selectedId = useEditorStore((s) => s.selectedId);
@@ -107,6 +107,7 @@ export function StyleBar() {
 
   return (
     <div className="editor-stylebar" role="toolbar" aria-label="Style">
+      {isRedact&&onPrivacy&&<button className="editor-toggle" onClick={onPrivacy}>Find sensitive text</button>}
       {/* A spotlight has no color or stroke — it's a dimmed cut-out. Show only its own
           controls (shape + dim, below); hide the color swatches and S/M/L widths that
           don't apply to it. */}

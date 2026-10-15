@@ -13,6 +13,8 @@ import { ExportBar } from "./editor/ExportBar";
 import { ProjectBar } from "./editor/ProjectBar";
 import { FramePanel } from "./editor/FramePanel";
 import {ImagesPanel} from './editor/ImagesPanel';
+import {PrivacyPanel} from './editor/PrivacyPanel';
+import type {PrivacySuggestion} from '../editor/privacy';
 import { CornersPanel } from "./editor/CornersPanel";
 import { ShortcutCheatsheet } from "./editor/ShortcutCheatsheet";
 import type { ToolId } from "../editor/model";
@@ -20,6 +22,8 @@ import "./editor/editor.css";
 
 export default function EditorView() {
   const [imagesOpen,setImagesOpen]=useState(false);
+  const [privacyOpen,setPrivacyOpen]=useState(false);
+  const [suggestions,setSuggestions]=useState<PrivacySuggestion[]>([]);
   const base = useEditorStore((s) => s.base);
   const loadDoc = useEditorStore((s) => s.loadDoc);
   const reset = useEditorStore((s) => s.reset);
@@ -30,6 +34,8 @@ export default function EditorView() {
   const [cornersOpen, setCornersOpen] = useState(false);
 
   const setTool = useEditorStore((s) => s.setTool);
+  const activeTool=useEditorStore(s=>s.tool);
+  useEffect(()=>{if(activeTool==='redact'){setPrivacyOpen(true);setImagesOpen(false);setCornersOpen(false);}},[activeTool]);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
   const remove = useEditorStore((s) => s.remove);
@@ -225,14 +231,14 @@ export default function EditorView() {
     <div className="editor-view">
       <div className="editor-topbar">
         <ProjectBar />
-        <StyleBar />
+        <StyleBar onPrivacy={()=>{setPrivacyOpen(v=>!v);setImagesOpen(false);setCornersOpen(false);}}/>
         <div className="editor-frame-slot">
-          <button className={`editor-export-btn${imagesOpen?' editor-export-btn--primary':''}`} aria-pressed={imagesOpen} onClick={()=>{setCornersOpen(false);setImagesOpen(!imagesOpen);}} disabled={!base}>Images</button>
+          <button className={`editor-export-btn${imagesOpen?' editor-export-btn--primary':''}`} aria-pressed={imagesOpen} onClick={()=>{setPrivacyOpen(false);setCornersOpen(false);setImagesOpen(!imagesOpen);}} disabled={!base}>Images</button>
           <button
-            className={`editor-export-btn${frameEnabled&&!imagesOpen ? " editor-export-btn--primary" : ""}`}
-            onClick={() => {setCornersOpen(false);setImagesOpen(false);toggleFrame(imagesOpen?true:undefined);}}
+            className={`editor-export-btn${frameEnabled&&!imagesOpen&&!privacyOpen ? " editor-export-btn--primary" : ""}`}
+            onClick={() => {setPrivacyOpen(false);setCornersOpen(false);setImagesOpen(false);toggleFrame(imagesOpen||privacyOpen?true:undefined);}}
             title="Frame & background"
-            aria-pressed={frameEnabled&&!imagesOpen}
+            aria-pressed={frameEnabled&&!imagesOpen&&!privacyOpen}
             disabled={!base}
           >
             <FrameIcon size={16} strokeWidth={1.5} /> Frame
@@ -242,7 +248,7 @@ export default function EditorView() {
           {!frameEnabled && (
             <button
               className={`editor-export-btn${cornersOpen&&!imagesOpen ? " editor-export-btn--primary" : ""}`}
-              onClick={() => {setImagesOpen(false);setCornersOpen((v) => !v);}}
+              onClick={() => {setPrivacyOpen(false);setImagesOpen(false);setCornersOpen((v) => !v);}}
               title="Round the image corners (trims to transparent on export)"
               aria-pressed={cornersOpen&&!imagesOpen}
               disabled={!base}
@@ -256,13 +262,14 @@ export default function EditorView() {
       <div className="editor-main">
         <ToolRail />
         {base ? (
-          <EditorStage ref={stageRef} />
+          <EditorStage ref={stageRef} suggestions={privacyOpen?suggestions:[]}/>
         ) : (
           <div className="editor-stage" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }} />
         )}
         {imagesOpen&&<ImagesPanel/>}
-        {!imagesOpen&&frameEnabled && <FramePanel />}
-        {!imagesOpen&&!frameEnabled && cornersOpen && <CornersPanel />}
+        {privacyOpen&&<PrivacyPanel stageRef={stageRef} suggestions={suggestions} onSuggestions={setSuggestions}/>}
+        {!privacyOpen&&!imagesOpen&&frameEnabled && <FramePanel />}
+        {!privacyOpen&&!imagesOpen&&!frameEnabled && cornersOpen && <CornersPanel />}
       </div>
       <ShortcutCheatsheet open={cheatsheetOpen} onClose={() => setCheatsheetOpen(false)} />
     </div>
