@@ -567,9 +567,10 @@ pub fn tray_copy(state: State<TrayState>, id: u64) -> Result<(), String> {
 }
 
 #[tauri::command(async)]
-pub fn tray_copy_path(state: State<TrayState>, id: u64) -> Result<(), String> {
+pub fn tray_copy_path(app: AppHandle, state: State<TrayState>, id: u64) -> Result<(), String> {
     let it = tray_item(&state, id)?;
-    clipboard::copy_text(&it.path)
+    let path=crate::attachments::preserve(&crate::attachments::directory(&app)?,std::path::Path::new(&it.path))?;
+    clipboard::copy_text(&path.to_string_lossy())
 }
 
 #[tauri::command(async)]

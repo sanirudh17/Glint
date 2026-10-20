@@ -200,14 +200,7 @@ pub fn editor_save(app: AppHandle, db: State<crate::Db>, png_base64: String) -> 
 #[tauri::command(async)]
 pub fn editor_flatten_temp(app: AppHandle, png_base64: String) -> Result<String, String> {
     let bytes = decode_png_arg(&png_base64)?;
-    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
-    let dest = dir.join(format!("glint-edit-{ts}.png"));
-    std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
+    let dest=crate::attachments::store(&crate::attachments::directory(&app)?,&bytes,"png")?;
     Ok(dest.to_string_lossy().to_string())
 }
 

@@ -1,4 +1,5 @@
 mod autostart;
+mod attachments;
 mod capture;
 mod clipboard;
 mod countdown;
@@ -148,6 +149,8 @@ pub fn run() {
             // migration 1 under its old SQL text, so plugin-sql rejects every
             // load and no setting can persist. Runs before any frontend DB use.
             crate::db::repair_migration_bookkeeping(&conn);
+            crate::db::ensure_captures_table(&conn)?;
+            crate::db::text_index::migrate_naming_opt_in(&conn)?;
             // Hydrate persisted settings into the live SettingsState.
             {
                 let state = app.state::<SettingsState>();
@@ -323,6 +326,7 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             clipboard::clipboard_copy_text,
+            attachments::drag_prepare,
             settings_get_all,
             settings_set,
             settings_set_hotkey,

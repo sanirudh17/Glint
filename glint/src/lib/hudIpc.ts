@@ -5,6 +5,7 @@
  */
 import { invoke } from "@tauri-apps/api/core";
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
+import {useAppStore} from '../store/useAppStore';
 
 export type TrayItem = {
   id: number;
@@ -37,6 +38,9 @@ let blankDragIcon: string | null = null;
 void invoke<string>("drag_blank_icon").then((p) => { blankDragIcon = p; }).catch(() => {});
 
 /** Drag the real file out into any app (blank drag icon → just the cursor). */
-export function dragOut(path: string): void {
-  void startDrag({ item: [path], icon: blankDragIcon ?? path, mode: "copy" });
+export async function dragOut(path: string): Promise<void> {
+  try {
+    const attachment=await invoke<string>('drag_prepare',{path});
+    await startDrag({ item: [attachment], icon: blankDragIcon ?? attachment, mode: "copy" });
+  } catch(error) {useAppStore.getState().pushToast(`Couldn't attach the image: ${String(error)}`);}
 }
