@@ -14,6 +14,7 @@ const KIND_OPTIONS = [
   { value: "all",        label: "All" },
   { value: "screenshot", label: "Screenshots" },
   { value: "recording",  label: "Recordings" },
+  { value: "gif", label: "GIFs" },
 ];
 
 export default function LibraryView() {

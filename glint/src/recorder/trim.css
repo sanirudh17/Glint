@@ -47,6 +47,12 @@
 .trim-root.is-booting .trim-video { opacity: 0; }
 .trim-transport { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
 .trim-actions { display: flex; align-items: center; gap: 12px; padding: 8px 16px; }
+.trim-gif { padding:var(--s2) var(--s4); border-top:1px solid var(--border); background:var(--bg-elev); font-size:var(--fz-sm); }
+.trim-gif > summary { cursor:pointer; color:var(--text-dim); }
+.trim-gif-content { display:flex; align-items:center; flex-wrap:wrap; gap:var(--s4); padding-top:var(--s3); }
+.trim-gif-content > label { display:inline-flex; align-items:center; gap:var(--s2); }
+.trim-gif-content .g-select-wrap { width:76px; }
+.trim-gif-content .g-number-input { width:132px; }
 /* One icon set: 1.5px stroke on transport, actions, and filmstrip glyphs. */
 .trim-transport svg, .trim-actions svg, .trim-filmstrip svg { stroke-width: 1.5; }
 .trim-spacer { flex: 1; }

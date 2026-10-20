@@ -416,6 +416,7 @@ pub fn run() {
             recorder::studio::studio_import,
             recorder::studio::studio_save,
             recorder::studio_export::studio_export,
+            recorder::gif::recorder_gif_export,
             recorder::studio_export::studio_export_cancel,
             recorder::studio_export::studio_discard_source,
             recorder::recorder_trim_target,

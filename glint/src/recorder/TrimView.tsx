@@ -1,4 +1,5 @@
 import { StudioPanel } from "./StudioPanel";
+import {GifExportControls,type GifOptions} from './GifExportControls';
 import { StudioEffectTrack } from "./StudioEffectTrack";
 import { StudioMaskOverlay } from "./StudioMaskOverlay";
 import { newMask,setMaskKeyframe } from "./studioMasks";
@@ -11,7 +12,7 @@ import {confirm} from '@tauri-apps/plugin-dialog';
 import { hydrateProject, type StudioData, type StudioProject } from "./studioModel";
 /** TrimView.tsx — recording trim window (#/rec-trim): player + multi-cut timeline. */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc,invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { Scissors, Trash2, Undo2, Redo2, Play, Pause, SkipBack, ZoomIn, ZoomOut, X, RotateCcw } from "lucide-react";
@@ -79,6 +80,7 @@ export function TrimView() {
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [exporting, setExporting] = useState<number | null>(null); // percent or null
+  const [exportingGif,setExportingGif]=useState(false);
   const [waveform, setWaveform] = useState<number[] | null>(null);
   // Which clip the speed/delete controls act on. STICKY: set on click, it stays put while
   // playback moves the playhead — so "set this section to 2×" hits the section you clicked,
@@ -473,6 +475,16 @@ export function TrimView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [doSplit, doDelete, undo, redo, seek, playhead, fps, exporting, requestClose, zoomIn, zoomOut]);
 
+  const saveGif=async(options:GifOptions)=>{
+    if(!target||!probe||exporting!==null)return;
+    setExporting(0);setExportingGif(true);setExportMessage(null);
+    try{
+      await flushSave();
+      const camOverlay=probe.has_cam&&cam?.visible?{...toPixels(cam,probe.width,probe.height,probe.width/probe.height),shape:cam.shape}:null;
+      const path=await invoke<string>('recorder_gif_export',{path:target.path,project:studio?{...studio.project,...edit,cam}:null,segments:keptSegments(clips),fadeIn,fadeOut,camOverlay,options});
+      setExportMessage(`Exported: ${path}`);
+    }catch(error){setExportMessage(String(error));}finally{setExporting(null);setExportingGif(false);}
+  };
   const save = (mode: "copy" | "overwrite") => {
     if (!target || !probe || !canSave) return;
     setExporting(0); setExportMessage(null);
@@ -597,6 +609,7 @@ export function TrimView() {
 
       <TrimFilmstrip clips={clips} disabled={exporting !== null} selectedId={selectedId} onReorder={doReorder} onSelect={selectClip} />
 
+      <GifExportControls disabled={exporting!==null||!probe||keptCount(clips)===0} duration={outDur} onExport={options=>void saveGif(options)}/>
       <div className="trim-actions">
         <span className="trim-out">Output: {fmt(outDur)} / {fmt(duration)}</span>
         <div className="trim-zoomctl" role="group" aria-label="Timeline zoom">
@@ -623,7 +636,7 @@ export function TrimView() {
         </div>
         <span className="trim-spacer" />
         {exporting !== null ? (
-          <><div className="trim-progress"><div className="trim-progress-fill" style={{ width: `${exporting}%` }} /><span>Exporting… {exporting}%</span></div>{studio && <button className="trim-btn" onClick={() => void studioExportCancel()}>Cancel export</button>}</>
+          <><div className="trim-progress"><div className="trim-progress-fill" style={{ width: `${exporting}%` }} /><span>Exporting… {exporting}%</span></div>{(studio||exportingGif)&&<button className="trim-btn" onClick={() => void studioExportCancel()}>Cancel export</button>}</>
         ) : (
           <>
             <button className="trim-btn" onClick={requestClose}>Cancel</button>

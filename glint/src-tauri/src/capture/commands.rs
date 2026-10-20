@@ -882,6 +882,7 @@ pub fn drag_blank_icon(app: AppHandle) -> Result<String, String> {
 #[tauri::command]
 pub fn capture_copy(db: State<crate::Db>, id: i64) -> Result<(), String> {
     let path = path_for_existing(&db, id)?;
+    if crate::recorder::trim::is_video_path(&path)||std::path::Path::new(&path).extension().is_some_and(|e|e.eq_ignore_ascii_case("gif")){return clipboard::copy_file(std::path::Path::new(&path))}
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
     let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
     let (w, h) = (img.width(), img.height());

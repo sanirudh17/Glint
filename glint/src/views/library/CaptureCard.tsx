@@ -30,6 +30,7 @@ export function CaptureCard({
 }) {
   const pushToast = useAppStore((s) => s.pushToast);
   const isRecording = item.kind === "recording";
+  const isGif=item.kind==='gif';
 
   const [renaming, setRenaming] = useState(false);
   const [draft, setDraft] = useState("");
@@ -100,11 +101,19 @@ export function CaptureCard({
       { label: "Trim", icon: Scissors, run: () => act(() => openTrim(item.id, item.path)) },
       { label: "Rename", icon: Tag, run: startRename },
     ],
-    [{ label: "Copy file path", icon: Copy, run: doCopyPath }],
+    [{ label: "Copy file", icon: Copy, run: () => act(() => copyCapture(item.id)) },{ label: "Copy file path", icon: Copy, run: doCopyPath }],
     [{ label: "Delete", icon: Trash2, danger: true, run: doDelete }],
   ];
   // Home overlay: compact primary trio (the full set lives in Library).
-  const homeActs: CardAct[] = isRecording
+  const gifGroups:CardAct[][]=[[
+    {label:'Open GIF',icon:ExternalLink,run:()=>act(()=>openCapture(item.id))},
+    {label:'Copy GIF file',icon:Copy,run:()=>act(()=>copyCapture(item.id))},
+    {label:'Reveal in Explorer',icon:FolderOpen,run:()=>act(()=>revealCapture(item.id))},
+    {label:'Rename',icon:Tag,run:startRename},
+    {label:'Copy file path',icon:Copy,run:doCopyPath},
+    {label:'Delete',icon:Trash2,danger:true,run:doDelete},
+  ]];
+  const homeActs: CardAct[] = isGif?gifGroups[0].slice(0,3):isRecording
     ? [
         { label: "Copy file path", icon: Copy, run: doCopyPath },
         { label: "Trim", icon: Scissors, run: () => act(() => openTrim(item.id, item.path)) },
@@ -159,7 +168,7 @@ export function CaptureCard({
           </div>
         ) : (
           <div className="cap-actions" onPointerDown={(e) => e.stopPropagation()}>
-            {(isRecording ? recGroups : shotGroups).map((group, gi) => (
+            {(isGif?gifGroups:isRecording ? recGroups : shotGroups).map((group, gi) => (
               <span className="cap-group" key={gi} role="group">
                 {group.map(renderBtn)}
               </span>

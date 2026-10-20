@@ -127,15 +127,16 @@ pub async fn studio_export(
         }
         *slot = Some(cancel.clone());
     }
-    let result = perform(&app, &path, project, cancel).await;
+    let result = perform(&app, &path, project, cancel, None).await;
     *app.state::<ExportState>().0.lock().unwrap() = None;
     result
 }
-async fn perform(
+pub(super) async fn perform(
     app: &tauri::AppHandle,
     path: &str,
     project: serde_json::Value,
     cancel: Arc<AtomicBool>,
+    intermediate: Option<PathBuf>,
 ) -> Result<String, String> {
     let data: Project = serde_json::from_value(project.clone()).map_err(|e| e.to_string())?;
     let probe = trim::recorder_trim_probe(app.clone(), path.to_string()).await?;
@@ -156,8 +157,8 @@ async fn perform(
         std::path::Path::new(path).file_stem().unwrap().to_string_lossy()
     } else {folder.file_stem().unwrap().to_string_lossy()};
     let parent = folder.parent().unwrap();
-    let output = crate::paths::dedupe(parent, &format!("{name} (Studio).mp4"), |p| p.exists());
-    let tmp = folder.join("export.partial.mp4");
+    let output = intermediate.clone().unwrap_or_else(||crate::paths::dedupe(parent, &format!("{name} (Studio).mp4"), |p| p.exists()));
+    let tmp = if intermediate.is_some(){output.with_extension("partial.mp4")}else{folder.join("export.partial.mp4")};
     let cam_path = super::cam::cam_sidecar_path(path);
     let cam = if probe.has_cam {
         data.cam.as_ref().filter(|c| c["visible"] == true).map(|c| {
@@ -185,6 +186,7 @@ async fn perform(
     let worker_cancel = cancel.clone();
     let path = path.to_string();
     let app_progress = app.clone();
+    let progress_scale=if intermediate.is_some(){0.4}else{1.0};
     let tmp_render = tmp.clone();
     let render = tauri::async_runtime::spawn_blocking(move || {
         let cam_string = cam_path.to_string_lossy();
@@ -203,7 +205,7 @@ async fn perform(
             cam_overlay: cam,
         };
         studio_render::export(&spec, worker_cancel, |pct| {
-            let _ = app_progress.emit_to(super::windows::TRIM_LABEL, "rec-trim-progress", pct);
+            let _ = app_progress.emit_to(super::windows::TRIM_LABEL, "rec-trim-progress", pct*progress_scale);
         })
     })
     .await
@@ -227,6 +229,7 @@ async fn perform(
     // A fresh path and a same-volume rename publish the finished file atomically.
     std::fs::rename(&tmp, &output).map_err(|e| e.to_string())?;
     let output = output.to_string_lossy().to_string();
+    if intermediate.is_some(){return Ok(output)}
     let thumb = super::thumb::extract_thumb(app, &output).await;
     let exported = trim::recorder_trim_probe(app.clone(), output.clone()).await?;
     let row = crate::db::NewCapture {
