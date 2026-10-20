@@ -16,6 +16,7 @@ const LABEL: &str = "rec-scroll";
 #[serde(rename_all = "camelCase")]
 pub struct Status {
     pub active: bool,
+    pub ready: bool,
     pub width: u32,
     pub height: u32,
     pub strips: u32,
@@ -54,7 +55,12 @@ pub fn capture_scroll_control(app: AppHandle, action: String) -> Result<(), Stri
         match action.as_str() {
             "finish" => job.command.store(1, Ordering::Release),
             "cancel" => job.command.store(2, Ordering::Release),
-            "start" => job.automatic.store(true, Ordering::Release),
+            "start" => {
+                if !job.status.lock().unwrap().ready {
+                    return Err("Scrolling capture is still preparing".into());
+                }
+                job.automatic.store(true, Ordering::Release)
+            }
             "pause" => job.automatic.store(false, Ordering::Release),
             _ => return Err("Unknown scrolling action".into()),
         }
@@ -116,10 +122,19 @@ fn show_controller(
     command: Arc<AtomicU8>,
 ) -> Result<(), String> {
     let scale = session.scale;
+    let boot = {
+        let state = app.state::<crate::settings::commands::SettingsState>();
+        let settings = state.0.lock().unwrap();
+        serde_json::json!({"theme":settings.theme,"accent":settings.accent})
+    };
     let win =
         WebviewWindowBuilder::new(app, LABEL, WebviewUrl::App("index.html#/rec-scroll".into()))
             .title("Glint scrolling capture")
             .decorations(false)
+            .transparent(true)
+            .shadow(false)
+            .background_color(tauri::window::Color(0, 0, 0, 0))
+            .initialization_script(format!("window.__GLINT_BOOT__={boot};"))
             .always_on_top(true)
             .skip_taskbar(true)
             .resizable(false)
@@ -134,12 +149,39 @@ fn show_controller(
     ))
     .map_err(|e| e.to_string())?;
     crate::window::exclude_from_capture(&win);
+    crate::window::disable_transitions(&win);
     win.on_window_event(move |event| {
         if matches!(event, tauri::WindowEvent::CloseRequested { .. }) {
             command.store(2, Ordering::Release);
         }
     });
-    win.show().map_err(|e| e.to_string())
+    // React reveals this hidden window only after status and two painted frames.
+    // Never show WebView2's unpainted native surface on a cold build.
+    Ok(())
+}
+
+#[tauri::command]
+pub fn capture_scroll_ready(app: AppHandle) -> Result<(), String> {
+    if !is_running(&app) {
+        return Ok(());
+    }
+    if let Some(win) = app.get_webview_window(LABEL) {
+        win.show().map_err(|e| e.to_string())?;
+    }
+    Ok(())
+}
+
+fn wait_for_selection_hidden(app: &AppHandle) -> Result<(), String> {
+    let started = std::time::Instant::now();
+    while app.webview_windows().iter().any(|(label, w)| {
+        label.starts_with(crate::overlay::OVERLAY_PREFIX) && w.is_visible().unwrap_or(false)
+    }) {
+        if started.elapsed().as_millis() > 1500 {
+            return Err("The selection overlay did not close. Try the capture again.".into());
+        }
+        std::thread::sleep(std::time::Duration::from_millis(16));
+    }
+    Ok(())
 }
 
 /// Called off-thread by capture_commit, after selection overlay teardown.
@@ -179,10 +221,11 @@ pub fn start(app: &AppHandle, mut session: CaptureSession, rect: RectArg) -> Res
     let automatic = Arc::new(AtomicBool::new(false));
     let status = Arc::new(Mutex::new(Status {
         active: true,
+        ready: false,
         width: area.w,
         height: area.h,
         strips: 1,
-        message: "Ready. Start auto-scroll, or scroll the page manually.".into(),
+        message: "Preparing scrolling capture…".into(),
         at_limit: false,
         auto_scrolling: false,
     }));
@@ -206,18 +249,60 @@ pub fn start(app: &AppHandle, mut session: CaptureSession, rect: RectArg) -> Res
             .unwrap()
             .hide_desktop_icons;
         let _icons = super::desktop_icons::guard(hide_icons);
-        std::thread::sleep(std::time::Duration::from_millis(120));
-        let target = super::scroll_input::Target::at(
+        // Teardown waits for a painted clear, asynchronously. A fixed 120ms delay
+        // could hit-test the still-visible Glint overlay and cache that failure
+        // for the entire first attempt. Wait for actual visibility instead.
+        wait_for_selection_hidden(app)?;
+        show_controller(app, &session, command.clone())?;
+        let reveal_started = std::time::Instant::now();
+        while !app
+            .get_webview_window(LABEL)
+            .is_some_and(|w| w.is_visible().unwrap_or(false))
+        {
+            if command.load(Ordering::Acquire) == 2 {
+                return Ok(false);
+            }
+            if reveal_started.elapsed().as_secs() > 4 {
+                return Err("Could not prepare the capture controls. Please try again.".into());
+            }
+            std::thread::sleep(std::time::Duration::from_millis(16));
+        }
+        // Visibility changes precede DWM composition. Establish the reference
+        // after both windows have reached their final painted state, so the first
+        // strip cannot contain a disappearing selection or popup transition.
+        unsafe {
+            let _ = windows::Win32::Graphics::Dwm::DwmFlush();
+        }
+        let clean =
+            super::frozen::capture_monitor(session.monitor_id).map_err(|e| e.to_string())?;
+        if clean.width != session.image.width || clean.height != session.image.height {
+            return Err("Display geometry changed. Start the scrolling capture again.".into());
+        }
+        stitch = Stitcher::new(
+            image::RgbaImage::from_raw(
+                area.w,
+                area.h,
+                geometry::crop_rgba(&clean.rgba, clean.width, clean.height, area),
+            )
+            .ok_or("Invalid screen frame")?,
+        )?;
+        let point = (
             session.origin_x + (area.x + area.w / 2) as i32,
             session.origin_y + (area.y + area.h / 2) as i32,
         );
-        show_controller(app, &session, command.clone())?;
+        let mut target = super::scroll_input::Target::at(point.0, point.1);
+        {
+            let mut s = status.lock().unwrap();
+            s.ready = true;
+            s.message = "Ready. Start auto-scroll, or scroll the page manually.".into();
+        }
         let mut sample: Option<image::RgbaImage> = None;
         let started = std::time::Instant::now();
         let mut last_progress = std::time::Instant::now();
         let mut last_wheel = std::time::Instant::now();
         let (mut waiting, mut no_movement, mut was_auto) = (false, 0, false);
         let mut notice: Option<String> = None;
+        let mut uncertain_since: Option<std::time::Instant> = None;
         while command.load(Ordering::Acquire) == 0 {
             std::thread::sleep(std::time::Duration::from_millis(250));
             if started.elapsed().as_secs() > 300 {
@@ -241,6 +326,9 @@ pub fn start(app: &AppHandle, mut session: CaptureSession, rect: RectArg) -> Res
                 image::RgbaImage::from_raw(area.w, area.h, pixels).ok_or("Invalid screen frame")?;
             let auto = automatic.load(Ordering::Acquire);
             if auto && !was_auto {
+                // Reacquire on Resume as well, allowing a covered page/controller
+                // to be moved away without permanently poisoning the first target.
+                target = super::scroll_input::Target::at(point.0, point.1);
                 notice = None;
                 no_movement = 0;
                 waiting = false;
@@ -263,10 +351,12 @@ pub fn start(app: &AppHandle, mut session: CaptureSession, rect: RectArg) -> Res
             let step = stitch.push(next.clone());
             sample = Some(next);
             let mut s = status.lock().unwrap();
+            let mut aligned = true;
             s.height = stitch.image.height();
             s.strips = stitch.strips;
             match step {
                 Step::Appended(_) => {
+                    uncertain_since = None;
                     notice = None;
                     waiting = false;
                     no_movement = 0;
@@ -275,6 +365,7 @@ pub fn start(app: &AppHandle, mut session: CaptureSession, rect: RectArg) -> Res
                         "Captured. Auto-scroll can continue, or finish your capture.".into();
                 }
                 Step::Unchanged => {
+                    uncertain_since = None;
                     if waiting && last_wheel.elapsed().as_millis() > 900 {
                         no_movement += 1;
                         waiting = false;
@@ -289,9 +380,17 @@ pub fn start(app: &AppHandle, mut session: CaptureSession, rect: RectArg) -> Res
                     });
                 }
                 Step::Uncertain => {
-                    automatic.store(false, Ordering::Release);
-                    s.message="Could not align this step. Scroll back, then try a smaller step. Animated regions may not stitch.".into();
-                    notice = Some(s.message.clone());
+                    aligned = false;
+                    let since = uncertain_since.get_or_insert_with(std::time::Instant::now);
+                    if since.elapsed().as_secs() < 3 {
+                        s.message =
+                            "Waiting for this scroll step to settle… Captured strips are kept."
+                                .into();
+                    } else {
+                        automatic.store(false, Ordering::Release);
+                        s.message="Could not align this step. Scroll back, then try a smaller step. Animated regions may not stitch.".into();
+                        notice = Some(s.message.clone());
+                    }
                 }
                 Step::Limit => {
                     automatic.store(false, Ordering::Release);
@@ -300,6 +399,7 @@ pub fn start(app: &AppHandle, mut session: CaptureSession, rect: RectArg) -> Res
                 }
             }
             if auto
+                && aligned
                 && !waiting
                 && !s.at_limit
                 && last_wheel.elapsed().as_millis() > 600

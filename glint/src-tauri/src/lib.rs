@@ -352,6 +352,7 @@ pub fn run() {
             capture::scrolling::capture_scroll_begin,
             capture::scrolling::capture_scroll_control,
             capture::scrolling::capture_scroll_status,
+            capture::scrolling::capture_scroll_ready,
             capture::scrolling::capture_displays,
             capture::scrolling::capture_choose_monitor,
             tray_list,
