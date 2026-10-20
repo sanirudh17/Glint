@@ -73,7 +73,12 @@ No website redesign, model download or cloud dependency is part of this phase.
   deliberately leaves this file available for the user. Earlier missing-file
   errors in the QA window referred to test outputs removed by test cleanup.
 - Checks: 250 frontend tests and 242 native tests passed; two pre-existing display
-  tests remain ignored. Production build and installation tracked separately.
+  tests remain ignored. Production Tauri build passed and the installed executable
+  matches SHA-256 `D517EEA2CE162A2AB82B79525230DCB03A3A69A3492EA04F24C3069F88A027A7`.
+  Installed Shell reveal succeeded; the new GIF command is available. All 335
+  existing capture records remain; the durable attachment survives app restart.
+  The isolated QA instance was closed after verification, leaving the updated
+  installed app running. Its retained review GIF remains available on disk.
 - Reproducible checks: `scripts/capture-phase5-gif-check.mjs`,
   `scripts/capture-phase5-gif-ui-check.mjs`, and
   `scripts/capture-phase5-reveal-check.mjs` (QA CDP port 9241).
