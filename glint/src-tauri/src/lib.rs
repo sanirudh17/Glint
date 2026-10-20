@@ -52,6 +52,7 @@ pub struct Db(pub std::sync::Mutex<rusqlite::Connection>);
 /// remove it, then begins.
 #[tauri::command]
 fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
+    if capture::scrolling::is_running(&app){return Err("Finish or cancel the scrolling capture first".into());}
     use std::str::FromStr;
     use tauri::Manager;
     let m = crate::capture::CaptureMode::from_str(&mode)
@@ -117,6 +118,7 @@ pub fn run() {
         )
         .manage(SettingsState(Default::default()))
         .manage(crate::capture::CaptureState::default())
+        .manage(crate::capture::scrolling::ScrollState::default())
         .manage(crate::capture::LastCaptureState::default())
         .manage(crate::capture::tray::TrayState::default())
         .manage(crate::editor::EditorState::default())
@@ -346,6 +348,12 @@ pub fn run() {
             capture_commit,
             capture_cancel,
             capture_start,
+            editor::commands::editor_open_latest,
+            capture::scrolling::capture_scroll_begin,
+            capture::scrolling::capture_scroll_control,
+            capture::scrolling::capture_scroll_status,
+            capture::scrolling::capture_displays,
+            capture::scrolling::capture_choose_monitor,
             tray_list,
             tray_copy,
             tray_copy_path,
@@ -356,6 +364,8 @@ pub fn run() {
             tray_extract_text,
             tray_dismiss,
             tray_clear,
+            capture::commands::tray_auto_close,
+            settings::commands::settings_open_notifications,
             tray_resize,
             captures_list,
             capture_open,

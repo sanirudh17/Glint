@@ -8,6 +8,13 @@ use super::{apply_update, Hotkeys, Settings};
 
 pub struct SettingsState(pub Mutex<Settings>);
 
+#[tauri::command]
+pub fn settings_open_notifications()->Result<(),String>{
+    use std::os::windows::process::CommandExt;
+    std::process::Command::new("explorer.exe").arg("ms-settings:notifications").creation_flags(0x08000000).spawn().map_err(|e|e.to_string())?;
+    Ok(())
+}
+
 /// `(async)` — sync commands execute on the MAIN thread, and at boot that thread is
 /// busy building the pre-warmed webviews (overlay/selector/HUD/editor/trim). Running
 /// this on the async runtime instead lets the frontend's very first invoke return
@@ -42,6 +49,7 @@ fn action_label(action: &str) -> String {
         "capture_fullscreen" => "Capture fullscreen",
         "record" => "Record",
         "copy_path" => "Copy path",
+        "open_latest"=>"Open latest capture",
         "capture_area_delayed" => "Delayed capture area",
         "capture_window_delayed" => "Delayed capture window",
         "capture_fullscreen_delayed" => "Delayed capture fullscreen",

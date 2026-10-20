@@ -4,6 +4,7 @@
  * Local-first: no network. Drag-out reuses the proven tauri-plugin-drag path.
  */
 import { invoke } from "@tauri-apps/api/core";
+import {emit} from '@tauri-apps/api/event';
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
 import {useAppStore} from '../store/useAppStore';
 
@@ -41,6 +42,8 @@ void invoke<string>("drag_blank_icon").then((p) => { blankDragIcon = p; }).catch
 export async function dragOut(path: string): Promise<void> {
   try {
     const attachment=await invoke<string>('drag_prepare',{path});
+    await emit('capture-dragging',true);
     await startDrag({ item: [attachment], icon: blankDragIcon ?? attachment, mode: "copy" });
   } catch(error) {useAppStore.getState().pushToast(`Couldn't attach the image: ${String(error)}`);}
+  finally{void emit('capture-dragging',false).catch(()=>{});}
 }

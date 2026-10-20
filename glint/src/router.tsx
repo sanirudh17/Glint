@@ -21,6 +21,7 @@ import LibraryView from "./views/LibraryView";
 import SettingsView from "./views/SettingsView";
 
 const OcrPanel = lazy(() => import("./ocr/OcrPanel").then((m) => ({ default: m.OcrPanel })));
+const ScrollController=lazy(()=>import('./capture/ScrollController').then(m=>({default:m.ScrollController})));
 
 /** Suspense wrapper for a lazily-loaded route element. Fallback is empty — the chunk loads
  *  from local disk in a blink, and a spinner would flash more than it helps. */
@@ -69,6 +70,7 @@ function AppShell() {
 }
 
 export const router = createHashRouter([
+  {path:'/rec-scroll',element:lazyRoute(<ScrollController/>)},
   {
     path: "/overlay",
     element: lazyRoute(<OverlayApp />),

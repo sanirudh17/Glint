@@ -6,9 +6,12 @@ pub mod thumb;
 pub mod tray;
 pub mod windows_enum;
 pub mod scroll_stitch;
+pub mod scrolling;
+pub mod scroll_input;
+pub mod desktop_icons;
 
 use crate::overlay;
-use frozen::{CapturedImage, ScreenCapturer, XcapCapturer};
+use frozen::CapturedImage;
 use geometry::PixelRect;
 use std::str::FromStr;
 use std::sync::atomic::{AtomicU64, Ordering};
@@ -34,6 +37,7 @@ pub enum CaptureMode {
 pub enum CaptureIntent {
     Screenshot,
     Text,
+    Scroll,
 }
 
 impl FromStr for CaptureMode {
@@ -65,6 +69,8 @@ pub struct CaptureSession {
     pub monitor_id: u32,
     pub image: CapturedImage,
     pub scale: f64,
+    pub origin_x: i32,
+    pub origin_y: i32,
     pub windows: Vec<WindowInfo>,
     pub mode: CaptureMode,
     /// True when this capture was started from the main-window UI (a quick-start
@@ -223,6 +229,11 @@ pub fn begin(app: &AppHandle, mode: CaptureMode) {
 /// buttons (which hid the main window first). Never panics; logs + toasts on
 /// failure. Must run off the main thread (see [`begin_spawned`]).
 pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
+    begin_on(app,mode,restore_main,CaptureIntent::Screenshot,0);
+}
+
+pub fn begin_on(app:&AppHandle,mode:CaptureMode,restore_main:bool,intent:CaptureIntent,monitor_id:u32) {
+    let fail=|message:&str|{toast(app,message);if restore_main{restore_main_window(app);}};
     // Drop overlapped begins (see BEGIN_IN_FLIGHT): the grab→show sequence must
     // never run interleaved with itself across threads.
     let _in_flight = match BEGIN_IN_FLIGHT.try_lock() {
@@ -240,12 +251,15 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
     overlay::teardown_all(app);
 
     let _perf = std::time::Instant::now();
-    let capturer = XcapCapturer;
-    let mut image = match capturer.capture_primary() {
+    if scrolling::is_running(app) { fail("Finish or cancel the scrolling capture first"); return; }
+    let monitors=match frozen::monitors(){Ok(m)=>m,Err(e)=>{fail(&e.to_string());return;}};
+    let Some(monitor)=monitors.get(monitor_id as usize) else {fail("Display is no longer available");return;};
+    let hide_icons=app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().hide_desktop_icons;
+    let mut image = match desktop_icons::during(hide_icons,||frozen::capture_monitor(monitor_id)) {
         Ok(img) => img,
         Err(e) => {
             log::error!("capture failed: {e}");
-            toast(app, "Couldn't capture screen");
+            fail("Couldn't capture screen");
             return;
         }
     };
@@ -257,13 +271,8 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
         .lock()
         .unwrap()
         .include_cursor;
-    let (ox, oy) = app
-        .primary_monitor()
-        .ok()
-        .flatten()
-        .map(|m| (m.position().x, m.position().y))
-        .unwrap_or((0, 0));
-    if include_cursor {
+    let (ox,oy)=(monitor.x().unwrap_or(0),monitor.y().unwrap_or(0));
+    if include_cursor && intent!=CaptureIntent::Scroll {
         cursor::composite_cursor(&mut image.rgba, image.width, image.height, ox, oy);
     }
     // Crop the instant-loupe patch AFTER compositing so it matches the frozen
@@ -277,19 +286,12 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
         _perf.elapsed().as_millis()
     );
 
-    let monitor_id: u32 = 0; // single-monitor phase: primary keyed as 0
-
     // AppHandle::primary_monitor() exists in Tauri 2.11.3 (confirmed in app.rs:870).
     // Returns crate::Result<Option<Monitor>>; Monitor::scale_factor(&self) -> f64.
-    let scale = app
-        .primary_monitor()
-        .ok()
-        .flatten()
-        .map(|m| m.scale_factor())
-        .unwrap_or(1.0);
+    let scale=monitor.scale_factor().unwrap_or(1.) as f64;
 
     let windows = if matches!(mode, CaptureMode::Window) {
-        windows_enum::list_windows()
+        windows_enum::list_windows().into_iter().map(|mut w|{w.x-=ox;w.y-=oy;w}).collect()
     } else {
         Vec::new()
     };
@@ -338,10 +340,12 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
         monitor_id,
         image,
         scale,
+        origin_x:ox,
+        origin_y:oy,
         windows,
         mode,
         restore_main,
-        intent: CaptureIntent::Screenshot,
+        intent,
         id: sid,
         backdrop_url: Mutex::new(None),
         loupe_patch,
@@ -356,7 +360,7 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
             log::error!("overlay open failed: {e}");
             overlay::teardown_all(app);
             *app.state::<CaptureState>().0.lock().unwrap() = None;
-            toast(app, "Couldn't open capture overlay");
+            fail("Couldn't open capture overlay");
         }
     }
 }
@@ -370,14 +374,12 @@ pub fn begin_restoring(app: &AppHandle, mode: CaptureMode, restore_main: bool) {
 /// frozen frame, and gives the compositor a beat before freezing. `restore_main =
 /// true` re-shows it once the capture settles.
 pub fn begin_ocr_capture(app: &AppHandle) {
+    if scrolling::is_running(app){toast(app,"Finish or cancel the scrolling capture first");return;}
     if let Some(win) = app.get_webview_window("main") {
         let _ = win.hide();
     }
     std::thread::sleep(std::time::Duration::from_millis(200));
-    begin_restoring(app, CaptureMode::Area, true);
-    if let Some(session) = app.state::<CaptureState>().0.lock().unwrap().as_mut() {
-        session.intent = CaptureIntent::Text;
-    }
+    begin_on(app,CaptureMode::Area,true,CaptureIntent::Text,0);
 }
 
 /// Spawn [`begin_ocr_capture`] on a background thread — the main-thread-safe entry

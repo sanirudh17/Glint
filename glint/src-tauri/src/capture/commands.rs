@@ -116,12 +116,8 @@ fn session_meta(
 fn cursor_logical(app: &AppHandle, scale: f64) -> (Option<f64>, Option<f64>) {
     match app.cursor_position() {
         Ok(p) => {
-            let (ox, oy) = app
-                .primary_monitor()
-                .ok()
-                .flatten()
-                .map(|m| (m.position().x, m.position().y))
-                .unwrap_or((0, 0));
+            let (ox,oy)=app.state::<CaptureState>().0.lock().unwrap().as_ref()
+                .map(|s|(s.origin_x,s.origin_y)).unwrap_or((0,0));
             let (lx, ly) =
                 crate::capture::geometry::global_to_overlay_logical(p.x, p.y, ox, oy, scale);
             (Some(lx), Some(ly))
@@ -261,18 +257,21 @@ pub fn capture_commit(
     // Take the session out — it won't be available after this.
     let session = { state.0.lock().unwrap().take() }.ok_or("no active capture session")?;
     overlay::teardown_all(&app);
-    if session.restore_main && session.intent != crate::capture::CaptureIntent::Text {
+    if session.restore_main && session.intent == crate::capture::CaptureIntent::Screenshot {
         crate::capture::restore_main_window(&app);
     }
 
     let app2 = app.clone();
+    let restore_on_error = session.restore_main;
     std::thread::spawn(move || {
         let result = match session.intent {
             crate::capture::CaptureIntent::Text => finish_ocr_commit(&app2, session, rect),
-            crate::capture::CaptureIntent::Screenshot => finish_commit(&app2, session, rect),
+            crate::capture::CaptureIntent::Screenshot => finish_commit(&app2, session, rect,false),
+            crate::capture::CaptureIntent::Scroll => crate::capture::scrolling::start(&app2,session,rect),
         };
         if let Err(e) = result {
             log::error!("capture commit failed: {e}");
+            if restore_on_error { crate::capture::restore_main_window(&app2); }
             let _ = app2.emit("glint-toast", "Couldn't save capture");
         }
     });
@@ -311,10 +310,11 @@ fn finish_ocr_commit(
 
 /// The heavy half of a commit: crop, encode, write, copy to clipboard, emit.
 /// Runs off the main thread (see [`capture_commit`]).
-fn finish_commit(
+pub(super) fn finish_commit(
     app: &AppHandle,
     session: crate::capture::CaptureSession,
     rect: RectArg,
+    force_editor:bool,
 ) -> Result<(), String> {
     let _perf = std::time::Instant::now();
     let phys = logical_to_physical(
@@ -342,7 +342,7 @@ fn finish_commit(
     let (auto_save, auto_copy, open_in_editor, image_format, jpeg_quality) = {
         let state = app.state::<crate::settings::commands::SettingsState>();
         let s = state.0.lock().unwrap();
-        (s.auto_save, s.auto_copy, s.open_in_editor, s.image_format.clone(), s.jpeg_quality.clone())
+        (s.auto_save, s.auto_copy, s.open_in_editor||force_editor, s.image_format.clone(), s.jpeg_quality.clone())
     };
 
     // Decide where the durable file lives: auto-save → Pictures\Glint; otherwise a temp file.
@@ -680,6 +680,18 @@ pub fn tray_dismiss(app: AppHandle, state: State<TrayState>, id: u64) -> Result<
         crate::hud::teardown(&app);
     }
     Ok(())
+}
+
+/// Close the idle tray window while retaining its captures and temporary files.
+#[tauri::command]
+pub fn tray_auto_close(app:AppHandle,latest_id:u64)->Result<bool,String>{
+    if !app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().quick_access_auto_close{return Ok(false);}
+    let current=app.state::<TrayState>().0.lock().unwrap().list().last().map(|i|i.id);
+    if current!=Some(latest_id){return Ok(false);}
+    // Close only the webview, keeping tray items and files. Rebuilding on the next
+    // capture avoids the known WebView2 repaint failure from repeated hide/show.
+    crate::hud::teardown(&app);
+    Ok(true)
 }
 
 /// Empty the whole tray, delete every temp file, close the window.

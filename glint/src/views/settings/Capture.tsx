@@ -1,4 +1,5 @@
-import { Section, Field, Select, Switch } from "../../components/ui";
+import { Section, Field, Select, Switch,Button } from "../../components/ui";
+import {invoke} from '@tauri-apps/api/core';
 import { useAppStore } from "../../store/useAppStore";
 
 const FORMAT_OPTIONS = [
@@ -25,6 +26,9 @@ export function Capture() {
   const setJpegQuality = useAppStore((s) => s.setJpegQuality);
   const setIncludeCursor = useAppStore((s) => s.setIncludeCursor);
   const setCaptureDelay = useAppStore((s) => s.setCaptureDelay);
+  const setHideDesktopIcons=useAppStore(s=>s.setHideDesktopIcons);
+  const setQuickAccessAutoClose=useAppStore(s=>s.setQuickAccessAutoClose);
+  const pushToast=useAppStore(s=>s.pushToast);
   const isJpeg = (settings?.image_format ?? "png") === "jpeg";
   return (
     <Section
@@ -58,6 +62,15 @@ export function Capture() {
           options={DELAY_OPTIONS}
           onChange={(v) => void setCaptureDelay(Number(v) as 3 | 5 | 10)}
         />
+      </Field>
+      <Field label="Hide desktop icons" hint="Hide icons while grabbing a screenshot or scrolling strip, then restore their previous visibility.">
+        <Switch ariaLabel="Hide desktop icons" checked={settings?.hide_desktop_icons??false} onChange={on=>void setHideDesktopIcons(on)}/>
+      </Field>
+      <Field label="Auto-close Quick Access" hint="Hide the capture tray after 8 idle seconds. Hovering or dragging pauses the timer; captures are kept.">
+        <Switch ariaLabel="Auto-close Quick Access" checked={settings?.quick_access_auto_close??false} onChange={on=>void setQuickAccessAutoClose(on)}/>
+      </Field>
+      <Field label="Recording notifications" hint="Turn on Do not disturb in Windows before recording. Windows does not provide an unrestricted automatic switch for Glint.">
+        <Button size="sm" variant="ghost" onClick={()=>void invoke('settings_open_notifications').catch(e=>pushToast(String(e)))}>Notification settings</Button>
       </Field>
     </Section>
   );

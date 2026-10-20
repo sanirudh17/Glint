@@ -84,6 +84,7 @@ export default function HomeView() {
           <Button variant="subtle" size="md" icon={Monitor} onClick={() => startCapture("fullscreen")}>Fullscreen</Button>
           <Button variant="subtle" size="md" icon={Video} onClick={() => invoke("recorder_open_region_selector")}>Record</Button>
           <Button variant="subtle" size="md" icon={ScanText} onClick={() => captureText()}>Capture Text</Button>
+          <Button variant="subtle" size="md" onClick={()=>void invoke('capture_scroll_begin').catch(e=>pushToast(String(e)))}>Scrolling capture</Button>
           <Button variant="ghost" size="md" icon={FolderOpen} onClick={onOpenProject}>Open Project</Button>
         </div>
       </section>

@@ -78,13 +78,13 @@ pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
     // on a borderless transparent always-on-top window can drop the transparency
     // (black fill) or fight the manual geometry. A borderless window sized to the
     // monitor with always_on_top is the correct "fullscreen overlay".
-    if let Some(monitor) = win.primary_monitor()? {
-        let pos = monitor.position();
-        let size = monitor.size();
-        win.set_position(tauri::PhysicalPosition { x: pos.x, y: pos.y })?;
+    let geometry=app.state::<crate::capture::CaptureState>().0.lock().unwrap().as_ref()
+        .map(|s|(s.origin_x,s.origin_y,s.image.width,s.image.height));
+    if let Some((x,y,width,height)) = geometry {
+        win.set_position(tauri::PhysicalPosition { x, y })?;
         win.set_size(tauri::PhysicalSize {
-            width: size.width,
-            height: size.height,
+            width,
+            height,
         })?;
     } else {
         log::warn!("overlay: no primary monitor; using default window geometry");

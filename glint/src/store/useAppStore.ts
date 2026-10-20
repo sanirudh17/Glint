@@ -19,6 +19,8 @@ export interface Settings {
   hotkeys: Record<string, string>;
   auto_save: boolean;
   auto_copy: boolean;
+  hide_desktop_icons:boolean;
+  quick_access_auto_close:boolean;
   index_screenshot_text: boolean;
   auto_name_captures: boolean;
   open_in_editor: boolean;
@@ -80,6 +82,8 @@ interface AppState {
   setWebcamDevice: (id: string) => Promise<void>;
   setWebcamShape: (shape: "circle" | "rounded" | "square" | "rect") => Promise<void>;
   setCaptureDelay: (v: 3 | 5 | 10) => Promise<void>;
+  setHideDesktopIcons:(on:boolean)=>Promise<void>;
+  setQuickAccessAutoClose:(on:boolean)=>Promise<void>;
   setRecordResolution: (v: "original" | "1080p" | "720p") => Promise<void>;
   setRecordQuality: (v: "high" | "medium" | "low") => Promise<void>;
   pushToast: (text: string) => void;
@@ -387,6 +391,8 @@ export const useAppStore = create<AppState>((set, get) => {
 
   setCaptureDelay: (v: 3 | 5 | 10) =>
     commit("capture_delay_secs", v, "Capture delay"),
+  setHideDesktopIcons:on=>commit('hide_desktop_icons',on,'Hide desktop icons'),
+  setQuickAccessAutoClose:on=>commit('quick_access_auto_close',on,'Quick Access auto-close'),
 
   setRecordResolution: (v: "original" | "1080p" | "720p") =>
     commit("record_resolution", v, "Resolution"),

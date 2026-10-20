@@ -3,9 +3,10 @@
 
 use super::Hotkeys;
 
-pub const HOTKEY_ACTIONS: [&str; 8] = [
+pub const HOTKEY_ACTIONS: [&str; 9] = [
     "capture_area", "capture_window", "capture_fullscreen", "record", "copy_path",
     "capture_area_delayed", "capture_window_delayed", "capture_fullscreen_delayed",
+    "open_latest",
 ];
 
 #[derive(Debug, PartialEq)]
@@ -110,6 +111,7 @@ pub fn get_field<'a>(h: &'a Hotkeys, action: &str) -> Option<&'a str> {
         "capture_area_delayed" => h.capture_area_delayed.as_str(),
         "capture_window_delayed" => h.capture_window_delayed.as_str(),
         "capture_fullscreen_delayed" => h.capture_fullscreen_delayed.as_str(),
+        "open_latest"=>h.open_latest.as_str(),
         _ => return None,
     })
 }
@@ -124,6 +126,7 @@ pub fn set_field(h: &mut Hotkeys, action: &str, accel: String) -> bool {
         "capture_area_delayed" => h.capture_area_delayed = accel,
         "capture_window_delayed" => h.capture_window_delayed = accel,
         "capture_fullscreen_delayed" => h.capture_fullscreen_delayed = accel,
+        "open_latest"=>h.open_latest=accel,
         _ => return false,
     }
     true
@@ -159,6 +162,7 @@ mod tests {
             capture_area_delayed: String::new(),
             capture_window_delayed: String::new(),
             capture_fullscreen_delayed: String::new(),
+            open_latest:String::new(),
         }
     }
 

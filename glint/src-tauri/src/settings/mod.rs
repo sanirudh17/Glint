@@ -21,6 +21,8 @@ pub struct Hotkeys {
     pub capture_window_delayed: String,
     #[serde(default)]
     pub capture_fullscreen_delayed: String,
+    #[serde(default)]
+    pub open_latest: String,
 }
 
 impl Default for Hotkeys {
@@ -34,6 +36,7 @@ impl Default for Hotkeys {
             capture_area_delayed: String::new(),
             capture_window_delayed: String::new(),
             capture_fullscreen_delayed: String::new(),
+            open_latest: String::new(),
         }
     }
 }
@@ -45,6 +48,10 @@ pub struct Settings {
     pub hotkeys: Hotkeys,
     pub auto_save: bool,
     pub auto_copy: bool,
+    #[serde(default)]
+    pub hide_desktop_icons: bool,
+    #[serde(default)]
+    pub quick_access_auto_close: bool,
     pub index_screenshot_text: bool,
     pub auto_name_captures: bool,
     pub open_in_editor: bool,
@@ -111,6 +118,8 @@ impl Default for Settings {
             hotkeys: Hotkeys::default(),
             auto_save: true,
             auto_copy: true,
+            hide_desktop_icons:false,
+            quick_access_auto_close:false,
             index_screenshot_text: true,
             auto_name_captures: false,
             open_in_editor: false,
@@ -155,6 +164,8 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         "auto_save" => {
             s.auto_save = value.as_bool().ok_or("auto_save must be boolean")?;
         }
+        "hide_desktop_icons"=>{s.hide_desktop_icons=value.as_bool().ok_or("hide_desktop_icons must be boolean")?;}
+        "quick_access_auto_close"=>{s.quick_access_auto_close=value.as_bool().ok_or("quick_access_auto_close must be boolean")?;}
         "auto_copy" => {
             s.auto_copy = value.as_bool().ok_or("auto_copy must be boolean")?;
         }
@@ -491,6 +502,14 @@ mod tests {
     #[test]
     fn default_capture_delay_is_five() {
         assert_eq!(Settings::default().capture_delay_secs, 5);
+    }
+    #[test]
+    fn clean_capture_defaults_are_off_and_legacy_hotkeys_load(){
+        let mut s=Settings::default();assert!(!s.hide_desktop_icons);assert!(!s.quick_access_auto_close);assert!(s.hotkeys.open_latest.is_empty());
+        let mut old=serde_json::to_value(&s.hotkeys).unwrap();old.as_object_mut().unwrap().remove("open_latest");
+        s.hotkeys=serde_json::from_value(old).unwrap();assert!(s.hotkeys.open_latest.is_empty());assert_eq!(s.hotkeys.capture_area,"CmdOrCtrl+Shift+1");
+        for key in ["hide_desktop_icons","quick_access_auto_close"]{assert!(apply_update(&mut s,key,json!("yes")).is_err());apply_update(&mut s,key,json!(true)).unwrap();apply_update(&mut s,key,json!(false)).unwrap();}
+        assert!(!s.hide_desktop_icons);assert!(!s.quick_access_auto_close);
     }
 
     #[test]
