@@ -35,7 +35,7 @@ export function AutoSave() {
         <Switch ariaLabel="Search screenshot text" checked={settings?.index_screenshot_text??true} onChange={v=>void setIndexScreenshotText(v)}/>
       </Field>
       <Field label="Name captures from text" hint="Name newly indexed captures from a meaningful OCR line. Custom names stay unchanged.">
-        <Switch ariaLabel="Name captures from text" checked={settings?.auto_name_captures??true} onChange={v=>void setAutoNameCaptures(v)}/>
+        <Switch ariaLabel="Name captures from text" checked={settings?.auto_name_captures??false} onChange={v=>void setAutoNameCaptures(v)}/>
       </Field>
     </Section>
   );

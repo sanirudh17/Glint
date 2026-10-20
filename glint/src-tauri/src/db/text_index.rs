@@ -1,5 +1,25 @@
 //! Local OCR text index. Keep schema ownership here, outside SQL-plugin migration 1.
 use rusqlite::{params, Connection};
+/// Repair the unwanted OCR titles once. Manual names and indexed search text stay.
+/// Keep the migration separate from schema checks so opting in later stays opted in.
+pub fn migrate_naming_opt_in(conn: &Connection) -> rusqlite::Result<()> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS settings(key TEXT PRIMARY KEY,value TEXT NOT NULL);",
+    )?;
+    let tx = conn.unchecked_transaction()?;
+    if tx.execute(
+        "INSERT OR IGNORE INTO settings(key,value) VALUES('ocr_naming_opt_in_v2','true')",
+        [],
+    )? == 1
+    {
+        tx.execute(
+            "UPDATE captures SET title=NULL,title_origin=NULL WHERE title_origin='ocr'",
+            [],
+        )?;
+        tx.execute("INSERT INTO settings(key,value) VALUES('auto_name_captures','false') ON CONFLICT(key) DO UPDATE SET value='false'",[])?;
+    }
+    tx.commit()
+}
 pub fn ensure(conn: &Connection) -> rusqlite::Result<()> {
     conn.execute_batch(
     "CREATE TABLE IF NOT EXISTS capture_text(capture_id INTEGER PRIMARY KEY,body TEXT NOT NULL,fingerprint TEXT NOT NULL);
@@ -87,6 +107,48 @@ pub fn search(conn: &Connection, query: &str) -> rusqlite::Result<Vec<i64>> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn naming_repair_preserves_manual_names_and_runs_only_once() {
+        let c = db();
+        put(&c, 1, "Noisy OCR heading", "a", true).unwrap();
+        super::super::set_title(&c, 2, Some("My custom name")).unwrap();
+        migrate_naming_opt_in(&c).unwrap();
+        assert_eq!(
+            c.query_row("SELECT title FROM captures WHERE id=1", [], |r| r
+                .get::<_, Option<String>>(0))
+                .unwrap(),
+            None
+        );
+        assert_eq!(
+            c.query_row("SELECT title FROM captures WHERE id=2", [], |r| r
+                .get::<_, String>(0))
+                .unwrap(),
+            "My custom name"
+        );
+        assert_eq!(search(&c, "Noisy").unwrap(), vec![1]);
+        c.execute(
+            "UPDATE settings SET value='true' WHERE key='auto_name_captures'",
+            [],
+        )
+        .unwrap();
+        put(&c, 1, "Optional future title", "b", true).unwrap();
+        migrate_naming_opt_in(&c).unwrap();
+        assert_eq!(
+            c.query_row("SELECT title FROM captures WHERE id=1", [], |r| r
+                .get::<_, String>(0))
+                .unwrap(),
+            "Optional future title"
+        );
+        assert_eq!(
+            c.query_row(
+                "SELECT value FROM settings WHERE key='auto_name_captures'",
+                [],
+                |r| r.get::<_, String>(0)
+            )
+            .unwrap(),
+            "true"
+        );
+    }
     fn db() -> Connection {
         let c = Connection::open_in_memory().unwrap();
         super::super::ensure_captures_table(&c).unwrap();

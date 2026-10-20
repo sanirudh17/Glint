@@ -112,7 +112,7 @@ impl Default for Settings {
             auto_save: true,
             auto_copy: true,
             index_screenshot_text: true,
-            auto_name_captures: true,
+            auto_name_captures: false,
             open_in_editor: false,
             explorer_menu_enabled: true,
             record_system_audio: true,
