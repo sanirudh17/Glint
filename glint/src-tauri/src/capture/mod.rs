@@ -5,6 +5,7 @@ pub mod geometry;
 pub mod thumb;
 pub mod tray;
 pub mod windows_enum;
+pub mod scroll_stitch;
 
 use crate::overlay;
 use frozen::{CapturedImage, ScreenCapturer, XcapCapturer};
