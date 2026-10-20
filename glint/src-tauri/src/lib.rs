@@ -13,6 +13,7 @@ mod pin;
 mod recorder;
 mod settings;
 mod shell_integration;
+mod shell_reveal;
 mod shortcuts;
 mod tray;
 mod updater;

@@ -57,6 +57,9 @@ windows = { version = "0.62", features = [
     "Win32_Graphics_Gdi",
     "Win32_Graphics_Dwm",
     "Win32_UI_Input_KeyboardAndMouse",
+    "Win32_UI_Shell",
+    "Win32_UI_Shell_Common",
+    "Win32_System_Com",
 ] }
 raw-window-handle = "0.6"
 # In-app updater: fetch the latest GitHub release installer and launch it. A tiny
