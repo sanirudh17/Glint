@@ -136,13 +136,18 @@ pub(super) async fn perform(
     path: &str,
     project: serde_json::Value,
     cancel: Arc<AtomicBool>,
-    intermediate: Option<PathBuf>,
+    intermediate: Option<(PathBuf,f64)>,
 ) -> Result<String, String> {
+    let (intermediate,output_fps) = match intermediate {
+        Some((path,fps)) => (Some(path),Some(fps)),
+        None => (None,None),
+    };
     let data: Project = serde_json::from_value(project.clone()).map_err(|e| e.to_string())?;
     let probe = trim::recorder_trim_probe(app.clone(), path.to_string()).await?;
     data.segments(probe.duration_secs)?;
     let folder = studio::project_folder(path).ok_or("Missing Studio project")?;
-    studio::write_project(&folder, &project)?;
+    // The GIF caller already flushed edits. Export must not rewrite project state.
+    if intermediate.is_none() { studio::write_project(&folder, &project)?; }
     let events: studio::Events = serde_json::from_slice(
         &std::fs::read(folder.join("events.json")).map_err(|e| e.to_string())?,
     )
@@ -189,6 +194,13 @@ pub(super) async fn perform(
     let progress_scale=if intermediate.is_some(){0.4}else{1.0};
     let tmp_render = tmp.clone();
     let render = tauri::async_runtime::spawn_blocking(move || {
+        if progress_scale < 1. && data.look.enabled && data.look.background["type"] == "transparent"
+        {
+            studio_render::Renderer::new(&data, &events, probe.width, probe.height)?
+                .gif_alpha_mask()
+                .save(tmp_render.with_file_name("alpha.png"))
+                .map_err(|e| e.to_string())?;
+        }
         let cam_string = cam_path.to_string_lossy();
         let spec = ExportSpec {
             binary: &binary,
@@ -198,7 +210,9 @@ pub(super) async fn perform(
             events: &events,
             width: probe.width,
             height: probe.height,
-            fps: probe.fps,
+            // Compose only the frames GIF needs instead of rendering e.g. 60 FPS
+            // then discarding three quarters of them in palette conversion.
+            fps: output_fps.unwrap_or(probe.fps).min(probe.fps),
             duration: probe.duration_secs,
             audio: probe.has_audio,
             cam: cam.as_ref().map(|_| cam_string.as_ref()),

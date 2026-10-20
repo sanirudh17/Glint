@@ -42,14 +42,48 @@ No website redesign, model download or cloud dependency is part of this phase.
 - `f429d4a`: OCR naming off by default; one-time title repair and preservation tests.
 - `5edc929`: durable attachment paths; image snapshots survive source deletion.
 - Native regression run: 240 passed, two pre-existing display tests ignored.
-- Production/desktop validation: pending.
+- Installed title repair: 65 generated names removed; all 335 capture records,
+  original paths, manual names and OCR search content preserved.
+- Real tray dismissal deletes its temporary source while the shared attachment
+  remains readable. Durable attachments use app-local storage outside Temp.
+
+## GIF and reveal checkpoint (October 20)
+
+- GIF uses the same Studio look, crop, aspect, zoom and privacy rendering as MP4.
+  Solid, gradient and image backgrounds stay opaque. Selecting Transparent in
+  Studio gives transparent GIF surroundings; black recording pixels and privacy
+  masks stay opaque. There is no separate GIF background toggle.
+- Transparency is binary, so GIF edges are crisp and soft shadows are omitted.
+  Coverage uses the actual rounded frame geometry, chrome, border and watermark
+  pixels, never color-key removal from the recorded screen.
+- Render only the selected GIF frame rate for the intermediate Studio pass,
+  avoiding unnecessary composition at the source video's higher frame rate.
+- Idle editors ignore unrelated native progress events. Encoding progress stops
+  at 99% with "Finishing export" until publication completes; the real Export GIF
+  button was checked through successful completion and re-enables afterward.
+- Export no longer rewrites the saved Studio project. Quick/Studio exports,
+  dimensions, FPS, looping, every-frame solid privacy, cancellation cleanup and
+  unchanged source bytes passed bundled-FFmpeg desktop checks.
+- Show in folder uses Windows Shell item selection for files, normalizes existing
+  paths, and reports missing files rather than silently opening Explorer Home.
+  Real Explorer selection passed for forward slashes, Unicode, spaces, commas and
+  ampersands. The actual export-result button also selected its exact GIF.
+- The final review GIF is retained under
+  `%LOCALAPPDATA%\GlintValidation\Phase5\Exports`; successful UI verification
+  deliberately leaves this file available for the user. Earlier missing-file
+  errors in the QA window referred to test outputs removed by test cleanup.
+- Checks: 250 frontend tests and 242 native tests passed; two pre-existing display
+  tests remain ignored. Production build and installation tracked separately.
+- Reproducible checks: `scripts/capture-phase5-gif-check.mjs`,
+  `scripts/capture-phase5-gif-ui-check.mjs`, and
+  `scripts/capture-phase5-reveal-check.mjs` (QA CDP port 9241).
 
 ## Acceptance and measurement
 
-- [ ] Generated OCR titles return to normal, manual names and search survive.
+- [x] Generated OCR titles return to normal, manual names and search survive.
 - [ ] Dragged image paths remain readable after dismissal, eviction and restart.
-- [ ] Quick and Studio GIF exports apply edits/look, dimensions, FPS and loop.
-- [ ] GIFs stay below the stated cap; cancellation leaves no published partial file.
+- [x] Quick and Studio GIF exports apply edits/look, dimensions, FPS and loop.
+- [x] GIFs stay below the stated cap; cancellation leaves no published partial file.
 - [ ] Long web-page and chat fixtures stitch without visible seams in manual mode.
 - [ ] Sticky bands, no movement, overscroll, ambiguous matches and DPI are checked.
 - [ ] Every new clean-capture option can be turned off and restores system state.

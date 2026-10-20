@@ -177,6 +177,7 @@ async fn perform(
     std::fs::create_dir_all(&job).map_err(|e| e.to_string())?;
     let intermediate = job.join("render.mp4");
     let palette = job.join("palette.png");
+    let alpha = job.join("alpha.png");
     let dir =
         crate::settings::locations::save_dir(app, crate::settings::locations::SaveKind::Recording);
     std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
@@ -196,7 +197,7 @@ async fn perform(
                 path,
                 project,
                 cancel.clone(),
-                Some(intermediate.clone()),
+                Some((intermediate.clone(),options.fps as f64)),
             )
             .await?;
         } else {
@@ -227,15 +228,21 @@ async fn perform(
             return Err("Export cancelled".into());
         }
         let filter = palette_filter(&options);
-        let args = vec![
+        let mut args = vec![
             "-hide_banner".into(),
             "-v".into(),
             "error".into(),
             "-y".into(),
             "-i".into(),
             intermediate.to_string_lossy().into_owned(),
-            "-vf".into(),
-            format!("{filter},palettegen=stats_mode=diff"),
+        ];
+        if alpha.exists() {
+            args.extend(["-i".into(), alpha.to_string_lossy().into_owned(),
+                "-filter_complex".into(),format!("[0:v][1:v]alphamerge,{filter},palettegen=stats_mode=diff:reserve_transparent=1")]);
+        } else {
+            args.extend(["-vf".into(),format!("{filter},palettegen=stats_mode=diff")]);
+        }
+        args.extend([
             "-frames:v".into(),
             "1".into(),
             "-update".into(),
@@ -243,7 +250,7 @@ async fn perform(
             "-progress".into(),
             "pipe:1".into(),
             palette.to_string_lossy().into_owned(),
-        ];
+        ]);
         let b = binary.clone();
         let c = cancel.clone();
         let a = app.clone();
@@ -258,7 +265,7 @@ async fn perform(
         })
         .await
         .map_err(|e| e.to_string())??;
-        let args = vec![
+        let mut args = vec![
             "-hide_banner".into(),
             "-v".into(),
             "error".into(),
@@ -267,15 +274,21 @@ async fn perform(
             intermediate.to_string_lossy().into_owned(),
             "-i".into(),
             palette.to_string_lossy().into_owned(),
+        ];
+        let base = if alpha.exists() {
+            args.extend(["-i".into(),alpha.to_string_lossy().into_owned()]);
+            "[0:v][2:v]alphamerge,"
+        } else { "[0:v]" };
+        args.extend([
             "-lavfi".into(),
-            format!("[0:v]{filter}[x];[x][1:v]paletteuse=dither=sierra2_4a:diff_mode=rectangle"),
+            format!("{base}{filter}[x];[x][1:v]paletteuse=dither=sierra2_4a:diff_mode=rectangle:alpha_threshold=128"),
             "-an".into(),
             "-loop".into(),
             if options.repeat { "0" } else { "-1" }.into(),
             "-progress".into(),
             "pipe:1".into(),
             partial.to_string_lossy().into_owned(),
-        ];
+        ]);
         let b = binary.clone();
         let c = cancel.clone();
         let guard = partial.clone();
@@ -308,6 +321,7 @@ async fn perform(
         &intermediate,
         &intermediate.with_extension("partial.mp4"),
         &palette,
+        &alpha,
         &partial,
     ] {
         let _ = std::fs::remove_file(file);
@@ -341,7 +355,7 @@ mod tests {
         assert!(Options {
             fps: 0,
             width: 0,
-            repeat: true
+            repeat: true,
         }
         .validate()
         .is_err());

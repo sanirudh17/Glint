@@ -23,7 +23,29 @@ try{
   const studio=await main.invoke('recorder_gif_export',{...args,project,options:{fps:5,width:320,repeat:false}}),studioBytes=await remember(studio,'studio.gif'),s=probe(studio);assert.equal(s.streams[0].width,320);assert.equal(s.streams[0].height,320);assert.ok(!studioBytes.includes(Buffer.from('NETSCAPE2.0')));
   const rgb=execFileSync(ffmpeg,['-v','error','-i',studio,'-f','rawvideo','-pix_fmt','rgb24','-'],{windowsHide:true,maxBuffer:12*1024*1024});let frames=0;for(let offset=0;offset<rgb.length;offset+=320*320*3){const i=offset+(142*320+142)*3;assert.deepEqual(Array.from(rgb.subarray(i,i+3)),[0,0,0]);frames++;}assert.ok(frames>=14);
   console.log('Studio GIF square look, solid privacy in every frame and play-once passed.');
+  const firstFrame=path=>execFileSync(ffmpeg,['-v','error','-i',path,'-frames:v','1','-f','rawvideo','-pix_fmt','rgba','-'],{windowsHide:true,maxBuffer:2*1024*1024});
+  const solid=firstFrame(studio);assert.equal(solid[3],255);for(let i=0;i<3;i++)assert.ok(Math.abs(solid[i]-[17,34,51][i])<8,'Studio solid background must reach GIF');
+  const backgrounds=[];
+  const stamp=execFileSync(ffmpeg,['-v','error','-f','lavfi','-i','color=c=0x2864c8:s=16x16','-frames:v','1','-f','image2pipe','-vcodec','png','-'],{windowsHide:true});
+  for(const background of [{type:'gradient',kind:'linear',angleDeg:0,grain:0,stops:[{offset:0,color:'#ff0000'},{offset:1,color:'#0000ff'}]},{type:'image',dataUrl:`data:image/png;base64,${stamp.toString('base64')}`}]){
+    const path=await main.invoke('recorder_gif_export',{...args,project:{...project,look:{...project.look,background}},options:{fps:5,width:320,repeat:false}});
+    await remember(path,`${background.type}.gif`);const pixels=firstFrame(path);assert.equal(pixels[3],255);
+    if(background.type==='gradient'){assert.ok(pixels[0]>pixels[2]+100);const end=(319*4);assert.ok(pixels[end+2]>pixels[end]+100);}
+    else for(let i=0;i<3;i++)assert.ok(Math.abs(pixels[i]-[40,100,200][i])<8,'Studio image background must reach GIF');
+    backgrounds.push(background.type);
+  }
+  console.log('Studio solid, gradient and image backgrounds match the selected look.');
+  const transparentProject={...project,look:{...project.look,background:{type:'transparent'}}};
+  const transparent=await main.invoke('recorder_gif_export',{...args,project:transparentProject,options:{fps:5,width:320,repeat:true}}),transparentBytes=await remember(transparent,'transparent.gif');
+  const rgba=execFileSync(ffmpeg,['-v','error','-i',transparent,'-f','rawvideo','-pix_fmt','rgba','-'],{windowsHide:true,maxBuffer:16*1024*1024});
+  for(let offset=0;offset<rgba.length;offset+=320*320*4){
+    assert.equal(rgba[offset+3],0,'surroundings must be transparent');
+    const i=offset+(142*320+142)*4;assert.deepEqual(Array.from(rgba.subarray(i,i+4)),[0,0,0,255],'black privacy must stay opaque');
+  }
+  assert.ok(transparentBytes.length<25_000_000);
+  assert.equal(await editor.evaluate(`!!document.querySelector('.trim-progress')`),false,'native progress must not activate an idle UI export');
+  console.log('Transparent surroundings and opaque black privacy in every frame passed.');
   const pending=main.invoke('recorder_gif_export',{...args,project}).then(path=>({path}),error=>({error:String(error)}));await pause(120);await main.invoke('studio_export_cancel');const cancelled=await pending;assert.ok(cancelled.error?.toLowerCase().includes('cancel'),JSON.stringify(cancelled));assert.ok(!(await readdir(join(root,'output'))).some(n=>n.endsWith('partial.gif')));
   assert.equal(hash(await readFile(source)),before);await editor.screenshot(join(root,'gif-controls-ui.png'));
-  await writeFile(join(root,'gif-result.json'),JSON.stringify({passed:true,quick:{width:320,height:180,fps:10,loop:true,bytes:bytes.length},studio:{width:320,height:320,fps:5,loop:false,frames,bytes:studioBytes.length,opaqueMaskAllFrames:true},cancelled:true,sourceUnchanged:true},null,2));console.log('Cancellation cleanup and unchanged source passed.');
+  await writeFile(join(root,'gif-result.json'),JSON.stringify({passed:true,quick:{width:320,height:180,fps:10,loop:true,bytes:bytes.length},studio:{width:320,height:320,fps:5,loop:false,frames,bytes:studioBytes.length,opaqueMaskAllFrames:true,backgrounds:['solid',...backgrounds,'transparent'],transparentSurroundingsOpaqueMask:true},cancelled:true,sourceUnchanged:true},null,2));console.log('Cancellation cleanup and unchanged source passed.');
 }finally{for(const id of owned)await main.invoke('capture_delete',{id});editor?.close();main.close();}

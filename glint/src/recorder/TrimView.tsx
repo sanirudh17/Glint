@@ -263,7 +263,8 @@ export function TrimView() {
   useEffect(() => () => { void flushSave(); }, [flushSave]);
 
   useEffect(() => {
-    const un = listen<number>("rec-trim-progress", (e) => setExporting(Math.round(e.payload)));
+    const un = listen<number>("rec-trim-progress", (e) => setExporting(current =>
+      current === null || !Number.isFinite(e.payload) ? current : Math.max(current,Math.min(99,Math.round(e.payload)))));
     return () => { un.then((f) => f()).catch(() => {}); };
   }, []);
 
@@ -636,7 +637,7 @@ export function TrimView() {
         </div>
         <span className="trim-spacer" />
         {exporting !== null ? (
-          <><div className="trim-progress"><div className="trim-progress-fill" style={{ width: `${exporting}%` }} /><span>Exporting… {exporting}%</span></div>{(studio||exportingGif)&&<button className="trim-btn" onClick={() => void studioExportCancel()}>Cancel export</button>}</>
+          <><div className="trim-progress"><div className="trim-progress-fill" style={{ width: `${exporting}%` }} /><span>{exporting>=99?'Finishing export…':`Exporting… ${exporting}%`}</span></div>{(studio||exportingGif)&&<button className="trim-btn" onClick={() => void studioExportCancel()}>Cancel export</button>}</>
         ) : (
           <>
             <button className="trim-btn" onClick={requestClose}>Cancel</button>

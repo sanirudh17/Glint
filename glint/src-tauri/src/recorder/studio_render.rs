@@ -395,6 +395,31 @@ pub struct Renderer {
     watermark: Vec<(u32,u32,[u8;3],f64)>,
 }
 impl Renderer {
+    /// Binary GIF coverage comes from geometry, never from the recorded colors.
+    /// Keep chrome, the actual border pixels and watermark; omit soft shadows.
+    pub fn gif_alpha_mask(&self) -> GrayImage {
+        let l = self.layout;
+        let top = l.y - l.chrome_h;
+        let mut mask = GrayImage::from_fn(l.width, l.height, |x, y| {
+            let inside = sdf(
+                x as f64 - l.x as f64,
+                y as f64 - top as f64,
+                l.content_w as f64,
+                (l.content_h + l.chrome_h) as f64,
+                l.radius,
+            ) <= 0.;
+            Luma([if inside { 255 } else { 0 }])
+        });
+        for (x, y, _) in &self.border {
+            mask.put_pixel(*x, *y, Luma([255]));
+        }
+        for (x, y, _, alpha) in &self.watermark {
+            if *alpha >= 0.5 {
+                mask.put_pixel(*x, *y, Luma([255]));
+            }
+        }
+        mask
+    }
     pub fn new(
         project: &Project,
         events: &Events,
