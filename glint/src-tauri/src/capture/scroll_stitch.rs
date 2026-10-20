@@ -25,28 +25,150 @@ fn valid_size(w: u32, h: u32) -> bool {
 
 // Ignore the outermost columns, including scrollbars and their moving thumbs.
 fn row_error(a: &RgbaImage, ay: u32, b: &RgbaImage, by: u32) -> f64 {
+    row_error_at(a, ay, b, by, &sample_columns(a.width()))
+}
+
+fn sample_columns(width: u32) -> [u32; 48] {
+    std::array::from_fn(|col| width / 24 + col as u32 * (width * 11 / 12 - 1) / 47)
+}
+
+fn row_error_at(a: &RgbaImage, ay: u32, b: &RgbaImage, by: u32, columns: &[u32]) -> f64 {
     let mut error = 0u64;
-    for col in 0..48 {
-        let x = a.width() / 24 + col * (a.width() * 11 / 12 - 1) / 47;
+    for &x in columns {
         let p = a.get_pixel(x, ay);
         let q = b.get_pixel(x, by);
         for c in 0..3 {
             error += p[c].abs_diff(q[c]) as u64;
         }
     }
-    error as f64 / 144.
+    error as f64 / (columns.len() * 3) as f64
 }
 
-fn row_detail(image: &RgbaImage, y: u32) -> bool {
+// Match the moving page, not fixed browser margins/navigation beside it. Derive
+// this from motion at the same screen coordinates before searching offsets.
+fn alignment_columns(a: &RgbaImage, b: &RgbaImage) -> Vec<u32> {
+    sample_columns(a.width())
+        .into_iter()
+        .filter(|&x| {
+            let mut changed = 0;
+            for row in 0..64 {
+                let y = row * (a.height() - 1) / 63;
+                let (p, q) = (a.get_pixel(x, y), b.get_pixel(x, y));
+                let error = (0..3).map(|c| p[c].abs_diff(q[c]) as u32).sum::<u32>();
+                if error > 12 {
+                    changed += 1;
+                }
+            }
+            changed >= 6
+        })
+        .collect()
+}
+
+fn row_detail(image: &RgbaImage, y: u32, columns: &[u32]) -> bool {
     let (mut low, mut high) = (255, 0);
-    for col in 0..48 {
-        let x = image.width() / 24 + col * (image.width() * 11 / 12 - 1) / 47;
+    for &x in columns {
         let p = image.get_pixel(x, y);
         let luma = (p[0] as u32 + p[1] as u32 + p[2] as u32) / 3;
         low = low.min(luma);
         high = high.max(luma);
     }
     high - low >= 20
+}
+
+// Large selections can contain several nearly identical paragraphs. Sparse
+// anchors locate candidates; actual moving pixels (including small letters and
+// digits between the anchors) must distinguish their offsets before acceptance.
+fn refine_candidates(
+    a: &RgbaImage,
+    b: &RgbaImage,
+    start: u32,
+    end: u32,
+    candidates: &mut Vec<(f64, u32)>,
+) -> bool {
+    let coarse = candidates[0].0;
+    candidates.retain(|(error, _)| *error <= coarse + 1.5);
+    if candidates.len() > 16 {
+        return false;
+    }
+    let columns: Vec<_> = (a.width() / 24..a.width() * 23 / 24)
+        .filter(|&x| {
+            (0..64).any(|row| {
+                let y = row * (a.height() - 1) / 63;
+                let (p, q) = (a.get_pixel(x, y), b.get_pixel(x, y));
+                (0..3).any(|c| p[c].abs_diff(q[c]) > 4)
+            })
+        })
+        .collect();
+    if columns.is_empty() {
+        return false;
+    }
+    for (score, shift) in candidates.iter_mut() {
+        let mut squared = 0u64;
+        let mut count = 0u64;
+        for y in start..end - *shift {
+            for &x in &columns {
+                let (p, q) = (a.get_pixel(x, y + *shift), b.get_pixel(x, y));
+                for c in 0..3 {
+                    let d = p[c].abs_diff(q[c]) as u64;
+                    squared += d * d;
+                    count += 1;
+                }
+            }
+        }
+        *score = (squared as f64 / count.max(1) as f64).sqrt();
+    }
+    candidates.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let (best, shift) = candidates[0];
+    best <= 3.
+        && !candidates
+            .iter()
+            .any(|(e, d)| d.abs_diff(shift) > 2 && *e < best + 0.25)
+}
+
+fn extend_stationary_sides(
+    output: &mut RgbaImage,
+    prev: &RgbaImage,
+    next: &RgbaImage,
+    top: u32,
+    bottom: u32,
+    shift: u32,
+) {
+    let end = prev.height() - bottom;
+    let moving = |x| {
+        (top..end).any(|y| {
+            let (p, q) = (prev.get_pixel(x, y), next.get_pixel(x, y));
+            (0..3).any(|c| p[c].abs_diff(q[c]) > 4)
+        })
+    };
+    let Some(left) = (0..prev.width()).find(|&x| moving(x)) else {
+        return;
+    };
+    let right = (left..prev.width()).rfind(|&x| moving(x)).unwrap();
+    let new_end = output.height() - bottom;
+    let tail = (end - top).min(64);
+    for x in (0..left).chain(right + 1..prev.width()) {
+        let mut colors = std::collections::HashMap::new();
+        for row in 0..64 {
+            let color = *prev.get_pixel(x, top + row * (end - top - 1) / 63);
+            *colors.entry(color.0).or_insert(0u32) += 1;
+        }
+        let (color, count) = colors.into_iter().max_by_key(|(_, n)| *n).unwrap();
+        // Only extend a clear flat panel background, never guess at photographs
+        // or patterned sidebars. Move its fixed bottom controls once to the end.
+        if count < 32 {
+            continue;
+        }
+        for y in new_end - shift - tail..new_end {
+            output.put_pixel(x, y, image::Rgba(color));
+        }
+        for row in 0..tail {
+            output.put_pixel(
+                x,
+                new_end - tail + row,
+                *next.get_pixel(x, end - tail + row),
+            );
+        }
+    }
 }
 
 pub fn same_frame(a: &RgbaImage, b: &RgbaImage) -> bool {
@@ -100,24 +222,34 @@ impl Stitcher {
             return Step::Unchanged;
         }
         let h = prev.height();
+        let columns = alignment_columns(prev, &next);
+        if columns.len() < 4 {
+            return Step::Uncertain;
+        }
+        let error_at = |ay, by| row_error_at(prev, ay, &next, by, &columns);
         // Static headers/footers are identified in place, then excluded from the
-        // displacement search. Limit their reach so whitespace cannot eat a page.
+        // displacement search. Full-window captures may include tall toolbars;
+        // retain at least 128 pixels of moving content rather than capping chrome
+        // at one quarter of the whole selection.
         let mut top = 0;
-        while top < h / 4 && row_error(prev, top, &next, top) < 0.7 {
+        while top < h - 128 && error_at(top, top) < 0.7 {
             top += 1;
         }
         let mut bottom = 0;
-        while bottom < h / 4 && row_error(prev, h - 1 - bottom, &next, h - 1 - bottom) < 0.7 {
+        while bottom < h - top - 128 && error_at(h - 1 - bottom, h - 1 - bottom) < 0.7 {
             bottom += 1;
         }
         let guard = (h / 32).max(4);
         let start = top.max(guard);
         let end = h - bottom.max(guard);
-        let min_overlap = (h / 4).max(64);
+        let Some(moving_height) = end.checked_sub(start) else {
+            return Step::Uncertain;
+        };
+        let min_overlap = (moving_height / 4).max(64);
         if end <= start + min_overlap {
             return Step::Uncertain;
         }
-        let details: Vec<_> = (0..h).map(|y| row_detail(prev, y)).collect();
+        let details: Vec<_> = (0..h).map(|y| row_detail(prev, y, &columns)).collect();
         let mut candidates = Vec::new();
         for shift in 1..end - start - min_overlap + 1 {
             let length = end - start - shift;
@@ -127,7 +259,7 @@ impl Stitcher {
                 if !details[(y + shift) as usize] {
                     continue;
                 }
-                let error = row_error(prev, y + shift, &next, y);
+                let error = error_at(y + shift, y);
                 sum += error;
                 count += 1;
                 if error > 8. {
@@ -139,22 +271,24 @@ impl Stitcher {
             }
         }
         candidates.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let Some(&(error, shift)) = candidates.first() else {
+        let Some(&(error, _)) = candidates.first() else {
             return Step::Uncertain;
         };
-        if error > 3.
-            || candidates
-                .iter()
-                .any(|(e, d)| d.abs_diff(shift) > 2 && *e < error + 1.5)
+        if error > 3. {
+            return Step::Uncertain;
+        }
+        if candidates.iter().skip(1).any(|(e, _)| *e < error + 1.5)
+            && !refine_candidates(prev, &next, start, end, &mut candidates)
         {
             return Step::Uncertain;
         }
+        let shift = candidates[0].1;
         // Check the full overlap, not just anchors: reject substantial animation,
         // horizontal movement, lazy-load reflow or an unrelated window.
         let mut mismatch = 0;
         let rows = end - start - shift;
         for y in start..end - shift {
-            if row_error(prev, y + shift, &next, y) > 8. {
+            if error_at(y + shift, y) > 8. {
                 mismatch += 1;
             }
         }
@@ -176,6 +310,7 @@ impl Stitcher {
         pixels.extend_from_slice(&next.as_raw()[new_start..new_end]);
         pixels.extend_from_slice(&next.as_raw()[new_end..]);
         self.image = RgbaImage::from_raw(self.image.width(), height, pixels).unwrap();
+        extend_stationary_sides(&mut self.image, prev, &next, top, bottom, shift);
         self.previous = next;
         self.strips += 1;
         Step::Appended(shift)
@@ -282,5 +417,94 @@ mod tests {
         assert!(settled_frame(&a, &blink));
         assert!(!settled_frame(&a, &frame(&p, 140, 44, 32)));
         assert_eq!(Stitcher::new(a).unwrap().push(blink), Step::Unchanged);
+    }
+
+    #[test]
+    fn large_window_with_stationary_sidebars_and_tall_chrome_aligns() {
+        let content = page(900, 3000);
+        let window = |offset: u32| {
+            RgbaImage::from_fn(1600, 1000, |x, y| {
+                if (340..1240).contains(&x) && (300..820).contains(&y) {
+                    *content.get_pixel(x - 340, y - 300 + offset)
+                } else {
+                    // Detailed fixed navigation on both sides, plus large toolbars.
+                    Rgba([((x * 13 + y * 7) % 180) as u8, (y % 150) as u8, 80, 255])
+                }
+            })
+        };
+        let mut stitch = Stitcher::new(window(0)).unwrap();
+        for offset in [120, 240, 360, 480] {
+            assert_eq!(stitch.push(window(offset)), Step::Appended(120));
+        }
+        assert_eq!(stitch.image.height(), 1480);
+        for y in 300..1300 {
+            for x in 340..1240 {
+                assert_eq!(
+                    stitch.image.get_pixel(x, y),
+                    content.get_pixel(x - 340, y - 300)
+                );
+            }
+        }
+    }
+
+    #[test]
+    fn repeated_paragraphs_keep_small_unique_details_between_anchors() {
+        let mut content = RgbaImage::from_fn(320, 3000, |x, y| {
+            let n = x.wrapping_mul(73856093) ^ (y % 112).wrapping_mul(19349663);
+            Rgba(if y % 112 < 60 && x > 12 && x < 305 && n % 11 < 5 {
+                [25, 35, 45, 255]
+            } else {
+                [245, 245, 245, 255]
+            })
+        });
+        for index in 0..26 {
+            for bit in 0..5 {
+                for y in 10..18 {
+                    for x in 0..2 {
+                        content.put_pixel(
+                            34 + bit * 4 + x,
+                            index * 112 + y,
+                            Rgba(if index & (1 << bit) != 0 {
+                                [5, 5, 5, 255]
+                            } else {
+                                [245, 245, 245, 255]
+                            }),
+                        );
+                    }
+                }
+            }
+        }
+        let frame = |offset| image::imageops::crop_imm(&content, 0, offset, 320, 1000).to_image();
+        let mut stitch = Stitcher::new(frame(0)).unwrap();
+        assert_eq!(stitch.push(frame(120)), Step::Appended(120));
+        assert_eq!(stitch.push(frame(240)), Step::Appended(120));
+        assert_eq!(
+            stitch.image,
+            image::imageops::crop_imm(&content, 0, 0, 320, 1240).to_image()
+        );
+    }
+
+    #[test]
+    fn stationary_sidebar_keeps_navigation_and_bottom_controls_once() {
+        let content = page(320, 2000);
+        let window = |offset| {
+            RgbaImage::from_fn(600, 480, |x, y| {
+                if x >= 180 && x < 500 && y >= 44 && y < 448 {
+                    *content.get_pixel(x - 180, y - 44 + offset)
+                } else if y < 44 || y >= 448 {
+                    Rgba([30, 40, 50, 255])
+                } else if y == 440 || y == 441 || y == 60 {
+                    Rgba([200, 210, 220, 255])
+                } else {
+                    Rgba([40, 50, 60, 255])
+                }
+            })
+        };
+        let mut stitch = Stitcher::new(window(0)).unwrap();
+        assert_eq!(stitch.push(window(120)), Step::Appended(120));
+        assert_eq!(stitch.push(window(240)), Step::Appended(120));
+        assert_eq!(stitch.image.get_pixel(20, 60), &Rgba([200, 210, 220, 255]));
+        assert_eq!(stitch.image.get_pixel(20, 440), &Rgba([40, 50, 60, 255]));
+        assert_eq!(stitch.image.get_pixel(20, 680), &Rgba([200, 210, 220, 255]));
     }
 }
