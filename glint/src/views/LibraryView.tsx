@@ -94,10 +94,10 @@ export default function LibraryView() {
           </div>
           <Select value={kind} options={KIND_OPTIONS} onChange={setKind} />
         </div>
-        {textEnabled&&captures.some(c=>c.kind==='screenshot')&&<div className="library-index-status">
-          <span role="status" aria-live="polite">{indexError|| (progress.running?`Reading screenshot text · ${progress.done} of ${progress.total}`:progress.errors?`${progress.errors} images could not be read.`:progress.total&&progress.done<progress.total?'Text scan paused.': 'Screenshot text stays on this device.')}</span>
+        {textEnabled&&captures.some(c=>c.kind==='screenshot')&&(progress.running||indexError||progress.errors>0)&&<div className="library-index-status">
+          <span role="status" aria-live="polite">{indexError|| (progress.running?`Reading screenshot text · ${progress.done} of ${progress.total}`:`${progress.errors} images could not be read.`)}</span>
           {progress.running?<button className="g-btn g-btn-subtle g-btn-sm" onClick={()=>void invoke('library_index_cancel')}>Cancel text scan</button>
-            :<button className="g-btn g-btn-subtle g-btn-sm" onClick={async()=>{setIndexError('');try{if(progress.errors)await invoke('library_index_clear');setIndexRun(v=>v+1);}catch{setIndexError('Screenshot text could not be read. Try again.');}}}>{progress.errors?'Retry text scan':'Read screenshot text'}</button>}
+            :<button className="g-btn g-btn-subtle g-btn-sm" onClick={async()=>{setIndexError('');try{if(progress.errors)await invoke('library_index_clear');setIndexRun(v=>v+1);}catch{setIndexError('Screenshot text could not be read. Try again.');}}}>Retry text scan</button>}
         </div>}
       </section>
 
