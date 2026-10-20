@@ -8,6 +8,8 @@ export async function connectPage(match, port = Number(process.env.GLINT_CDP_POR
   const socket = new WebSocket(target.webSocketDebuggerUrl);
   await new Promise((resolve, reject) => { socket.addEventListener('open', resolve, {once:true}); socket.addEventListener('error', reject, {once:true}); });
   let id = 0; const pending = new Map();
+  const closed=()=>{for(const waiter of pending.values())waiter.reject(new Error('CDP page closed'));pending.clear();};
+  socket.addEventListener('close',closed);socket.addEventListener('error',closed);
   socket.addEventListener('message', e => { const message=JSON.parse(e.data); const waiter=pending.get(message.id); if (waiter) {pending.delete(message.id); message.error ? waiter.reject(new Error(JSON.stringify(message.error))) : waiter.resolve(message.result);} });
   const send = (method, params={}) => new Promise((resolve,reject) => { const key=++id;pending.set(key,{resolve,reject});socket.send(JSON.stringify({id:key,method,params})); });
   const evaluate = async expression => {const r=await send('Runtime.evaluate',{expression,awaitPromise:true,returnByValue:true});if(r.exceptionDetails) throw new Error(r.exceptionDetails.exception?.value ?? r.exceptionDetails.exception?.description ?? r.exceptionDetails.text);return r.result.value;};

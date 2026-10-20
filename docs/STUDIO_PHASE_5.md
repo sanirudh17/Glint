@@ -192,3 +192,46 @@ Artifacts: `%LOCALAPPDATA%\GlintValidation\Phase5\CaptureCheck`.
 
 Background removal stays deferred, without a model download or inference runtime.
 Main remains unchanged; work is saved on `phase-5-capture-export`.
+
+## Full-screen scrolling follow-up (October 21)
+
+The user reported that full-browser selections failed where smaller regions worked,
+capture sometimes failed on its first attempt, and the controller flashed white.
+
+- Alignment now identifies moving columns instead of mixing fixed navigation and
+  margins into the match. Tall browser chrome is excluded based on the actual
+  moving region. Similar paragraphs get a finer pixel comparison, including small
+  distinguishing letters/digits between the sparse anchors. Genuinely ambiguous
+  matches, reverse scrolling and excessive jumps still leave the image unchanged.
+- Flat stationary side panels extend their background while preserving their top
+  navigation and bottom controls once, avoiding repeated footer borders at joins.
+  Patterned backgrounds are not guessed. Temporary uncertainty stops further wheel
+  input and gets a three-second retry period before pausing with recovery guidance.
+- Startup waits for the selection overlay to hide. The controller has explicit
+  Preparing/Ready states, and Start/Finish stay disabled during preparation. Its
+  native surface is transparent, boot theme/accent are set before HTML loads, OS
+  transitions are disabled, and React reveals it after status and two paint frames.
+  DWM composition is flushed before establishing the initial reference frame.
+  Resume reacquires the target window instead of retaining an initial hit-test error.
+- Regression evidence: a maximized Chrome window was selected at 1920 x 1020,
+  excluding the taskbar, on 125% Windows scaling. Automatic page output was
+  1920 x 2917; chat output was 1920 x 3205. Both reference comparisons had zero
+  differing pixels and zero maximum channel error. Pause/Resume and bottom
+  detection passed in the same run. Browser content comparisons include the fixed
+  sidebar; its border is no longer repeated.
+- Smaller manual captures also passed exactly: page 800 x 2800, chat 800 x 3088.
+  Both test runs deliberately delayed overlay acknowledgement by 400 ms and checked
+  first-visible controller content in dark and light themes. Four consecutive
+  controller creation/start cycles passed on the final code.
+- Checks: 251 native tests and 250 frontend tests passed; two existing native
+  display-dependent tests remain ignored. TypeScript passed. New unit regressions
+  cover large fixed layouts, repeated paragraphs and stationary sidebar controls.
+- Reproduce the full-window automatic check with `GLINT_SCROLL_LARGE=1`,
+  `GLINT_SCROLL_AUTO=1`, `GLINT_SCROLL_LIFECYCLE=1`, `GLINT_MANUAL_FOCUS=1` and
+  `GLINT_PIN_FIXTURE=1`, then run `scripts/capture-phase5-scroll-check.mjs` against
+  the existing CaptureCheck artifact directory. The test uses a fresh local Chrome
+  profile each run. CDP disconnects now reject pending requests, so test cleanup
+  cannot hang waiting for a window that has already closed.
+
+The isolated development preview contains these fixes. The installed executable
+and the outstanding optimized-build performance gate are unchanged.

@@ -15,6 +15,6 @@ public class GlintWindowRead {
 }
 '@
 $owned=[Collections.Generic.List[object]]::new()
-$callback=[GlintWindowRead+Callback]{param($h,$p) $owner=0;[void][GlintWindowRead]::GetWindowThreadProcessId($h,[ref]$owner);if($owner -eq $TargetPid){$title=[Text.StringBuilder]::new(512);[void][GlintWindowRead]::GetWindowText($h,$title,512);if($Pin -and $title.ToString() -eq 'Glint manual scroll check'){[void][GlintWindowRead]::SetWindowPos($h,[IntPtr]::new(-1),0,0,0,0,0x0013)};$owned.Add([pscustomobject]@{hwnd=$h.ToInt64();title=$title.ToString();visible=[GlintWindowRead]::IsWindowVisible($h);minimized=[GlintWindowRead]::IsIconic($h);foreground=($h -eq [GlintWindowRead]::GetForegroundWindow())})};return $true}
+$callback=[GlintWindowRead+Callback]{param($h,$p) $owner=0;[void][GlintWindowRead]::GetWindowThreadProcessId($h,[ref]$owner);if($owner -eq $TargetPid){$title=[Text.StringBuilder]::new(512);[void][GlintWindowRead]::GetWindowText($h,$title,512);if($Pin -and $title.ToString().StartsWith('Glint manual scroll check')){[void][GlintWindowRead]::SetWindowPos($h,[IntPtr]::new(-1),0,0,0,0,0x0013)};$owned.Add([pscustomobject]@{hwnd=$h.ToInt64();title=$title.ToString();visible=[GlintWindowRead]::IsWindowVisible($h);minimized=[GlintWindowRead]::IsIconic($h);foreground=($h -eq [GlintWindowRead]::GetForegroundWindow())})};return $true}
 [void][GlintWindowRead]::EnumWindows($callback,[IntPtr]::Zero)
 ConvertTo-Json -InputObject @($owned.ToArray()) -Compress
