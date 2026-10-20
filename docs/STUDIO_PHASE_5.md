@@ -1,6 +1,7 @@
 # Phase 5 — GIF export, scrolling capture and clean capture
 
-Status: in progress, authorized by the user on October 20, 2026 after Phase 4.
+Status: functional checkpoint ready; optimized-build performance gate remains open.
+Authorized by the user on October 20, 2026 after Phase 4.
 Branch: `phase-5-capture-export`, based on `e3782ca`. Main remains unchanged.
 Background removal and Phase 6 remain outside this work.
 
@@ -24,8 +25,8 @@ Background removal and Phase 6 remain outside this work.
    and the existing region-selection overlay. A background worker collects settled
    frames; pure overlap logic detects displacement and repeated sticky bands,
    rejects ambiguous seams, and caps height/pixel allocation. Finish opens the
-   stitched PNG in the existing editable screenshot editor. Auto-scroll is deferred
-   as the build plan explicitly prioritizes manual mode.
+   stitched PNG in the existing editable screenshot editor. Manual mode landed first;
+   the user subsequently authorized optional auto-scroll to clarify the workflow.
 5. Audit clean-capture controls and reuse what exists. Capture settings already
    have 3/5/10 second delays; window capture, path copying, file drag, and the
    latest-capture editor command already exist. Add only missing monitor choice,
@@ -86,14 +87,15 @@ No website redesign, model download or cloud dependency is part of this phase.
 ## Acceptance and measurement
 
 - [x] Generated OCR titles return to normal, manual names and search survive.
-- [ ] Dragged image paths remain readable after dismissal, eviction and restart.
+- [x] Dragged image paths remain readable after dismissal, eviction and restart.
 - [x] Quick and Studio GIF exports apply edits/look, dimensions, FPS and loop.
 - [x] GIFs stay below the stated cap; cancellation leaves no published partial file.
-- [ ] Long web-page and chat fixtures stitch without visible seams in manual mode.
-- [ ] Sticky bands, no movement, overscroll, ambiguous matches and DPI are checked.
-- [ ] Every new clean-capture option can be turned off and restores system state.
-- [ ] Existing capture, editor, privacy and video behavior pass regression checks.
-- [ ] Capture latency and idle/peak memory are measured against the pre-change app.
+- [x] Long web-page and chat fixtures stitch without visible seams in manual mode.
+- [x] Sticky bands, no movement, overscroll, ambiguous matches and DPI are checked.
+- [x] Every new clean-capture option can be turned off and restores system state.
+- [x] Existing capture, editor, privacy and video behavior pass regression checks.
+- [x] Capture latency and complete process-tree idle/peak memory are recorded.
+- [ ] Comparable optimized builds verify latency and idle-memory targets.
 
 Before the new capture features, the installed native process used approximately
 69 MB working set with Library open (WebView processes excluded; this is not a
@@ -102,3 +104,91 @@ comparison. Target no more than 20% idle-memory growth, keep expensive work off
 the UI thread, and target warm region selection/metadata within 250 ms. Record
 the actual measured results and explain any missed target before calling this
 phase complete.
+
+## Scrolling and clean-capture checkpoint (October 21)
+
+- Home > Scrolling capture > select the scrollable region > Start auto-scroll.
+  Pause/Resume controls automatic wheel steps; Finish opens an editable PNG.
+  Manual scrolling works without starting auto-scroll. Esc cancels; Enter finishes
+  when focus is outside a button or input.
+- Small caret/clock changes no longer cause indefinite settling. Prolonged motion
+  and uncertain overlaps pause auto-scroll with recovery guidance and keep the
+  captured portion. At the bottom, it stops advancing and offers Finish. Limits
+  are 20,000 pixels in height, 24 megapixels and five minutes; Finish still saves
+  the accumulated portion after reaching a limit.
+- Wheel input targets the selected window without moving the pointer. Closing or
+  covering that window pauses automatic input. The controller is excluded from
+  screen capture. After an alignment failure, scroll back and use smaller steps.
+- Actual Chrome desktop fixtures passed at 125% Windows scaling. Manual page
+  (800 x 2800) and chat (800 x 3088) matched their unrolled references exactly.
+  Automatic page matched exactly; automatic chat had a maximum one-level color
+  difference, with zero pixels differing by more than two levels. Pause/Resume
+  and bottom detection passed. Video, heavy animation, large jumps, lazy insertion
+  above the viewport and uniform pages can still prevent reliable alignment.
+- Desktop-icon hiding is off by default. A scrolling session holds its hide guard
+  until completion or cancellation, avoiding icon flicker between strips. Actual
+  cancellation checks preserved initially visible and initially hidden icons.
+- Optional Quick Access auto-close is off by default. After eight idle seconds it
+  closes only the webview, retaining captures. Hover pauses it; drag events also
+  suspend the timer. Actual idle/off, hover, retained captures, reopening on a new
+  capture and opening the latest capture after auto-close passed.
+- The latest-capture shortcut can be bound or disabled. It opens in-memory latest
+  pixels during a session, or the newest existing, non-deleted saved screenshot
+  after restart. Both command paths and binding/clearing were checked.
+- Actual five-card tray eviction deleted its temporary source while the shared
+  attachment remained byte-identical. Clear/dismissal and process restart also
+  preserved it. Copy path now snapshots images off the UI thread too.
+- Windows clipboard checks confirmed one exact CF_HDROP file path for GIF and
+  video copy, with the prior clipboard restored afterward. Video validation here
+  checks file transport, not decoding.
+- Monitor keys/buttons use the selected display origin and scale. Negative
+  origins have unit coverage; only one physical display was available, so actual
+  multi-monitor switching remains a hardware review item.
+- Automatic notification suppression is deferred. The documented FocusSession API
+  is a Limited Access Feature requiring an unlock token. Glint offers Notification
+  settings rather than changing undocumented registry state. See
+  [Microsoft API requirements](https://learn.microsoft.com/en-us/uwp/api/windows.ui.shell.focussessionmanager.trystartfocussession?view=winrt-28000).
+- Repeated captures exposed a Tauri once-listener race on duplicate paint events.
+  Bounded listeners now accept repeated acknowledgements and unregister afterward.
+  Duplicate-event and invalid-selection recovery checks passed.
+- UI checks covered dark/light tokens and wide/compact settings layouts. The idle
+  Library scan button and explanatory sentence are removed; OCR search and active
+  scan/error handling remain.
+- Verification: 250 frontend tests and 248 native tests passed; two existing
+  display-dependent tests remain ignored. TypeScript and the final native compile
+  check passed. These capture changes have not replaced the installed executable.
+  The latest running build is the isolated development preview, with identifier
+  `com.glint.validation.phase5.capture` and its own database.
+
+### Performance evidence and remaining gate
+
+Warm capture-start to available selection metadata, five samples per build:
+installed baseline 281/276/277/290/279 ms; development preview
+463/471/458/474/466 ms. Both exceed the 250 ms target. The path includes an
+existing deliberate 200 ms hide/compositor delay; the preview also runs
+unoptimized native code and Vite. No latency improvement is claimed.
+
+Complete native-plus-WebView process-tree measurements (shared working pages can
+be counted in more than one process):
+
+| Context | Working set | Private bytes |
+| --- | ---: | ---: |
+| Installed baseline, Library | 680,558,592 | 585,637,888 |
+| Development preview, idle Library | 873,218,048 | 530,042,880 |
+| Development preview, peak during real page/chat checks | 1,666,306,048 | 1,151,352,832 |
+
+Observed idle working-set growth is about 28%, above the 20% target, while private
+bytes are lower. Build modes and retained WebView/window states differ, so these
+numbers cannot establish the optimized release regression. Keep the release
+performance gate open until comparable optimized builds are measured. No full
+production rebuild was performed for these capture changes. Do not start Phase 6.
+
+Reproduction scripts: `capture-phase5-scroll-check.mjs` (`GLINT_SCROLL_AUTO=1` for
+automatic mode), `capture-phase5-clean-check.mjs`, `capture-phase5-icons-check.mjs`,
+`capture-phase5-file-copy-check.ps1` (STA), `capture-phase5-latency-check.mjs` and
+`capture-phase5-measure-scroll.ps1`. They target the isolated preview on CDP 9242;
+latency comparison additionally expects the installed baseline on 9240.
+Artifacts: `%LOCALAPPDATA%\GlintValidation\Phase5\CaptureCheck`.
+
+Background removal stays deferred, without a model download or inference runtime.
+Main remains unchanged; work is saved on `phase-5-capture-export`.
