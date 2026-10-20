@@ -133,10 +133,10 @@ pub fn ensure_open(app: &AppHandle) -> tauri::Result<()> {
     use tauri::Listener;
     use std::sync::atomic::{AtomicBool, Ordering};
     let shown = std::sync::Arc::new(AtomicBool::new(false));
-    {
+    let ready_id = {
         let win = win.clone();
         let shown = shown.clone();
-        app.once("hud-ready", move |_| {
+        app.listen("hud-ready", move |_| {
             if !shown.swap(true, Ordering::SeqCst) {
                 let _ = win.show();
                 // Also emit a second tray-updated after showing so that if the
@@ -145,8 +145,8 @@ pub fn ensure_open(app: &AppHandle) -> tauri::Result<()> {
                 // Can't emit from here (no AppHandle), but the window is now shown
                 // and the initial HudApp mount already does a refetch, so no need.
             }
-        });
-    }
+        })
+    };
     {
         let win = win.clone();
         let shown2 = shown.clone();
@@ -160,10 +160,12 @@ pub fn ensure_open(app: &AppHandle) -> tauri::Result<()> {
     }
     {
         let win = win.clone();
+        let app = app.clone();
         // Secondary fallback: thread sleep that cannot be starved by tokio pressure.
         // Guarantees the HUD appears even if the async runtime is saturated.
         std::thread::spawn(move || {
             std::thread::sleep(std::time::Duration::from_millis(1600));
+            app.unlisten(ready_id);
             if !shown.swap(true, Ordering::SeqCst) {
                 let _ = win.show();
             }

@@ -102,7 +102,10 @@ pub fn open_for_monitor(app: &AppHandle, monitor_id: u32) -> tauri::Result<()> {
     // (see capture::begin_spawned), so the bounded wait never blocks the main
     // event loop that delivers the signal.
     let (tx, rx) = mpsc::channel::<String>();
-    let ready_id = app.once("overlay-ready", move |ev| {
+    // A remount/refresh may acknowledge twice concurrently. Tauri's once wrapper
+    // panics on concurrent delivery; the channel consumes the first acknowledgement
+    // and the explicit unlisten below bounds the listener's lifetime.
+    let ready_id = app.listen("overlay-ready", move |ev| {
         let _ = tx.send(ev.payload().to_string());
     });
 
@@ -190,7 +193,7 @@ pub fn teardown_all(app: &AppHandle) {
 /// a newer capture session has already been triggered.
 fn clear_then_hide(app: &AppHandle, label: &str, session: u64) {
     let (tx, rx) = mpsc::channel::<()>();
-    let cleared_id = app.once("overlay-cleared", move |_| {
+    let cleared_id = app.listen("overlay-cleared", move |_| {
         let _ = tx.send(());
     });
     let _ = app.emit_to(label, "overlay-clear", ());
