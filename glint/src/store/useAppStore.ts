@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import {accentForeground} from '../lib/accentContrast';
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { persistSetting, saveSetting, setHotkey as setHotkeyIpc, resetHotkeys as resetHotkeysIpc, setSaveDir as setSaveDirIpc, windowSetTaskbar } from "../lib/ipc";
@@ -521,6 +522,7 @@ export function applyAccent(hex: string): void {
     (e) => e.accent.toLowerCase() === hex.toLowerCase(),
   );
   const root = document.documentElement.style;
+  root.setProperty('--accent-fg',accentForeground(hex));
   if (entry) {
     root.setProperty("--accent", entry.accent);
     root.setProperty("--accent-hover", entry.hover);
