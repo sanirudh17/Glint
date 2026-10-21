@@ -395,6 +395,18 @@ pub struct Renderer {
     watermark: Vec<(u32,u32,[u8;3],f64)>,
 }
 impl Renderer {
+    /// Compose a still through the same layout, shadow, border and watermark
+    /// engine as video. Flatten source alpha against its actual background.
+    pub fn still_frame(&self, source: &image::RgbaImage) -> RgbImage {
+        let l = self.layout;
+        let source = image::imageops::resize(source, l.content_w, l.content_h, image::imageops::FilterType::Triangle);
+        let mut rgb = RgbImage::new(l.content_w, l.content_h);
+        for (x,y,p) in source.enumerate_pixels() {
+            let bg=self.plate.get_pixel(l.x+x,l.y+y);
+            rgb.put_pixel(x,y,Rgb(std::array::from_fn(|c|((p[c] as u32*p[3] as u32+bg[c] as u32*(255-p[3] as u32)+127)/255) as u8)));
+        }
+        let mut out=RgbImage::new(l.width,l.height);self.frame(rgb.as_raw(),0.,&mut out);out
+    }
     /// Binary GIF coverage comes from geometry, never from the recorded colors.
     /// Keep chrome, the actual border pixels and watermark; omit soft shadows.
     pub fn gif_alpha_mask(&self) -> GrayImage {
@@ -1312,6 +1324,19 @@ fn encode(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn still_alpha_uses_shared_background_and_preserves_framing() {
+        let (mut project,events)=background_fixture();
+        project.look.enabled=true;project.look.background=serde_json::json!({"type":"solid","color":"#204060"});
+        let renderer=Renderer::new(&project,&events,320,200).unwrap();let l=renderer.layout;
+        let transparent=image::RgbaImage::from_pixel(320,200,image::Rgba([255,0,0,0]));
+        let frame=renderer.still_frame(&transparent);
+        assert_eq!(frame.get_pixel(l.x+l.content_w/2,l.y+l.content_h/2).0,[32,64,96]);
+        let opaque=image::RgbaImage::from_pixel(320,200,image::Rgba([255,0,0,255]));
+        let frame=renderer.still_frame(&opaque);
+        assert_eq!(frame.get_pixel(l.x+l.content_w/2,l.y+l.content_h/2).0,[255,0,0]);
+        assert_eq!(frame.get_pixel(0,0).0,[32,64,96]);
+    }
     #[test]
     fn named_output_sizes_preserve_card_geometry_and_exact_even_dimensions(){
         let (mut p, _)=background_fixture();

@@ -17,6 +17,8 @@ pub mod studio_render;
 mod look_gradient;
 mod look_watermark;
 pub mod studio_export;
+pub mod scene_project;
+pub mod scene_commands;
 pub mod gif;
 pub mod windows;
 
