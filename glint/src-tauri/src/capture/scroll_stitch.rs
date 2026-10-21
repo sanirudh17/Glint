@@ -828,6 +828,17 @@ mod tests {
             temporal.push_settled(frame(100, 21), &frame(100, 20)),
             Step::Appended(100)
         );
+        // A playing preview can stop on a different frame from the initial
+        // reference. Settling must recover without requiring the old frame.
+        let mut paused = Stitcher::new(frame(0, 0)).unwrap();
+        assert_eq!(
+            paused.push_settled(frame(0, 30), &frame(0, 30)),
+            Step::Unchanged
+        );
+        assert_eq!(
+            paused.push_settled(frame(100, 30), &frame(100, 30)),
+            Step::Appended(100)
+        );
         for y in 800..1000 {
             for x in 0..800 {
                 assert_eq!(stitch.image.get_pixel(x, y), content.get_pixel(x, y));

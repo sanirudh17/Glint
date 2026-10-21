@@ -42,6 +42,18 @@ pub fn disable_transitions(win: &tauri::WebviewWindow) {
 #[cfg(not(windows))]
 pub fn disable_transitions(_win: &tauri::WebviewWindow) {}
 
+/// Wait for a preceding hide to reach the composed desktop before grabbing it.
+/// Call off the event thread, after hiding a window with transitions disabled.
+/// Unlike an arbitrary delay, this normally waits only one composition frame.
+pub fn wait_for_compositor() {
+    #[cfg(windows)]
+    if unsafe { windows::Win32::Graphics::Dwm::DwmFlush() }.is_ok() {
+        return;
+    }
+    // Preserve the conservative path when composition is unavailable.
+    std::thread::sleep(std::time::Duration::from_millis(200));
+}
+
 /// Mark a window as excluded from screen capture (Win10 2004+): it stays visible on
 /// screen but is omitted from anything that captures the desktop (gdigrab/ddagrab). Used
 /// for the recording control bar and the pre-record countdown so neither is baked into the

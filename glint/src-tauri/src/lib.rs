@@ -48,8 +48,8 @@ pub struct Db(pub std::sync::Mutex<rusqlite::Connection>);
 /// Start a capture from the main-window UI (the Home quick-start buttons).
 /// Hotkeys and the tray call `capture::begin` directly while the main window is
 /// already hidden; this command additionally hides the main window first — so
-/// Glint isn't baked into the frozen frame — gives the compositor a beat to
-/// remove it, then begins.
+/// Glint isn't baked into the frozen frame — waits for the compositor to remove
+/// it, then begins.
 #[tauri::command]
 fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     if capture::scrolling::is_running(&app){return Err("Finish or cancel the scrolling capture first".into());}
@@ -63,10 +63,10 @@ fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     }
     // Run capture OFF the main thread (this sync command runs on the main thread,
     // and building the overlay webview there deadlocks the event loop). Give the
-    // hide a beat to take effect on screen, then begin.
+    // hide to reach the composed desktop, then begin.
     let app2 = app.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        crate::window::wait_for_compositor();
         // restore_main = true: re-show the main window once the capture settles,
         // since we hid it above.
         crate::capture::begin_restoring(&app2, m, true);
