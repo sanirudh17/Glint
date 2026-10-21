@@ -1,15 +1,16 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, ScanText, RotateCcw, ArrowRight } from "lucide-react";
+import { confirm, open } from "@tauri-apps/plugin-dialog";
+import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, ScanText, RotateCcw, ArrowRight, ChevronDown } from "lucide-react";
 import { Button, EmptyState } from "../components/ui";
 import { useAppStore } from "../store/useAppStore";
 import { startCapture } from "../lib/captureIpc";
 import { captureText } from "../lib/ocr";
 import { listCaptures, type CaptureItem } from "../lib/captures";
-import { getRecentProjects, openProject, pickOpenPath, pushRecentProject, type RecentProject } from "../lib/editor";
+import { getRecentProjects, openProject, pushRecentProject, type RecentProject } from "../lib/editor";
 import { CaptureCard } from "./library/CaptureCard";
 import "./home.css";
 
@@ -21,6 +22,13 @@ const RESUME_LIMIT = 3;
 export default function HomeView() {
   const pushToast = useAppStore((s) => s.pushToast);
   const navigate = useNavigate();
+  const projectMenu = useRef<HTMLDetailsElement>(null);
+  useEffect(() => {
+    const close = (e: PointerEvent) => { if (!projectMenu.current?.contains(e.target as Node)) projectMenu.current?.removeAttribute('open'); };
+    const escape = (e: KeyboardEvent) => { if (e.key === 'Escape' && projectMenu.current?.open) { projectMenu.current.removeAttribute('open'); projectMenu.current.querySelector('summary')?.focus(); } };
+    document.addEventListener('pointerdown', close); document.addEventListener('keydown', escape);
+    return () => { document.removeEventListener('pointerdown', close); document.removeEventListener('keydown', escape); };
+  }, []);
 
   // Recent captures — newest first, capped.
   const [recent, setRecent] = useState<CaptureItem[]>([]);
@@ -50,11 +58,20 @@ export default function HomeView() {
   }, [reloadRecent, reloadProjects]);
 
   const onOpenProject = useCallback(async () => {
-    const path = await pickOpenPath();
-    if (!path) return;
-    try { await openProject(path); await pushRecentProject(path); }
+    const path = await open({ filters: [{name:'Glint projects',extensions:['glint','glint-video']}], multiple:false, directory:false });
+    if (typeof path !== 'string') return;
+    projectMenu.current?.removeAttribute('open');
+    try {
+      if (path.toLowerCase().endsWith('.glint-video')) {
+        let replacingDraft = false;
+        try { const draft = JSON.parse(localStorage.getItem('glint-scene-project-draft-v1') ?? 'null'); replacingDraft = !!draft?.dirty && draft.path !== path; } catch { /* No readable draft to replace. */ }
+        if (replacingDraft && !await confirm('Open another video project? This will replace the draft kept on this device.', {title:'Open video project',kind:'warning'})) return;
+        navigate(`/video-project?path=${encodeURIComponent(path)}`);
+      }
+      else { await openProject(path); await pushRecentProject(path); }
+    }
     catch { pushToast("Couldn't open the project"); }
-  }, [pushToast]);
+  }, [pushToast, navigate]);
 
   const onOpenRecent = useCallback(async (p: RecentProject) => {
     if (!p.exists) { pushToast("That project file is no longer on disk"); reloadProjects(); return; }
@@ -84,9 +101,13 @@ export default function HomeView() {
           <Button variant="subtle" size="md" icon={Monitor} onClick={() => startCapture("fullscreen")}>Fullscreen</Button>
           <Button variant="subtle" size="md" icon={Video} onClick={() => invoke("recorder_open_region_selector")}>Record</Button>
           <Button variant="subtle" size="md" icon={ScanText} onClick={() => captureText()}>Capture Text</Button>
-          <Button variant="subtle" size="md" onClick={()=>void invoke('capture_scroll_begin').catch(e=>pushToast(String(e)))}>Scrolling capture</Button>
-          <Button variant="ghost" size="md" icon={FolderOpen} onClick={onOpenProject}>Open Project</Button>
-          <Button variant="ghost" size="md" icon={Video} onClick={()=>navigate('/video-project')}>Video project</Button>
+          <details className="home-project-menu" ref={projectMenu}>
+            <summary className="g-btn g-btn-ghost g-btn-md"><FolderOpen size={16} strokeWidth={1.5}/>Projects<ChevronDown size={14} strokeWidth={1.5}/></summary>
+            <div className="home-project-options">
+              <button type="button" onClick={()=>navigate('/video-project')}><Video size={16} strokeWidth={1.5}/><span>Video project<small>Create a video or resume your draft</small></span></button>
+              <button type="button" onClick={()=>void onOpenProject()}><FolderOpen size={16} strokeWidth={1.5}/><span>Open saved project<small>Screenshot or video project</small></span></button>
+            </div>
+          </details>
         </div>
       </section>
 
