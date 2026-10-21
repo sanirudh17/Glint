@@ -3,7 +3,8 @@
 Status: functional checkpoint ready; optimized-build performance gate remains open.
 Authorized by the user on October 20, 2026 after Phase 4.
 Branch: `phase-5-capture-export`, based on `e3782ca`. Main remains unchanged.
-Background removal and Phase 6 remain outside this work.
+Background removal remains deferred. Phase 5 is complete; Phase 6 is authorized
+after the optimized performance verification recorded at the end of this file.
 
 ## Verified paths and plan
 
@@ -95,7 +96,7 @@ No website redesign, model download or cloud dependency is part of this phase.
 - [x] Every new clean-capture option can be turned off and restores system state.
 - [x] Existing capture, editor, privacy and video behavior pass regression checks.
 - [x] Capture latency and complete process-tree idle/peak memory are recorded.
-- [ ] Comparable optimized builds verify latency and idle-memory targets.
+- [x] Comparable optimized builds verify latency and idle-memory targets.
 
 Before the new capture features, the installed native process used approximately
 69 MB working set with Library open (WebView processes excluded; this is not a
@@ -284,3 +285,47 @@ stable content can still require pausing; changing content is captured as snapsh
 
 The installed executable, deferred background removal and optimized-build
 performance gate remain unchanged. Phase 6 has not started.
+
+## Final optimized performance gate — passed (October 21)
+
+This supersedes the open performance gate in the earlier checkpoint notes.
+The user accepted the functional checks and authorized Phase 6 once this gate
+passed, without another approval step.
+
+Both executables were built with `tauri build --no-bundle` using the same Rust
+toolchain, dependency cache and WebView2 version. The pre-Phase-5 baseline is
+`e3782ca`; the candidate contains the final scrolling fixes and the compositor
+wait change in `76df0fb`. Each uses an isolated identifier, a fresh WebView
+profile, the same 87 captures with copied thumbnails, and a 1100 x 720 Library.
+Builds ran sequentially, with compilation finished before measurement. All nine
+native/WebView processes are included; shared working pages can be counted more
+than once, so these are comparative process-tree totals, not physical RAM claims.
+
+| Measurement | Baseline | Phase 5 candidate |
+| --- | ---: | ---: |
+| Warm metadata, median / range (10 trials) | 305 / 301–324 ms | 111 / 107–174 ms |
+| Warm overlay visible, median / range | 320 / 310–344 ms | 125 / 118–196 ms |
+| Idle working set, median (5 samples) | 671,825,920 B | 661,114,880 B |
+| Idle private bytes, median | 384,339,968 B | 372,420,608 B |
+| Working set after 11 capture/cancel cycles | 997,326,848 B | 1,031,421,952 B |
+| Private bytes after those cycles | 648,245,248 B | 677,134,336 B |
+
+All candidate warm selection measurements pass the 250 ms target. Idle working
+set is 1.59% lower and private bytes are 3.10% lower, passing the maximum 20%
+growth target. The existing fixed 200 ms hide delay is replaced by `DwmFlush`,
+off the event thread, with the conservative delay retained if composition fails.
+Three captures with a bright main-window sentinel found zero sentinel pixels in
+the frozen desktop. No installer was built or installed and main is unchanged.
+
+The video regression also verifies that playback may settle on a different frame
+from the initial reference and then scroll successfully. Enough stable page
+content is still required; continuously changing video or major reflow can pause
+capture while retaining completed strips. Do not promise a fixed one-second
+timeout for arbitrary animated pages.
+
+Reproduce with `capture-phase5-performance-check.mjs <artifact-directory> <label>
+<CDP-port> <owned-PID>` against each seeded optimized executable, then
+`capture-phase5-hidden-window-check.mjs <artifact-directory> <CDP-port>`.
+Raw measurements and three frozen-frame checks are under
+`%LOCALAPPDATA%\GlintValidation\Phase5\Perf`. Full native checks: 253 passed,
+two existing display-dependent tests ignored. Phase 5 is complete.
