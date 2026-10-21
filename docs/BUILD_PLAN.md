@@ -309,6 +309,10 @@ Scoped multi-scene editing, not a general video editor.
 
 ### Phase 7 — Polish, à la carte (S each)
 
+Completed scope and verification: [STUDIO_PHASE_7.md](STUDIO_PHASE_7.md).
+Optional local English captions were included by user choice; multi-camera and
+multi-display recording remain deferred.
+
 Pick what time allows; each is independent.
 
 - Motion presets: 6–8 easing and entrance styles for zoom and title cards.

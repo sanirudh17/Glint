@@ -1,7 +1,9 @@
 # Phase 6 — Multi-clip projects
 
 Completed on `phase-6-multi-clip-projects`, after the optimized Phase 5 gate passed.
-Main and the installed executable are unchanged. Phase 7 has not started.
+Main and the installed executable are unchanged. The user subsequently authorized
+Phase 7 with optional local captions; its completion is recorded in
+[STUDIO_PHASE_7.md](STUDIO_PHASE_7.md).
 
 ## Verified paths and implementation
 
