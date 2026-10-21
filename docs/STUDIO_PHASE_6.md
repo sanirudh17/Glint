@@ -91,3 +91,38 @@ was rebuilt or installed for Phase 6.
 Commits: `502ed14` (schema/export) and `9eaca82` (editor/preview), followed by
 the acceptance scripts and this checkpoint record. Stop here; Phase 7 needs a
 separate scope decision.
+
+## Editor usability follow-up
+
+The preview and playback controls now stay visible while the scene list and
+inspector scroll independently. A wider inspector separates Scene settings from
+Look & canvas. When the editor has at most 760 px of available width (including
+the navigation rail), a Scenes / Scene settings / Look & canvas switch uses the
+area below the preview. Field labels stay on one line; long selected filenames
+can scroll horizontally instead of wrapping across the inspector.
+
+Themed Select portals clamp horizontally and flip vertically within the window.
+Keyboard highlighting scrolls only the menu, without moving its inspector.
+Home and Library navigation retain the local video draft immediately. If draft
+storage fails, navigation still requires Save and leave; an active export also
+blocks leaving. New/Open continue to confirm replacement of unsaved work.
+
+Home has one Projects entry with Video project (create/resume) and Open saved
+project. The latter accepts both `.glint` and `.glint-video`, with confirmation
+before replacing a different unsaved video draft. The Home scrolling-capture
+shortcut was removed as requested; the capture implementation is retained.
+
+Validation: 254 frontend tests and the production frontend build pass. The
+isolated browser check covers dark 1400 x 850 / 1100 x 720 / 850 x 600 and light
+850 x 720, preview aspect, one-line labels, inspector overflow, dropdown bounds,
+right-edge and upward placement, Home/Library navigation, draft recovery,
+combined project filters/routing and failed-storage protection. No browser
+runtime errors were recorded. Impeccable reports no findings. Native export
+code was unchanged, so this follow-up does not repeat the native export suite.
+
+Run `node scripts/studio-phase6-layout-check.mjs` with Vite and the isolated
+native preview on CDP 9242. It reads the open draft for realistic media but
+performs all mutations in its own headless Chrome profile with stubbed native
+IPC. It verifies that the real preview's draft and route remain unchanged.
+Screenshots and `result.json` are under
+`%LOCALAPPDATA%\GlintValidation\Phase6\Layout`. No installer was rebuilt.
