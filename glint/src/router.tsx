@@ -22,6 +22,7 @@ import SettingsView from "./views/SettingsView";
 
 const OcrPanel = lazy(() => import("./ocr/OcrPanel").then((m) => ({ default: m.OcrPanel })));
 const ScrollController=lazy(()=>import('./capture/ScrollController').then(m=>({default:m.ScrollController})));
+const VideoProjectView=lazy(()=>import('./recorder/VideoProjectView').then(m=>({default:m.VideoProjectView})));
 
 /** Suspense wrapper for a lazily-loaded route element. Fallback is empty — the chunk loads
  *  from local disk in a blink, and a spinner would flash more than it helps. */
@@ -145,6 +146,7 @@ export const router = createHashRouter([
       { path: "home", element: <HomeView /> },
       { path: "library", element: <LibraryView /> },
       { path: "settings", element: <SettingsView /> },
+      { path: "video-project", element: lazyRoute(<VideoProjectView />) },
     ],
   },
 ]);

@@ -8,10 +8,10 @@ import { savePreset, useLookPresets } from "./presets";
 import { OUTPUT_SIZES,autoBalance,watermarkImage,exportDimensions,originalExportSizing } from './sizing';
 import { NumberInput } from '../components/ui';
 
-export function LookControls({ look, onChange, checkpoint = () => {}, video = false, onSample, dimensions }: {
+export function LookControls({ look, onChange, checkpoint = () => {}, video = false, onSample, dimensions, fixedOutput=false }: {
   look: LookConfig; onChange: (patch: Partial<LookConfig>) => void; checkpoint?: () => void; video?: boolean;
   onSample?:()=>GradientStop[];
-  dimensions?:{width:number;height:number};
+  dimensions?:{width:number;height:number}; fixedOutput?:boolean;
 }) {
   const presets = useLookPresets();
   const [name, setName] = useState("");
@@ -71,13 +71,14 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
     {(["padding", "radius", "shadow"] as const).map((key) => <LookSlider key={key} label={key[0].toUpperCase() + key.slice(1)} // taste-skill-ignore: media shadow strength control
       ariaLabel={key} value={look[key]} unit="%" checkpoint={checkpoint} onChange={(value) => { setPresetId(""); onChange({ [key]: value }); }} />)}
     <button type="button" className="g-btn g-btn-subtle g-btn-sm" title="Use equal margins around the screenshot; clear fixed output size" onClick={()=>change(autoBalance(dimensions?.width??1,dimensions?.height??1))}>Auto Balance</button>
-    <div className="look-row"><span className="look-label">Aspect</span><div className="look-control"><Select portal ariaLabel="Export aspect" value={look.aspect}
+    {!fixedOutput&&<><div className="look-row"><span className="look-label">Aspect</span><div className="look-control"><Select portal ariaLabel="Export aspect" value={look.aspect}
       options={aspects.map((aspect) => ({ value: aspect, label: aspect === "auto" ? "Original" : aspect }))}
       onChange={(aspect) => change({ aspect: aspect as AspectId,outputSize:undefined })} /></div></div>
     <div className="look-preset-field"><span className="look-label">Output size</span><div><Select portal ariaLabel="Output size preset" value={look.outputSize?OUTPUT_SIZES.find(s=>s.width===look.outputSize?.width&&s.height===look.outputSize?.height)?.id??'custom':''}
       options={[{value:'',label:'Original resolution'},...OUTPUT_SIZES.map(s=>({value:s.id,label:s.label})),...(look.outputSize?[{value:'custom',label:'Custom size'}]:[])]}
       onChange={id=>{const size=OUTPUT_SIZES.find(s=>s.id===id);change({enabled:true,...(size?{outputSize:{width:size.width,height:size.height}}:originalExportSizing())});}}/></div></div>
     {look.outputSize&&<p className="look-hint">{look.outputSize.width} × {look.outputSize.height} px</p>}
+    </>}
     <ControlDisclosure title="Advanced look">
       {!video&&<><div className="look-row"><span className="look-label">Export width</span><div className="look-control"><NumberInput ariaLabel="Export width" min={16} max={Math.max(4096,output.width)} value={output.width} onChange={width=>change({outputSize:{width,height:output.height}})}/></div></div>
       <div className="look-row"><span className="look-label">Export height</span><div className="look-control"><NumberInput ariaLabel="Export height" min={16} max={Math.max(4096,output.height)} value={output.height} onChange={height=>change({outputSize:{height,width:output.width}})}/></div></div>
