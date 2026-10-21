@@ -20,6 +20,9 @@ pub mod studio_export;
 pub mod scene_project;
 pub mod scene_commands;
 pub mod gif;
+pub mod polish;
+pub mod captions;
+pub mod notes;
 pub mod windows;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -1184,6 +1187,13 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
 }
 
 /// Discard an in-flight recording: stop ffmpeg and delete the partial file.
+#[tauri::command(async)]
+pub async fn recorder_restart(app:tauri::AppHandle)->Result<(),String>{
+    let (target,system,mic,webcam,movable,fx,studio)={let state=app.state::<RecorderState>();let guard=state.0.lock().unwrap();let r=guard.as_ref().ok_or("No recording to restart")?;(r.target,!r.controls.system_muted.load(Ordering::Relaxed)&&r.sys_avail,!r.controls.mic_muted.load(Ordering::Relaxed)&&r.mic_avail,r.webcam_on,r.webcam_movable,r.fx_cfg,r.studio.is_some())};
+    recorder_cancel(app.clone()).await?;
+    let (mode,x,y,w,h)=match target{RecordTarget::Fullscreen=>("fullscreen",None,None,None,None),RecordTarget::Region{x,y,w,h}=>("region",Some(x),Some(y),Some(w),Some(h))};
+    recorder_start(app,mode.into(),x,y,w,h,Some(system),Some(mic),Some(webcam),Some(movable),Some(fx.click_viz),Some(fx.keystrokes),Some(fx.spotlight),Some(fx.cursor_hide),Some(match fx.cursor_size{1=>"large",2=>"xl",_=>"off"}.into()),Some(studio)).await
+}
 #[tauri::command(async)]
 pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();

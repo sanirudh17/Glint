@@ -34,6 +34,10 @@ pub struct Scene {
     pub title_size: f64,
     pub raster: Option<String>,
     pub transition: Transition,
+    #[serde(default)]
+    pub entrance: Option<String>,
+    #[serde(default)]
+    pub shape: Option<String>,
 }
 impl Scene {
     pub fn seconds(&self) -> f64 {
@@ -70,6 +74,7 @@ impl SceneProject {
         let mut ids = std::collections::HashSet::new();
         let mut total = 0.;
         for (i, s) in self.scenes.iter().enumerate() {
+            if s.entrance.as_ref().is_some_and(|v|!matches!(v.as_str(),"none"|"fade"|"left"|"right"|"up"|"down"|"zoom-in"|"zoom-out"))||s.shape.as_ref().is_some_and(|v|!matches!(v.as_str(),"none"|"line"|"circle"|"rectangle")){return Err("Invalid title motion or shape.".into());}
             if s.id.is_empty()
                 || !ids.insert(&s.id)
                 || !matches!(s.kind.as_str(), "video" | "image" | "title")

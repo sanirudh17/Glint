@@ -14,10 +14,10 @@ pub fn pixels(wm:Option<&Value>,w:u32,h:u32)->Result<Vec<(u32,u32,[u8;3],f64)>,S
     let size=wm["size"].as_f64().unwrap_or(100.);
     if !(50. ..=200.).contains(&size){return Err("Invalid watermark size".into());}
     let margin=12f64.max(w.min(h) as f64*0.025).min(w as f64/4.).min(h as f64/4.);
-    let height=(12f64.max(w.min(h) as f64*0.035)*size/100.).min(h as f64-margin*2.);
+    let height=if wm["caption"]==true{h as f64*0.18}else{(12f64.max(w.min(h) as f64*0.035)*size/100.).min(h as f64-margin*2.)};
     let width=(w as f64-margin*2.).min(height*image.width() as f64/image.height() as f64).max(1.);
     let height=width*image.height() as f64/image.width() as f64;
-    let left=if wm["position"].as_str()==Some("bottom-left"){margin}else{w as f64-margin-width};
+    let left=if wm["caption"]==true{(w as f64-width)/2.}else if wm["position"].as_str()==Some("bottom-left"){margin}else{w as f64-margin-width};
     let top=h as f64-margin-height;
     let stamp=image::imageops::resize(&image,width.round().max(1.) as u32,height.round().max(1.) as u32,image::imageops::FilterType::Triangle);
     Ok(stamp.enumerate_pixels().filter_map(|(x,y,p)|{let (px,py)=(left.round() as i32+x as i32,top.round() as i32+y as i32);(p[3]>0&&px>=0&&py>=0&&px<(w as i32)&&py<(h as i32)).then_some((px as u32,py as u32,[p[0],p[1],p[2]],p[3] as f64/255.*opacity))}).collect())

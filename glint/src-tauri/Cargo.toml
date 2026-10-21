@@ -67,4 +67,5 @@ raw-window-handle = "0.6"
 # cert store) and automatic redirect-following (GitHub asset URLs 302 to a CDN).
 # The download runs on a spawned thread, so a blocking client is the right shape.
 ureq = "2"
+sha2 = "0.10"
 

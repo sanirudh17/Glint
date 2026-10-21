@@ -62,7 +62,7 @@ pub fn validate_zooms(segments: &[Zoom], duration: f64) -> Result<(), String> {
             || !(0.0..=2.).contains(&s.ease_in)
             || !(0.0..=2.).contains(&s.ease_out)
             || !matches!(s.mode.as_str(), "fixed" | "follow-cursor")
-            || !matches!(s.ease.as_str(), "gentle" | "snappy" | "slow")
+            || !matches!(s.ease.as_str(), "gentle" | "snappy" | "slow" | "linear" | "smooth" | "accelerate" | "decelerate" | "exponential")
             || !matches!(s.origin.as_str(), "manual" | "auto" | "marker")
             || s.transition_start
                 .is_some_and(|v| !v.is_finite() || v > s.start)
@@ -77,6 +77,11 @@ pub fn validate_zooms(segments: &[Zoom], duration: f64) -> Result<(), String> {
 pub fn ease(value: f64, preset: &str) -> f64 {
     let x = value.clamp(0., 1.);
     match preset {
+        "linear" => x,
+        "smooth" => x*x*x*(x*(x*6.-15.)+10.),
+        "accelerate" => x*x,
+        "decelerate" => 1.-(1.-x)*(1.-x),
+        "exponential" => if x==1. {1.} else {1.-2f64.powf(-10.*x)},
         "snappy" => 1. - (1. - x).powi(3),
         "slow" => (1. - (std::f64::consts::PI * x).cos()) / 2.,
         _ => x * x * (3. - 2. * x),

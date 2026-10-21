@@ -39,6 +39,13 @@ pub fn paint(bg:&Value, plate:&mut RgbImage)->Result<(),String> {
     }
     Ok(())
 }
+pub fn drift_background(bg:&Value)->Result<Value,String>{
+ let presets:Vec<Preset>=serde_json::from_str(include_str!("../../../src/look/gradients.json")).map_err(|e|e.to_string())?;
+ let angle=bg["angleDeg"].as_f64().unwrap_or_else(||presets.iter().find(|p|Some(p.id.as_str())==bg["gradientId"].as_str()).unwrap_or(&presets[0]).angle_deg);
+    let mut out=bg.clone();out["angleDeg"]=((angle+30.).rem_euclid(360.)).into();out["animationSeconds"]=Value::Null;
+    if bg["kind"]=="radial"{let preset=presets.iter().find(|p|Some(p.id.as_str())==bg["gradientId"].as_str()).unwrap_or(&presets[0]);let stops:Vec<Stop>=if let Some(stops)=bg.get("stops"){serde_json::from_value(stops.clone()).map_err(|e|e.to_string())?}else{serde_json::from_value(serde_json::json!(preset.stops.iter().map(|s|serde_json::json!({"offset":s.offset,"color":s.color})).collect::<Vec<_>>())).map_err(|e|e.to_string())?};out["stops"]=serde_json::json!(stops.iter().enumerate().map(|(i,s)|serde_json::json!({"offset":s.offset,"color":stops[stops.len()-1-i].color})).collect::<Vec<_>>());}
+    Ok(out)
+}
 #[cfg(test)]
 mod tests {
     use super::*;

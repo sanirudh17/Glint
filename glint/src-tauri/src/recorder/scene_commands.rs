@@ -120,8 +120,9 @@ fn nonce() -> u128 {
         .unwrap_or_default()
         .as_nanos()
 }
-struct Workspace(PathBuf);
+pub(super) struct Workspace(pub PathBuf);
 impl Workspace {
+    pub(super) fn temporary() -> Result<Self,String> {Self::create(&std::env::temp_dir())}
     fn create(parent: &Path) -> Result<Self, String> {
         let p = parent.join(format!(".glint-scenes-{}-{}", std::process::id(), nonce()));
         fs::create_dir(&p).map_err(|e| e.to_string())?;
@@ -392,22 +393,23 @@ fn perform(
                 let m = scene.media.as_ref().unwrap();
                 image::open(&m.path).map_err(|e| e.to_string())?.to_rgba8()
             };
-            let data = project.render_project(0., duration)?;
+            let mut data = project.render_project(0., duration)?;
+            data.content_motion=scene.entrance.clone();
+            data.content_motion_seconds=Some((duration/2.).min(0.6));
             let events = SceneProject::events(source.width(), source.height());
             let frame =
                 studio_render::Renderer::new(&data, &events, source.width(), source.height())?
                     .still_frame(&source);
             let plate = workspace.0.join(format!("plate-{i}.png"));
             frame.save(&plate).map_err(|e| e.to_string())?;
-            run(
-                binary,
-                strings(&[
-                    "-loop",
-                    "1",
-                    "-framerate",
-                    "30",
-                    "-i",
-                    &plate.to_string_lossy(),
+            let mut args=strings(&["-loop","1","-framerate","30","-i",&plate.to_string_lossy()]);
+            if data.content_motion.as_ref().is_some_and(|s|s!="none")||data.look.background["animationSeconds"].as_f64().is_some_and(|s|s>0.) {
+                let original=workspace.0.join(format!("source-{i}.png"));source.save(&original).map_err(|e|e.to_string())?;
+                let rendered=workspace.0.join(format!("animated-{i}.mp4"));
+                studio_render::export(&studio_render::ExportSpec{binary,source:&original.to_string_lossy(),output:&rendered,project:&data,events:&events,width:source.width(),height:source.height(),fps:30.,duration,audio:false,cam:None,cam_overlay:None},cancel.clone(),|pct|progress(pct/100.*0.9))?;
+                args=strings(&["-i",&rendered.to_string_lossy()]);
+            }
+            args.extend(strings(&[
                     "-f",
                     "lavfi",
                     "-i",
@@ -430,7 +432,10 @@ fn perform(
                     "2",
                     "-shortest",
                     &normalized.to_string_lossy(),
-                ]),
+                ]));
+            run(
+                binary,
+                args,
                 &cancel,
                 duration,
                 progress.clone(),
