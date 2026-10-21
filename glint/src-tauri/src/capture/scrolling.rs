@@ -348,7 +348,7 @@ pub fn start(app: &AppHandle, mut session: CaptureSession, rect: RectArg) -> Res
                 }
                 continue;
             }
-            let step = stitch.push(next.clone());
+            let step = stitch.push_settled(next.clone(), sample.as_ref().unwrap());
             sample = Some(next);
             let mut s = status.lock().unwrap();
             let mut aligned = true;

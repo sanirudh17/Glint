@@ -180,7 +180,7 @@ pub fn same_frame(a: &RgbaImage, b: &RgbaImage) -> bool {
 
 /// A caret, clock or small hover animation must not keep a settled page waiting.
 /// Substantial motion still needs to stop before we accept a strip.
-pub fn settled_frame(a: &RgbaImage, b: &RgbaImage) -> bool {
+fn strict_settled_frame(a: &RgbaImage, b: &RgbaImage) -> bool {
     if a.dimensions() != b.dimensions() {
         return false;
     }
@@ -196,6 +196,322 @@ pub fn settled_frame(a: &RgbaImage, b: &RgbaImage) -> bool {
         error += e;
     }
     stable >= 44 && error / 48. < 3.
+}
+
+fn strict_offset(prev: &RgbaImage, next: &RgbaImage) -> Option<(u32, u32, u32)> {
+    let h = prev.height();
+    let columns = alignment_columns(prev, &next);
+    if columns.len() < 4 {
+        return None;
+    }
+    let error_at = |ay, by| row_error_at(prev, ay, &next, by, &columns);
+    // Static headers/footers are identified in place, then excluded from the
+    // displacement search. Full-window captures may include tall toolbars;
+    // retain at least 128 pixels of moving content rather than capping chrome
+    // at one quarter of the whole selection.
+    let mut top = 0;
+    while top < h - 128 && error_at(top, top) < 0.7 {
+        top += 1;
+    }
+    let mut bottom = 0;
+    while bottom < h - top - 128 && error_at(h - 1 - bottom, h - 1 - bottom) < 0.7 {
+        bottom += 1;
+    }
+    let guard = (h / 32).max(4);
+    let start = top.max(guard);
+    let end = h - bottom.max(guard);
+    let Some(moving_height) = end.checked_sub(start) else {
+        return None;
+    };
+    let min_overlap = (moving_height / 4).max(64);
+    if end <= start + min_overlap {
+        return None;
+    }
+    let details: Vec<_> = (0..h).map(|y| row_detail(prev, y, &columns)).collect();
+    let mut candidates = Vec::new();
+    for shift in 1..end - start - min_overlap + 1 {
+        let length = end - start - shift;
+        let (mut sum, mut count, mut bad) = (0., 0, 0);
+        for i in 0..48 {
+            let y = start + i * (length - 1) / 47;
+            if !details[(y + shift) as usize] {
+                continue;
+            }
+            let error = error_at(y + shift, y);
+            sum += error;
+            count += 1;
+            if error > 8. {
+                bad += 1;
+            }
+        }
+        if count >= 8 && bad * 5 <= count {
+            candidates.push((sum / count as f64, shift));
+        }
+    }
+    candidates.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let Some(&(error, _)) = candidates.first() else {
+        return None;
+    };
+    if error > 3. {
+        return None;
+    }
+    if candidates.iter().skip(1).any(|(e, _)| *e < error + 1.5)
+        && !refine_candidates(prev, &next, start, end, &mut candidates)
+    {
+        return None;
+    }
+    let shift = candidates[0].1;
+    // Check the full overlap, not just anchors: reject substantial animation,
+    // horizontal movement, lazy-load reflow or an unrelated window.
+    let mut mismatch = 0;
+    let rows = end - start - shift;
+    for y in start..end - shift {
+        if error_at(y + shift, y) > 8. {
+            mismatch += 1;
+        }
+    }
+    if mismatch * 20 > rows {
+        return None;
+    }
+
+    Some((shift, top, bottom))
+}
+
+const PATCH_COLS: u32 = 9;
+const PATCH_ROWS: u32 = 5;
+const PATCH_BYTES: usize = (PATCH_COLS * PATCH_ROWS * 3) as usize;
+
+struct Patch {
+    x: u32,
+    y: u32,
+    col: u32,
+    row: u32,
+    pixels: [u8; PATCH_BYTES],
+}
+fn patches(image: &RgbaImage) -> Vec<Patch> {
+    let mut result = Vec::new();
+    for row in 0..32 {
+        for col in 0..24 {
+            let x = image.width() / 24 + col * (image.width() * 11 / 12 - PATCH_COLS * 2) / 23;
+            let y = image.height() / 32 + row * (image.height() * 15 / 16 - PATCH_ROWS * 2) / 31;
+            let mut pixels = [0; PATCH_BYTES];
+            let (mut low, mut high) = (255u32, 0u32);
+            for dy in 0..PATCH_ROWS {
+                for dx in 0..PATCH_COLS {
+                    let p = image.get_pixel(x + dx * 2, y + dy * 2);
+                    let luma = (p[0] as u32 + p[1] as u32 + p[2] as u32) / 3;
+                    low = low.min(luma);
+                    high = high.max(luma);
+                    for c in 0..3 {
+                        pixels[((dy * PATCH_COLS + dx) * 3) as usize + c] = p[c];
+                    }
+                }
+            }
+            if high - low >= 20 {
+                result.push(Patch {
+                    x,
+                    y,
+                    col,
+                    row,
+                    pixels,
+                });
+            }
+        }
+    }
+    result
+}
+fn patch_matches(image: &RgbaImage, patch: &Patch, shift: u32) -> bool {
+    if patch.y + shift + (PATCH_ROWS - 1) * 2 >= image.height() {
+        return false;
+    }
+    let mut error = 0u32;
+    for dy in 0..PATCH_ROWS {
+        for dx in 0..PATCH_COLS {
+            let p = image.get_pixel(patch.x + dx * 2, patch.y + shift + dy * 2);
+            for c in 0..3 {
+                error +=
+                    p[c].abs_diff(patch.pixels[((dy * PATCH_COLS + dx) * 3) as usize + c]) as u32;
+                if error > PATCH_BYTES as u32 * 3 {
+                    return false;
+                }
+            }
+        }
+    }
+    true
+}
+fn stable_layout(a: &RgbaImage, b: &RgbaImage) -> bool {
+    if a.dimensions() != b.dimensions() {
+        return false;
+    }
+    let anchors = patches(b);
+    let matching: Vec<_> = anchors.iter().filter(|p| patch_matches(a, p, 0)).collect();
+    if matching.len() < 24 || matching.len() * 4 < anchors.len() {
+        return false;
+    }
+    let (min_x, max_x) = (
+        matching.iter().map(|p| p.x).min().unwrap(),
+        matching.iter().map(|p| p.x).max().unwrap(),
+    );
+    let (min_y, max_y) = (
+        matching.iter().map(|p| p.y).min().unwrap(),
+        matching.iter().map(|p| p.y).max().unwrap(),
+    );
+    max_x - min_x >= a.width() / 4 && max_y - min_y >= a.height() / 3
+}
+
+/// A local video, thumbnail or spinner need not settle if enough detailed page
+/// content remains stable. Matching still has to prove a coherent scroll offset.
+pub fn settled_frame(a: &RgbaImage, b: &RgbaImage) -> bool {
+    strict_settled_frame(a, b) || stable_layout(a, b)
+}
+
+// Fallback for local updates: vote with detailed 2D patches, not whole rows.
+// Fixed chrome/sidebar patches cannot vote because they match at zero offset.
+// Competing offsets or weak/spatially concentrated evidence are never appended.
+fn patch_alignment(
+    a: &RgbaImage,
+    b: &RgbaImage,
+    temporal: Option<&RgbaImage>,
+) -> Result<Option<(u32, u32, u32)>, ()> {
+    let anchors: Vec<_> = patches(b)
+        .into_iter()
+        .filter(|p| temporal.is_none_or(|frame| patch_matches(frame, p, 0)))
+        .filter(|p| !patch_matches(a, p, 0))
+        .collect();
+    let mut candidates = Vec::new();
+    let mut peak = 0usize;
+    let mut possible_offsets = Vec::new();
+    for shift in 1..a.height() - a.height().max(256) / 4 {
+        let (mut count, mut xs, mut ys) = (0usize, 0u32, 0u32);
+        for p in &anchors {
+            if patch_matches(a, p, shift) {
+                count += 1;
+                xs |= 1 << p.col;
+                ys |= 1 << p.row;
+            }
+        }
+        peak = peak.max(count);
+        if count >= 8 && xs.count_ones() >= 3 && ys.count_ones() >= 3 {
+            possible_offsets.push(shift);
+        }
+        if count >= 16 && count * 6 >= anchors.len() && xs.count_ones() >= 4 && ys.count_ones() >= 4
+        {
+            let y_span = 31 - ys.leading_zeros() - ys.trailing_zeros();
+            if y_span >= 5 {
+                candidates.push((count, shift));
+            }
+        }
+    }
+    candidates.sort_by(|a, b| b.0.cmp(&a.0));
+    let Some(&(count, mut shift)) = candidates.first() else {
+        return if peak < 8 && stable_layout(a, b) {
+            Ok(None)
+        } else {
+            Err(())
+        };
+    };
+    let mut verified_pixels = false;
+    if candidates
+        .iter()
+        .any(|(n, d)| d.abs_diff(shift) > 2 && n * 2 >= count)
+    {
+        // Repeated feed cards can share whole paragraphs. Verify the actual
+        // stable moving pixels between anchors before calling that ambiguous.
+        // Tiles changing between consecutive samples cannot participate.
+        let tile_width = a.width().div_ceil(16);
+        let mut stable = vec![true; (tile_width * a.height().div_ceil(16)) as usize];
+        if let Some(frame) = temporal {
+            for y in (0..a.height()).step_by(2) {
+                for x in (0..a.width()).step_by(2) {
+                    let (p, q) = (frame.get_pixel(x, y), b.get_pixel(x, y));
+                    if (0..3).any(|c| p[c].abs_diff(q[c]) > 4) {
+                        stable[(y / 16 * tile_width + x / 16) as usize] = false;
+                    }
+                }
+            }
+        }
+        let mut refined = Vec::new();
+        for &(votes, delta) in &candidates {
+            if votes * 2 < count {
+                continue;
+            }
+            let (mut top, mut bottom) = (0, 0);
+            while top < a.height() - delta - 64 && row_error(a, top, b, top) < 0.7 {
+                top += 1;
+            }
+            while bottom < a.height() - top - delta - 64
+                && row_error(a, a.height() - 1 - bottom, b, a.height() - 1 - bottom) < 0.7
+            {
+                bottom += 1;
+            }
+            let (mut squared, mut samples) = (0u64, 0u64);
+            for y in (top..a.height() - bottom - delta).step_by(2) {
+                for x in (a.width() / 24..a.width() * 23 / 24).step_by(2) {
+                    if !stable[(y / 16 * tile_width + x / 16) as usize]
+                        || !stable[((y + delta) / 16 * tile_width + x / 16) as usize]
+                    {
+                        continue;
+                    }
+                    let (p, zero) = (b.get_pixel(x, y), a.get_pixel(x, y));
+                    if (0..3).all(|c| p[c].abs_diff(zero[c]) <= 4) {
+                        continue;
+                    }
+                    let old = a.get_pixel(x, y + delta);
+                    for c in 0..3 {
+                        let d = p[c].abs_diff(old[c]) as u64;
+                        squared += d * d;
+                        samples += 1;
+                    }
+                }
+            }
+            if samples >= 128 {
+                refined.push(((squared as f64 / samples as f64).sqrt(), delta));
+            }
+        }
+        refined.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let Some(&(error, best)) = refined.first() else {
+            return Err(());
+        };
+        if error > 3.
+            || refined
+                .iter()
+                .any(|(e, d)| d.abs_diff(best) > 2 && *e < error + 0.25)
+        {
+            return Err(());
+        }
+        shift = best;
+        verified_pixels = true;
+    }
+    // A smaller second group can be hidden by the unequal overlap lengths of
+    // two offsets. Reject coherent *exclusive* matches elsewhere on the page:
+    // that is reflow, not a local image update. Repeated text matching both
+    // offsets is handled by the ambiguity guard above.
+    for other in possible_offsets
+        .into_iter()
+        .filter(|d| !verified_pixels && d.abs_diff(shift) > 2)
+    {
+        let (mut count, mut xs, mut ys) = (0usize, 0u32, 0u32);
+        for p in &anchors {
+            if !patch_matches(a, p, shift) && patch_matches(a, p, other) {
+                count += 1;
+                xs |= 1 << p.col;
+                ys |= 1 << p.row;
+            }
+        }
+        if count >= 8 && xs.count_ones() >= 3 && ys.count_ones() >= 3 {
+            return Err(());
+        }
+    }
+    let h = a.height();
+    let mut top = 0;
+    let mut bottom = 0;
+    while top < h - shift - 64 && row_error(a, top, b, top) < 0.7 {
+        top += 1;
+    }
+    while bottom < h - top - shift - 64 && row_error(a, h - 1 - bottom, b, h - 1 - bottom) < 0.7 {
+        bottom += 1;
+    }
+    Ok(Some((shift, top, bottom)))
 }
 
 impl Stitcher {
@@ -214,87 +530,40 @@ impl Stitcher {
     }
 
     pub fn push(&mut self, next: RgbaImage) -> Step {
+        self.push_inner(next, None)
+    }
+
+    /// Consecutive samples identify locally animated patches. Those cannot vote
+    /// for displacement, but stable content around them still can.
+    pub fn push_settled(&mut self, next: RgbaImage, temporal: &RgbaImage) -> Step {
+        if strict_settled_frame(&next, temporal) {
+            self.push(next)
+        } else {
+            self.push_inner(next, Some(temporal))
+        }
+    }
+
+    fn push_inner(&mut self, next: RgbaImage, temporal: Option<&RgbaImage>) -> Step {
         let prev = &self.previous;
         if prev.dimensions() != next.dimensions() {
             return Step::Uncertain;
         }
-        if settled_frame(prev, &next) {
+        if strict_settled_frame(prev, &next) {
             return Step::Unchanged;
         }
+        let (shift, top, bottom) = if let Some(offset) = strict_offset(prev, &next) {
+            offset
+        } else {
+            match patch_alignment(prev, &next, temporal) {
+                Ok(Some(offset)) => offset,
+                Ok(None) => {
+                    self.previous = next;
+                    return Step::Unchanged;
+                }
+                Err(()) => return Step::Uncertain,
+            }
+        };
         let h = prev.height();
-        let columns = alignment_columns(prev, &next);
-        if columns.len() < 4 {
-            return Step::Uncertain;
-        }
-        let error_at = |ay, by| row_error_at(prev, ay, &next, by, &columns);
-        // Static headers/footers are identified in place, then excluded from the
-        // displacement search. Full-window captures may include tall toolbars;
-        // retain at least 128 pixels of moving content rather than capping chrome
-        // at one quarter of the whole selection.
-        let mut top = 0;
-        while top < h - 128 && error_at(top, top) < 0.7 {
-            top += 1;
-        }
-        let mut bottom = 0;
-        while bottom < h - top - 128 && error_at(h - 1 - bottom, h - 1 - bottom) < 0.7 {
-            bottom += 1;
-        }
-        let guard = (h / 32).max(4);
-        let start = top.max(guard);
-        let end = h - bottom.max(guard);
-        let Some(moving_height) = end.checked_sub(start) else {
-            return Step::Uncertain;
-        };
-        let min_overlap = (moving_height / 4).max(64);
-        if end <= start + min_overlap {
-            return Step::Uncertain;
-        }
-        let details: Vec<_> = (0..h).map(|y| row_detail(prev, y, &columns)).collect();
-        let mut candidates = Vec::new();
-        for shift in 1..end - start - min_overlap + 1 {
-            let length = end - start - shift;
-            let (mut sum, mut count, mut bad) = (0., 0, 0);
-            for i in 0..48 {
-                let y = start + i * (length - 1) / 47;
-                if !details[(y + shift) as usize] {
-                    continue;
-                }
-                let error = error_at(y + shift, y);
-                sum += error;
-                count += 1;
-                if error > 8. {
-                    bad += 1;
-                }
-            }
-            if count >= 8 && bad * 5 <= count {
-                candidates.push((sum / count as f64, shift));
-            }
-        }
-        candidates.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let Some(&(error, _)) = candidates.first() else {
-            return Step::Uncertain;
-        };
-        if error > 3. {
-            return Step::Uncertain;
-        }
-        if candidates.iter().skip(1).any(|(e, _)| *e < error + 1.5)
-            && !refine_candidates(prev, &next, start, end, &mut candidates)
-        {
-            return Step::Uncertain;
-        }
-        let shift = candidates[0].1;
-        // Check the full overlap, not just anchors: reject substantial animation,
-        // horizontal movement, lazy-load reflow or an unrelated window.
-        let mut mismatch = 0;
-        let rows = end - start - shift;
-        for y in start..end - shift {
-            if error_at(y + shift, y) > 8. {
-                mismatch += 1;
-            }
-        }
-        if mismatch * 20 > rows {
-            return Step::Uncertain;
-        }
         let Some(height) = self.image.height().checked_add(shift) else {
             return Step::Limit;
         };
@@ -482,6 +751,26 @@ mod tests {
             stitch.image,
             image::imageops::crop_imm(&content, 0, 0, 320, 1240).to_image()
         );
+        // Repeated text plus a changing preview must use stable fine details,
+        // rather than rejecting every repeated paragraph as a competing offset.
+        let animated = |offset, tick: u32| {
+            let mut image = frame(offset);
+            for y in 200..350 {
+                for x in 180..310 {
+                    image.put_pixel(x, y, Rgba([(tick * 37 % 255) as u8, 90, 120, 255]));
+                }
+            }
+            image
+        };
+        let mut stitch = Stitcher::new(animated(0, 0)).unwrap();
+        assert_eq!(
+            stitch.push_settled(animated(120, 2), &animated(120, 1)),
+            Step::Appended(120)
+        );
+        assert_eq!(
+            stitch.push_settled(animated(240, 4), &animated(240, 3)),
+            Step::Appended(120)
+        );
     }
 
     #[test]
@@ -506,5 +795,58 @@ mod tests {
         assert_eq!(stitch.image.get_pixel(20, 60), &Rgba([200, 210, 220, 255]));
         assert_eq!(stitch.image.get_pixel(20, 440), &Rgba([40, 50, 60, 255]));
         assert_eq!(stitch.image.get_pixel(20, 680), &Rgba([200, 210, 220, 255]));
+    }
+
+    #[test]
+    fn localized_video_updates_do_not_block_stationary_page_or_scroll() {
+        let content = page(800, 2400);
+        let frame = |offset: u32, tick: u32| {
+            RgbaImage::from_fn(800, 800, |x, y| {
+                let py = y + offset;
+                if (100..650).contains(&x) && (80..350).contains(&py) {
+                    let n = x.wrapping_mul(19349663)
+                        ^ py.wrapping_mul(73856093)
+                        ^ tick.wrapping_mul(83492791);
+                    Rgba([
+                        (n % 255) as u8,
+                        ((n >> 8) % 255) as u8,
+                        ((n >> 16) % 255) as u8,
+                        255,
+                    ])
+                } else {
+                    *content.get_pixel(x, py)
+                }
+            })
+        };
+        assert!(settled_frame(&frame(0, 0), &frame(0, 1)));
+        let mut stitch = Stitcher::new(frame(0, 0)).unwrap();
+        assert_eq!(stitch.push(frame(0, 1)), Step::Unchanged);
+        assert_eq!(stitch.push(frame(100, 2)), Step::Appended(100));
+        assert_eq!(stitch.push(frame(200, 3)), Step::Appended(100));
+        let mut temporal = Stitcher::new(frame(0, 0)).unwrap();
+        assert_eq!(
+            temporal.push_settled(frame(100, 21), &frame(100, 20)),
+            Step::Appended(100)
+        );
+        for y in 800..1000 {
+            for x in 0..800 {
+                assert_eq!(stitch.image.get_pixel(x, y), content.get_pixel(x, y));
+            }
+        }
+    }
+
+    #[test]
+    fn local_update_fallback_rejects_competing_reflow_and_horizontal_motion() {
+        let content = page(900, 2400);
+        let first = image::imageops::crop_imm(&content, 0, 0, 800, 800).to_image();
+        let split = RgbaImage::from_fn(800, 800, |x, y| {
+            *content.get_pixel(x, y + if y < 400 { 100 } else { 220 })
+        });
+        let sideways = RgbaImage::from_fn(800, 800, |x, y| *content.get_pixel(x + 30, y + 100));
+        for next in [split, sideways] {
+            let mut stitch = Stitcher::new(first.clone()).unwrap();
+            assert_eq!(stitch.push(next), Step::Uncertain);
+            assert_eq!(stitch.image, first);
+        }
     }
 }
