@@ -10,13 +10,14 @@ const root=process.argv[2],pause=ms=>new Promise(r=>setTimeout(r,ms));
 // Connect before opening a visible fixture, so a restarting dev app cannot leave
 // an orphan test browser behind.
 const main=await connectPage(t=>t.url==='http://localhost:5173/'||t.url.startsWith('http://localhost:5173/#/'),9242);
+if((await main.invoke('capture_scroll_status')).active){main.close();throw Error('An existing capture is active; leave it untouched');}
 await mkdir(root,{recursive:true});
 const html=await readFile(new URL('./fixtures/phase5-scroll.html',import.meta.url));
 const server=createServer((req,res)=>{res.writeHead(200,{'Content-Type':'text/html; charset=utf-8'});res.end(html)});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const port=server.address().port;
 const large=!!process.env.GLINT_SCROLL_LARGE;
 const profile=await mkdtemp(join(root,'chrome-check-'));
-const browser=spawn('C:/Program Files/Google/Chrome/Application/chrome.exe',[`--user-data-dir=${profile}`,'--remote-debugging-port=9251','--no-first-run','--no-default-browser-check','--disable-session-crashed-bubble','--force-device-scale-factor=1','--window-position=0,0','--window-size=1150,850',`${large?'':'--app='}http://127.0.0.1:${port}/page`],{stdio:'ignore'});
+const browser=spawn('C:/Program Files/Google/Chrome/Application/chrome.exe',[`--user-data-dir=${profile}`,'--remote-debugging-port=9251','--no-first-run','--no-default-browser-check','--disable-session-crashed-bubble','--disable-lcd-text','--force-device-scale-factor=1','--window-position=0,0','--window-size=1150,850',`${large?'':'--app='}http://127.0.0.1:${port}/page`],{stdio:'ignore'});
 const ffmpeg='glint/src-tauri/binaries/ffmpeg-x86_64-pc-windows-msvc.exe';
 const rgba=(png)=>execFileSync(ffmpeg,['-v','error','-i','pipe:0','-f','rawvideo','-pix_fmt','rgba','pipe:1'],{input:png,windowsHide:true,maxBuffer:64*1024*1024});
 let chrome;const results=[];let selection=false,scroll=false;
@@ -28,7 +29,7 @@ try{
   chrome=await until(()=>connectPage(t=>t.url.startsWith(`http://127.0.0.1:${port}`),9251).catch(()=>null),'Chrome did not start');
   if(large){const {windowId}=await chrome.send('Browser.getWindowForTarget',{targetId:chrome.target.id});await chrome.send('Browser.setWindowBounds',{windowId,bounds:{windowState:'maximized'}});}
   await main.invoke('settings_set',{key:'image_format',value:'png'});
-  for(const mode of ['page','chat'].filter(mode=>!process.env.GLINT_SCROLL_ONLY||process.env.GLINT_SCROLL_ONLY===mode)){
+  for(const mode of process.env.GLINT_SCROLL_ONLY?[process.env.GLINT_SCROLL_ONLY]:['page','chat']){
     const theme=mode==='page'?'dark':'light';
     if(process.env.GLINT_SCROLL_LIFECYCLE)await main.invoke('settings_set',{key:'theme',value:theme});
     await chrome.send('Page.navigate',{url:`http://127.0.0.1:${port}/${mode}`});await pause(250);await chrome.send('Page.bringToFront');
@@ -88,10 +89,12 @@ try{
     const max=await chrome.evaluate(`document.querySelector('#scroller').scrollHeight-document.querySelector('#scroller').clientHeight`);
     let steps=0;
     if(process.env.GLINT_SCROLL_AUTO){
+      if(process.env.GLINT_SCROLL_DIAGNOSTICS)await chrome.screenshot(join(root,'diagnostic-first.png'));
       await main.invoke('capture_scroll_control',{action:'start'});
       await until(async()=>{const s=await main.invoke('capture_scroll_status');return s.height>height+60;},'Automatic wheel steps did not extend the capture',15);
       await main.invoke('capture_scroll_control',{action:'pause'});await pause(800);
       const paused=await chrome.evaluate(`document.querySelector('#scroller').scrollTop`);await pause(1000);
+      if(process.env.GLINT_SCROLL_DIAGNOSTICS){await chrome.screenshot(join(root,'diagnostic-paused.png'));await pause(250);await chrome.screenshot(join(root,'diagnostic-paused-temporal.png'));}
       assert.equal(await chrome.evaluate(`document.querySelector('#scroller').scrollTop`),paused,'Pause must stop automatic wheel input');
       await main.invoke('capture_scroll_control',{action:'start'});
       await until(async()=>{const s=await main.invoke('capture_scroll_status');if(s.height===height+max&&!s.autoScrolling)return s;if(!s.autoScrolling&&s.message.includes('Could not align'))throw Error(JSON.stringify(s));return false;},'Auto-scroll did not reach and pause at the bottom',90);
@@ -111,7 +114,11 @@ try{
     const source=await editor.invoke('editor_source');assert.equal(source.width,width);assert.equal(source.height,height+max);
     await editor.screenshot(join(root,`${mode}-editor.png`));
     await editor.invoke('plugin:window|close',{label:'editor'});editor.close();
+    // Restore the owned fixture after the result editor took foreground. An
+    // occluded Chrome compositor can otherwise wait indefinitely for a frame.
+    await chrome.send('Page.bringToFront');
     const bounds=await chrome.evaluate('expandForGolden()');
+    const ignored=await chrome.evaluate(`(()=>{const root=document.querySelector('#region').getBoundingClientRect();return [...document.querySelectorAll('.preview')].map(el=>{const r=el.getBoundingClientRect();return {x:r.x-root.x,y:r.y-root.y,w:r.width,h:r.height};});})()`);
     const screenshot=await chrome.send('Page.captureScreenshot',{format:'png',captureBeyondViewport:true,clip:{x:bounds.x,y:bounds.y,width:bounds.width,height:bounds.height,scale:1}});
     const golden=Buffer.from(screenshot.data,'base64'),actual=await readFile(capture.path);
     outputs.push(actual);
@@ -119,17 +126,18 @@ try{
     let a=rgba(actual);const b=rgba(golden);
     if(large){const stride=width*4;const crop=Buffer.alloc(regionWidth*(regionHeight+max)*4);for(let row=0;row<regionHeight+max;row++){a.copy(crop,row*regionWidth*4,(row+y)*stride+x*4,(row+y)*stride+(x+regionWidth)*4);}a=crop;}
     assert.equal(a.length,b.length);
-    let differing=0,maxError=0;for(let i=0;i<a.length;i+=4){let bad=false;for(let c=0;c<3;c++){const d=Math.abs(a[i+c]-b[i+c]);maxError=Math.max(maxError,d);if(d>2)bad=true;}if(bad)differing++;}
+    let differing=0,maxError=0,ignoredPixels=0;for(let i=0;i<a.length;i+=4){const x=(i/4)%regionWidth,y=Math.floor(i/4/regionWidth);if(ignored.some(r=>x>=r.x&&x<r.x+r.w&&y>=r.y&&y<r.y+r.h)){ignoredPixels++;continue;}let bad=false;for(let c=0;c<3;c++){const d=Math.abs(a[i+c]-b[i+c]);maxError=Math.max(maxError,d);if(d>2)bad=true;}if(bad)differing++;}
     // Screen and compositor can differ in font rasterization; save the exact
     // difference count and require matching geometry and a very small fraction.
     assert.ok(differing/(a.length/4)<0.001,`${mode}: ${differing} pixels differ, max error ${maxError}`);
-    results.push({mode,width,height:height+max,steps,differingPixels:differing,maxChannelError:maxError,scale:meta.scale,path:capture.path});
+    results.push({mode,width,height:height+max,steps,differingPixels:differing,maxChannelError:maxError,ignoredAnimatedPixels:ignoredPixels,scale:meta.scale,path:capture.path});
     console.log(JSON.stringify(results.at(-1)));
   }
-  await writeFile(join(root,`${large?'scroll-large':process.env.GLINT_SCROLL_AUTO?'scroll-auto':'scroll'}-result.json`),JSON.stringify({passed:true,results},null,2));
+  await writeFile(join(root,`${process.env.GLINT_SCROLL_ONLY==='feed'?'scroll-feed':large?'scroll-large':process.env.GLINT_SCROLL_AUTO?'scroll-auto':'scroll'}-result.json`),JSON.stringify({passed:true,results},null,2));
 }catch(error){
   await writeFile(join(root,'scroll-failure.json'),JSON.stringify({error:String(error),status:await main.invoke('capture_scroll_status').catch(()=>null)},null,2));
   if(chrome)await chrome.screenshot(join(root,'scroll-failure-browser.png')).catch(()=>{});
+  if(chrome&&process.env.GLINT_SCROLL_DIAGNOSTICS){console.log('Failure scroll offset',await chrome.evaluate(`document.querySelector('#scroller').scrollTop`));await pause(250);await chrome.screenshot(join(root,'diagnostic-failure-temporal.png'));}
   throw error;
 }finally{
   if(scroll)await main.invoke('capture_scroll_control',{action:'cancel'}).catch(()=>{});

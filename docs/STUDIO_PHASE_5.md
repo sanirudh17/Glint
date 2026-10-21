@@ -235,3 +235,52 @@ capture sometimes failed on its first attempt, and the controller flashed white.
 
 The isolated development preview contains these fixes. The installed executable
 and the outstanding optimized-build performance gate are unchanged.
+
+## YouTube and changing-feed follow-up (October 21)
+
+The paused-video report was reproduced on a public YouTube watch page in a fresh,
+unsigned-in Chrome profile, selecting the full browser above the taskbar. Before
+the fix, auto-scroll stopped after about 4.6 seconds with the alignment error,
+one strip and `scrollY = 0`. A paused player does not make the rest of the page
+pixel-static: thumbnails and other local updates can still change after the
+initial reference frame.
+
+- Keep the existing strict matcher as the fast path. A fallback now matches
+  detailed patches distributed across the page and excludes patches changing
+  between consecutive samples. Fixed chrome and sidebars cannot vote for a
+  nonzero scroll offset. Local changes without displacement can refresh the
+  matching reference without rewriting the captured output.
+- Repeated feed text gets a finer comparison of stable moving pixels, excluding
+  changing tiles and fixed header/footer bands. Conflicting reflow, horizontal
+  movement, weak evidence and genuinely ambiguous offsets still reject the step
+  without altering the accumulated image.
+- The same public YouTube video now passed twice in succession, scrolling back
+  to the top between attempts. With the video paused throughout, both attempts
+  reached `scrollY = 1800` in the comments and extended the capture to
+  1920 x 2720 / 18 strips, in about 17 seconds. No alignment pause occurred.
+- An on-screen animated feed fixture completed 35 native wheel steps to the
+  bottom, including Pause/Resume, producing a 1920 x 4453 editable PNG. The
+  comparison excludes only the 24 known animated preview rectangles (276,480
+  pixels); all other pixels stayed within one channel level of the browser's
+  unrolled reference. Chrome uses grayscale text rendering in the fixture to
+  avoid comparing desktop LCD text against CDP grayscale text.
+- Checks: 253 native tests passed; two existing display-dependent tests remain
+  ignored. Regressions cover local video updates, repeated paragraphs with an
+  animated region, and rejection of competing reflow and horizontal movement.
+  JavaScript syntax, Rust formatting and whitespace checks passed. No frontend
+  production code changed in this follow-up.
+- Full-window ordinary page/chat captures also passed on this code: 1920 x 2917
+  and 1920 x 3205, with zero differing pixels and zero maximum channel error.
+  The harness returns its owned browser to foreground after the result editor,
+  so Chrome can paint the unrolled reference screenshot.
+
+Run `scripts/capture-phase5-live-page-check.mjs` against the CaptureCheck artifact
+directory for the paused public YouTube reproduction. It repeats capture after
+scrolling back to the top, asserts progress into the comments, and writes status
+traces and before/after screenshots for each attempt. For the animated feed, use
+the full-window automatic fixture command above with `GLINT_SCROLL_ONLY=feed`.
+This is not an authenticated Twitter/X test. Major page reflow or insufficient
+stable content can still require pausing; changing content is captured as snapshots.
+
+The installed executable, deferred background removal and optimized-build
+performance gate remain unchanged. Phase 6 has not started.

@@ -7,4 +7,8 @@
 const chat=location.pathname.includes('chat');document.body.classList.toggle('chat',chat);
 document.querySelector('#content').innerHTML=Array.from({length:24},(_,i)=>`<article class="entry"><h2>${chat?(i%2?'Mira':'Alex'):'Section'} ${i+1} — ${['Review the capture','Design decisions','Project update','Implementation notes'][i%4]}</h2><p>${i%2?'The layout should remain readable across every stitched strip.':'A longer paragraph gives the overlap finder real text, spacing and varied line breaks.'}</p><code>capture_${i+1} · value ${173+i*97} · ${'abcdefgh'.slice(i%5)}</code></article>`).join('');
 window.expandForGolden=()=>{document.querySelector('#scroller').scrollTop=0;Object.assign(document.querySelector('#region').style,{height:'auto'});Object.assign(document.querySelector('#scroller').style,{overflow:'visible',flex:'none'});return document.querySelector('#region').getBoundingClientRect().toJSON()};
+if(location.pathname.includes('feed')){
+ const style=document.createElement('style');style.textContent='.entry{height:176px}.preview{float:right;width:160px;height:72px;margin:0 12px 12px;background:#ccd4de}';document.head.append(style);
+ document.querySelectorAll('.entry').forEach((entry,i)=>{const canvas=document.createElement('canvas');canvas.className='preview';canvas.width=160;canvas.height=72;entry.prepend(canvas);const ctx=canvas.getContext('2d');let tick=0;const paint=()=>{ctx.fillStyle=`hsl(${(i*47+tick*37)%360} 55% 48%)`;ctx.fillRect(0,0,160,72);ctx.fillStyle='#20304c';ctx.fillRect((tick*17)%110,12,40,48);tick++;};paint();setInterval(paint,180);});
+}
 </script></html>
