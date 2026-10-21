@@ -1,7 +1,7 @@
 import { Crosshair, Plus, Scissors, Trash2, WandSparkles } from "lucide-react";
 import { Button, ControlDisclosure, NumberInput, Select } from "../components/ui";
 import { LookSlider } from "../look/LookControls";
-import { clamp, newZoom, splitZoom, type ZoomSegment } from "./studioEffects";
+import { clamp, newZoom, splitZoom, ZOOM_EASES, type ZoomSegment } from "./studioEffects";
 import { regenerateZooms } from "./studioAutoZoom";
 import {useMemo} from 'react';
 import {smoothPath,followSourcePoint} from './studioCursor';
@@ -39,7 +39,7 @@ export function StudioZoomControls({segments,selected,time,duration,onChange,onS
       <LookSlider label="Vertical" ariaLabel="Zoom vertical focus" value={focus.y*100} unit="%" onChange={y=>changeFocus({...focus,y:clamp(y/100,0,1)})}/>
       <Button size="sm" variant="ghost" icon={Crosshair} aria-pressed={picking} onClick={onPick}>{picking?'Cancel picking':'Pick focus in preview'}</Button>
       {active.mode==='follow-cursor'&&<p className="look-hint">Position follows the recorded cursor. Pick a point to adjust its framing.</p>}
-      <div className="look-row"><span className="look-label">Easing</span><div className="look-control"><Select portal ariaLabel="Zoom easing" value={active.ease} options={[{value:"gentle",label:"Gentle"},{value:"snappy",label:"Snappy"},{value:"slow",label:"Slow"}]} onChange={ease=>{const seconds={gentle:.4,snappy:.3,slow:.5}[ease]!;change({ease:ease as ZoomSegment['ease'],easeIn:seconds,easeOut:seconds});}}/></div></div>
+      <div className="look-row"><span className="look-label">Easing</span><div className="look-control"><Select portal ariaLabel="Zoom easing" value={active.ease} options={ZOOM_EASES} onChange={ease=>{const seconds=ease==='snappy'?.3:ease==='slow'?.5:.4;change({ease:ease as ZoomSegment['ease'],easeIn:seconds,easeOut:seconds});}}/></div></div>
       <Button size="sm" variant="ghost" icon={Scissors} disabled={time<=active.start+.05||time>=active.end-.05} onClick={()=>onChange(segments.flatMap(s=>s.id===active.id?splitZoom(s,time):[s]))}>Split at playhead</Button>
     </>:<p className="look-hint">Add a zoom at the playhead, then drag its timeline segment to move or trim it.</p>}
   </ControlDisclosure>;

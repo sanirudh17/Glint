@@ -46,7 +46,8 @@
 /* Boot gate: keep controls visible while smoothly fading the video in once decoded */
 .trim-root.is-booting .trim-video { opacity: 0; }
 .trim-transport { display: flex; align-items: center; gap: 8px; padding: 8px 12px; }
-.trim-actions { display: flex; align-items: center; gap: 12px; padding: 8px 16px; }
+.trim-actions { display: flex; align-items: center; flex-wrap:wrap; gap: 12px; padding: 12px 20px; }
+.trim-save-actions{display:flex;gap:8px;flex:none;margin-left:auto}
 .trim-gif { padding:var(--s2) var(--s4); border-top:1px solid var(--border); background:var(--bg-elev); font-size:var(--fz-sm); }
 .trim-gif > summary { cursor:pointer; color:var(--text-dim); }
 .trim-gif-content { display:flex; align-items:center; flex-wrap:wrap; gap:var(--s4); padding-top:var(--s3); }
@@ -222,7 +223,16 @@
 }
 
 .trim-preview-row { display: flex; flex: 1; min-height: 0; }
-.studio-panel { width: 344px; flex: none; overflow: auto; padding: 24px; background: var(--bg-frame); scrollbar-width: auto; }
+.studio-panel { width: 376px; flex: none; overflow: auto; padding: 24px; background: var(--bg-frame); scrollbar-width: auto; }
+.studio-panel-tabs{display:flex;gap:4px;margin:0 0 24px;padding-bottom:12px;border-bottom:1px solid var(--border)}
+.studio-panel-tabs button{flex:1;padding:10px 8px;border:0;border-radius:var(--r2);font:inherit;font-size:13px;color:var(--text-dim);background:transparent;cursor:pointer}
+.studio-panel-tabs button:hover,.studio-panel-tabs button[aria-pressed=true]{background:var(--bg-elev2);color:var(--text)}
+.studio-edit-controls:not([hidden]){display:flex;flex-direction:column;gap:24px}
+.studio-panel .look-row:not(.look-slider){flex-direction:column;align-items:stretch;gap:8px;margin:16px 0}
+.studio-panel .look-control{width:100%}
+.studio-panel .look-row>.g-switch-root{align-self:flex-start}
+.studio-panel .look-label{white-space:nowrap}
+.trim-export-estimate{font-variant-numeric:tabular-nums;white-space:nowrap}
 .studio-panel::-webkit-scrollbar { width: 5px; height: 5px; }
 .studio-panel::-webkit-scrollbar-track, .studio-panel::-webkit-scrollbar-corner { background: transparent; }
 .studio-panel::-webkit-scrollbar-thumb { background: transparent; border-radius: 5px; }
@@ -230,7 +240,7 @@
 .studio-panel::-webkit-scrollbar-thumb:hover { background: var(--border-strong); }
 .studio-panel::-webkit-scrollbar-button { display: none; width: 0; height: 0; }
 .studio-panel .look-controls { gap: 12px; }
-.studio-panel .look-label { font-size: var(--fz-sm); }
+.studio-panel .look-label { font-size: 13px; }
 .studio-panel .look-row { min-height: 32px; }
 .studio-panel .look-slider-control > output { font-size: var(--fz-xs); }
 .studio-panel .g-switch-root { min-height: 24px; }
@@ -238,7 +248,7 @@
 .studio-panel .g-switch-track::after { width: 10px; height: 10px; top: 2px; left: 2px; }
 .studio-panel .g-switch-root:has(input:checked) .g-switch-track::after { transform: translateX(14px); }
 .studio-panel-header { margin-bottom: 24px; }
-.studio-panel-header h2 { font-size: 22px; line-height: 1.2; font-weight: 700; letter-spacing: -.025em; margin: 0 0 8px; }
+.studio-panel-header h1 { font-size: 22px; line-height: 1.2; font-weight: 600; letter-spacing: -.02em; margin: 0 0 8px; }
 .studio-project-name { font-size: var(--fz-sm); line-height: var(--lh-base); color: var(--text-dim); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .studio-save-status { display: flex; align-items: center; gap: 6px; margin-top: 10px; color: var(--text-dim); font-size: var(--fz-sm); line-height: var(--lh-base); overflow-wrap: anywhere; }
 .studio-save-status.is-saved > svg { color: var(--accent); }
@@ -257,7 +267,7 @@
 .studio-export-complete > svg { color: var(--accent); }
 .studio-export-name { font-size: var(--fz-md); font-weight: var(--fw-semi); color: var(--text); line-height: var(--lh-base); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .studio-export-folder { font-size: var(--fz-sm); color: var(--text-dim); line-height: var(--lh-base); margin-top: 4px; overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
-.studio-export-actions { display: flex; align-items: center; gap: 4px; margin: 10px -6px -4px; }
+.studio-export-actions { display: flex; align-items: center;flex-wrap:wrap; gap: 8px; margin: 10px -6px -4px; }
 .studio-export-actions .g-btn { padding-left: 6px; padding-right: 6px; font-size: var(--fz-xs); }
 .studio-export-error { color: var(--danger); font-size: var(--fz-sm); line-height: var(--lh-base); overflow-wrap: anywhere; margin-bottom: 20px; }
 .studio-stage > .trim-video, .studio-stage > .trim-cam-layer { visibility: hidden; }
@@ -266,7 +276,7 @@
 .studio-preview-instruction { position:absolute;bottom:28px;left:50%;transform:translateX(-50%);padding:8px 12px;border-radius:var(--r2);background:var(--bg-elev2);color:var(--text);font-size:var(--fz-sm);pointer-events:none; }
 .studio-effects-controls > summary { color:var(--text);font-size:var(--fz-lg);font-weight:700; }
 .studio-effect-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
-.studio-effect-track-row { display:flex;align-items:center;gap:8px;padding:3px 12px;min-height:28px; }
+.studio-effect-track-row { display:flex;align-items:center;gap:8px;padding:3px 20px;min-height:28px; }
 .studio-effect-track-label { flex:none;width:36px;color:var(--text-dim);font-size:var(--fz-xs); }
 .studio-effect-track { position:relative;flex:1;height:24px;overflow:hidden;background:var(--bg-elev2);border-radius:var(--r1); }
 .studio-effect-track-content { height:100%;position:relative; }
@@ -288,5 +298,5 @@
 .studio-mask-corner:focus-visible { outline:1px solid var(--accent); }
 .studio-privacy-note { color:var(--text-dim);font-size:var(--fz-sm);line-height:var(--lh-base);padding-left:10px;border-left:2px solid var(--border-strong); }
 .studio-preview { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 20px; box-sizing: border-box; }
-@media (max-width: 1000px) { .studio-panel { width: 312px; padding: 24px 20px; } }
-@media (max-width: 760px) { .studio-panel { width: 292px; padding: 20px 16px; } .look-control, .look-slider-control { width: 154px; } .trim-actions { flex-wrap: wrap; gap: 8px; } }
+@media (max-width: 1000px) { .studio-panel { width: 340px; padding: 24px 20px; } }
+@media (max-width: 760px) { .studio-panel { width: 312px; padding: 20px 16px; } .studio-panel .look-slider-control { width: 154px; } .trim-actions { flex-wrap: wrap; gap: 8px; } }

@@ -8,6 +8,7 @@ import { importZoomMarkers } from "./studioMarkers";
 import { validateMasks,type MaskSegment } from "./studioMasks";
 import type {MotionBlur} from './studioMotion';
 import type { CamPlacement } from "./camOverlay";
+import type {AudioCleanup,Caption,Entrance} from './studioPolish';
 export interface CursorConfig {
   visible: boolean; smoothing: number; size: number; style: "arrow" | "dot";
   hideIdle: boolean; idleSeconds: number; clicks: boolean; clickSize: number; keystrokes: boolean;
@@ -21,6 +22,11 @@ export interface StudioProject {
   importedVideo?:boolean;
   deleteSourceAfterExport?:boolean;
   motionBlur?:MotionBlur;
+  audioCleanup?:AudioCleanup;
+  captions?:Caption[];
+  captionsEnabled?:boolean;
+  contentMotion?:Entrance;
+  contentMotionSeconds?:number;
 }
 export interface InputEvent {
   t: number; kind: "cursor" | "click" | "key" | "marker"; x?: number; y?: number;

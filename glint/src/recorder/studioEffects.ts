@@ -1,6 +1,11 @@
 import type { Crop } from "../editor/composition";
 
-export type ZoomEase = "gentle" | "snappy" | "slow";
+export type ZoomEase = "gentle" | "snappy" | "slow" | "linear" | "smooth" | "accelerate" | "decelerate" | "exponential";
+export const ZOOM_EASES: {value:ZoomEase;label:string}[] = [
+  {value:'gentle',label:'Gentle'},{value:'snappy',label:'Snappy'},{value:'slow',label:'Slow'},
+  {value:'linear',label:'Linear'},{value:'smooth',label:'Smooth'},{value:'accelerate',label:'Accelerate'},
+  {value:'decelerate',label:'Decelerate'},{value:'exponential',label:'Exponential'},
+];
 export interface ZoomSegment {
   id: string; start: number; end: number; scale: number;
   mode: "fixed" | "follow-cursor"; focus: { x: number; y: number };
@@ -17,6 +22,11 @@ export function newZoom(time: number, duration: number): ZoomSegment {
 }
 export function easeValue(t: number, ease: ZoomEase): number {
   const x = clamp(t, 0, 1);
+  if(ease==='linear')return x;
+  if(ease==='smooth')return x*x*x*(x*(x*6-15)+10);
+  if(ease==='accelerate')return x*x;
+  if(ease==='decelerate')return 1-(1-x)*(1-x);
+  if(ease==='exponential')return x===1?1:1-2**(-10*x);
   return ease === "snappy" ? 1 - (1 - x) ** 3 : ease === "slow" ? (1 - Math.cos(Math.PI * x)) / 2 : x * x * (3 - 2 * x);
 }
 export function zoomAt(segments: ZoomSegment[], t: number, crop: Crop, sourceW: number, sourceH: number, cursor?: { x: number; y: number;latestX?:number;latestY?:number } | null) {
@@ -47,7 +57,7 @@ export function validateZooms(segments: ZoomSegment[], duration: number): boolea
     && s.start >= 0 && s.end > s.start && s.end <= duration + .05 && s.scale >= 1.2 && s.scale <= 3
     && s.focus.x >= 0 && s.focus.x <= 1 && s.focus.y >= 0 && s.focus.y <= 1
     && s.easeIn >= 0 && s.easeIn <= 2 && s.easeOut >= 0 && s.easeOut <= 2
-    && ["gentle","snappy","slow"].includes(s.ease) && ["fixed","follow-cursor"].includes(s.mode)
+    && ZOOM_EASES.some(e=>e.value===s.ease) && ["fixed","follow-cursor"].includes(s.mode)
     && ["manual","auto","marker"].includes(s.origin)
     && (s.followOffset===undefined||[s.followOffset.x,s.followOffset.y].every(v=>Number.isFinite(v)&&v>=-1&&v<=1))
     && (s.transitionStart === undefined || Number.isFinite(s.transitionStart) && s.transitionStart <= s.start)

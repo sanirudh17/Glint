@@ -5,6 +5,9 @@ import { getCurrentWindow, PhysicalSize, PhysicalPosition } from "@tauri-apps/ap
 import { recorderStop, recorderPause, recorderResume, recorderStatus, recorderSetMute, recorderSetWebcam, recorderSetFx } from "../lib/recorder";
 import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointerClick, Keyboard, Sun } from "lucide-react";
 import "./recorder.css";
+import {invoke} from '@tauri-apps/api/core';
+import {confirm} from '@tauri-apps/plugin-dialog';
+import {FileText,RotateCcw} from 'lucide-react';
 
 export function mmss(total: number): string {
   const m = Math.floor(total / 60), s = total % 60;
@@ -230,6 +233,8 @@ export function ControlBar() {
           ? <Play size={13} strokeWidth={2.5} fill="currentColor" />
           : <Pause size={13} strokeWidth={2.5} fill="currentColor" />}
       </button>
+      <button className="rec-atog" aria-label="Speaker notes" {...tip('Speaker notes (hidden from capture)')} onClick={()=>void invoke('studio_speaker_notes').catch(e=>setHint(String(e)))}><FileText size={13}/></button>
+      <button className="rec-atog" aria-label="Restart recording" disabled={busy} {...tip('Restart recording')} onClick={()=>void confirm('Discard this recording and start again in the same area?',{title:'Restart recording',kind:'warning'}).then(async ok=>{if(!ok)return;setBusy(true);try{await invoke('recorder_restart');}catch(e){setHint(String(e));setBusy(false);}})}><RotateCcw size={13}/></button>
       <button className="rec-stop" onClick={() => recorderStop()} {...tip("Stop recording")} aria-label="Stop">
         <Square size={13} strokeWidth={2.5} fill="currentColor" />
       </button>

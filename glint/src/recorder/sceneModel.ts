@@ -1,10 +1,13 @@
 import {DEFAULT_LOOK,cloneLook,type LookConfig} from '../look/model';
 import {DEFAULT_CURSOR,type StudioData} from './studioModel';
+import type {Entrance} from './studioPolish';
 export interface SceneMedia {path:string;kind:'video'|'image';width:number;height:number;duration:number;hasAudio:boolean}
 export interface Scene {
   id:string;kind:'video'|'image'|'title';media:SceneMedia|null;start:number;end:number;duration:number;
   title:string;titleColor:string;titleStart:string;titleEnd:string;titleSize:number;raster:string|null;
   transition:{kind:'cut'|'crossfade'|'slide';duration:number};
+  entrance?:Entrance;
+  shape?:'none'|'line'|'circle'|'rectangle';
 }
 export interface SceneProject {version:1;width:number;height:number;look:LookConfig;scenes:Scene[]}
 export const emptySceneProject=():SceneProject=>({version:1,width:1280,height:720,look:{...cloneLook(DEFAULT_LOOK),enabled:true,aspect:'16:9',padding:32},scenes:[]});
@@ -37,12 +40,13 @@ export function effectiveSceneLook(project:SceneProject):LookConfig {
 }
 export function sceneStudio(project:SceneProject,scene:Scene):StudioData {
  const width=scene.media?.width??project.width,height=scene.media?.height??project.height;
- return {project:{version:2,look:effectiveSceneLook(project),cursor:{...DEFAULT_CURSOR,visible:false,clicks:false,keystrokes:false},crop:null,clips:[{id:1,start:scene.start,end:scene.kind==='video'?scene.end:scene.duration,speed:1,kept:true,order:0}],fadeIn:0,fadeOut:0,cam:null,zoomSegments:[],masks:[]},events:{version:1,geometry:{x:0,y:0,width,height,monitorX:0,monitorY:0,monitorWidth:width,monitorHeight:height,dpiScale:1},events:[]}};
+ return {project:{version:2,look:effectiveSceneLook(project),cursor:{...DEFAULT_CURSOR,visible:false,clicks:false,keystrokes:false},crop:null,clips:[{id:1,start:scene.start,end:scene.kind==='video'?scene.end:scene.duration,speed:1,kept:true,order:0}],fadeIn:0,fadeOut:0,cam:null,zoomSegments:[],masks:[],contentMotion:scene.kind==='title'?scene.entrance:undefined,contentMotionSeconds:Math.min(.6,scene.duration/2)},events:{version:1,geometry:{x:0,y:0,width,height,monitorX:0,monitorY:0,monitorWidth:width,monitorHeight:height,dpiScale:1},events:[]}};
 }
 /** Raster titles with the app's installed font, keeping editable text in the document. */
 export function titleRaster(scene:Scene,width:number,height:number):string {
  const canvas=document.createElement('canvas');canvas.width=width;canvas.height=height;const ctx=canvas.getContext('2d')!;
  const gradient=ctx.createLinearGradient(0,0,width,height);gradient.addColorStop(0,scene.titleStart);gradient.addColorStop(1,scene.titleEnd);ctx.fillStyle=gradient;ctx.fillRect(0,0,width,height);
+ if(scene.shape&&scene.shape!=='none'){ctx.save();ctx.globalAlpha=.18;ctx.fillStyle=scene.titleColor;ctx.strokeStyle=scene.titleColor;ctx.lineWidth=height*.012;ctx.beginPath();if(scene.shape==='circle'){ctx.arc(width*.8,height*.5,height*.32,0,Math.PI*2);ctx.fill();}else if(scene.shape==='rectangle'){ctx.roundRect(width*.12,height*.2,width*.76,height*.6,height*.04);ctx.stroke();}else{ctx.moveTo(width*.25,height*.72);ctx.lineTo(width*.75,height*.72);ctx.stroke();}ctx.restore();}
  let size=scene.titleSize*width/1280,lines:string[]=[];
  const wrap=()=>{ctx.font=`600 ${size}px Manrope, "Segoe UI", sans-serif`;lines=[];for(const paragraph of scene.title.split('\n')){let line='';for(const word of paragraph.split(/\s+/)){const candidate=line?`${line} ${word}`:word;if(ctx.measureText(candidate).width>width*.8&&line){lines.push(line);line=word;}else{line=candidate;}}lines.push(line);}};
  wrap();while(size>8&&(lines.length*size*1.3>height*.75||lines.some(l=>ctx.measureText(l).width>width*.9))){size*=.95;wrap();}
