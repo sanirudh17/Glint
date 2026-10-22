@@ -1,0 +1,5251 @@
+{
+  "date": "2026-10-22",
+  "purpose": "Accuracy-first candidate evaluation; no production integration or engine change",
+  "candidate": "Indra OCR 1.1 (package 1.1.2, expected model tag v1.1.0)",
+  "criterion": "Mean case-sensitive Levenshtein CER after whitespace normalization. Lower is better.",
+  "inputs": "Unchanged owned synthetic English screenshots; fake identifiers only; no remote inference.",
+  "comparison": {
+    "small": {
+      "mean_cer": 0.01670792079207921,
+      "exact_key_matches": 0,
+      "exact_long_token_matches": 0,
+      "samples": 8
+    },
+    "medium": {
+      "mean_cer": 0.018873762376237623,
+      "exact_key_matches": 1,
+      "exact_long_token_matches": 0,
+      "samples": 8
+    }
+  },
+  "runs": [
+    {
+      "engine": "indra-ocr",
+      "package_version": "1.1.2",
+      "model_revision": "bd02167fdf2005a19962cc15188f8496a2c87d3b",
+      "model_tag": "v1.1.0",
+      "packages": {
+        "onnxruntime": "1.31.0",
+        "numpy": "2.5.4",
+        "opencv-python-headless": "5.0.0.93",
+        "Pillow": "13.0.0"
+      },
+      "platform": "Windows-11-10.0.26300-SP0",
+      "threads": 4,
+      "provider": "CPUExecutionProvider",
+      "upscale": 1,
+      "model_load_ms": 996.1989999865182,
+      "model_files": {
+        "config.json": {
+          "bytes": 703,
+          "sha256": "8d23884924b5ee9f6a1eb33e477b6b367d1a6da2d2a007fab7323008b4c189a8"
+        },
+        "det.onnx": {
+          "bytes": 389948,
+          "sha256": "f2bd4cba23e9c328cf7ec824634e423e191a2c6aacbbf35c62bd79dd70f62f59"
+        },
+        "LICENSE": {
+          "bytes": 14750,
+          "sha256": "50c88a018a7ee322e89f6b09401b237beb0cd331685879405b3db48993950a5f"
+        },
+        "lm.npz": {
+          "bytes": 15695957,
+          "sha256": "6c0fb618a363a0acdd05d4f5b0edd9e8146d2d990541b87f6130bbfe17cea58d"
+        },
+        "lm_cjk.npz": {
+          "bytes": 18955160,
+          "sha256": "6d64f13f4f90f4e529bd63340c6df76238d007feaef2abb903d8cd28d92bc2f3"
+        },
+        "lm_world.npz": {
+          "bytes": 11641215,
+          "sha256": "34df5e74a2fcbb9cf5e7f360a559375ffa2e04d2d2943a42308c177bcb444d5d"
+        },
+        "meta.json": {
+          "bytes": 211869,
+          "sha256": "4ce4c94b46f5d644033c02e718322014ff4081270f385038c571912b56696339"
+        },
+        "order.onnx": {
+          "bytes": 2973138,
+          "sha256": "a42db2e8b536ad3d84045a4b7f9b0a72667cf8be4aa02d63f7b38004719fb180"
+        },
+        "orient.onnx": {
+          "bytes": 371802,
+          "sha256": "20eaf670f55a7cf9facfe1bdd6c7b8e40be75bbf4d48a3df43f66aa3bbd874fd"
+        },
+        "README.md": {
+          "bytes": 22905,
+          "sha256": "3c4940ddedbd61b948bfa2a91fa4ae95f014554cd82fda89cc7f37234ce515d0"
+        },
+        "rec.onnx": {
+          "bytes": 5042161,
+          "sha256": "475972a2710be4a3cbfeb2bc7f3624ffd563de07de42476fc7a290d4e1ece484"
+        },
+        "rec_cjk.onnx": {
+          "bytes": 10176018,
+          "sha256": "4a035516a17e62cdf33a4fe2d88077654cb8841cff024685cdef4e351694ef50"
+        },
+        "rec_rtl.onnx": {
+          "bytes": 4812710,
+          "sha256": "468796bd684486a8388c30c8b4ed2a26e3eeb1f8ff02831c24c2e12c79a2a834"
+        },
+        "rec_world.onnx": {
+          "bytes": 5627990,
+          "sha256": "c8d1e59f21b04966f179d2d2d8e22b230d22110b3f89855bbbf2624a58c40043"
+        },
+        "script.onnx": {
+          "bytes": 191630,
+          "sha256": "b6ce4e926e19c243faaf37bd46880398bf2cb4ae56a29e1177a3b017c1280e36"
+        }
+      },
+      "normalization": "case-sensitive Levenshtein CER after whitespace normalization; no identifier correction",
+      "privacy_limit": "Raw transcription and line boxes only; not a production Glint privacy scan",
+      "summary": {
+        "exact": {
+          "samples": 8,
+          "median_ms": 98.91465000691824,
+          "mean_cer": 0.05290841584158416,
+          "key_exact": 0,
+          "token_exact": 0
+        },
+        "simple": {
+          "samples": 6,
+          "median_ms": 106.7326000193134,
+          "mean_cer": 0.03051643192488263
+        },
+        "privacy": {
+          "samples": 10,
+          "median_ms": 117.42534997756593,
+          "exact_values": 43,
+          "reference_values": 60
+        }
+      },
+      "privacy_probe": {
+        "reference_values": 60,
+        "complete_opaque_values": 52,
+        "method": "Existing native Glint privacy::detect using public Indra whole-line boxes, without secondary Tesseract. Full reference boxes and every exported mask pixel checked. Masks are conservative whole-line rectangles. Probe success means measurements recorded, not that all values were covered.",
+        "results": [
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-1-light.png",
+            "suggestions": [
+              {
+                "h": 27.3,
+                "kind": "Email",
+                "w": 297.40000000000003,
+                "x": 16.7,
+                "y": 11.8
+              },
+              {
+                "h": 23.599999999999994,
+                "kind": "Card number",
+                "w": 309.1,
+                "x": 15.2,
+                "y": 56.5
+              },
+              {
+                "h": 23.700000000000003,
+                "kind": "Phone",
+                "w": 272.7,
+                "x": 15.100000000000001,
+                "y": 100.0
+              },
+              {
+                "h": 23.899999999999977,
+                "kind": "IP address",
+                "w": 212.6,
+                "x": 15.100000000000001,
+                "y": 143.8
+              },
+              {
+                "h": 27.900000000000006,
+                "kind": "API key",
+                "w": 598.3,
+                "x": 14.5,
+                "y": 187.1
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-0.75-light.png",
+            "suggestions": [
+              {
+                "h": 22.5,
+                "kind": "Email",
+                "w": 225.1,
+                "x": 11.5,
+                "y": 7.800000000000001
+              },
+              {
+                "h": 19.800000000000004,
+                "kind": "Card number",
+                "w": 233.79999999999998,
+                "x": 10.4,
+                "y": 41.3
+              },
+              {
+                "h": 19.799999999999997,
+                "kind": "Phone",
+                "w": 206.6,
+                "x": 10.3,
+                "y": 74.0
+              },
+              {
+                "h": 20.10000000000001,
+                "kind": "IP address",
+                "w": 161.5,
+                "x": 10.3,
+                "y": 106.8
+              },
+              {
+                "h": 23.0,
+                "kind": "API key",
+                "w": 450.70000000000005,
+                "x": 9.9,
+                "y": 139.3
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-0.5-light.png",
+            "suggestions": [
+              {
+                "h": 18.0,
+                "kind": "Email",
+                "w": 152.79999999999998,
+                "x": 6.300000000000001,
+                "y": 3.7
+              },
+              {
+                "h": 16.000000000000004,
+                "kind": "Card number",
+                "w": 157.6,
+                "x": 5.5,
+                "y": 26.2
+              },
+              {
+                "h": 16.199999999999996,
+                "kind": "Phone",
+                "w": 140.4,
+                "x": 5.5,
+                "y": 47.9
+              },
+              {
+                "h": 16.5,
+                "kind": "IP address",
+                "w": 111.5,
+                "x": 5.5,
+                "y": 69.7
+              },
+              {
+                "h": 18.299999999999997,
+                "kind": "API key",
+                "w": 303.3,
+                "x": 5.199999999999999,
+                "y": 91.4
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-full-light.png",
+            "suggestions": [
+              {
+                "h": 18.900000000000006,
+                "kind": "Email",
+                "w": 153.7,
+                "x": 24.4,
+                "y": 95.8
+              },
+              {
+                "h": 18.700000000000017,
+                "kind": "Card number",
+                "w": 161.2,
+                "x": 24.4,
+                "y": 130.6
+              },
+              {
+                "h": 18.099999999999994,
+                "kind": "Phone",
+                "w": 142.3,
+                "x": 24.5,
+                "y": 166.0
+              },
+              {
+                "h": 18.400000000000006,
+                "kind": "IP address",
+                "w": 108.60000000000001,
+                "x": 28.200000000000003,
+                "y": 200.7
+              },
+              {
+                "h": 20.099999999999994,
+                "kind": "API key",
+                "w": 304.1,
+                "x": 24.2,
+                "y": 235.8
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "JWT",
+                "opaque_pixels": true
+              }
+            ],
+            "file": "privacy-tall-light.png",
+            "suggestions": [
+              {
+                "h": 22.700000000000045,
+                "kind": "Email",
+                "w": 201.10000000000002,
+                "x": 34.2,
+                "y": 885.5
+              },
+              {
+                "h": 21.0,
+                "kind": "Card number",
+                "w": 209.5,
+                "x": 34.5,
+                "y": 935.9
+              },
+              {
+                "h": 21.299999999999955,
+                "kind": "Phone",
+                "w": 182.7,
+                "x": 34.4,
+                "y": 995.0
+              },
+              {
+                "h": 21.90000000000009,
+                "kind": "IP address",
+                "w": 147.0,
+                "x": 34.3,
+                "y": 1775.1
+              },
+              {
+                "h": 23.399999999999864,
+                "kind": "API key",
+                "w": 403.5,
+                "x": 34.1,
+                "y": 1824.9
+              },
+              {
+                "h": 24.5,
+                "kind": "JWT",
+                "w": 565.5,
+                "x": 38.4,
+                "y": 1904.5
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-1-dark.png",
+            "suggestions": [
+              {
+                "h": 30.4,
+                "kind": "Email",
+                "w": 300.5,
+                "x": 14.100000000000001,
+                "y": 9.9
+              },
+              {
+                "h": 29.4,
+                "kind": "Card number",
+                "w": 310.9,
+                "x": 14.3,
+                "y": 54.1
+              },
+              {
+                "h": 29.0,
+                "kind": "Phone",
+                "w": 274.3,
+                "x": 14.3,
+                "y": 97.8
+              },
+              {
+                "h": 29.100000000000023,
+                "kind": "IP address",
+                "w": 214.2,
+                "x": 14.3,
+                "y": 141.7
+              },
+              {
+                "h": 31.799999999999983,
+                "kind": "API key",
+                "w": 599.5,
+                "x": 13.899999999999999,
+                "y": 184.9
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-0.75-dark.png",
+            "suggestions": [
+              {
+                "h": 25.0,
+                "kind": "Email",
+                "w": 227.4,
+                "x": 9.6,
+                "y": 6.300000000000001
+              },
+              {
+                "h": 23.9,
+                "kind": "Card number",
+                "w": 235.20000000000002,
+                "x": 9.7,
+                "y": 39.6
+              },
+              {
+                "h": 23.69999999999999,
+                "kind": "Phone",
+                "w": 207.6,
+                "x": 9.8,
+                "y": 72.4
+              },
+              {
+                "h": 23.89999999999999,
+                "kind": "IP address",
+                "w": 162.70000000000002,
+                "x": 9.7,
+                "y": 105.3
+              },
+              {
+                "h": 25.900000000000006,
+                "kind": "API key",
+                "w": 451.70000000000005,
+                "x": 9.4,
+                "y": 137.6
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "JWT",
+                "opaque_pixels": true
+              }
+            ],
+            "file": "privacy-0.5-dark.png",
+            "suggestions": [
+              {
+                "h": 19.7,
+                "kind": "Email",
+                "w": 154.4,
+                "x": 5.0,
+                "y": 2.7
+              },
+              {
+                "h": 18.699999999999996,
+                "kind": "Card number",
+                "w": 160.5,
+                "x": 4.1,
+                "y": 25.1
+              },
+              {
+                "h": 18.699999999999996,
+                "kind": "Phone",
+                "w": 141.20000000000002,
+                "x": 5.1,
+                "y": 46.9
+              },
+              {
+                "h": 19.5,
+                "kind": "IP address",
+                "w": 111.4,
+                "x": 5.0,
+                "y": 68.6
+              },
+              {
+                "h": 20.799999999999997,
+                "kind": "API key",
+                "w": 304.09999999999997,
+                "x": 4.800000000000001,
+                "y": 90.0
+              },
+              {
+                "h": 20.799999999999997,
+                "kind": "JWT",
+                "w": 429.7,
+                "x": 4.800000000000001,
+                "y": 111.7
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-full-dark.png",
+            "suggestions": [
+              {
+                "h": 21.0,
+                "kind": "Email",
+                "w": 154.3,
+                "x": 24.1,
+                "y": 94.8
+              },
+              {
+                "h": 20.5,
+                "kind": "Card number",
+                "w": 161.8,
+                "x": 24.1,
+                "y": 129.2
+              },
+              {
+                "h": 20.700000000000017,
+                "kind": "Phone",
+                "w": 143.1,
+                "x": 24.1,
+                "y": 164.1
+              },
+              {
+                "h": 19.799999999999983,
+                "kind": "IP address",
+                "w": 112.8,
+                "x": 24.2,
+                "y": 199.8
+              },
+              {
+                "h": 22.099999999999994,
+                "kind": "API key",
+                "w": 304.70000000000005,
+                "x": 23.9,
+                "y": 234.4
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-tall-dark.png",
+            "suggestions": [
+              {
+                "h": 27.600000000000023,
+                "kind": "Email",
+                "w": 202.39999999999998,
+                "x": 36.7,
+                "y": 882.6
+              },
+              {
+                "h": 26.799999999999955,
+                "kind": "Card number",
+                "w": 211.0,
+                "x": 32.7,
+                "y": 932.6
+              },
+              {
+                "h": 25.5,
+                "kind": "Phone",
+                "w": 188.2,
+                "x": 33.2,
+                "y": 993.1
+              },
+              {
+                "h": 25.799999999999955,
+                "kind": "IP address",
+                "w": 148.0,
+                "x": 32.7,
+                "y": 1772.8
+              },
+              {
+                "h": 27.90000000000009,
+                "kind": "API key",
+                "w": 408.7,
+                "x": 32.8,
+                "y": 1823.0
+              }
+            ]
+          }
+        ]
+      },
+      "results": [
+        {
+          "corpus": "exact",
+          "file": "accuracy-consolas-11-light.png",
+          "ms": 90.29310004552826,
+          "text": "Email: user.name+demo@example.co.uk API key: sk-proj-RwLs2ld80popaT@IidmmtOS1QNgVmWjGhnLCaLhx Token: eyJhbGciOiJIUzI1Ni39.sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfwa9eEduMVfN7.bpdLgfbX33c6Rz0_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo\\file_e1.ts\"; if (value !== null && count >= 10) { return items[ø]?.id ?? \"\"; ) const ids = [\"0eIli\", \"AbCdef_9-0\", \"xX_01-1I\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.034653465346534656,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "ed14b52d70dfcadca668b6ca8548a6cc4b61c6b2694403e4e8de3c5cfcfc83c3"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-consolas-11-dark.png",
+          "ms": 130.05540001904592,
+          "text": "Email: user.name+demo@example.co.uk APT key: _sk-prog-RWis21dgepopateidmmtosingymnjghnicalhx Token: ey)hbGci0iJIUzI1Ni39.sS8hhss6inCQmw31126fąxAhjVmMyamjXC_9jhUfwa9eEduMVfN7. bpdLgfbx33c6Rz0_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo\\file_01.ts\"; if (value !== null && count >= 10) { return items[e]?.id ?? \"\"; } const ids = [\"00Il1\", \"AbCdef_9-0\", \"xX_01-1I\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.09158415841584158,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "d1779e3f2a1bd1050607d91dee19359a9a392b3d31f62cc4853f5d80293d902e"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-consolas-15-light.png",
+          "ms": 100.44200002448633,
+          "text": "Email: user.name+demo@example.co.uk API key: sk-proj-Rwls21d80popaT0IidmmtOS1QNgVmWjGhnLCalhx Token: eyJhbGci0iJIUzI1NiJ9.sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfWa9eEduMVFN7.bpdlgfbXJ3c6Rz0_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo\\file_01.ts\"; if (value !== null && count >= 10) { return items[0]?.id ?? \"\"; } const ids = [\"00Il1\", \"AbCdEf 9-0\", \"xX_01-1I\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.027227722772277228,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "64816108cc375d0f578ff66cd15d42e60231e692783d2deba1640edcde55fb62"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-consolas-15-dark.png",
+          "ms": 78.95830000052229,
+          "text": "Email: user.name+demo@example.co.uk API key: sk-proj-Rwls21d80popaT@IidmmtOS1QNgVmWjGhnLCalhx Token: eyJhbGci0iJIUzI1NiJ9.sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfWa9eEduMVfN7. bpdlgfbXJ3c6Rz0_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo\\file_01.ts\"; if (value !== null && count >= 10) { return items[0]?.id ?? \"\"; } const ids = [\"00Il1\", \"AbCdEf 9-0\", \"xX_01-1I\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.0297029702970297,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "7564bdade2f79b4450bde852024b7a554b9169e736d9275a17a90c595a2a128c"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-segoe-11-light.png",
+          "ms": 143.78139999462292,
+          "text": "Email: user.name+ demo@example.co.uk API key: sk-proj-RwLs2ld80popaT0lidmmtOS1QNgVmWjGhnLCaLhx Token: eyJhbGciOiJIUz|1 NiJ9.sS8hhss6inCQmw31126fąXAhj VmMyamjXC_9jhUfWa9eEduMVfN7.bpdlgfbXJ3c6RzO_JGOYTTwtt7L5tbe6 const path = \"CAUsers\\demo\\file_01.ts\"; if (value !== null && count > = 10) ( return items[0]?.id ?? \";) const ids = ['00111”, “Abcdef 9-0\", \"XX 01-11]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.07178217821782178,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "790599869f9402bebee09a705b2842a8cf33b50664d7ada4d543513be18adb27"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-segoe-11-dark.png",
+          "ms": 105.95590004231781,
+          "text": "Email: user.name+ demo@example.co.uk API key: sk-proj-RwLs2Id80popaTOlidmmtOS1QNgVmWjGhnLCaLhx Token: eyJhbGciOiJ|Uz!1NiJ9.sS8hhss6inCQmw31126fqXAhj VmMyamjXC_9jhUfWa9eEduMVfN7.bpdlgfbXJ3c6RzO_JGOYTTwtt7L5tbe6 const path = \"ChUsers\\demoffile_01.ts”; if (value !== null && count > = 10) ( return items[0]?id ?? ””;) const ids = (00111”, “Abcdef 9-0\", \"XX 01-11]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.08663366336633663,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "2d7df2a29b1c139ede0ada7869d7b1c43ad6e5e7f518549d99d48fe522e22d97"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-segoe-15-light.png",
+          "ms": 97.38729998935014,
+          "text": "Email: user.name +demo@example.co.uk API key: sk-proj-RwLs2ld80popaT0lidmmtOS1QNgVmWjGhnLCalhx Token: eyJhbGciOiJlUzl1NiJ9.sS8hhss6inCQmw31126fqXAhj VmMyamjXC_9jhUfWa9eEduMVfN7.bpdlgfbXJ3c6RzO_JGOYTTwtt7L5tbe6 const path = \"C\\Users\\demo\\file_01.ts\"; if (value !== null && count >= 10) ( return items[0]?.id ?? \"\";) const ids = [\"O0II1\", \"AbCdEf_9-0\", \"xX_01-Il”]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.039603960396039604,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "56ed1618d8753bf2f30fc10faca08e15c1eb6e9172008bebc71c50531f6816f2"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-segoe-15-dark.png",
+          "ms": 90.22090001963079,
+          "text": "Email: user.name + demo@example.co.uk API key: sk-proj-RwLs2Id80popaT0lidmmtOS1QNgVmWjGhnLCaLhx Token: eyJhbGciOiJlUz|1NiJ9.sS8hhss6inCQmw3 1126fqXAhj VmMyamjXC_9jhUfWa9eEduMVfN7.bpdLgfbXJ3c6RzO_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo file_01.ts”; if (value !== null && count >= 10) ( return items[0]?.id ?? \"\";) const ids = [\"O0II1\", \"AbCdEf 9-0\", \"xX_01-II\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.04207920792079208,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "57f897f48b89dff7b8a9a329529707b8b74e819ad31951d40ba18cf7a31e0a4f"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-11-dark.png",
+          "ms": 113.69280004873872,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFFe01122334455 Token: eyhbGcioidIUzIIN139. ey zdulii IXM MONTY30Dkwine. signature 12345 const result = await capture(( width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 (json) [array] foo_bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.07042253521126761,
+          "image_sha256": "dfb7a45738b7d44780f359b1b4bdac808f7050984e71bc7659e15dbdda027ffb"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-11-light.png",
+          "ms": 89.28880002349615,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFFø01122334455 Token: eyJhbGciOiJIUzI1Ni39.eyJzdwIi0iIxMjMeNTY30DkwIne.signature12345 const result = await capture(( width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 (json) [array] foo_bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.030985915492957747,
+          "image_sha256": "67d58773e332ffd196447338082528186f96e293763ddfeb997ba08f6f92fc86"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-14-dark.png",
+          "ms": 117.17799998586997,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_5105aaBBccDDeeFF001122334455 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMONTY30DkwIn0.signature12345 const result = await capture({ width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 {json) [array] foo_bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.016901408450704224,
+          "image_sha256": "1007f75bae52bd4103b4cc90c7474d94e4076b79b627ea3d04b51e28e05855a4"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-14-light.png",
+          "ms": 115.69629999576136,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFF001122334455 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMøNTY30DkwIn0.signature12345 const result = await capture({ width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 (json) [array] foo_bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.016901408450704224,
+          "image_sha256": "d91efa4b385d35b60c908e566d9ac73ba3255418c34ad3ec488d3e7a283c72d2"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-18-dark.png",
+          "ms": 99.77239998988807,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFF001122334455 Token: eyJhbGci0iJIUzI1NiJ9.eyJzdWIi0iIxMjMONTY30DkwIn0. signature12345 const result = await capture({ width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 I11 (json) [array] foo bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.028169014084507043,
+          "image_sha256": "de08bc8187fb22d96ed903e039f2a9e505191f2e58458618367ba50a5f676f33"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-18-light.png",
+          "ms": 98.31909998320043,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFF001122334455 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMøNTY30DkwIn0. signature12345 const result = await capture({ width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 {json) [array] foo bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.01971830985915493,
+          "image_sha256": "a662a106bec1d46e446f1a2cbfb3379743883539d285914a53cb7aaf66a76ac2"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-1-light.png",
+          "ms": 72.9700000374578,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMøNTY3ODkwIn0.signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": true,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                104.0,
+                16,
+                308.0,
+                35
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                92.0,
+                61,
+                320.0,
+                75
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                104.0,
+                105,
+                284.0,
+                119
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                68.0,
+                149,
+                224.0,
+                163
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                80.0,
+                191,
+                608.0,
+                211
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                104.0,
+                235,
+                860.0,
+                255
+              ]
+            }
+          ],
+          "image_sha256": "9a27187ff159d9ba0e400ee735dda288663dbdb20db8d2efd223c5f34d50b38f"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-0.75-light.png",
+          "ms": 74.89820005139336,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMøNTY30DkwIn0.signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": true,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                78.0,
+                12.0,
+                231.0,
+                26.25
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                69.0,
+                45.75,
+                240.0,
+                56.25
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                78.0,
+                78.75,
+                213.0,
+                89.25
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                51.0,
+                111.75,
+                168.0,
+                122.25
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                60.0,
+                143.25,
+                456.0,
+                158.25
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                78.0,
+                176.25,
+                645.0,
+                191.25
+              ]
+            }
+          ],
+          "image_sha256": "aaa61aab90658984283e06913a91dfab31a253d14958aa8aae78b71409d87acc"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-0.5-light.png",
+          "ms": 104.15630001807585,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijkimnopgrstuvwxyz0123456789 Token: eyJhbGciOiJIUzIINi39.eyJzdWIiOiIxMjMøNTY30DkwInø.signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                52.0,
+                8.0,
+                154.0,
+                17.5
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                46.0,
+                30.5,
+                160.0,
+                37.5
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                52.0,
+                52.5,
+                142.0,
+                59.5
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                34.0,
+                74.5,
+                112.0,
+                81.5
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                40.0,
+                95.5,
+                304.0,
+                105.5
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                52.0,
+                117.5,
+                430.0,
+                127.5
+              ]
+            }
+          ],
+          "image_sha256": "85048d4b923e26d2ca77cc6c6027aaddd9799f1c0bc2b9d8d336fac0351c6661"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-full-light.png",
+          "ms": 220.3870000084862,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijkimnopqrstuvwxyz0123456789 Token: eythbcidi IUz1N139. ey zdwiiTxMMONTY300kwIne. signature 12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                72.0,
+                101,
+                174.0,
+                111
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                66.0,
+                137,
+                180.0,
+                144
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                72.0,
+                172,
+                162.0,
+                179
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                54.0,
+                207,
+                132.0,
+                214
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                60.0,
+                241,
+                324.0,
+                251
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                72.0,
+                276,
+                450.0,
+                286
+              ]
+            }
+          ],
+          "image_sha256": "af123d7b434456b11b55ec134703c08ae8b6e3e569e5babd49a58f7cb53e8bf0"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-tall-light.png",
+          "ms": 131.6579999984242,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789 Token: eyJhbGci0iJIUzI1NiJ9.eyJzdWIi0iIxMjMMNTY30DkwIn0.signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": true,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                96.0,
+                891,
+                232.0,
+                904
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                88.0,
+                942,
+                240.0,
+                951
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                96.0,
+                1002,
+                216.0,
+                1011
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                72.0,
+                1782,
+                176.0,
+                1791
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                80.0,
+                1831,
+                432.0,
+                1844
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                96.0,
+                1911,
+                600.0,
+                1924
+              ]
+            }
+          ],
+          "image_sha256": "1390fbeb05926e6704cbef007f8d66e1a5236b941c72b7830b87a3c14e146cdf"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-1-dark.png",
+          "ms": 116.73719994723797,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijk1mnopqrstuvwxyz0123456789 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMəNTY3ODkwInø. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                104.0,
+                16,
+                308.0,
+                35
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                92.0,
+                61,
+                320.0,
+                75
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                104.0,
+                105,
+                284.0,
+                119
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                68.0,
+                149,
+                224.0,
+                163
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                80.0,
+                191,
+                608.0,
+                211
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                104.0,
+                235,
+                860.0,
+                255
+              ]
+            }
+          ],
+          "image_sha256": "2c2726b37e026f6d2aad23a356c7fd5ced285ee10f889bf2992d16c08255c64b"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-0.75-dark.png",
+          "ms": 107.30859998147935,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijklmnopgrstuvwxyz0123456789 Token: eyJhbGci0iJIUzI1NiJ9.eyJzdWTi0iIxMjMəNTY3ODkwIn0. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                78.0,
+                12.0,
+                231.0,
+                26.25
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                69.0,
+                45.75,
+                240.0,
+                56.25
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                78.0,
+                78.75,
+                213.0,
+                89.25
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                51.0,
+                111.75,
+                168.0,
+                122.25
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                60.0,
+                143.25,
+                456.0,
+                158.25
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                78.0,
+                176.25,
+                645.0,
+                191.25
+              ]
+            }
+          ],
+          "image_sha256": "403929380b1caf8dee584d40b91e7e10923319417bc0c55126dfd4489459a0ba"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-0.5-dark.png",
+          "ms": 118.11350000789389,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijk1mnopgrstuvwxyz0123456789 Token: eyJhbGci0iJIUzI1Ni39.eyJzdWIi0iIxMjMeNTY30DkwIn0. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                52.0,
+                8.0,
+                154.0,
+                17.5
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                46.0,
+                30.5,
+                160.0,
+                37.5
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                52.0,
+                52.5,
+                142.0,
+                59.5
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                34.0,
+                74.5,
+                112.0,
+                81.5
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                40.0,
+                95.5,
+                304.0,
+                105.5
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                52.0,
+                117.5,
+                430.0,
+                127.5
+              ]
+            }
+          ],
+          "image_sha256": "1d26015ece9f50a9cb046d6a65f74425d9709488764bd21e6187ab97a01a5047"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-full-dark.png",
+          "ms": 140.69869997911155,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijkimnopgrstuvwxyz0123456789 Token: ey b6cidi IUz1N139.sy zdalidi IMM MenTY300kwine. signature 12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                72.0,
+                101,
+                174.0,
+                111
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                66.0,
+                137,
+                180.0,
+                144
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                72.0,
+                172,
+                162.0,
+                179
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                54.0,
+                207,
+                132.0,
+                214
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                60.0,
+                241,
+                324.0,
+                251
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                72.0,
+                276,
+                450.0,
+                286
+              ]
+            }
+          ],
+          "image_sha256": "b5c73d55d253104ca1eda2a105da932f47d165c6410d1a072a406ccba27eb2d8"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-tall-dark.png",
+          "ms": 151.7706000013277,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijkimnopqrstuvwxyz0123456789 Token: ey]hbGcioiduzini 39. eyjzdwiniTxMjMenTY300kwine, sig ure 12345",
+          "rotation": 0,
+          "skew": -0.3,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                96.0,
+                891,
+                232.0,
+                904
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                88.0,
+                942,
+                240.0,
+                951
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                96.0,
+                1002,
+                216.0,
+                1011
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                72.0,
+                1782,
+                176.0,
+                1791
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                80.0,
+                1831,
+                432.0,
+                1844
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                96.0,
+                1911,
+                600.0,
+                1924
+              ]
+            }
+          ],
+          "image_sha256": "25caba4405bf63abd85c1fe0843e23dadef1bb1972945c24ad7bf9356c074567"
+        }
+      ]
+    },
+    {
+      "engine": "indra-ocr",
+      "package_version": "1.1.2",
+      "model_revision": "bd02167fdf2005a19962cc15188f8496a2c87d3b",
+      "model_tag": "v1.1.0",
+      "packages": {
+        "onnxruntime": "1.31.0",
+        "numpy": "2.5.4",
+        "opencv-python-headless": "5.0.0.93",
+        "Pillow": "13.0.0"
+      },
+      "platform": "Windows-11-10.0.26300-SP0",
+      "threads": 4,
+      "provider": "CPUExecutionProvider",
+      "upscale": 2,
+      "model_load_ms": 783.105299982708,
+      "model_files": {
+        "config.json": {
+          "bytes": 703,
+          "sha256": "8d23884924b5ee9f6a1eb33e477b6b367d1a6da2d2a007fab7323008b4c189a8"
+        },
+        "det.onnx": {
+          "bytes": 389948,
+          "sha256": "f2bd4cba23e9c328cf7ec824634e423e191a2c6aacbbf35c62bd79dd70f62f59"
+        },
+        "LICENSE": {
+          "bytes": 14750,
+          "sha256": "50c88a018a7ee322e89f6b09401b237beb0cd331685879405b3db48993950a5f"
+        },
+        "lm.npz": {
+          "bytes": 15695957,
+          "sha256": "6c0fb618a363a0acdd05d4f5b0edd9e8146d2d990541b87f6130bbfe17cea58d"
+        },
+        "lm_cjk.npz": {
+          "bytes": 18955160,
+          "sha256": "6d64f13f4f90f4e529bd63340c6df76238d007feaef2abb903d8cd28d92bc2f3"
+        },
+        "lm_world.npz": {
+          "bytes": 11641215,
+          "sha256": "34df5e74a2fcbb9cf5e7f360a559375ffa2e04d2d2943a42308c177bcb444d5d"
+        },
+        "meta.json": {
+          "bytes": 211869,
+          "sha256": "4ce4c94b46f5d644033c02e718322014ff4081270f385038c571912b56696339"
+        },
+        "order.onnx": {
+          "bytes": 2973138,
+          "sha256": "a42db2e8b536ad3d84045a4b7f9b0a72667cf8be4aa02d63f7b38004719fb180"
+        },
+        "orient.onnx": {
+          "bytes": 371802,
+          "sha256": "20eaf670f55a7cf9facfe1bdd6c7b8e40be75bbf4d48a3df43f66aa3bbd874fd"
+        },
+        "README.md": {
+          "bytes": 22905,
+          "sha256": "3c4940ddedbd61b948bfa2a91fa4ae95f014554cd82fda89cc7f37234ce515d0"
+        },
+        "rec.onnx": {
+          "bytes": 5042161,
+          "sha256": "475972a2710be4a3cbfeb2bc7f3624ffd563de07de42476fc7a290d4e1ece484"
+        },
+        "rec_cjk.onnx": {
+          "bytes": 10176018,
+          "sha256": "4a035516a17e62cdf33a4fe2d88077654cb8841cff024685cdef4e351694ef50"
+        },
+        "rec_rtl.onnx": {
+          "bytes": 4812710,
+          "sha256": "468796bd684486a8388c30c8b4ed2a26e3eeb1f8ff02831c24c2e12c79a2a834"
+        },
+        "rec_world.onnx": {
+          "bytes": 5627990,
+          "sha256": "c8d1e59f21b04966f179d2d2d8e22b230d22110b3f89855bbbf2624a58c40043"
+        },
+        "script.onnx": {
+          "bytes": 191630,
+          "sha256": "b6ce4e926e19c243faaf37bd46880398bf2cb4ae56a29e1177a3b017c1280e36"
+        }
+      },
+      "normalization": "case-sensitive Levenshtein CER after whitespace normalization; no identifier correction",
+      "privacy_limit": "Raw transcription and line boxes only; not a production Glint privacy scan",
+      "summary": {
+        "exact": {
+          "samples": 8,
+          "median_ms": 109.60344999330118,
+          "mean_cer": 0.05290841584158416,
+          "key_exact": 0,
+          "token_exact": 0
+        },
+        "simple": {
+          "samples": 6,
+          "median_ms": 102.63219999615103,
+          "mean_cer": 0.02394366197183099
+        },
+        "privacy": {
+          "samples": 10,
+          "median_ms": 104.646599967964,
+          "exact_values": 43,
+          "reference_values": 60
+        }
+      },
+      "privacy_probe": {
+        "reference_values": 60,
+        "complete_opaque_values": 55,
+        "method": "Existing native Glint privacy::detect using public Indra whole-line boxes, without secondary Tesseract. Full reference boxes and every exported mask pixel checked. Masks are conservative whole-line rectangles. Probe success means measurements recorded, not that all values were covered.",
+        "results": [
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-1-light.png",
+            "suggestions": [
+              {
+                "h": 27.400000000000002,
+                "kind": "Email",
+                "w": 297.4,
+                "x": 16.75,
+                "y": 11.7
+              },
+              {
+                "h": 23.599999999999994,
+                "kind": "Card number",
+                "w": 309.15000000000003,
+                "x": 15.149999999999999,
+                "y": 56.5
+              },
+              {
+                "h": 23.700000000000003,
+                "kind": "Phone",
+                "w": 272.65000000000003,
+                "x": 15.149999999999999,
+                "y": 100.0
+              },
+              {
+                "h": 23.94999999999999,
+                "kind": "IP address",
+                "w": 212.6,
+                "x": 15.100000000000001,
+                "y": 143.8
+              },
+              {
+                "h": 28.0,
+                "kind": "API key",
+                "w": 598.35,
+                "x": 14.5,
+                "y": 187.05
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "JWT",
+                "opaque_pixels": true
+              }
+            ],
+            "file": "privacy-0.75-light.png",
+            "suggestions": [
+              {
+                "h": 22.55,
+                "kind": "Email",
+                "w": 225.04999999999998,
+                "x": 11.55,
+                "y": 7.75
+              },
+              {
+                "h": 19.65,
+                "kind": "Card number",
+                "w": 233.85,
+                "x": 10.35,
+                "y": 41.4
+              },
+              {
+                "h": 19.75,
+                "kind": "Phone",
+                "w": 206.5,
+                "x": 10.35,
+                "y": 74.05
+              },
+              {
+                "h": 20.0,
+                "kind": "IP address",
+                "w": 161.45,
+                "x": 10.3,
+                "y": 106.85
+              },
+              {
+                "h": 23.05000000000001,
+                "kind": "API key",
+                "w": 450.79999999999995,
+                "x": 9.85,
+                "y": 139.25
+              },
+              {
+                "h": 23.05000000000001,
+                "kind": "JWT",
+                "w": 637.75,
+                "x": 11.45,
+                "y": 171.95
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-0.5-light.png",
+            "suggestions": [
+              {
+                "h": 18.0,
+                "kind": "Email",
+                "w": 152.79999999999998,
+                "x": 6.300000000000001,
+                "y": 3.75
+              },
+              {
+                "h": 15.950000000000003,
+                "kind": "Card number",
+                "w": 157.54999999999998,
+                "x": 5.550000000000001,
+                "y": 26.25
+              },
+              {
+                "h": 16.300000000000004,
+                "kind": "Phone",
+                "w": 140.45,
+                "x": 5.5,
+                "y": 47.9
+              },
+              {
+                "h": 16.450000000000003,
+                "kind": "IP address",
+                "w": 111.55,
+                "x": 5.449999999999999,
+                "y": 69.75
+              },
+              {
+                "h": 18.35000000000001,
+                "kind": "API key",
+                "w": 303.3,
+                "x": 5.199999999999999,
+                "y": 91.35
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-full-light.png",
+            "suggestions": [
+              {
+                "h": 19.0,
+                "kind": "Email",
+                "w": 153.8,
+                "x": 24.35,
+                "y": 95.75
+              },
+              {
+                "h": 18.650000000000006,
+                "kind": "Card number",
+                "w": 161.2,
+                "x": 24.4,
+                "y": 130.6
+              },
+              {
+                "h": 18.05000000000001,
+                "kind": "Phone",
+                "w": 142.25,
+                "x": 24.5,
+                "y": 166.0
+              },
+              {
+                "h": 18.400000000000006,
+                "kind": "IP address",
+                "w": 112.35000000000001,
+                "x": 24.45,
+                "y": 200.75
+              },
+              {
+                "h": 20.150000000000006,
+                "kind": "API key",
+                "w": 304.1,
+                "x": 24.2,
+                "y": 235.85
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "JWT",
+                "opaque_pixels": true
+              }
+            ],
+            "file": "privacy-tall-light.png",
+            "suggestions": [
+              {
+                "h": 22.25,
+                "kind": "Email",
+                "w": 200.95,
+                "x": 34.3,
+                "y": 885.65
+              },
+              {
+                "h": 20.899999999999977,
+                "kind": "Card number",
+                "w": 209.5,
+                "x": 34.5,
+                "y": 935.95
+              },
+              {
+                "h": 21.399999999999977,
+                "kind": "Phone",
+                "w": 187.25,
+                "x": 34.4,
+                "y": 994.95
+              },
+              {
+                "h": 22.0,
+                "kind": "IP address",
+                "w": 146.95000000000002,
+                "x": 34.35,
+                "y": 1775.0
+              },
+              {
+                "h": 23.449999999999818,
+                "kind": "API key",
+                "w": 403.45,
+                "x": 34.1,
+                "y": 1824.9
+              },
+              {
+                "h": 24.549999999999955,
+                "kind": "JWT",
+                "w": 565.5,
+                "x": 38.45,
+                "y": 1904.45
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "JWT",
+                "opaque_pixels": true
+              }
+            ],
+            "file": "privacy-1-dark.png",
+            "suggestions": [
+              {
+                "h": 30.349999999999998,
+                "kind": "Email",
+                "w": 300.45000000000005,
+                "x": 14.149999999999999,
+                "y": 9.95
+              },
+              {
+                "h": 29.199999999999996,
+                "kind": "Card number",
+                "w": 310.84999999999997,
+                "x": 14.3,
+                "y": 54.15
+              },
+              {
+                "h": 28.849999999999994,
+                "kind": "Phone",
+                "w": 274.2,
+                "x": 14.350000000000001,
+                "y": 97.95
+              },
+              {
+                "h": 28.900000000000006,
+                "kind": "IP address",
+                "w": 214.05,
+                "x": 14.350000000000001,
+                "y": 141.75
+              },
+              {
+                "h": 31.650000000000006,
+                "kind": "API key",
+                "w": 599.4499999999999,
+                "x": 13.95,
+                "y": 184.95
+              },
+              {
+                "h": 32.150000000000006,
+                "kind": "JWT",
+                "w": 851.0,
+                "x": 13.850000000000001,
+                "y": 228.1
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "JWT",
+                "opaque_pixels": true
+              }
+            ],
+            "file": "privacy-0.75-dark.png",
+            "suggestions": [
+              {
+                "h": 24.9,
+                "kind": "Email",
+                "w": 227.35,
+                "x": 9.6,
+                "y": 6.35
+              },
+              {
+                "h": 23.950000000000003,
+                "kind": "Card number",
+                "w": 235.15,
+                "x": 9.7,
+                "y": 39.65
+              },
+              {
+                "h": 23.599999999999994,
+                "kind": "Phone",
+                "w": 207.7,
+                "x": 9.75,
+                "y": 72.45
+              },
+              {
+                "h": 23.85000000000001,
+                "kind": "IP address",
+                "w": 162.6,
+                "x": 9.75,
+                "y": 105.3
+              },
+              {
+                "h": 25.900000000000006,
+                "kind": "API key",
+                "w": 451.65000000000003,
+                "x": 9.45,
+                "y": 137.65
+              },
+              {
+                "h": 26.25,
+                "kind": "JWT",
+                "w": 640.25,
+                "x": 9.4,
+                "y": 170.05
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "JWT",
+                "opaque_pixels": true
+              }
+            ],
+            "file": "privacy-0.5-dark.png",
+            "suggestions": [
+              {
+                "h": 19.650000000000002,
+                "kind": "Email",
+                "w": 154.35,
+                "x": 5.0,
+                "y": 2.7
+              },
+              {
+                "h": 18.7,
+                "kind": "Card number",
+                "w": 160.54999999999998,
+                "x": 4.050000000000001,
+                "y": 25.05
+              },
+              {
+                "h": 18.800000000000004,
+                "kind": "Phone",
+                "w": 141.25,
+                "x": 5.1,
+                "y": 46.85
+              },
+              {
+                "h": 19.349999999999994,
+                "kind": "IP address",
+                "w": 111.3,
+                "x": 5.050000000000001,
+                "y": 68.65
+              },
+              {
+                "h": 20.75,
+                "kind": "API key",
+                "w": 304.0,
+                "x": 4.85,
+                "y": 90.1
+              },
+              {
+                "h": 20.75,
+                "kind": "JWT",
+                "w": 429.7,
+                "x": 4.85,
+                "y": 111.75
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-full-dark.png",
+            "suggestions": [
+              {
+                "h": 21.0,
+                "kind": "Email",
+                "w": 154.39999999999998,
+                "x": 24.05,
+                "y": 94.85
+              },
+              {
+                "h": 20.549999999999983,
+                "kind": "Card number",
+                "w": 161.8,
+                "x": 24.1,
+                "y": 129.15
+              },
+              {
+                "h": 20.650000000000006,
+                "kind": "Phone",
+                "w": 143.05,
+                "x": 24.1,
+                "y": 164.1
+              },
+              {
+                "h": 19.849999999999994,
+                "kind": "IP address",
+                "w": 112.85000000000001,
+                "x": 24.2,
+                "y": 199.85
+              },
+              {
+                "h": 22.100000000000023,
+                "kind": "API key",
+                "w": 304.70000000000005,
+                "x": 23.9,
+                "y": 234.45
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-tall-dark.png",
+            "suggestions": [
+              {
+                "h": 27.600000000000023,
+                "kind": "Email",
+                "w": 206.85,
+                "x": 32.25,
+                "y": 882.65
+              },
+              {
+                "h": 26.850000000000023,
+                "kind": "Card number",
+                "w": 211.04999999999998,
+                "x": 32.65,
+                "y": 932.55
+              },
+              {
+                "h": 25.149999999999977,
+                "kind": "Phone",
+                "w": 188.10000000000002,
+                "x": 33.2,
+                "y": 993.25
+              },
+              {
+                "h": 26.149999999999864,
+                "kind": "IP address",
+                "w": 148.05,
+                "x": 32.6,
+                "y": 1772.7
+              },
+              {
+                "h": 27.90000000000009,
+                "kind": "API key",
+                "w": 408.75,
+                "x": 32.8,
+                "y": 1823.3
+              }
+            ]
+          }
+        ]
+      },
+      "results": [
+        {
+          "corpus": "exact",
+          "file": "accuracy-consolas-11-light.png",
+          "ms": 117.84179997630417,
+          "text": "Email: user.name+demo@example.co.uk API key: sk-proj-RwLs2ld80popaT@IidmmtOS1QNgVmWjGhnLCaLhx Token: eyJhbGciOiJIUzI1Ni39.sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfwa9eEduMVfN7.bpdLgfbX33c6Rz0_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demolfile_01.ts\"; if (value !== null && count >= 10) { return items[ø]?.id ?? \"\"; } const ids = [\"00Ili\", \"AbCdef_9-0\", \"xX_01-lI\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.027227722772277228,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "ed14b52d70dfcadca668b6ca8548a6cc4b61c6b2694403e4e8de3c5cfcfc83c3"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-consolas-11-dark.png",
+          "ms": 146.78539999295026,
+          "text": "Email: user.name+demo@example.co.uk APT key: sk-proj-Rw.s21ddepopateidmmtosingymighnlCalh Token: eyJhbGci0iJIUzI1Ni39.sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfWa9eEduMVfN7. bpdLgfbX>3c6Rz0_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo\\file_e1.ts\"; if (value !== null && count >= 10) ( return items[ø]?.id ?? \"\";} const ids = [\"00Il1\", \"AbCdef_9-0\", \"xX_01-1I\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.08168316831683169,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "d1779e3f2a1bd1050607d91dee19359a9a392b3d31f62cc4853f5d80293d902e"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-consolas-15-light.png",
+          "ms": 117.23629996413365,
+          "text": "Email: user.name+demo@example.co.uk API key: sk-proj-Rwls2ld80popaT0IidmmtOS1QNgVmWjGhnLCalhx Token: eyJhbGci0iJIUzI1NiJ9. sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfWa9eEduMVFN7.bpdlgfbXJ3c6Rz0_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo\\file_01.ts\"; if (value !== null && count >= 10) { return items[0]?.id ?? \"\"; } const ids = [\"00Il1\", \"AbCdEf_9-0\", \"xX_01-1I\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.024752475247524754,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "64816108cc375d0f578ff66cd15d42e60231e692783d2deba1640edcde55fb62"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-consolas-15-dark.png",
+          "ms": 90.48400004394352,
+          "text": "Email: user.name+demo@example.co.uk API key: sk-proj-Rwls21d80popaT0Iidmmt0S1QNgVmWjGhnLCalhx Token: eyJhbGci0iJIUzI1NiJ9. sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfWa9eEduMVFN7.bpdlgfbXJ3c6Rz0_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demolfile_01.ts\"; if (value !== null 8& count >= 10) { return items[0]?.id ?? \"\";} const ids = [\"00Il1\", \"AbCdEf 9-0\", \"xX_01-1I\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.039603960396039604,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "7564bdade2f79b4450bde852024b7a554b9169e736d9275a17a90c595a2a128c"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-segoe-11-light.png",
+          "ms": 101.97060002246872,
+          "text": "Email: user.name+ demo@example.co.uk API key: sk-proj-RwLs2ld80popaT0lidmmtOS1QNgVmWjGhnLCaLhx Token: eyJhbGciOiJ|Uz|1 NiJ9.sS8hhss6inCQmw31126fqXAhj VmMyamjXC_9jhUfWa9eEduMVfN7.bpdLgfbXJ3c6RzO_JGOYTTwtt7L5tbe6 const path = \"ChUsers\\demo\\file_01.ts\"; if (value != = null && count > = 10) ( return items[0]?id ?? \"\";} const ids = ['00111”, “Abcdef 9-0\", \"XX 01-111); Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.07178217821782178,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "790599869f9402bebee09a705b2842a8cf33b50664d7ada4d543513be18adb27"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-segoe-11-dark.png",
+          "ms": 123.72159998631105,
+          "text": "Email: user.name+ demo@example.co.uk API key: sk-proj-RwLs2Id80popaTOlidmmtOS1QNgVmWjGhnLCaLhx Token: eyJhbGciOiJI|Uz!1 NiJ9.sS8hhss6inCQmw31126fąXAhj VmMyamjXC_9jhUfWa9eEduMVfN7.bpdlgfbXJ3c6RzO_JGOYTTwtt7L5tbe6 const path = \"CAUsers\\demo\\file_01.ts\"; if (value !== null && count > = 10) ( return items[0]?id ?? m;) const ids = ['00111\", \"Abcdef 9-0\", \"XX 01-117; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.08168316831683169,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "2d7df2a29b1c139ede0ada7869d7b1c43ad6e5e7f518549d99d48fe522e22d97"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-segoe-15-light.png",
+          "ms": 87.08140003727749,
+          "text": "Email: user.name +demo@example.co.uk API key: sk-proj-RwLs2ld80popaT0lidmmtOS1QNgVmWjGhnLCaLhx Token: eyJhbGciOiJlUzl1NiJ9.sS8hhss6inCQmw31126fqXAhj VmMyamjXC_9jhUfWa9eEduMVfN7.bpdLgfbXJ3c6RzO_JGOYTTwtt7L5tbe6 const path = \"C\\Users\\demo\\file_01.ts\"; if (value !== null && count >= 10) ( return items[0]?.id ?? \"\";) const ids = [\"O0II1\", \"AbCdEf_9-0\", \"xX_01-II\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.0297029702970297,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "56ed1618d8753bf2f30fc10faca08e15c1eb6e9172008bebc71c50531f6816f2"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-segoe-15-dark.png",
+          "ms": 101.01400001440197,
+          "text": "Email: user.name+ demo@example.co.uk API key: sk-proj-RwLs2ld80popaTOlidmmtOS1QNgVmWjGhnLCalLhx Token: eyJhbGciOiJlUz|1NiJ9.sS8hhss6inCQmw3 1126fqXAhj VmMyamjXC_9jhUfWa9eEduMVfN7. bpdlgfbXJ3c6RzO_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo file_01.ts\"; if (value !== null && count >= 10) ( return items[0]?.id ?? \"”;) const ids = [\"OOI1\", \"Abdef 9-0\", \"XX 01-1l”); Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.06683168316831684,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "57f897f48b89dff7b8a9a329529707b8b74e819ad31951d40ba18cf7a31e0a4f"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-11-dark.png",
+          "ms": 103.13719999976456,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFFe01122334455 Token: eyJhbGciOiJIUzIINi39.eyJzdwIi0iIxMjMeNTY30DkwIne. signature12345 const result = await capture(( width: 1920, height: 1080 )); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 (json) [array] foo_bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.03943661971830986,
+          "image_sha256": "dfb7a45738b7d44780f359b1b4bdac808f7050984e71bc7659e15dbdda027ffb"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-11-light.png",
+          "ms": 102.63959999429062,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFF001122334455 Token: eyJhbGciOiJIUzI1Ni39.eyJzdwIiOiIxMjMeNTY30DkwIne. signature12345 const result = await capture(( width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 (json) [array] foo_bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.028169014084507043,
+          "image_sha256": "67d58773e332ffd196447338082528186f96e293763ddfeb997ba08f6f92fc86"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-14-dark.png",
+          "ms": 100.95769999315962,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccCDDeeFF001122334455 Token: eyJhbGci0iJIUzI1NiJ9.eyJzdWIi0iIxMjMeNTY3ODkwIn0.signature12345 const result = await capture({ width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 (json) [array] foo_bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.01971830985915493,
+          "image_sha256": "1007f75bae52bd4103b4cc90c7474d94e4076b79b627ea3d04b51e28e05855a4"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-14-light.png",
+          "ms": 95.17919999780133,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFF001122334455 Token: eyJhbGci0iJIUzI1NiJ9.eyJzdWIi0iIxMjM0NTY30DkwIn0.signature12345 const result = await capture({ width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 (json) [array] foobar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.01971830985915493,
+          "image_sha256": "d91efa4b385d35b60c908e566d9ac73ba3255418c34ad3ec488d3e7a283c72d2"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-18-dark.png",
+          "ms": 110.11740000685677,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFF001122334455 Token: eyJhbGci0iJIUzI1NiJ9.eyJzdWIi0iIxMjMøNTY3ODkwIn0. signature12345 const result = await capture({ width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 (json) [array] foo bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.022535211267605635,
+          "image_sha256": "de08bc8187fb22d96ed903e039f2a9e505191f2e58458618367ba50a5f676f33"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-18-light.png",
+          "ms": 102.62479999801144,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFF001122334455 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMøNTY30DkwIn0.signature12345 const result = await capture({ width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 {json) [array] foo_bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.014084507042253521,
+          "image_sha256": "a662a106bec1d46e446f1a2cbfb3379743883539d285914a53cb7aaf66a76ac2"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-1-light.png",
+          "ms": 77.35639996826649,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIiOiIxMjMøNTY3ODkwIn0. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": true,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                104.0,
+                16,
+                308.0,
+                35
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                92.0,
+                61,
+                320.0,
+                75
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                104.0,
+                105,
+                284.0,
+                119
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                68.0,
+                149,
+                224.0,
+                163
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                80.0,
+                191,
+                608.0,
+                211
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                104.0,
+                235,
+                860.0,
+                255
+              ]
+            }
+          ],
+          "image_sha256": "9a27187ff159d9ba0e400ee735dda288663dbdb20db8d2efd223c5f34d50b38f"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-0.75-light.png",
+          "ms": 100.97419994417578,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789 Token: eyJhbGciOiJIUzIINiJ9.eyJzdWIi0iIxMjMMNTY3ODkwIn. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": true,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                78.0,
+                12.0,
+                231.0,
+                26.25
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                69.0,
+                45.75,
+                240.0,
+                56.25
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                78.0,
+                78.75,
+                213.0,
+                89.25
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                51.0,
+                111.75,
+                168.0,
+                122.25
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                60.0,
+                143.25,
+                456.0,
+                158.25
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                78.0,
+                176.25,
+                645.0,
+                191.25
+              ]
+            }
+          ],
+          "image_sha256": "aaa61aab90658984283e06913a91dfab31a253d14958aa8aae78b71409d87acc"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-0.5-light.png",
+          "ms": 99.20230001443997,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijklmnopgrstuvwxyz0123456789 Token: eyJhbGciOiJIUzI1Ni39.eyJzdWIiOiIxMjMəNTY30DkwInø. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                52.0,
+                8.0,
+                154.0,
+                17.5
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                46.0,
+                30.5,
+                160.0,
+                37.5
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                52.0,
+                52.5,
+                142.0,
+                59.5
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                34.0,
+                74.5,
+                112.0,
+                81.5
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                40.0,
+                95.5,
+                304.0,
+                105.5
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                52.0,
+                117.5,
+                430.0,
+                127.5
+              ]
+            }
+          ],
+          "image_sha256": "85048d4b923e26d2ca77cc6c6027aaddd9799f1c0bc2b9d8d336fac0351c6661"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-full-light.png",
+          "ms": 108.31899999175221,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijk1mnopgrstuvwxyz0123456789 Token: eythbcidi IUz1N139. ey zdwiiTxM MONTY300kwIne. signature 12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                72.0,
+                101,
+                174.0,
+                111
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                66.0,
+                137,
+                180.0,
+                144
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                72.0,
+                172,
+                162.0,
+                179
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                54.0,
+                207,
+                132.0,
+                214
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                60.0,
+                241,
+                324.0,
+                251
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                72.0,
+                276,
+                450.0,
+                286
+              ]
+            }
+          ],
+          "image_sha256": "af123d7b434456b11b55ec134703c08ae8b6e3e569e5babd49a58f7cb53e8bf0"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-tall-light.png",
+          "ms": 117.52819997491315,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789 Token: eyJhbGci0iJIUzI1Ni39.eyJzdWIi0iIxMjMMNTY30DkwIn0. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": true,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                96.0,
+                891,
+                232.0,
+                904
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                88.0,
+                942,
+                240.0,
+                951
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                96.0,
+                1002,
+                216.0,
+                1011
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                72.0,
+                1782,
+                176.0,
+                1791
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                80.0,
+                1831,
+                432.0,
+                1844
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                96.0,
+                1911,
+                600.0,
+                1924
+              ]
+            }
+          ],
+          "image_sha256": "1390fbeb05926e6704cbef007f8d66e1a5236b941c72b7830b87a3c14e146cdf"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-1-dark.png",
+          "ms": 81.48519997484982,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijk1mnopgrstuvwxyz0123456789 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMMNTY3ODkwIn0. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                104.0,
+                16,
+                308.0,
+                35
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                92.0,
+                61,
+                320.0,
+                75
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                104.0,
+                105,
+                284.0,
+                119
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                68.0,
+                149,
+                224.0,
+                163
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                80.0,
+                191,
+                608.0,
+                211
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                104.0,
+                235,
+                860.0,
+                255
+              ]
+            }
+          ],
+          "image_sha256": "2c2726b37e026f6d2aad23a356c7fd5ced285ee10f889bf2992d16c08255c64b"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-0.75-dark.png",
+          "ms": 81.47829998051748,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijk1mnopgrstuvwxyz0123456789 Token: eyJhbGci0iJIUzIINiJ9.eyJzdWTi0iIxMjMeNTY3ODkwIn0. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                78.0,
+                12.0,
+                231.0,
+                26.25
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                69.0,
+                45.75,
+                240.0,
+                56.25
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                78.0,
+                78.75,
+                213.0,
+                89.25
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                51.0,
+                111.75,
+                168.0,
+                122.25
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                60.0,
+                143.25,
+                456.0,
+                158.25
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                78.0,
+                176.25,
+                645.0,
+                191.25
+              ]
+            }
+          ],
+          "image_sha256": "403929380b1caf8dee584d40b91e7e10923319417bc0c55126dfd4489459a0ba"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-0.5-dark.png",
+          "ms": 128.6903999862261,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijkimnopgrstuvwxyz0123456789 Token: eyJhbGci0iJIUzI1Ni39.eyJzdWIi0iIxMjMeNTY30DkwIne. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                52.0,
+                8.0,
+                154.0,
+                17.5
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                46.0,
+                30.5,
+                160.0,
+                37.5
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                52.0,
+                52.5,
+                142.0,
+                59.5
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                34.0,
+                74.5,
+                112.0,
+                81.5
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                40.0,
+                95.5,
+                304.0,
+                105.5
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                52.0,
+                117.5,
+                430.0,
+                127.5
+              ]
+            }
+          ],
+          "image_sha256": "1d26015ece9f50a9cb046d6a65f74425d9709488764bd21e6187ab97a01a5047"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-full-dark.png",
+          "ms": 108.35290001705289,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijkimnopgrstuvwxyz0123456789 Token: ey b6cidi IU211N139. ey 2d Lidi IMM MNTY00kwine. signature 12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                72.0,
+                101,
+                174.0,
+                111
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                66.0,
+                137,
+                180.0,
+                144
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                72.0,
+                172,
+                162.0,
+                179
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                54.0,
+                207,
+                132.0,
+                214
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                60.0,
+                241,
+                324.0,
+                251
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                72.0,
+                276,
+                450.0,
+                286
+              ]
+            }
+          ],
+          "image_sha256": "b5c73d55d253104ca1eda2a105da932f47d165c6410d1a072a406ccba27eb2d8"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-tall-dark.png",
+          "ms": 172.18120000325143,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijkimnopgrstuvwxyz0123456789 Token: ey]hbocioi TurIINiJ9. eyzdwiniTxMjMenTY300kwine, sign ture 12345",
+          "rotation": 0,
+          "skew": -0.3,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                96.0,
+                891,
+                232.0,
+                904
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                88.0,
+                942,
+                240.0,
+                951
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                96.0,
+                1002,
+                216.0,
+                1011
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                72.0,
+                1782,
+                176.0,
+                1791
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                80.0,
+                1831,
+                432.0,
+                1844
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                96.0,
+                1911,
+                600.0,
+                1924
+              ]
+            }
+          ],
+          "image_sha256": "25caba4405bf63abd85c1fe0843e23dadef1bb1972945c24ad7bf9356c074567"
+        }
+      ]
+    },
+    {
+      "engine": "indra-ocr",
+      "package_version": "1.1.2",
+      "model_revision": "bd02167fdf2005a19962cc15188f8496a2c87d3b",
+      "model_tag": "v1.1.0",
+      "packages": {
+        "onnxruntime": "1.31.0",
+        "numpy": "2.5.4",
+        "opencv-python-headless": "5.0.0.93",
+        "Pillow": "13.0.0"
+      },
+      "platform": "Windows-11-10.0.26300-SP0",
+      "threads": 4,
+      "provider": "CPUExecutionProvider",
+      "upscale": 1,
+      "model_load_ms": 838.161299994681,
+      "model_files": {
+        "config.json": {
+          "bytes": 703,
+          "sha256": "8d23884924b5ee9f6a1eb33e477b6b367d1a6da2d2a007fab7323008b4c189a8"
+        },
+        "det.onnx": {
+          "bytes": 389948,
+          "sha256": "f2bd4cba23e9c328cf7ec824634e423e191a2c6aacbbf35c62bd79dd70f62f59"
+        },
+        "LICENSE": {
+          "bytes": 14750,
+          "sha256": "50c88a018a7ee322e89f6b09401b237beb0cd331685879405b3db48993950a5f"
+        },
+        "lm.npz": {
+          "bytes": 15695957,
+          "sha256": "6c0fb618a363a0acdd05d4f5b0edd9e8146d2d990541b87f6130bbfe17cea58d"
+        },
+        "lm_cjk.npz": {
+          "bytes": 18955160,
+          "sha256": "6d64f13f4f90f4e529bd63340c6df76238d007feaef2abb903d8cd28d92bc2f3"
+        },
+        "lm_world.npz": {
+          "bytes": 11641215,
+          "sha256": "34df5e74a2fcbb9cf5e7f360a559375ffa2e04d2d2943a42308c177bcb444d5d"
+        },
+        "meta.json": {
+          "bytes": 211869,
+          "sha256": "4ce4c94b46f5d644033c02e718322014ff4081270f385038c571912b56696339"
+        },
+        "order.onnx": {
+          "bytes": 2973138,
+          "sha256": "a42db2e8b536ad3d84045a4b7f9b0a72667cf8be4aa02d63f7b38004719fb180"
+        },
+        "orient.onnx": {
+          "bytes": 371802,
+          "sha256": "20eaf670f55a7cf9facfe1bdd6c7b8e40be75bbf4d48a3df43f66aa3bbd874fd"
+        },
+        "README.md": {
+          "bytes": 22905,
+          "sha256": "3c4940ddedbd61b948bfa2a91fa4ae95f014554cd82fda89cc7f37234ce515d0"
+        },
+        "rec.onnx": {
+          "bytes": 5042161,
+          "sha256": "475972a2710be4a3cbfeb2bc7f3624ffd563de07de42476fc7a290d4e1ece484"
+        },
+        "rec_cjk.onnx": {
+          "bytes": 10176018,
+          "sha256": "4a035516a17e62cdf33a4fe2d88077654cb8841cff024685cdef4e351694ef50"
+        },
+        "rec_rtl.onnx": {
+          "bytes": 4812710,
+          "sha256": "468796bd684486a8388c30c8b4ed2a26e3eeb1f8ff02831c24c2e12c79a2a834"
+        },
+        "rec_world.onnx": {
+          "bytes": 5627990,
+          "sha256": "c8d1e59f21b04966f179d2d2d8e22b230d22110b3f89855bbbf2624a58c40043"
+        },
+        "script.onnx": {
+          "bytes": 191630,
+          "sha256": "b6ce4e926e19c243faaf37bd46880398bf2cb4ae56a29e1177a3b017c1280e36"
+        }
+      },
+      "language_model": false,
+      "normalization": "case-sensitive Levenshtein CER after whitespace normalization; no identifier correction",
+      "privacy_limit": "Raw transcription and line boxes only; not a production Glint privacy scan",
+      "summary": {
+        "exact": {
+          "samples": 8,
+          "median_ms": 97.93205000460148,
+          "mean_cer": 0.0411509900990099,
+          "key_exact": 0,
+          "token_exact": 0
+        },
+        "simple": {
+          "samples": 6,
+          "median_ms": 101.82300000451505,
+          "mean_cer": 0.023943661971830985
+        },
+        "privacy": {
+          "samples": 10,
+          "median_ms": 116.97294999612495,
+          "exact_values": 43,
+          "reference_values": 60
+        }
+      },
+      "privacy_probe": {
+        "reference_values": 60,
+        "complete_opaque_values": 54,
+        "method": "Existing native Glint privacy::detect using public Indra whole-line boxes, without secondary Tesseract. Full reference boxes and every exported mask pixel checked. Masks are conservative whole-line rectangles. Probe success means measurements recorded, not that all values were covered.",
+        "results": [
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-1-light.png",
+            "suggestions": [
+              {
+                "h": 27.3,
+                "kind": "Email",
+                "w": 297.40000000000003,
+                "x": 16.7,
+                "y": 11.8
+              },
+              {
+                "h": 23.599999999999994,
+                "kind": "Card number",
+                "w": 309.1,
+                "x": 15.2,
+                "y": 56.5
+              },
+              {
+                "h": 23.700000000000003,
+                "kind": "Phone",
+                "w": 272.7,
+                "x": 15.100000000000001,
+                "y": 100.0
+              },
+              {
+                "h": 23.899999999999977,
+                "kind": "IP address",
+                "w": 212.6,
+                "x": 15.100000000000001,
+                "y": 143.8
+              },
+              {
+                "h": 27.900000000000006,
+                "kind": "API key",
+                "w": 598.3,
+                "x": 14.5,
+                "y": 187.1
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-0.75-light.png",
+            "suggestions": [
+              {
+                "h": 22.5,
+                "kind": "Email",
+                "w": 225.1,
+                "x": 11.5,
+                "y": 7.800000000000001
+              },
+              {
+                "h": 19.800000000000004,
+                "kind": "Card number",
+                "w": 233.79999999999998,
+                "x": 10.4,
+                "y": 41.3
+              },
+              {
+                "h": 19.799999999999997,
+                "kind": "Phone",
+                "w": 206.6,
+                "x": 10.3,
+                "y": 74.0
+              },
+              {
+                "h": 20.10000000000001,
+                "kind": "IP address",
+                "w": 161.5,
+                "x": 10.3,
+                "y": 106.8
+              },
+              {
+                "h": 23.0,
+                "kind": "API key",
+                "w": 450.70000000000005,
+                "x": 9.9,
+                "y": 139.3
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-0.5-light.png",
+            "suggestions": [
+              {
+                "h": 18.0,
+                "kind": "Email",
+                "w": 152.79999999999998,
+                "x": 6.300000000000001,
+                "y": 3.7
+              },
+              {
+                "h": 16.000000000000004,
+                "kind": "Card number",
+                "w": 157.6,
+                "x": 5.5,
+                "y": 26.2
+              },
+              {
+                "h": 16.199999999999996,
+                "kind": "Phone",
+                "w": 140.4,
+                "x": 5.5,
+                "y": 47.9
+              },
+              {
+                "h": 16.5,
+                "kind": "IP address",
+                "w": 111.5,
+                "x": 5.5,
+                "y": 69.7
+              },
+              {
+                "h": 18.299999999999997,
+                "kind": "API key",
+                "w": 303.3,
+                "x": 5.199999999999999,
+                "y": 91.4
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "JWT",
+                "opaque_pixels": true
+              }
+            ],
+            "file": "privacy-full-light.png",
+            "suggestions": [
+              {
+                "h": 18.900000000000006,
+                "kind": "Email",
+                "w": 153.7,
+                "x": 24.4,
+                "y": 95.8
+              },
+              {
+                "h": 18.700000000000017,
+                "kind": "Card number",
+                "w": 161.2,
+                "x": 24.4,
+                "y": 130.6
+              },
+              {
+                "h": 18.099999999999994,
+                "kind": "Phone",
+                "w": 142.3,
+                "x": 24.5,
+                "y": 166.0
+              },
+              {
+                "h": 18.400000000000006,
+                "kind": "IP address",
+                "w": 108.60000000000001,
+                "x": 28.200000000000003,
+                "y": 200.7
+              },
+              {
+                "h": 20.099999999999994,
+                "kind": "API key",
+                "w": 304.1,
+                "x": 24.2,
+                "y": 235.8
+              },
+              {
+                "h": 20.100000000000023,
+                "kind": "JWT",
+                "w": 427.90000000000003,
+                "x": 27.9,
+                "y": 270.9
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "JWT",
+                "opaque_pixels": true
+              }
+            ],
+            "file": "privacy-tall-light.png",
+            "suggestions": [
+              {
+                "h": 22.700000000000045,
+                "kind": "Email",
+                "w": 201.10000000000002,
+                "x": 34.2,
+                "y": 885.5
+              },
+              {
+                "h": 21.0,
+                "kind": "Card number",
+                "w": 209.5,
+                "x": 34.5,
+                "y": 935.9
+              },
+              {
+                "h": 21.299999999999955,
+                "kind": "Phone",
+                "w": 182.7,
+                "x": 34.4,
+                "y": 995.0
+              },
+              {
+                "h": 21.90000000000009,
+                "kind": "IP address",
+                "w": 147.0,
+                "x": 34.3,
+                "y": 1775.1
+              },
+              {
+                "h": 23.399999999999864,
+                "kind": "API key",
+                "w": 403.5,
+                "x": 34.1,
+                "y": 1824.9
+              },
+              {
+                "h": 24.5,
+                "kind": "JWT",
+                "w": 565.5,
+                "x": 38.4,
+                "y": 1904.5
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-1-dark.png",
+            "suggestions": [
+              {
+                "h": 30.4,
+                "kind": "Email",
+                "w": 300.5,
+                "x": 14.100000000000001,
+                "y": 9.9
+              },
+              {
+                "h": 29.4,
+                "kind": "Card number",
+                "w": 310.9,
+                "x": 14.3,
+                "y": 54.1
+              },
+              {
+                "h": 29.0,
+                "kind": "Phone",
+                "w": 274.3,
+                "x": 14.3,
+                "y": 97.8
+              },
+              {
+                "h": 29.100000000000023,
+                "kind": "IP address",
+                "w": 214.2,
+                "x": 14.3,
+                "y": 141.7
+              },
+              {
+                "h": 31.799999999999983,
+                "kind": "API key",
+                "w": 599.5,
+                "x": 13.899999999999999,
+                "y": 184.9
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-0.75-dark.png",
+            "suggestions": [
+              {
+                "h": 25.0,
+                "kind": "Email",
+                "w": 227.4,
+                "x": 9.6,
+                "y": 6.300000000000001
+              },
+              {
+                "h": 23.9,
+                "kind": "Card number",
+                "w": 235.20000000000002,
+                "x": 9.7,
+                "y": 39.6
+              },
+              {
+                "h": 23.69999999999999,
+                "kind": "Phone",
+                "w": 207.6,
+                "x": 9.8,
+                "y": 72.4
+              },
+              {
+                "h": 23.89999999999999,
+                "kind": "IP address",
+                "w": 162.70000000000002,
+                "x": 9.7,
+                "y": 105.3
+              },
+              {
+                "h": 25.900000000000006,
+                "kind": "API key",
+                "w": 451.70000000000005,
+                "x": 9.4,
+                "y": 137.6
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "JWT",
+                "opaque_pixels": true
+              }
+            ],
+            "file": "privacy-0.5-dark.png",
+            "suggestions": [
+              {
+                "h": 19.7,
+                "kind": "Email",
+                "w": 154.4,
+                "x": 5.0,
+                "y": 2.7
+              },
+              {
+                "h": 18.699999999999996,
+                "kind": "Card number",
+                "w": 160.5,
+                "x": 4.1,
+                "y": 25.1
+              },
+              {
+                "h": 18.699999999999996,
+                "kind": "Phone",
+                "w": 141.20000000000002,
+                "x": 5.1,
+                "y": 46.9
+              },
+              {
+                "h": 19.5,
+                "kind": "IP address",
+                "w": 111.4,
+                "x": 5.0,
+                "y": 68.6
+              },
+              {
+                "h": 20.799999999999997,
+                "kind": "API key",
+                "w": 304.09999999999997,
+                "x": 4.800000000000001,
+                "y": 90.0
+              },
+              {
+                "h": 20.799999999999997,
+                "kind": "JWT",
+                "w": 429.7,
+                "x": 4.800000000000001,
+                "y": 111.7
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "JWT",
+                "opaque_pixels": true
+              }
+            ],
+            "file": "privacy-full-dark.png",
+            "suggestions": [
+              {
+                "h": 21.0,
+                "kind": "Email",
+                "w": 154.3,
+                "x": 24.1,
+                "y": 94.8
+              },
+              {
+                "h": 20.5,
+                "kind": "Card number",
+                "w": 161.8,
+                "x": 24.1,
+                "y": 129.2
+              },
+              {
+                "h": 20.700000000000017,
+                "kind": "Phone",
+                "w": 143.1,
+                "x": 24.1,
+                "y": 164.1
+              },
+              {
+                "h": 19.799999999999983,
+                "kind": "IP address",
+                "w": 112.8,
+                "x": 24.2,
+                "y": 199.8
+              },
+              {
+                "h": 22.099999999999994,
+                "kind": "API key",
+                "w": 304.70000000000005,
+                "x": 23.9,
+                "y": 234.4
+              },
+              {
+                "h": 22.299999999999955,
+                "kind": "JWT",
+                "w": 432.20000000000005,
+                "x": 23.9,
+                "y": 269.1
+              }
+            ]
+          },
+          {
+            "bounds": [
+              {
+                "complete_box": true,
+                "kind": "Email",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Card number",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "Phone",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "IP address",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": true,
+                "kind": "API key",
+                "opaque_pixels": true
+              },
+              {
+                "complete_box": false,
+                "kind": "JWT",
+                "opaque_pixels": false
+              }
+            ],
+            "file": "privacy-tall-dark.png",
+            "suggestions": [
+              {
+                "h": 27.600000000000023,
+                "kind": "Email",
+                "w": 202.39999999999998,
+                "x": 36.7,
+                "y": 882.6
+              },
+              {
+                "h": 26.799999999999955,
+                "kind": "Card number",
+                "w": 211.0,
+                "x": 32.7,
+                "y": 932.6
+              },
+              {
+                "h": 25.5,
+                "kind": "Phone",
+                "w": 188.2,
+                "x": 33.2,
+                "y": 993.1
+              },
+              {
+                "h": 25.799999999999955,
+                "kind": "IP address",
+                "w": 148.0,
+                "x": 32.7,
+                "y": 1772.8
+              },
+              {
+                "h": 27.90000000000009,
+                "kind": "API key",
+                "w": 408.7,
+                "x": 32.8,
+                "y": 1823.0
+              }
+            ]
+          }
+        ]
+      },
+      "results": [
+        {
+          "corpus": "exact",
+          "file": "accuracy-consolas-11-light.png",
+          "ms": 98.87029998935759,
+          "text": "Email: user.name+demo@example.co.uk API key: sk-proj-RwLs2ld80popaT@IidmmtOS1QNgVmWjGhnLCaLhx Token: eyJhbGciOiJIUzI1Ni39.sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfwa9eEduMVfN7.bpdLgfbX33c6Rz0_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo\\file_e1.ts\"; if (value !== null && count >= 10) { return items[ø]?.id ?? \"\"; ) const ids = [\"0eIli\", \"AbCdef_9-0\", \"xX_01-1I\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.034653465346534656,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "ed14b52d70dfcadca668b6ca8548a6cc4b61c6b2694403e4e8de3c5cfcfc83c3"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-consolas-11-dark.png",
+          "ms": 96.99380001984537,
+          "text": "Email: user.name+demo@example.co.uk API key: sk-proj-RwLs2ld8epopaT@IidmmtoS1QNgVmWjGhnLCaLhx Token: ey)hbGci0iJIUzI1Ni39.sS8hhss6inCQmw31126fąxAhjVmMyamjXC_9jhUfwa9eEduMVfN7. bpdLgfbx33c6Rz0_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo\\file_01.ts\"; if (value !== null && count >= 10) { return items[e]?.id ?? \"\"; } const ids = [\"00Il1\", \"AbCdef_9-0\", \"xX_01-1I\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.04455445544554455,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "d1779e3f2a1bd1050607d91dee19359a9a392b3d31f62cc4853f5d80293d902e"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-consolas-15-light.png",
+          "ms": 114.06310001621023,
+          "text": "Email: user.name+demo@example.co.uk API key: sk-proj-Rwls21d80popaT0IidmmtOS1QNgVmWjGhnLCalhx Token: eyJhbGci0iJIUzI1NiJ9.sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfWa9eEduMVFN7.bpdlgfbXJ3c6Rz0_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo\\file_01.ts\"; if (value !== null && count >= 10) { return items[0]?.id ?? \"\"; } const ids = [\"00Il1\", \"AbCdEf 9-0\", \"xX_01-1I\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.027227722772277228,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "64816108cc375d0f578ff66cd15d42e60231e692783d2deba1640edcde55fb62"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-consolas-15-dark.png",
+          "ms": 99.3531999993138,
+          "text": "Email: user.name+demo@example.co.uk API key: sk-proj-Rwls21d80popaT@IidmmtOS1QNgVmWjGhnLCalhx Token: eyJhbGci0iJIUzI1NiJ9.sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfWa9eEduMVfN7. bpdlgfbXJ3c6Rz0_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo\\file_01.ts\"; if (value !== null && count >= 10) { return items[0]?.id ?? \"\"; } const ids = [\"00Il1\", \"AbCdEf 9-0\", \"xX_01-1I\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.0297029702970297,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "7564bdade2f79b4450bde852024b7a554b9169e736d9275a17a90c595a2a128c"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-segoe-11-light.png",
+          "ms": 101.34759999345988,
+          "text": "Email: user.name+ demo@example.co.uk API key: sk-proj-RwLs2ld80popaT0lidmmtOS1QNgVmWjGhnLCaLhx Token: eyJhbGciOiJIUz|1 NiJ9.sS8hhss6inCQmw31126fąXAhj VmMyamjXC_9jhUfWa9eEduMVfN7.bpdlgfbXJ3c6RzO_JGOYTTwtt7L5tbe6 const path = \"CAUsers\\demo\\file_01.ts\"; if (value !== null && count > = 10) ( return items[0]?.id ?? \";) const ids = [\"O0II1\", \"AbCdEf 9-0\", \"xX_01-II]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.04702970297029703,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "790599869f9402bebee09a705b2842a8cf33b50664d7ada4d543513be18adb27"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-segoe-11-dark.png",
+          "ms": 95.91799997724593,
+          "text": "Email: user.name+ demo@example.co.uk API key: sk-proj-RwLs2Id80popaTOlidmmtOS1QNgVmWjGhnLCaLhx Token: eyJhbGciOiJ|Uz!1NiJ9.sS8hhss6inCQmw31126fqXAhj VmMyamjXC_9jhUfWa9eEduMVfN7.bpdlgfbXJ3c6RzO_JGOYTTwtt7L5tbe6 const path = \"ChUsers\\demoffile_01.ts”; if (value !== null && count > = 10) ( return items[0]?id ?? ””;) const ids = [’O0II1\", \"AbCdEf 9-0\", \"xX 01-II]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.06435643564356436,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "2d7df2a29b1c139ede0ada7869d7b1c43ad6e5e7f518549d99d48fe522e22d97"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-segoe-15-light.png",
+          "ms": 88.8977000140585,
+          "text": "Email: user.name +demo@example.co.uk API key: sk-proj-RwLs2ld80popaT0lidmmtOS1QNgVmWjGhnLCalhx Token: eyJhbGciOiJlUzl1NiJ9.sS8hhss6inCQmw31126fqXAhj VmMyamjXC_9jhUfWa9eEduMVfN7.bpdlgfbXJ3c6RzO_JGOYTTwtt7L5tbe6 const path = \"C\\Users\\demo\\file_01.ts\"; if (value !== null && count >= 10) ( return items[0]?.id ?? \"\";) const ids = [\"O0II1\", \"AbCdEf_9-0\", \"xX_01-Il”]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.039603960396039604,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "56ed1618d8753bf2f30fc10faca08e15c1eb6e9172008bebc71c50531f6816f2"
+        },
+        {
+          "corpus": "exact",
+          "file": "accuracy-segoe-15-dark.png",
+          "ms": 84.37450003111735,
+          "text": "Email: user.name + demo@example.co.uk API key: sk-proj-RwLs2Id80popaT0lidmmtOS1QNgVmWjGhnLCaLhx Token: eyJhbGciOiJlUz|1NiJ9.sS8hhss6inCQmw3 1126fqXAhj VmMyamjXC_9jhUfWa9eEduMVfN7.bpdLgfbXJ3c6RzO_JGOYTTwtt7L5tbe6 const path = \"C:\\Users\\demo file_01.ts”; if (value !== null && count >= 10) ( return items[0]?.id ?? \"\";) const ids = [\"O0II1\", \"AbCdEf 9-0\", \"xX_01-II\"]; Invoice #AX-2048: $1,234.56 | 2026-10-22",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.04207920792079208,
+          "key_exact": false,
+          "token_exact": false,
+          "image_sha256": "57f897f48b89dff7b8a9a329529707b8b74e819ad31951d40ba18cf7a31e0a4f"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-11-dark.png",
+          "ms": 100.39490001508966,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFFe01122334455 Token: eyJhbGciOiJIUzI1Ni39.eyJzdwIiOiIxMjMeNTY30DkwIne. signature12345 const result = await capture(( width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 (json) [array] foo_bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.030985915492957747,
+          "image_sha256": "dfb7a45738b7d44780f359b1b4bdac808f7050984e71bc7659e15dbdda027ffb"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-11-light.png",
+          "ms": 95.6251000170596,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFFø01122334455 Token: eyJhbGciOiJIUzI1Ni39.eyJzdwIi0iIxMjMeNTY30DkwIne.signature12345 const result = await capture(( width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 (json) [array] foo_bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.030985915492957747,
+          "image_sha256": "67d58773e332ffd196447338082528186f96e293763ddfeb997ba08f6f92fc86"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-14-dark.png",
+          "ms": 110.0383999873884,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_5105aaBBccDDeeFF001122334455 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMONTY30DkwIn0.signature12345 const result = await capture({ width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 {json) [array] foo_bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.016901408450704224,
+          "image_sha256": "1007f75bae52bd4103b4cc90c7474d94e4076b79b627ea3d04b51e28e05855a4"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-14-light.png",
+          "ms": 101.21210000943393,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFF001122334455 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMøNTY30DkwIn0.signature12345 const result = await capture({ width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 (json) [array] foo_bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.016901408450704224,
+          "image_sha256": "d91efa4b385d35b60c908e566d9ac73ba3255418c34ad3ec488d3e7a283c72d2"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-18-dark.png",
+          "ms": 109.29970000870526,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFF001122334455 Token: eyJhbGci0iJIUzI1NiJ9.eyJzdWIi0iIxMjMONTY30DkwIn0. signature12345 const result = await capture({ width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 I11 (json) [array] foo bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.028169014084507043,
+          "image_sha256": "de08bc8187fb22d96ed903e039f2a9e505191f2e58458618367ba50a5f676f33"
+        },
+        {
+          "corpus": "simple",
+          "file": "fixture-18-light.png",
+          "ms": 102.43389999959618,
+          "text": "Glint captures stay on this device. Email: hello@example.com API key: sk_test_51Q5aaBBccDDeeFF001122334455 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMøNTY30DkwIn0. signature12345 const result = await capture({ width: 1920, height: 1080 }); Invoice total: $1,234.56 | 2026-10-21 IP address: 192.168.1.100 Mixed symbols: 00 Il1 {json) [array] foo bar/path.ts",
+          "rotation": 0,
+          "skew": 0.0,
+          "cer": 0.01971830985915493,
+          "image_sha256": "a662a106bec1d46e446f1a2cbfb3379743883539d285914a53cb7aaf66a76ac2"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-1-light.png",
+          "ms": 91.5588999632746,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMøNTY3ODkwIn0.signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": true,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                104.0,
+                16,
+                308.0,
+                35
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                92.0,
+                61,
+                320.0,
+                75
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                104.0,
+                105,
+                284.0,
+                119
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                68.0,
+                149,
+                224.0,
+                163
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                80.0,
+                191,
+                608.0,
+                211
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                104.0,
+                235,
+                860.0,
+                255
+              ]
+            }
+          ],
+          "image_sha256": "9a27187ff159d9ba0e400ee735dda288663dbdb20db8d2efd223c5f34d50b38f"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-0.75-light.png",
+          "ms": 69.56060003722087,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMøNTY30DkwIn0.signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": true,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                78.0,
+                12.0,
+                231.0,
+                26.25
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                69.0,
+                45.75,
+                240.0,
+                56.25
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                78.0,
+                78.75,
+                213.0,
+                89.25
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                51.0,
+                111.75,
+                168.0,
+                122.25
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                60.0,
+                143.25,
+                456.0,
+                158.25
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                78.0,
+                176.25,
+                645.0,
+                191.25
+              ]
+            }
+          ],
+          "image_sha256": "aaa61aab90658984283e06913a91dfab31a253d14958aa8aae78b71409d87acc"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-0.5-light.png",
+          "ms": 102.05289995064959,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijkimnopgrstuvwxyz0123456789 Token: eyJhbGciOiJIUzIINi39.eyJzdWIiOiIxMjMøNTY30DkwInø.signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                52.0,
+                8.0,
+                154.0,
+                17.5
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                46.0,
+                30.5,
+                160.0,
+                37.5
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                52.0,
+                52.5,
+                142.0,
+                59.5
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                34.0,
+                74.5,
+                112.0,
+                81.5
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                40.0,
+                95.5,
+                304.0,
+                105.5
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                52.0,
+                117.5,
+                430.0,
+                127.5
+              ]
+            }
+          ],
+          "image_sha256": "85048d4b923e26d2ca77cc6c6027aaddd9799f1c0bc2b9d8d336fac0351c6661"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-full-light.png",
+          "ms": 131.12510001519695,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijkimnopqrstuvwxyz0123456789 Token: eyJhbGci0iJIUzI1Ni39.eyJzdwIi0iIxMjMeNTY30DkwIne.signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                72.0,
+                101,
+                174.0,
+                111
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                66.0,
+                137,
+                180.0,
+                144
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                72.0,
+                172,
+                162.0,
+                179
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                54.0,
+                207,
+                132.0,
+                214
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                60.0,
+                241,
+                324.0,
+                251
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                72.0,
+                276,
+                450.0,
+                286
+              ]
+            }
+          ],
+          "image_sha256": "af123d7b434456b11b55ec134703c08ae8b6e3e569e5babd49a58f7cb53e8bf0"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-tall-light.png",
+          "ms": 117.83130001276731,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijklmnopqrstuvwxyz0123456789 Token: eyJhbGci0iJIUzI1NiJ9.eyJzdWIi0iIxMjMMNTY30DkwIn0.signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": true,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                96.0,
+                891,
+                232.0,
+                904
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                88.0,
+                942,
+                240.0,
+                951
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                96.0,
+                1002,
+                216.0,
+                1011
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                72.0,
+                1782,
+                176.0,
+                1791
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                80.0,
+                1831,
+                432.0,
+                1844
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                96.0,
+                1911,
+                600.0,
+                1924
+              ]
+            }
+          ],
+          "image_sha256": "1390fbeb05926e6704cbef007f8d66e1a5236b941c72b7830b87a3c14e146cdf"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-1-dark.png",
+          "ms": 107.78550000395626,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijk1mnopqrstuvwxyz0123456789 Token: eyJhbGciOiJIUzI1NiJ9.eyJzdWIi0iIxMjMəNTY3ODkwInø. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                104.0,
+                16,
+                308.0,
+                35
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                92.0,
+                61,
+                320.0,
+                75
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                104.0,
+                105,
+                284.0,
+                119
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                68.0,
+                149,
+                224.0,
+                163
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                80.0,
+                191,
+                608.0,
+                211
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                104.0,
+                235,
+                860.0,
+                255
+              ]
+            }
+          ],
+          "image_sha256": "2c2726b37e026f6d2aad23a356c7fd5ced285ee10f889bf2992d16c08255c64b"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-0.75-dark.png",
+          "ms": 118.23480000020936,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijklmnopgrstuvwxyz0123456789 Token: eyJhbGci0iJIUzI1NiJ9.eyJzdWTi0iIxMjMəNTY3ODkwIn0. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                78.0,
+                12.0,
+                231.0,
+                26.25
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                69.0,
+                45.75,
+                240.0,
+                56.25
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                78.0,
+                78.75,
+                213.0,
+                89.25
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                51.0,
+                111.75,
+                168.0,
+                122.25
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                60.0,
+                143.25,
+                456.0,
+                158.25
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                78.0,
+                176.25,
+                645.0,
+                191.25
+              ]
+            }
+          ],
+          "image_sha256": "403929380b1caf8dee584d40b91e7e10923319417bc0c55126dfd4489459a0ba"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-0.5-dark.png",
+          "ms": 116.11459997948259,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijk1mnopgrstuvwxyz0123456789 Token: eyJhbGci0iJIUzI1Ni39.eyJzdWIi0iIxMjMeNTY30DkwIn0. signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                52.0,
+                8.0,
+                154.0,
+                17.5
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                46.0,
+                30.5,
+                160.0,
+                37.5
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                52.0,
+                52.5,
+                142.0,
+                59.5
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                34.0,
+                74.5,
+                112.0,
+                81.5
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                40.0,
+                95.5,
+                304.0,
+                105.5
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                52.0,
+                117.5,
+                430.0,
+                127.5
+              ]
+            }
+          ],
+          "image_sha256": "1d26015ece9f50a9cb046d6a65f74425d9709488764bd21e6187ab97a01a5047"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-full-dark.png",
+          "ms": 137.43539998540655,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijkimnopgrstuvwxyz0123456789 Token: eyJhbGci0iJIUzI1Ni39.eyJzdwIi0iIxMjMeNTY300kwIne.signature12345",
+          "rotation": 0,
+          "skew": 0.0,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                72.0,
+                101,
+                174.0,
+                111
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                66.0,
+                137,
+                180.0,
+                144
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                72.0,
+                172,
+                162.0,
+                179
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                54.0,
+                207,
+                132.0,
+                214
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                60.0,
+                241,
+                324.0,
+                251
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                72.0,
+                276,
+                450.0,
+                286
+              ]
+            }
+          ],
+          "image_sha256": "b5c73d55d253104ca1eda2a105da932f47d165c6410d1a072a406ccba27eb2d8"
+        },
+        {
+          "corpus": "privacy",
+          "file": "privacy-tall-dark.png",
+          "ms": 122.21260002115741,
+          "text": "Email: hello@example.com Card: 4111 1111 1111 1111 Phone: +1 415 555 0199 IP: 192.168.1.100 Key: sk-proj-abcdefghijkimnopqrstuvwxyz0123456789 Token: eyJhbGci0iJIUzIINi39.eyJzdWTi0iIxMjMeNTY300kwIne,sig ure 12345",
+          "rotation": 0,
+          "skew": -0.3,
+          "sensitive_exact": {
+            "Email": true,
+            "Card number": true,
+            "Phone": true,
+            "IP address": true,
+            "API key": false,
+            "JWT": false
+          },
+          "reference_bounds": [
+            {
+              "kind": "Email",
+              "box": [
+                96.0,
+                891,
+                232.0,
+                904
+              ]
+            },
+            {
+              "kind": "Card number",
+              "box": [
+                88.0,
+                942,
+                240.0,
+                951
+              ]
+            },
+            {
+              "kind": "Phone",
+              "box": [
+                96.0,
+                1002,
+                216.0,
+                1011
+              ]
+            },
+            {
+              "kind": "IP address",
+              "box": [
+                72.0,
+                1782,
+                176.0,
+                1791
+              ]
+            },
+            {
+              "kind": "API key",
+              "box": [
+                80.0,
+                1831,
+                432.0,
+                1844
+              ]
+            },
+            {
+              "kind": "JWT",
+              "box": [
+                96.0,
+                1911,
+                600.0,
+                1924
+              ]
+            }
+          ],
+          "image_sha256": "25caba4405bf63abd85c1fe0843e23dadef1bb1972945c24ad7bf9356c074567"
+        }
+      ]
+    }
+  ],
+  "decision": "Retain native PP-OCRv6 Small. Default Indra 5.29% CER; no-LM diagnostic 4.12%; 2x default 5.29%; native Small 1.67% on the eight exact-text screenshots. No Indra variant exactly transcribed the randomized API key or long token on any of those eight images.",
+  "limits": "Small synthetic English corpus does not rank all documents, handwriting or scripts. Indra Python Windows CPU timings are single warm observations per image, not a controlled production Rust speed comparison. No claim of universal OCR or privacy recall. Model weights have modified OpenRAIL-M restrictions; source Apache-2.0."
+}

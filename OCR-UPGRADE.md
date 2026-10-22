@@ -16,6 +16,7 @@ This is a recommendation for Glint screenshots, not a claim that one model is be
 | PP-OCRv5 Mobile | Older baseline with more errors | Tested locally through RapidOCR |
 | Tesseract | Retained fast default; no optional download | Tested through Glint's bundled executable and preprocessing |
 | OvisOCR3 | Strong general/document OCR candidate; more literal-token errors on the six local screenshots | Actually run locally on the RTX 4050, including an upscaled-input check |
+| Indra OCR 1.1 | Promising CPU candidate, but more screenshot transcription errors than native Small; not integrated | Tested locally on 24 unchanged images, plus 2x and no-language-model diagnostic runs |
 | TeleOCR | Leading entry in the consulted OmniDocBench v1.6_full document-parsing table | Reviewed benchmark and official model card; not benchmarked locally |
 | Chandra 2 | Strong document/layout candidate with model licensing distinct from its source license | Reviewed primary documentation; not benchmarked locally |
 
@@ -77,3 +78,40 @@ Reproduction additions: `ocr-accuracy-fixtures.py` generates the eight exact-tex
 The actual Rust pipeline changes the recommendation from the Python comparison. On the same eight harder screenshots, the native implementation measured **1.67% mean CER for Small** and **1.89% for Medium**. Medium reproduced the fake API key exactly in one variant, Small in none; neither reproduced the full randomized token exactly. There is no basis for claiming universal or perfect accuracy. Small is the recommended Glint engine because its native aggregate was better, while Medium remains available for other material. This recommendation prioritizes measured native accuracy rather than model size or speed. Both use the independent reader for privacy suggestions.
 
 Verification: 261 frontend tests, 266 standard native tests, explicit native exact-text tests for both tiers, a 16-image native Medium/privacy integration run, real-app switching between both models and Tesseract, saved engine selection, both model download cancellation/retry paths, exact hashes and retained license notices. The six privacy categories were also checked through the actual app command after model switching. The UI-polish worktree was removed; the OCR branch remains unmerged.
+
+## Indra OCR 1.1 evaluation (22 October 2026)
+
+Tested locally on Windows CPU with `indra-ocr==1.1.2`, ONNX Runtime 1.31.0, four intra-op threads and CPUExecutionProvider. Package 1.1.2 expects model tag `v1.1.0`; this resolved to pinned model revision `bd02167fdf2005a19962cc15188f8496a2c87d3b`. All model file hashes, dependency versions, input PNG hashes, recognized strings and per-image measurements are retained in [the evaluation report](validation/indra-1.1-2026-10-22.json). Only public models were downloaded; inference stayed local in a separate development venv. No app dependencies or production engine selection changed.
+
+The inputs are the **same eight exact-text screenshots**, six simpler screenshots and ten privacy fixtures used above. CER is case-sensitive Levenshtein distance after whitespace normalization, without correcting recognized identifiers. The harder corpus results are:
+
+| Pipeline | Mean CER | Exact fake key | Exact long token |
+| --- | --- | --- | --- |
+| Existing native PP-OCRv6 Small | 1.67% | 0/8 | 0/8 |
+| Existing native PP-OCRv6 Medium | 1.89% | 1/8 | 0/8 |
+| Indra 1.1, default | 5.29% | 0/8 | 0/8 |
+| Indra 1.1, 2x bicubic input | 5.29% | 0/8 | 0/8 |
+| Indra 1.1, language-model correction disabled | 4.12% | 0/8 | 0/8 |
+
+The alternative Indra settings are diagnostic ablations, not its advertised default. On the six simpler screenshots, default Indra averaged 3.05% CER; 2x input and disabling the language model each averaged 2.39%. Default Indra's warmed single-observation median on the eight harder images was about 99 ms, excluding model loading (~996 ms) and downloads. This is encouraging for responsiveness, but is not a controlled release-build speed comparison with Glint's native implementation.
+
+Privacy was checked separately from literal string copying. The existing Rust `privacy::detect` consumed Indra's public line text and boxes, without Tesseract fallback or fabricated character coordinates. A matched value therefore receives a conservative whole-line mask. Across ten fixtures (60 reference values), full category-matched box coverage **and opaque mask pixels** succeeded for 52/60 values by default, 55/60 with 2x input, and 54/60 with the language model disabled. All default misses were JWTs. This is a candidate probe, not an integrated app export or production recall guarantee. The ignored test records misses intentionally; its passing status only confirms the evaluation completed. These results do not replace the earlier native Paddle plus independent-reader export checks.
+
+**Decision: keep PP-OCRv6 Small recommended.** Indra is quick and compact, but did not improve screenshot accuracy or exact identifier recognition on this corpus. It remains a research candidate rather than an added engine. These synthetic English results do not establish its ranking on handwriting, scans, other scripts or arbitrary user images. The remaining exact-token errors in Paddle are also unresolved.
+
+Reproduce in a separate Python environment after generating the existing fixtures:
+
+```powershell
+python -m pip install indra-ocr==1.1.2 onnxruntime==1.31.0 Pillow==13.0.0
+python scripts/ocr-indra-benchmark.py
+python scripts/ocr-indra-benchmark.py --upscale 2
+python scripts/ocr-indra-benchmark.py --no-language-model
+$env:GLINT_OCR_FIXTURES = "$env:LOCALAPPDATA/GlintValidation/OcrUpgrade"
+cargo test --manifest-path glint/src-tauri/Cargo.toml --lib evaluate_indra_privacy_geometry -- --ignored
+# Repeat the probe with GLINT_INDRA_REPORT set to indra-benchmark-2x.json
+# and indra-benchmark-no-lm.json for those diagnostic runs.
+```
+
+All three native privacy probes completed, and the eight existing privacy unit tests passed. The benchmark uses PNGs in OCR mode, so digital PDF text-layer extraction cannot inflate the results. Model assets total about 76.1 MB including metadata/license; the model weights use modified OpenRAIL-M terms, distinct from the Apache-2.0 source license. Consult the upstream terms before any distribution decision.
+
+Primary references: [Indra 1.1 release](https://www.datalab.to/blog/indra-ocr-1-1), [package 1.1.2 model loader and expected tag](https://github.com/datalab-to/indra/blob/v1.1.2/indra_ocr/models.py), [pinned model card](https://huggingface.co/datalab-to/indra-ocr/blob/bd02167fdf2005a19962cc15188f8496a2c87d3b/README.md), [pinned model license](https://huggingface.co/datalab-to/indra-ocr/blob/bd02167fdf2005a19962cc15188f8496a2c87d3b/LICENSE).

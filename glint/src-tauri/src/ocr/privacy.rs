@@ -286,6 +286,101 @@ pub fn privacy_scan(
 #[cfg(test)]
 mod tests {
     use super::*;
+    /// Candidate evaluation, not a quality pass: records misses without changing
+    /// production selection. No download or model execution happens in this test.
+    #[test]
+    #[ignore = "requires GLINT_OCR_FIXTURES and the Indra benchmark JSON"]
+    fn evaluate_indra_privacy_geometry() {
+        let root = std::path::PathBuf::from(std::env::var("GLINT_OCR_FIXTURES").unwrap());
+        let input = std::env::var("GLINT_INDRA_REPORT").unwrap_or("indra-benchmark.json".into());
+        let report: serde_json::Value =
+            serde_json::from_slice(&std::fs::read(root.join(&input)).unwrap()).unwrap();
+        let mut reports = vec![];
+        for case in report["results"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .filter(|c| c["corpus"] == "privacy")
+        {
+            let name = case["file"].as_str().unwrap();
+            assert_eq!(
+                case["rotation"], 0,
+                "probe assumes original image coordinates"
+            );
+            let mut image = image::open(root.join(name)).unwrap().to_rgba8();
+            let words = case["lines"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .enumerate()
+                .map(|(i, line)| {
+                    let b = line["box"]
+                        .as_array()
+                        .unwrap()
+                        .iter()
+                        .map(|v| v.as_f64().unwrap())
+                        .collect::<Vec<_>>();
+                    assert!(b.iter().all(|v| v.is_finite()));
+                    assert!(b[2] >= b[0] && b[3] >= b[1]);
+                    // Public Indra output has line boxes. Do not invent character boxes.
+                    Word {
+                        text: line["text"].as_str().unwrap().into(),
+                        line: i.to_string(),
+                        x: b[0],
+                        y: b[1],
+                        w: b[2] - b[0],
+                        h: b[3] - b[1],
+                    }
+                })
+                .collect::<Vec<_>>();
+            let found = detect(&words, image.width(), image.height());
+            for suggestion in &found {
+                for y in suggestion.y.floor() as u32
+                    ..((suggestion.y + suggestion.h).ceil() as u32).min(image.height())
+                {
+                    for x in suggestion.x.floor() as u32
+                        ..((suggestion.x + suggestion.w).ceil() as u32).min(image.width())
+                    {
+                        image.put_pixel(x, y, image::Rgba([0, 0, 0, 255]));
+                    }
+                }
+            }
+            let mut bounds = vec![];
+            for bound in case["reference_bounds"].as_array().unwrap() {
+                let kind = bound["kind"].as_str().unwrap();
+                let b = bound["box"]
+                    .as_array()
+                    .unwrap()
+                    .iter()
+                    .map(|v| v.as_f64().unwrap())
+                    .collect::<Vec<_>>();
+                let complete_box = found.iter().any(|s| {
+                    s.kind == kind
+                        && s.x <= b[0]
+                        && s.y <= b[1]
+                        && s.x + s.w >= b[2]
+                        && s.y + s.h >= b[3]
+                });
+                let mut opaque = true;
+                for y in b[1].ceil() as u32..b[3].floor() as u32 {
+                    for x in b[0].ceil() as u32..b[2].floor() as u32 {
+                        opaque &= image.get_pixel(x, y).0 == [0, 0, 0, 255];
+                    }
+                }
+                bounds.push(serde_json::json!({"kind":kind,"complete_box":complete_box,"opaque_pixels":opaque}));
+            }
+            image
+                .save(root.join(format!(
+                    "{}-redacted-{name}",
+                    input.trim_end_matches(".json")
+                )))
+                .unwrap();
+            reports.push(serde_json::json!({"file":name,"bounds":bounds,"suggestions":found}));
+        }
+        assert_eq!(reports.len(), 10, "all privacy fixtures must be evaluated");
+        let output = root.join(format!("{}-privacy.json", input.trim_end_matches(".json")));
+        std::fs::write(output, serde_json::to_vec_pretty(&reports).unwrap()).unwrap();
+    }
     #[test]
     fn independent_readers_merge_coverage_without_merging_distinct_values() {
         let mut found = vec![Suggestion {
