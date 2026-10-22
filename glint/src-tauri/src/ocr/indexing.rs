@@ -104,7 +104,7 @@ pub fn library_index_start(app: tauri::AppHandle) {
             {
                 break;
             }
-            let fingerprint = crate::db::text_index::fingerprint(&row.path);
+            let fingerprint = crate::db::text_index::fingerprint(&row.path).map(|f|format!("{}:{f}",super::neural::engine_id()));
             if let Some(fingerprint) = fingerprint {
                 let current = {
                     let db = app.state::<crate::Db>();
@@ -130,12 +130,6 @@ pub fn library_index_start(app: tauri::AppHandle) {
                     if state.cancel.load(Ordering::Relaxed) {
                         break;
                     }
-                    let auto_name = app
-                        .state::<crate::settings::commands::SettingsState>()
-                        .0
-                        .lock()
-                        .unwrap()
-                        .auto_name_captures;
                     let failed = result.is_err();
                     let text = result.unwrap_or_default();
                     let stored_fingerprint = if failed {
@@ -154,7 +148,7 @@ pub fn library_index_start(app: tauri::AppHandle) {
                             row.id,
                             &text,
                             &stored_fingerprint,
-                            auto_name,
+                            false,
                         )
                         .is_ok()
                     };

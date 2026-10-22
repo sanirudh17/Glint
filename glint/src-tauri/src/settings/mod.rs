@@ -41,6 +41,7 @@ impl Default for Hotkeys {
     }
 }
 
+fn default_ocr_engine()->String{"tesseract".into()}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub theme: Theme,
@@ -54,6 +55,8 @@ pub struct Settings {
     pub quick_access_auto_close: bool,
     pub index_screenshot_text: bool,
     pub auto_name_captures: bool,
+    #[serde(default="default_ocr_engine")]
+    pub ocr_engine: String,
     pub open_in_editor: bool,
     pub explorer_menu_enabled: bool,
     pub record_system_audio: bool,
@@ -122,6 +125,7 @@ impl Default for Settings {
             quick_access_auto_close:false,
             index_screenshot_text: true,
             auto_name_captures: false,
+            ocr_engine: default_ocr_engine(),
             open_in_editor: false,
             explorer_menu_enabled: true,
             record_system_audio: true,
@@ -170,7 +174,8 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
             s.auto_copy = value.as_bool().ok_or("auto_copy must be boolean")?;
         }
         "index_screenshot_text"=>{s.index_screenshot_text=value.as_bool().ok_or("index_screenshot_text must be boolean")?;}
-        "auto_name_captures"=>{s.auto_name_captures=value.as_bool().ok_or("auto_name_captures must be boolean")?;}
+        "ocr_engine"=>{let engine=value.as_str().ok_or("OCR engine must be text")?;if !matches!(engine,"tesseract"|"ppocrv6-small"|"ppocrv6-medium"){return Err("Unknown OCR engine".into());}s.ocr_engine=engine.into();}
+        "auto_name_captures"=>{let _=value.as_bool().ok_or("auto_name_captures must be boolean")?;s.auto_name_captures=false;}
         "open_in_editor" => {
             s.open_in_editor = value.as_bool().ok_or("open_in_editor must be boolean")?;
         }
@@ -293,6 +298,26 @@ pub mod sound;
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn ocr_engine_migrates_and_validates() {
+        let mut settings=Settings::default();
+        assert_eq!(settings.ocr_engine,"tesseract");
+        let mut old=serde_json::to_value(&settings).unwrap();
+        old.as_object_mut().unwrap().remove("ocr_engine");
+        let restored:Settings=serde_json::from_value(old).unwrap();
+        assert_eq!(restored.ocr_engine,"tesseract");
+        apply_update(&mut settings,"ocr_engine",json!("ppocrv6-small")).unwrap();
+        assert_eq!(settings.ocr_engine,"ppocrv6-small");
+        apply_update(&mut settings,"ocr_engine",json!("ppocrv6-medium")).unwrap();
+        assert_eq!(settings.ocr_engine,"ppocrv6-medium");
+        apply_update(&mut settings,"auto_name_captures",json!(true)).unwrap();
+        assert!(!settings.auto_name_captures);
+        assert!(apply_update(&mut settings,"ocr_engine",json!("cloud")).is_err());
+        assert!(apply_update(&mut settings,"ocr_engine",json!(true)).is_err());
+        apply_update(&mut settings,"ocr_engine",json!("tesseract")).unwrap();
+        assert_eq!(settings.ocr_engine,"tesseract");
+    }
 
     #[test]
     fn defaults_are_dark_theme() {

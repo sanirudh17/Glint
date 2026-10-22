@@ -160,6 +160,44 @@ pub fn detect(words: &[Word], width: u32, height: u32) -> Vec<Suggestion> {
     out
 }
 
+/// Use both independent readings for privacy recall. A more accurate transcription
+/// model can still misread one IP or credential; a second reader may recover it.
+pub(crate) fn detect_with_fallback(
+    words: &[Word],
+    rgba: &[u8],
+    width: u32,
+    height: u32,
+    cancel: &AtomicBool,
+) -> Result<Vec<Suggestion>, String> {
+    let mut found = detect(words, width, height);
+    if super::neural::engine_id() != "tesseract" {
+        let secondary = super::words::recognize_tesseract(rgba, width, height, cancel)?;
+        for suggestion in detect(&secondary, width, height) {
+            merge_suggestion(&mut found, suggestion);
+        }
+    }
+    Ok(found)
+}
+fn merge_suggestion(found: &mut Vec<Suggestion>, next: Suggestion) {
+    for current in found.iter_mut().filter(|s| s.kind == next.kind) {
+        let overlap_w = (current.x + current.w).min(next.x + next.w) - current.x.max(next.x);
+        let overlap_h = (current.y + current.h).min(next.y + next.h) - current.y.max(next.y);
+        if overlap_w > 0.
+            && overlap_h > 0.
+            && overlap_w * overlap_h > 0.5 * (current.w * current.h).min(next.w * next.h)
+        {
+            let right = (current.x + current.w).max(next.x + next.w);
+            let bottom = (current.y + current.h).max(next.y + next.h);
+            current.x = current.x.min(next.x);
+            current.y = current.y.min(next.y);
+            current.w = right - current.x;
+            current.h = bottom - current.y;
+            return;
+        }
+    }
+    found.push(next);
+}
+
 #[derive(Default)]
 pub struct ScanJobs {
     current: Option<(String, Arc<AtomicBool>)>,
@@ -233,7 +271,7 @@ pub fn privacy_scan(
         if cancel.load(Ordering::Relaxed) {
             return Err("Cancelled".into());
         }
-        Ok(detect(&words, image.width(), image.height()))
+        detect_with_fallback(&words, &image, image.width(), image.height(), &cancel)
     })();
     {
         let state = app.state::<ScanState>();
@@ -248,6 +286,50 @@ pub fn privacy_scan(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn independent_readers_merge_coverage_without_merging_distinct_values() {
+        let mut found = vec![Suggestion {
+            kind: "Email".into(),
+            x: 10.,
+            y: 10.,
+            w: 100.,
+            h: 20.,
+        }];
+        merge_suggestion(
+            &mut found,
+            Suggestion {
+                kind: "Email".into(),
+                x: 8.,
+                y: 8.,
+                w: 106.,
+                h: 24.,
+            },
+        );
+        assert_eq!(found.len(), 1);
+        assert_eq!((found[0].x, found[0].w), (8., 106.));
+        merge_suggestion(
+            &mut found,
+            Suggestion {
+                kind: "Email".into(),
+                x: 200.,
+                y: 10.,
+                w: 80.,
+                h: 20.,
+            },
+        );
+        assert_eq!(found.len(), 2);
+        merge_suggestion(
+            &mut found,
+            Suggestion {
+                kind: "Phone".into(),
+                x: 8.,
+                y: 8.,
+                w: 106.,
+                h: 24.,
+            },
+        );
+        assert_eq!(found.len(), 3);
+    }
     #[test]
     fn detects_jwt_with_ocr_spaces_and_maps_the_entire_original_span() {
         // Exact OCR error from the half-size composed screenshot regression.

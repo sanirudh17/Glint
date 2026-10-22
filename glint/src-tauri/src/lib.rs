@@ -160,6 +160,7 @@ pub fn run() {
                 let mut s = state.0.lock().unwrap();
                 crate::settings::hydrate::hydrate_from_db(&conn, &mut s);
             }
+            crate::ocr::neural::initialize(app.path().app_local_data_dir()?,&app.state::<SettingsState>().0.lock().unwrap().ocr_engine);
             app.manage(Db(std::sync::Mutex::new(conn)));
 
             // Register global shortcuts AFTER hydration so persisted custom hotkeys win —
@@ -383,6 +384,9 @@ pub fn run() {
             editor::layers::editor_read_layer,
             ocr::privacy::privacy_scan,
             ocr::privacy::privacy_cancel,
+            ocr::neural::ocr_engine_status,
+            ocr::neural::ocr_engine_install,
+            ocr::neural::ocr_engine_cancel,
             ocr::indexing::library_index_start,
             ocr::indexing::library_index_cancel,
             ocr::indexing::library_index_status,

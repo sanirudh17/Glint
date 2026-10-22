@@ -35,7 +35,9 @@ pub fn settings_set(
     value: serde_json::Value,
 ) -> Result<Settings, String> {
     let mut s = state.0.lock().unwrap();
+    if key=="ocr_engine"&&matches!(value.as_str(),Some("ppocrv6-small"|"ppocrv6-medium"))&&!crate::ocr::neural::installed(value.as_str().unwrap()){return Err("Download the high-accuracy OCR engine first.".into());}
     apply_update(&mut s, &key, value)?;
+    if key=="ocr_engine"{crate::ocr::neural::set_engine(&s.ocr_engine);}
     Ok(s.clone())
 }
 

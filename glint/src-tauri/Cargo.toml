@@ -69,3 +69,14 @@ raw-window-handle = "0.6"
 ureq = "2"
 sha2 = "0.10"
 
+
+# CPU-only screenshot OCR; models are installed separately.
+[dependencies.oar-ocr]
+version = "=0.10.0"
+default-features = false
+features = ["simd"]
+
+[dependencies.ort]
+version = "=2.0.0-rc.13"
+default-features = false
+features = ["std", "load-dynamic"]

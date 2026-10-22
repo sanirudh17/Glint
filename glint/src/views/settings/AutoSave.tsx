@@ -1,3 +1,4 @@
+import {OcrEngineControls} from '../../ocr/OcrEngineControls';
 import { Section, Field, Switch } from "../../components/ui";
 import { useAppStore } from "../../store/useAppStore";
 
@@ -6,7 +7,7 @@ export function AutoSave() {
   const setAutoSave = useAppStore((s) => s.setAutoSave);
   const setAutoCopy = useAppStore((s) => s.setAutoCopy);
   const setOpenInEditor = useAppStore((s) => s.setOpenInEditor);
-  const setIndexScreenshotText=useAppStore(s=>s.setIndexScreenshotText),setAutoNameCaptures=useAppStore(s=>s.setAutoNameCaptures);
+  const setIndexScreenshotText=useAppStore(s=>s.setIndexScreenshotText);
 
   return (
     <Section
@@ -31,12 +32,11 @@ export function AutoSave() {
           onChange={(v) => setOpenInEditor(v)}
         />
       </Field>
+      <OcrEngineControls/>
       <Field label="Search screenshot text" hint="Read saved screenshots locally when Library opens. Turning this off clears the text index.">
         <Switch ariaLabel="Search screenshot text" checked={settings?.index_screenshot_text??true} onChange={v=>void setIndexScreenshotText(v)}/>
       </Field>
-      <Field label="Name captures from text" hint="Name newly indexed captures from a meaningful OCR line. Custom names stay unchanged.">
-        <Switch ariaLabel="Name captures from text" checked={settings?.auto_name_captures??false} onChange={v=>void setAutoNameCaptures(v)}/>
-      </Field>
+
     </Section>
   );
 }

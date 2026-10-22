@@ -24,6 +24,7 @@ export interface Settings {
   quick_access_auto_close:boolean;
   index_screenshot_text: boolean;
   auto_name_captures: boolean;
+  ocr_engine: "tesseract"|"ppocrv6-small"|"ppocrv6-medium";
   open_in_editor: boolean;
   explorer_menu_enabled: boolean;
   record_system_audio: boolean;
@@ -63,6 +64,7 @@ interface AppState {
   setAutoSave: (on: boolean) => Promise<void>;
   setAutoCopy: (on: boolean) => Promise<void>;
   setIndexScreenshotText:(on:boolean)=>Promise<void>;
+  setOcrEngine:(engine:"tesseract"|"ppocrv6-small"|"ppocrv6-medium")=>Promise<void>;
   setAutoNameCaptures:(on:boolean)=>Promise<void>;
   setOpenInEditor: (on: boolean) => Promise<void>;
   setExplorerMenu: (on: boolean) => Promise<void>;
@@ -233,6 +235,7 @@ export const useAppStore = create<AppState>((set, get) => {
   },
 
   setAutoSave: (on: boolean) => commit("auto_save", on, "Auto-save"),
+  setOcrEngine:(engine:'tesseract'|'ppocrv6-small'|'ppocrv6-medium')=>commit('ocr_engine',engine,'OCR engine'),
   setAutoNameCaptures:(on:boolean)=>commit('auto_name_captures',on,'Automatic capture names'),
   setIndexScreenshotText:async(on:boolean)=>{
     await commit('index_screenshot_text',on,'Screenshot text search');

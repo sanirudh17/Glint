@@ -1,9 +1,9 @@
-//! OCR / Capture Text. Turns pixels into text via a bundled/installed **Tesseract**
-//! engine (fully local, no cloud). We shell out to the `tesseract` CLI — the classic
-//! `Windows.Media.Ocr` engine proved far less accurate than Snipping Tool on small /
-//! dark-mode / terminal text, so we switched. ISOLATED from `recorder/` (imports
-//! nothing from it, and it imports nothing from here).
+//! Local OCR / Capture Text. Bundled Tesseract is available offline; optional
+//! PP-OCRv6 engines run directly through Rust and ONNX Runtime on CPU.
+//! Recognition sends no images or recognized text to a server. Capture Text,
+//! indexing and privacy use the same selected primary engine.
 
+pub mod neural;
 pub mod commands;
 pub mod window;
 pub mod words;
@@ -274,6 +274,9 @@ pub fn recognize(rgba: &[u8], w: u32, h: u32) -> Result<OcrOutput, String> {
     let need = w as usize * h as usize * 4;
     if w == 0 || h == 0 || rgba.len() < need {
         return Err("Couldn't read text".into());
+    }
+    if let Some(result)=neural::recognize_if_enabled(rgba,w,h,&std::sync::atomic::AtomicBool::new(false)){
+        let words=result?;let text=words::text(&words);return Ok(OcrOutput{line_count:text.lines().count(),word_count:text.split_whitespace().count(),text});
     }
     let png = preprocess_to_png(rgba, w, h)?;
     let tess = resolve_tesseract().ok_or_else(|| TESS_MISSING.to_string())?;

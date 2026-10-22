@@ -62,6 +62,25 @@ pub fn recognize(rgba: &[u8], w: u32, h: u32, cancel: &AtomicBool) -> Result<Vec
     if cancel.load(Ordering::Relaxed) {
         return Err("Cancelled".into());
     }
+    if let Some(result) = super::neural::recognize_if_enabled(rgba, w, h, cancel) {
+        return result;
+    }
+    recognize_tesseract(rgba, w, h, cancel)
+}
+
+/// Independent recognition for privacy recall; never delegates back to the selected engine.
+pub fn recognize_tesseract(
+    rgba: &[u8],
+    w: u32,
+    h: u32,
+    cancel: &AtomicBool,
+) -> Result<Vec<Word>, String> {
+    if w == 0 || h == 0 || rgba.len() != w as usize * h as usize * 4 {
+        return Err("Couldn't read this image".into());
+    }
+    if cancel.load(Ordering::Relaxed) {
+        return Err("Cancelled".into());
+    }
     let png = super::preprocess_to_png(rgba, w, h)?;
     let tess = super::resolve_tesseract().ok_or(super::TESS_MISSING)?;
     let path = std::env::temp_dir().join(format!(
