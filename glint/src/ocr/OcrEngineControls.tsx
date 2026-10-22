@@ -27,7 +27,7 @@ export function OcrEngineControls(){
   try{await invoke('ocr_engine_install',{engine:target});setReady(previous=>({...previous,[target]:true}));await setEngine(target);}
   catch(e){setError(String(e));}finally{setBusy(false);setStage('');}
  }
- return <Field label="Text recognition engine" hint="Small performed best in Glint?s screenshot tests. Medium is available for comparison. Review important identifiers; all recognition stays on this device.">
+ return <Field label="Text recognition engine" hint="Small performed best in Glint's screenshot tests. Medium is available for comparison. Review important identifiers; all recognition stays on this device.">
   <Select ariaLabel="Text recognition engine" value={choice} disabled={busy} options={OPTIONS} onChange={value=>{
    const next=value as Engine;setChoice(next);setError('');
    if(next==='tesseract'||ready[next])void setEngine(next);
