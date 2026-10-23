@@ -23,3 +23,6 @@ Thumbs.db
 # Glint runtime data (never commit captures)
 *.glint.db
 /captures
+
+# Local design inspection output
+.taste-skill/

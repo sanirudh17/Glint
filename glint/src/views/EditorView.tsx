@@ -1,3 +1,4 @@
+import { WindowControls } from "../components/Titlebar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
 import { emit, listen } from "@tauri-apps/api/event";
@@ -229,7 +230,7 @@ export default function EditorView() {
 
   return (
     <div className="editor-view">
-      <div className="editor-topbar">
+      <div className="editor-topbar" data-tauri-drag-region>
         <ProjectBar />
         <StyleBar onPrivacy={()=>{setPrivacyOpen(v=>!v);setImagesOpen(false);setCornersOpen(false);}}/>
         <div className="editor-frame-slot">
@@ -258,6 +259,7 @@ export default function EditorView() {
           )}
         </div>
         <ExportBar stageRef={stageRef} />
+        <WindowControls />
       </div>
       <div className="editor-main">
         <ToolRail />

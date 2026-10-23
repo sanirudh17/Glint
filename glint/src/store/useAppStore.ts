@@ -455,7 +455,7 @@ export function applyTheme(theme: Theme): void {
   document.documentElement.dataset.theme = resolved;
   document.documentElement.style.setProperty(
     "--bg",
-    resolved === "light" ? "#F6F7F9" : "#141518",
+    resolved === "light" ? "#F6F7F9" : "#121315",
   );
   try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch { /* no storage → skip */ }
   // Do not touch .ready here — initial load's ready is managed by index.html/main.tsx/loadSettings

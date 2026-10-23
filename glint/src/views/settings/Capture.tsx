@@ -42,7 +42,7 @@ export function Capture() {
           onChange={(v) => void setImageFormat(v as "png" | "jpeg" | "webp")}
         />
       </Field>
-      <Field label="JPEG quality" hint="Compression level when saving as JPEG.">
+      <Field label="JPEG quality" hint={isJpeg ? "Compression level when saving as JPEG." : "Available when Image format is set to JPEG."}>
         <Select
           value={settings?.jpeg_quality ?? "high"}
           options={QUALITY_OPTIONS}
@@ -70,7 +70,7 @@ export function Capture() {
         <Switch ariaLabel="Auto-close Quick Access" checked={settings?.quick_access_auto_close??false} onChange={on=>void setQuickAccessAutoClose(on)}/>
       </Field>
       <Field label="Recording notifications" hint="Turn on Do not disturb in Windows before recording. Windows does not provide an unrestricted automatic switch for Glint.">
-        <Button size="sm" variant="ghost" onClick={()=>void invoke('settings_open_notifications').catch(e=>pushToast(String(e)))}>Notification settings</Button>
+        <Button size="md" variant="subtle" onClick={()=>void invoke('settings_open_notifications').catch(e=>pushToast(String(e)))}>Notification settings</Button>
       </Field>
     </Section>
   );

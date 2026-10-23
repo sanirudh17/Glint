@@ -1,3 +1,4 @@
+import { WindowControls } from "../components/Titlebar";
 import { StudioPanel } from "./StudioPanel";
 import {EditorCommands} from './EditorCommands';
 import {prepareCaptions,estimateExportBytes} from './studioPolish';
@@ -529,6 +530,10 @@ export function TrimView() {
         {id:'notes',label:'Open speaker notes',run:()=>void invoke('studio_speaker_notes').catch(e=>setExportMessage(String(e)))},
         {id:'close',label:'Close editor',run:requestClose,disabled:exporting!==null},
       ]}/>
+      {!studio && <div className="trim-window-toolbar" data-tauri-drag-region>
+        <span className="trim-window-context">Trim recording</span>
+        <WindowControls onClose={requestClose} />
+      </div>}
       <div className="trim-preview-row">
       <div className={`trim-stage${studio ? " studio-stage" : ""}`}>
         {studio && probe && <StudioPreview studio={studio} video={videoRef} camVideo={camVideoRef} cam={cam} width={probe.width} height={probe.height} pickingFocus={pickingFocus}
@@ -566,7 +571,7 @@ export function TrimView() {
         )}
       </div>
 
-      {studio && probe && target && <StudioPanel project={{...studio.project,...edit}} path={target.path} width={probe.width} height={probe.height}
+      {studio && probe && target && <StudioPanel onClose={requestClose} project={{...studio.project,...edit}} path={target.path} width={probe.width} height={probe.height}
         time={playhead} duration={duration} events={studio.events} selectedZoom={selectedZoom} onSelectZoom={setSelectedZoom} focusAim={focusAim} pickingFocus={pickingFocus} onPickZoom={()=>{videoRef.current?.pause();setPlaying(false);setSelectedMask(null);setDrawingMask(false);setFocusAim(null);setPickingFocus(value=>!value);}}
         selectedMask={selectedMask} onSelectMask={setSelectedMask} drawingMask={drawingMask} onDrawMask={()=>{videoRef.current?.pause();setPickingFocus(false);setSelectedMask(null);setDrawingMask(value=>!value);}} onSeek={time=>{scrub(time,'start');scrub(time,'end');}}
         saveStatus={saveStatus} exportMessage={exportMessage} exporting={exporting !== null} cam={cam} onCamChange={setCam}

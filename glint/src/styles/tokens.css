@@ -13,7 +13,7 @@
 /* ─── Global (theme-independent) ──────────────────────────────────────── */
 :root {
   /* Default substrate before JS sets data-theme — prevents white flash */
-  --bg: #141518;
+  --bg: #121315;
   /* Spacing — 4-pt grid */
   --s1: 4px;
   --s2: 8px;
@@ -29,7 +29,9 @@
   --r2: 8px;
   --r3: 12px;
   /* Button radius — rounded-rectangle, applied to all pressable buttons */
-  --r-btn: 8px;
+  --r-btn: 7px;
+  --control-h: 32px;
+  --control-h-sm: 28px;
 
   /* Type scale — optical, not computed */
   --fz-xs: 11px;
@@ -104,10 +106,10 @@
 /* ─── Dark theme (primary) ─────────────────────────────────────────────── */
 :root[data-theme="dark"] {
   /* Substrate — smooth dark canvas */
-  --bg:        #141518;
+  --bg:        #121315;
   /* Sidebar & Titlebar frame — subtle distinctness from canvas */
-  --bg-frame:   #0F1013;
-  --bg-elev:   #141518;
+  --bg-frame:   #0D0E10;
+  --bg-elev:   #121315;
   --bg-elev2:  #1A1C21;
   --bg-elev3:  #202329;
 
@@ -141,7 +143,7 @@
 
   --text:       #111318;
   --text-dim:   #555D6A;
-  --text-faint: #8A919C;
+  --text-faint: #69717E;
 
   --accent-fg:  #ffffff;
 

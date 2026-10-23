@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { HardDrive, FolderOpen, RotateCcw } from "lucide-react";
 import { open } from "@tauri-apps/plugin-dialog";
-import { Section, Field, Card } from "../../components/ui";
+import { Section, Field, Card, Button } from "../../components/ui";
 import { useAppStore } from "../../store/useAppStore";
 import { storagePaths, revealPath, type StoragePaths } from "../../lib/ipc";
 
@@ -62,24 +62,20 @@ export function Storage() {
         <div className="settings-folder-control">
           <code className="settings-folder-path">{paths?.screenshots ?? "…"}</code>
           <div className="settings-folder-actions">
-            <button type="button" className="settings-hotkey-btn" onClick={() => void choose()}>
-              <FolderOpen size={13} strokeWidth={1.5} /> Choose…
-            </button>
-            <button
-              type="button"
-              className="settings-hotkey-btn"
+            <Button icon={FolderOpen} onClick={() => void choose()}>
+              Choose…
+            </Button>
+            <Button
               onClick={() => paths && void revealPath(paths.screenshots)}
             >
               Reveal
-            </button>
+            </Button>
             {custom && (
-              <button
-                type="button"
-                className="settings-hotkey-btn settings-hotkey-btn--ghost"
+              <Button variant="ghost" icon={RotateCcw}
                 onClick={() => void resetDefault()}
               >
-                <RotateCcw size={13} strokeWidth={1.5} /> Reset
-              </button>
+                Reset
+              </Button>
             )}
           </div>
         </div>

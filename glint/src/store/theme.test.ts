@@ -35,7 +35,7 @@ describe("applyTheme", () => {
   it("applies dark theme and synchronizes --bg", () => {
     applyTheme("dark");
     expect(fakeDocument.documentElement.dataset.theme).toBe("dark");
-    expect(fakeDocument.documentElement.style.getPropertyValue("--bg")).toBe("#141518");
+    expect(fakeDocument.documentElement.style.getPropertyValue("--bg")).toBe("#121315");
     expect(fakeLocalStorage.getItem(THEME_STORAGE_KEY)).toBe("dark");
   });
 
@@ -56,7 +56,7 @@ describe("applyTheme", () => {
 
     applyTheme("system");
     expect(fakeDocument.documentElement.dataset.theme).toBe("dark");
-    expect(fakeDocument.documentElement.style.getPropertyValue("--bg")).toBe("#141518");
+    expect(fakeDocument.documentElement.style.getPropertyValue("--bg")).toBe("#121315");
     expect(fakeLocalStorage.getItem(THEME_STORAGE_KEY)).toBe("system");
   });
 });

@@ -99,8 +99,8 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
       <button className="editor-export-btn" disabled={rendering} onClick={onSave} title="Export a PNG to the Library">
         <Download size={16} strokeWidth={1.5} /> Export
       </button>
-      <button className="editor-export-btn editor-export-btn--primary" disabled={rendering} onClick={onDone} title="Finish — send to the corner HUD">
-        <Check size={16} strokeWidth={1.5} /> Done
+      <button className="editor-export-btn editor-export-btn--primary editor-done-btn" disabled={rendering} onClick={onDone} title="Finish — send to the corner HUD">
+        <span>Done</span><Check size={14} strokeWidth={2} aria-hidden="true" />
       </button>
     </div>
   );

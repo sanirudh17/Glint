@@ -1,6 +1,6 @@
 //! The standalone editor window. The annotation editor used to be a `/editor`
 //! route inside the MAIN window (wrapped in the app shell's titlebar + nav rail);
-//! it now lives in its own decorated, resizable OS window so it has room to breathe
+//! it now lives in its own resizable window with integrated toolbar controls so it has room to breathe
 //! and the user can use the main app alongside it. Built off the main thread
 //! (window-build rule — a synchronous webview build on the main thread deadlocks the
 //! event loop), so callers invoke `open_editor_window` which spawns for us.
@@ -17,6 +17,8 @@ pub const EDITOR_LABEL: &str = "editor";
 fn builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
     WebviewWindowBuilder::new(app, EDITOR_LABEL, WebviewUrl::App("index.html#/editor".into()))
         .title("Glint")
+        .decorations(false)
+        .shadow(true)
         .inner_size(1180.0, 780.0)
         .min_inner_size(760.0, 540.0)
         .resizable(true)

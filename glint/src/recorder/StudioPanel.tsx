@@ -1,3 +1,4 @@
+import { WindowControls } from "../components/Titlebar";
 import { useState } from "react";
 import { Check, Copy, FolderOpen, Save } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
@@ -13,7 +14,8 @@ import {DEFAULT_MOTION} from './studioMotion';
 import type {FocusPoint} from './studioFocus';
 import {StudioPolishControls} from './StudioPolishControls';
 
-export function StudioPanel({ project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave, time, duration, selectedZoom, onSelectZoom, onPickZoom, events, selectedMask, onSelectMask, drawingMask, onDrawMask, onSeek,focusAim,pickingFocus }: {
+export function StudioPanel({ onClose, project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave, time, duration, selectedZoom, onSelectZoom, onPickZoom, events, selectedMask, onSelectMask, drawingMask, onDrawMask, onSeek,focusAim,pickingFocus }: {
+  onClose: () => void;
   project: StudioProject; path: string; width: number; height: number; saveStatus: string;
   exportMessage: string | null; exporting: boolean; cam: CamPlacement | null;
   onCamChange: (cam: CamPlacement) => void; onChange: (patch: Partial<StudioProject>,action?:string) => void; onSave: () => void;
@@ -32,7 +34,7 @@ export function StudioPanel({ project, path, width, height, saveStatus, exportMe
   const [tab,setTab]=useState<'look'|'edit'|'polish'>('look');
   return <aside className="studio-panel" aria-label="Studio settings">
     <header className="studio-panel-header">
-      <h1>Studio</h1>
+      <div className="studio-heading-row" data-tauri-drag-region><h1>Studio</h1><WindowControls onClose={onClose}/></div>
       <p className="studio-project-name" title={path}>{name}</p>
       {project.importedVideo&&<p className="look-hint">Edits save separately. Your original video is kept.</p>}
       <div className={`studio-save-status${saved ? " is-saved" : ""}`} role="status">
