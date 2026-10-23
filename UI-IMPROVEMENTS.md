@@ -34,3 +34,9 @@ These are interaction and grouping references, not copied assets or a macOS skin
 - External drag into a terminal, audible audio output and a complete multi-clip export were not repeated in this styling pass. No claim is made that those workflows received a fresh end-to-end test.
 
 The review executable and screenshots are under `%LOCALAPPDATA%\GlintValidation\UIImprovements`. Nothing is merged into `main`.
+
+## Responsive follow-up
+
+Settings sections and help text now use the available panel width, including maximized windows; selects grow within a bounded readable width. Video-project inspectors scale from 320 to 440px with the workspace, Studio from 344 to 440px, and screenshot right-hand panels from 292 to 380px. Existing compact-window layouts still apply. Done uses the shared 16px, 1.5px-stroke checkmark before its label.
+
+Production build passed after this follow-up. Actual WebView2 inspection confirmed Settings expands at restored and maximized sizes, and the editor renders the left-hand Done icon and wider Privacy review panel.

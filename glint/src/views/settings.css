@@ -97,7 +97,8 @@
  * settings panel specifically — a bit more breathing room than default.
  */
 .settings-panel .g-section {
-  max-width: 640px;
+  max-width: none;
+  min-width: 0;
 }
 
 .settings-panel .g-section + .g-section {
@@ -287,8 +288,8 @@
 }
 
 /* ── Rebindable hotkeys ─────────────────────────────────────────────────────── */
-/* Wider than the default 560px section so each instruction sentence fits on one line. */
-.settings-panel .g-section.settings-section--wide { max-width: 880px; }
+/* Settings rows follow the panel width at both restored and maximized sizes. */
+.settings-panel .g-section.settings-section--wide { max-width: none; }
 
 .settings-hotkey-help {
   margin-bottom: var(--s4);
@@ -431,7 +432,8 @@
 .settings-panel .g-section-body { gap: 24px; }
 .settings-panel .g-section-title { font-size: 18px; }
 .settings-panel .g-field > .g-btn { justify-self: start; align-self: flex-start; }
-.settings-panel .g-select-wrap { max-width: 260px; }
+.settings-panel .g-select-wrap { max-width: clamp(260px, 35vw, 420px); }
+.settings-panel .g-field:has(> .g-switch-root) > .g-field-hint { max-width: none; }
 .settings-folder-control { min-width: 0; }
 .settings-folder-path { display: block; font-size: 12px; padding: 10px 12px; line-height: 1.5; overflow-wrap: anywhere; }
 .settings-folder-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }

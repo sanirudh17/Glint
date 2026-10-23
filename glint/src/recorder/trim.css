@@ -223,7 +223,7 @@
 }
 
 .trim-preview-row { display: flex; flex: 1; min-height: 0; }
-.studio-panel { width: 344px; flex: none; overflow: auto; padding: 20px; background: var(--bg-frame); scrollbar-width: auto; }
+.studio-panel { width: clamp(344px, 28vw, 440px); flex: none; overflow: auto; padding: 20px; background: var(--bg-frame); scrollbar-width: auto; }
 .studio-panel-tabs{display:flex;gap:4px;margin:0 0 16px;padding-bottom:12px;border-bottom:1px solid var(--border)}
 .studio-panel-tabs button{flex:1;padding:10px 8px;border:0;border-radius:var(--r2);font:inherit;font-size:13px;color:var(--text-dim);background:transparent;cursor:pointer}
 .studio-panel-tabs button:hover,.studio-panel-tabs button[aria-pressed=true]{background:var(--bg-elev2);color:var(--text)}

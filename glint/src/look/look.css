@@ -26,4 +26,4 @@
 .look-image-picker:focus-within { outline: 2px solid var(--accent); outline-offset: 2px; }
 .look-hint { color: var(--text-dim); font-size: var(--fz-sm); line-height: var(--lh-base); }
 .look-error { color: var(--danger); font-size: var(--fz-sm); line-height: var(--lh-base); }
-.frame-panel .look-control, .frame-panel .look-slider-control { width: 142px; }
+.frame-panel .look-control, .frame-panel .look-slider-control { width: 54%; }

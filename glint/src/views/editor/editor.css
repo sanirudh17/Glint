@@ -396,7 +396,7 @@
 
 /* ── Frame panel (right dock) ────────────────────────────────────────────── */
 .frame-panel {
-  width: 292px;
+  width: clamp(292px, 25vw, 380px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
@@ -416,7 +416,7 @@
 .privacy-suggestions-list { display:flex; flex-direction:column; gap:var(--s3); list-style:none; padding:0; margin:0; }
 .privacy-suggestions-list > li { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); font-size:var(--fz-sm); }
 .privacy-sharing-note { font-size:var(--fz-sm); line-height:var(--lh-base); color:var(--text-dim); margin:var(--s3) 0 0; }
-.frame-panel[aria-label="Images and canvas"] .look-control { width:142px; }
+.frame-panel[aria-label="Images and canvas"] .look-control { width:54%; }
 .frame-panel[aria-label="Images and canvas"] .look-label { min-width:0; }
 .editor-layer-actions > button { display:inline-flex; align-items:center; justify-content:center; min-width:30px; }
 .editor-text-preset { width:116px; flex:none; }
