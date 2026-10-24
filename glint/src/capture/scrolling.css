@@ -8,3 +8,12 @@
 .ov-monitor-choice {position:absolute;z-index:30;top:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--bg-elev);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:var(--fz-sm);pointer-events:auto;}
 .ov-monitor-choice button {border:0;background:transparent;color:inherit;cursor:pointer;white-space:nowrap;}
 .ov-monitor-choice button:focus-visible {outline:2px solid var(--accent);outline-offset:3px;}
+
+.scroll-controller { padding: 16px; gap: 12px; border-radius: var(--r2); }
+.scroll-controller-head { gap: 10px; min-width: 0; flex-wrap: wrap; }
+.scroll-controller-head strong { font-size: 13px; }
+.scroll-controller-message { line-height: 1.6; overflow-wrap: anywhere; }
+.scroll-controller-actions { flex-wrap: wrap; gap: 8px; }
+.scroll-controller-actions > span { min-width: 0; font-variant-numeric: tabular-nums; }
+
+.scroll-controller-message { min-height: 0; overflow-y: auto; }

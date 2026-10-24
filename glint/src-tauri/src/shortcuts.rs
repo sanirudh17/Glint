@@ -38,6 +38,7 @@ fn apply(app: &AppHandle, strict: bool) -> Result<(), String> {
             (h.record.clone(), "record"),
             (h.copy_path.clone(), "copy_path"),
             (h.open_latest.clone(),"open_latest"),
+            (h.capture_scroll.clone(),"capture_scroll"),
             (h.capture_area_delayed.clone(), "capture_area_delayed"),
             (h.capture_window_delayed.clone(), "capture_window_delayed"),
             (h.capture_fullscreen_delayed.clone(), "capture_fullscreen_delayed"),
@@ -89,6 +90,9 @@ fn apply(app: &AppHandle, strict: bool) -> Result<(), String> {
                                 handle,
                                 crate::capture::CaptureMode::Fullscreen,
                             );
+                        }
+                        "capture_scroll" => {
+                            if let Err(error) = crate::capture::scrolling::capture_scroll_begin(handle.clone()) { crate::capture::toast(handle, &error); }
                         }
                         "open_latest"=>{
                             let app=handle.clone();

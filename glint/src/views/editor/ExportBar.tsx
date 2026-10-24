@@ -1,6 +1,6 @@
 import { type RefObject } from "react";
 import type Konva from "konva";
-import { Copy, Download, Share2, Check } from "lucide-react";
+import { Copy, Download, Share2, CheckCheck } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { useAppStore } from "../../store/useAppStore";
 import { computeLayout, exportPixelRatio } from "../../editor/composition";
@@ -100,7 +100,7 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
         <Download size={16} strokeWidth={1.5} /> Export
       </button>
       <button className="editor-export-btn editor-export-btn--primary editor-done-btn" disabled={rendering} onClick={onDone} title="Finish — send to the corner HUD">
-        <Check size={16} strokeWidth={1.5} aria-hidden="true" /><span>Done</span>
+        <CheckCheck size={16} strokeWidth={1.5} aria-hidden="true" /><span>Done</span>
       </button>
     </div>
   );

@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Layout, Crop } from "../../editor/composition";
 import { normalizeRect } from "../../editor/composition";
 
 interface Props {
+  controlsHost: HTMLDivElement | null;
   layout: Layout;
   scale: number;
   imageW: number;
@@ -39,7 +41,7 @@ const ASPECTS: { id: string; label: string; ratio: number | null }[] = [
  * stage box). The dim surround is a huge box-shadow on the rect. Enter confirms,
  * Esc cancels. All geometry is clamped to the image bounds.
  */
-export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel }: Props) {
+export function CropOverlay({ controlsHost, layout, scale, imageW, imageH, onConfirm, onCancel }: Props) {
   // Rect in image space; start at the current content bounds.
   const [rect, setRect] = useState<Crop>({
     x: layout.cropX,
@@ -173,7 +175,7 @@ export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel
       </div>
       {/* CleanShot-style crop bar: aspect chips + pill Cancel/Done. Same
           callbacks as Enter/Esc — no new behavior, just pointer affordances. */}
-      <div className="crop-bar" onPointerDown={(e) => e.stopPropagation()}>
+      {controlsHost && createPortal(<><div className="crop-bar" onPointerDown={(e) => e.stopPropagation()}>
         <div className="crop-aspects" role="group" aria-label="Aspect ratio">
           {ASPECTS.map((a) => (
             <button
@@ -198,7 +200,7 @@ export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel
           Done
         </button>
       </div>
-      <div className="crop-hint">Drag to crop · Enter to apply · Esc to cancel</div>
+      <div className="crop-hint">Drag to crop · Enter to apply · Esc to cancel</div></>, controlsHost)}
     </div>
   );
 }

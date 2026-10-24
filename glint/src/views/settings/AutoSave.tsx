@@ -33,7 +33,7 @@ export function AutoSave() {
         />
       </Field>
       <OcrEngineControls/>
-      <Field label="Search screenshot text" hint="Read saved screenshots locally when Library opens. Turning this off clears the text index.">
+      <Field label="Search screenshot text" hint="Find readable words in saved screenshots. Small, blurred or unusual text may be missed. Recognition stays on this device; turning this off clears the text index.">
         <Switch ariaLabel="Search screenshot text" checked={settings?.index_screenshot_text??true} onChange={v=>void setIndexScreenshotText(v)}/>
       </Field>
 

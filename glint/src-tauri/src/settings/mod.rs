@@ -23,6 +23,8 @@ pub struct Hotkeys {
     pub capture_fullscreen_delayed: String,
     #[serde(default)]
     pub open_latest: String,
+    #[serde(default)]
+    pub capture_scroll: String,
 }
 
 impl Default for Hotkeys {
@@ -37,6 +39,7 @@ impl Default for Hotkeys {
             capture_window_delayed: String::new(),
             capture_fullscreen_delayed: String::new(),
             open_latest: String::new(),
+            capture_scroll: String::new(),
         }
     }
 }

@@ -52,6 +52,7 @@ fn action_label(action: &str) -> String {
         "record" => "Record",
         "copy_path" => "Copy path",
         "open_latest"=>"Open latest capture",
+        "capture_scroll"=>"Scrolling capture",
         "capture_area_delayed" => "Delayed capture area",
         "capture_window_delayed" => "Delayed capture window",
         "capture_fullscreen_delayed" => "Delayed capture fullscreen",

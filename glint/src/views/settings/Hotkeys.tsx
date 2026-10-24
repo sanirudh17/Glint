@@ -12,6 +12,7 @@ const HOTKEY_LABELS: Record<string, string> = {
   record: "Record",
   copy_path: "Copy path",
   open_latest:"Open latest capture",
+  capture_scroll:"Scrolling capture",
   capture_area_delayed: "Delayed capture area",
   capture_window_delayed: "Delayed capture window",
   capture_fullscreen_delayed: "Delayed capture fullscreen",
@@ -20,7 +21,7 @@ const HOTKEY_LABELS: Record<string, string> = {
 const HOTKEY_ORDER = [
   "capture_area", "capture_window", "capture_fullscreen", "record", "copy_path",
   "capture_area_delayed", "capture_window_delayed", "capture_fullscreen_delayed",
-  "open_latest",
+  "open_latest", "capture_scroll",
 ];
 
 /** Defaults (must match Hotkeys::default() in Rust) — drives the per-row Reset affordance. */
@@ -31,6 +32,7 @@ const DEFAULTS: Record<string, string> = {
   record: "CmdOrCtrl+Shift+5",
   copy_path: "CmdOrCtrl+Shift+C",
   open_latest:"",
+  capture_scroll:"",
   capture_area_delayed: "",
   capture_window_delayed: "",
   capture_fullscreen_delayed: "",

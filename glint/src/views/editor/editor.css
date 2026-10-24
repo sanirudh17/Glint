@@ -625,3 +625,14 @@
   border-radius: 6px; padding: 2px 8px; text-align: center;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
 }
+
+/* Crop controls occupy their own row, never the image, even at fit-to-window. */
+.editor-canvas { flex-direction: column; min-width: 0; }
+.editor-crop-dock { position: relative; z-index: 22; flex: none; min-height: 68px; padding: 8px 12px; box-sizing: border-box; background: var(--bg-frame); border-bottom: 1px solid var(--border); }
+.editor-crop-dock .crop-bar { position: static; transform: none; flex-wrap: wrap; justify-content: center; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.editor-crop-dock .crop-hint { position: static; transform: none; margin-top: 6px; padding: 0; text-align: center; white-space: normal; background: transparent; color: var(--text-dim); }
+.editor-crop-dock .crop-chip, .editor-crop-dock .crop-pill { color: var(--text-dim); border-radius: var(--r-btn); }
+.editor-crop-dock .crop-chip:hover, .editor-crop-dock .crop-pill:hover { background: var(--bg-elev2); color: var(--text); }
+.editor-crop-dock .crop-chip--active { color: var(--accent); background: var(--accent-subtle); }
+.editor-crop-dock .crop-pill { border-color: var(--border-strong); }
+.editor-crop-dock .crop-pill--primary { color: var(--accent-fg); background: var(--accent); border-color: transparent; }

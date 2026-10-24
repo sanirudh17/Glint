@@ -660,4 +660,29 @@ mod tests {
         )
         .unwrap();
     }
+
+    #[test]
+    #[ignore = "requires owned LibrarySearch fixtures and local PP-OCRv6 Small models"]
+    fn native_library_search_retrieval() {
+        let fixtures=PathBuf::from(std::env::var("GLINT_OCR_FIXTURES").unwrap());
+        TEST_MODEL_ROOT.get_or_init(||PathBuf::from(std::env::var("GLINT_OCR_MODELS").unwrap()));
+        MEDIUM_SELECTED.store(false,Ordering::Relaxed);ENABLED.store(true,Ordering::Relaxed);
+        let cases:serde_json::Value=serde_json::from_slice(&std::fs::read(fixtures.join("search-fixtures.json")).unwrap()).unwrap();
+        let conn=rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE captures(id INTEGER PRIMARY KEY,created_at INTEGER,deleted_at INTEGER,title TEXT,title_origin TEXT);").unwrap();
+        crate::db::text_index::ensure(&conn).unwrap();
+        let cancel=AtomicBool::new(false);let mut reports=vec![];
+        for (index,case) in cases.as_array().unwrap().iter().enumerate() {
+            let id=index as i64+1;let file=case["file"].as_str().unwrap();
+            conn.execute("INSERT INTO captures(id,created_at) VALUES(?1,?1)",[id]).unwrap();
+            let image=image::open(fixtures.join(file)).unwrap().to_rgba8();let start=std::time::Instant::now();
+            let result=recognize(&image,image.width(),image.height(),&cancel);
+            let error=result.as_ref().err().cloned();let text=result.map(|words|super::super::words::text(&words)).unwrap_or_default();
+            crate::db::text_index::put(&conn,id,&text,"owned",false).unwrap();
+            let queries:Vec<_>=case["queries"].as_array().unwrap().iter().map(|q|{let query=q.as_str().unwrap();serde_json::json!({"query":query,"found":crate::db::text_index::search(&conn,query).unwrap().contains(&id)})}).collect();
+            assert!(!crate::db::text_index::search(&conn,"unfindablezebrafortyseven").unwrap().contains(&id));
+            reports.push(serde_json::json!({"file":file,"error":error,"ms":start.elapsed().as_millis(),"text":text,"queries":queries}));
+        }
+        std::fs::write(fixtures.join("native-search-result.json"),serde_json::to_vec_pretty(&reports).unwrap()).unwrap();
+    }
 }

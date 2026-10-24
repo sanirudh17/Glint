@@ -40,3 +40,17 @@ The review executable and screenshots are under `%LOCALAPPDATA%\GlintValidation\
 Settings sections and help text now use the available panel width, including maximized windows; selects grow within a bounded readable width. Video-project inspectors scale from 320 to 440px with the workspace, Studio from 344 to 440px, and screenshot right-hand panels from 292 to 380px. Existing compact-window layouts still apply. Done uses the shared 16px, 1.5px-stroke checkmark before its label.
 
 Production build passed after this follow-up. Actual WebView2 inspection confirmed Settings expands at restored and maximized sizes, and the editor renders the left-hand Done icon and wider Privacy review panel.
+
+## Capture surfaces and crop controls (24 October)
+
+- Crop ratios, apply/cancel and keyboard guidance occupy a separate dock above the image. The canvas viewport accounts for that row, so full-window images still leave the controls outside the crop area.
+- The Done action uses a lighter double-check completion glyph, aligned before the label.
+- OCR review, scrolling controls, recording selection and the recording pill share compact control proportions, clearer grouping, wrapping and focus states. Protected recording controls retain capture exclusion.
+- Scrolling capture is configurable under Hotkeys, with the same persistence, conflict checks, clearing and restoration as other capture actions. A configured global shortcut opened region selection and the scrolling controller in the isolated native review app.
+- Speaker Notes has borderless integrated window controls instead of native chrome plus a duplicate Close button.
+
+Screenshot-text search remains optional. Native PP-OCRv6 Small plus the actual SQLite FTS search found all 48 expected queries across 16 owned cases with zero recognition errors. Six 1920x1080 screens cover document, terminal and dashboard layouts in both themes; eight small-font cases and two blank/transparent cases cover further limits. Median processing time was about 0.94 seconds per image on this machine (background indexing); results are in `validation/library-search-2026-10-24.json`. These are controlled fixtures, not a claim that arbitrary photos, tiny lettering or identifiers are recognized perfectly. The Settings description now states that limitation.
+
+Actual WebView2 checks covered the unobstructed crop dock, OCR popup, recording selector, scrolling-shortcut launch, and drawing/saving an editable video arrow. The recording pill and scrolling controller can be excluded from screen capture; accessibility/state inspection remains available. A separate headless preview command was rejected by automatic approval review, so it was not used as visual evidence. The user's active recording was left untouched.
+
+Final follow-up checks: 269 frontend tests and 272 native tests passed (7 native tests require explicit integration fixtures). The production frontend build passed. Video annotations, Studio recording behavior and startup changes are documented separately in VIDEO-ANNOTATIONS.md.

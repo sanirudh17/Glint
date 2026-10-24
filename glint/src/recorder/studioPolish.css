@@ -28,3 +28,8 @@
 .speaker-notes h1{font-size:20px;margin:0;font-weight:600}
 .speaker-notes p{color:var(--text-dim);font-size:13px;line-height:1.5;margin:0}
 .speaker-notes textarea{flex:1;min-height:0;resize:none;width:100%;background:var(--bg-elev);color:var(--text);font:inherit;font-size:20px;line-height:1.8;padding:20px;border:1px solid var(--border);border-radius:var(--r2);caret-color:var(--accent);scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+
+.speaker-notes { padding: 20px; }
+.speaker-notes header { align-items: flex-start; gap: 12px; }
+.speaker-notes header h1 { font-size: 18px; font-weight: 600; line-height: 28px; margin: 0; pointer-events: none; }
+.speaker-notes header .g-winctl { margin: -8px -12px 0 0; }

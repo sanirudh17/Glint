@@ -107,6 +107,7 @@ export const EditorStage = forwardRef<Konva.Stage,{suggestions?:PrivacySuggestio
   const setPicking = useEditorStore((s) => s.setPicking);
   const setStyle = useEditorStore((s) => s.setStyle);
 
+  const [cropControlsHost, setCropControlsHost] = useState<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -678,6 +679,7 @@ export const EditorStage = forwardRef<Konva.Stage,{suggestions?:PrivacySuggestio
 
   return (
     <div className="editor-canvas" aria-busy={rendering}>
+      {tool === "crop" && <div className="editor-crop-dock" ref={setCropControlsHost} aria-label="Crop controls"/>}
       {rendering&&<span className="editor-render-status" role="status">Rendering background…</span>}
       {gradient.error&&<span className="editor-render-status" role="alert">{gradient.error}</span>}
       {/* The scroller: fits the stage to its content box, or pans it when zoomed in
@@ -837,6 +839,7 @@ export const EditorStage = forwardRef<Konva.Stage,{suggestions?:PrivacySuggestio
 
         {tool === "crop" && (
           <CropOverlay
+            controlsHost={cropControlsHost}
             layout={layout}
             scale={scale}
             imageW={sourceW}
