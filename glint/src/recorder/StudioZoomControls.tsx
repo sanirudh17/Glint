@@ -20,7 +20,7 @@ export function StudioZoomControls({segments,selected,time,duration,onChange,onS
   const hasClicks=events.events.some(e=>e.kind==='click'),hasCursor=events.events.some(e=>e.kind==='cursor');
   const change=(patch:Partial<ZoomSegment>)=>onChange(segments.map(s=>s.id===selected?{...s,...patch,edited:true}:s));
   const changeFocus=(point:FocusPoint)=>onChange(segments.map(s=>s.id===selected?setZoomFocus(s,point,cursor,width,height):s));
-  return <ControlDisclosure title="Zoom" className="studio-effects-controls">
+  return <ControlDisclosure title="Zoom" openByDefault={segments.length>0} className="studio-effects-controls">
     <div className="studio-effect-actions">
       <Button size="sm" variant="subtle" icon={Plus} disabled={duration<.1||segments.length>=512} onClick={()=>{const segment=newZoom(time,duration);onChange([...segments,segment]);onSelect(segment.id);}}>Add zoom</Button>
       <Button size="sm" variant="ghost" icon={WandSparkles} disabled={!hasClicks} title={hasClicks?undefined:'Requires clicks captured during a Studio recording'} onClick={()=>onChange(regenerateZooms(segments,events,duration))}>{segments.some(s=>s.origin==='auto')?'Regenerate':'Auto zoom'}</Button>

@@ -31,7 +31,7 @@ export function VideoAnnotationEditor({items,onChange,time,duration,onPause,disa
   useEffect(()=>{if(disabled){setTool(null);setDraft(null);drag.current=null;}},[disabled]);
   useEffect(()=>{const c=canvas.current;if(!c)return;const ctx=c.getContext('2d')!;ctx.clearRect(0,0,c.width,c.height);if(draft)paintAnnotation(ctx,draft,c.width,c.height);},[items,time,draft]);
   const point=(e:PointerEvent)=>{const r=e.currentTarget.getBoundingClientRect();return {x:Math.max(0,Math.min(1,(e.clientX-r.left)/r.width)),y:Math.max(0,Math.min(1,(e.clientY-r.top)/r.height))};};
-  return <ControlDisclosure title="Annotations">
+  return <ControlDisclosure title="Annotations" className="studio-annotations" openByDefault={items.length>0}>
     <div className="video-annotation-tools" role="group" aria-label="Video annotation tools">
       <Button size="sm" aria-pressed={tool===null} icon={MousePointer2} onClick={()=>{setTool(null);setSelected(null);}}>Select</Button>
       {ANNOTATION_TOOLS.map(kind=>{const Icon=icons[kind];return <button type="button" key={kind} disabled={disabled||items.length>=64} aria-label={`Draw ${kind}`} title={kind} aria-pressed={tool===kind} onClick={()=>{onPause();setTool(tool===kind?null:kind);}}><Icon size={16} strokeWidth={1.5}/></button>;})}

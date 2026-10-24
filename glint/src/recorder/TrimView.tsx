@@ -63,7 +63,7 @@ export function TrimView() {
   const saveQueueRef = useRef(Promise.resolve());
   const loadGeneration = useRef(0);
   const flushSave = useCallback(() => {
-    const pending = autosaveRef.current; if (!pending) return Promise.resolve();
+    const pending = autosaveRef.current; if (!pending) return saveQueueRef.current;
     autosaveRef.current = null;
     setSaveStatus("Saving…");
     saveQueueRef.current = saveQueueRef.current.catch(() => {}).then(() => studioSave(pending.path, pending.project))
@@ -201,7 +201,7 @@ export function TrimView() {
         const data = await studioLoad(t.path) ?? await studioImport(t.path);
         if (generation !== loadGeneration.current) return;
         const project = data ? hydrateProject(data.project, p.duration_secs, data.events, p) : null;
-        if (data && project) setStudio({ ...data, project });
+        if (data && project) {setStudio({ ...data, project });setSelectedZoom(project.zoomSegments[0]?.id??null);}
         setProbe(p);
         const clips0 = project?.clips ?? initClips(p.duration_secs);
         setEdit({ clips: clips0, fadeIn: project?.fadeIn ?? 0, fadeOut: project?.fadeOut ?? 0 });
@@ -586,12 +586,12 @@ export function TrimView() {
         )}
       </div>
 
-      {studio && probe && target && <StudioPanel onClose={requestClose} project={{...studio.project,...edit}} path={target.path} width={probe.width} height={probe.height}
+      {studio && probe && target && <StudioPanel key={target.path} onClose={requestClose} project={{...studio.project,...edit}} path={target.path} width={probe.width} height={probe.height}
         time={playhead} duration={duration} events={studio.events} selectedZoom={selectedZoom} onSelectZoom={setSelectedZoom} focusAim={focusAim} pickingFocus={pickingFocus} onPickZoom={()=>{videoRef.current?.pause();setPlaying(false);setSelectedMask(null);setDrawingMask(false);setFocusAim(null);setPickingFocus(value=>!value);}}
         selectedMask={selectedMask} onSelectMask={setSelectedMask} drawingMask={drawingMask} onDrawMask={()=>{videoRef.current?.pause();setPickingFocus(false);setSelectedMask(null);setDrawingMask(value=>!value);}} onSeek={time=>{scrub(time,'start');scrub(time,'end');}}
         saveStatus={saveStatus} exportMessage={exportMessage} exporting={exporting !== null} cam={cam} onCamChange={setCam}
         onChange={(patch,action) => {if(patch.clips)commit({...edit,clips:patch.clips},action);if(patch.zoomSegments){setPickingFocus(false);setFocusAim(null);}setStudio((data) => data && ({ ...data, project: { ...data.project, ...patch } }));}}
-        onSave={() => void flushSave()} />}
+        onSave={async () => {autosaveRef.current={path:target.path,project:{...studio.project,...edit,cam}};await flushSave();return autosaveRef.current===null;}} />}
 
       </div>
       <div className="trim-transport">

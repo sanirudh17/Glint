@@ -861,7 +861,7 @@ impl Renderer {
         let c = &config;
         if c.spotlight {if let Some(p)=studio_cursor::point_at(&self.path,t) {let(x,y)=m.point(p.x,p.y,&self.effects);let radius=(48.*l.scale*zoom).max(1.);for py in (y-radius).floor() as i32..=(y+radius).ceil() as i32 {for px in (x-radius).floor() as i32..=(x+radius).ceil() as i32 {if self.allowed(px,py)&&((px as f64-x).powi(2)+(py as f64-y).powi(2))<=radius*radius {blend(out,px,py,[255,235,160],0.22);}}}}}
         let mut samples = Vec::new();
-        if let Some(p) = studio_cursor::point_at(&self.path, t)
+        if let Some(p) = studio_cursor::point_for_frame(&self.path, t,&self.effects)
             .filter(|p| c.visible && (!c.hide_idle || t - p.moved_at < c.idle_seconds))
         {
             let old = studio_cursor::point_at(&self.path, (t - 1. / 60.).max(0.));
@@ -1248,6 +1248,10 @@ fn encode(
     let progress_idx = args.iter().position(|s| s == "-progress").unwrap();
     args.drain(progress_idx..progress_idx + 2);
     let graph_idx = args.iter().position(|s| s == "-filter_complex").unwrap() + 1;
+    // Desktop capture is variable-rate; its audio can end a few milliseconds
+    // after the final video frame. Pad each source span BEFORE trim/reorder so
+    // every requested span has its exact duration, including a moved tail clip.
+    args[graph_idx]=args[graph_idx].replace("[0:v]trim=","[0:v]tpad=stop_mode=clone:stop_duration=1,trim=");
     let source_mode = camera_only || !spec.project.zoom_segments.is_empty()
         || !spec.project.masks.is_empty()
         || spec
@@ -1282,6 +1286,8 @@ fn encode(
         "-threads".into(),
         "2".into(),
         "-an".into(),
+        "-frames:v".into(),
+        (total*fps).ceil().max(1.).to_string(),
         "-f".into(),
         "rawvideo".into(),
         "-pix_fmt".into(),
@@ -1379,9 +1385,14 @@ fn encode(
         } else {
             renderer.frame(&input, time, &mut frame);
         }
-        output
-            .write_all(frame.as_raw())
-            .map_err(|e| format!("Encoder stopped: {e}"))?;
+        if let Err(error)=output.write_all(frame.as_raw()) {
+            drop(output);
+            let _=decode.lock().unwrap().kill();
+            let _=wait(&decode);let _=wait(&encode);
+            let detail=encode_errors.join().unwrap_or_default();
+            let _=decode_errors.join();
+            return Err(format!("Video export failed: {}",if detail.trim().is_empty(){error.to_string()}else{detail.trim().to_string()}));
+        }
         n += 1;
         if n % 15 == 0 {
             progress((n as f64 / fps / total * 100.).min(99.));
@@ -1396,7 +1407,8 @@ fn encode(
         return Err("Export cancelled".into());
     }
     if !decode_ok || !encode_ok || n == 0 || n as f64 / fps < total - 2. / fps {
-        return Err(format!("Export failed: {de} {ee}"));
+        let detail=format!("{de} {ee}");
+        return Err(if detail.trim().is_empty(){"The video ended before the selected timeline was complete. Shorten the final clip and try again.".into()}else{format!("Video export failed: {}",detail.trim())});
     }
     progress(100.);
     Ok(())
@@ -1842,4 +1854,35 @@ mod tests {
             let result=Command::new(&binary).args(["-v","error","-ss",t,"-i"]).arg(&output).args(["-frames:v","1","-f","image2pipe","-vcodec","png","-"]).creation_flags(0x08000000).output().unwrap();assert!(result.status.success());let frame=image::load_from_memory(&result.stdout).unwrap().to_rgb8();let p=frame.get_pixel(frame.width()/2,frame.height()/2);assert_eq!(p[0]>200&&p[2]<80,red,"frame at {t}: {:?}",p.0);
         }
     }
+    #[test]
+    #[ignore = "requires bundled FFmpeg; validates real audio and polish export"]
+    fn recording_audio_and_polish_roundtrip() {
+        use std::os::windows::process::CommandExt;
+        let binary=std::path::PathBuf::from(std::env::var("GLINT_TEST_FFMPEG").unwrap());
+        let root=std::path::PathBuf::from(std::env::var("GLINT_VIDEO_FIXTURES").unwrap());std::fs::create_dir_all(&root).unwrap();
+        let source=root.join("polish-audio-source.mp4");
+        let status=Command::new(&binary).args(["-y","-v","error","-f","lavfi","-i","testsrc2=s=320x200:r=15:d=1.8","-f","lavfi","-i","sine=frequency=440:duration=2.037","-c:v","libx264","-pix_fmt","yuv420p","-c:a","aac"]).arg(&source).creation_flags(0x08000000).output().unwrap();assert!(status.status.success());
+        let (mut project,mut events)=background_fixture();
+        project.clips[0].end=2.037;
+        project.audio_cleanup=super::super::polish::AudioCleanup{denoise:true,level:true,click_sounds:true};
+        events.events.push(serde_json::from_value(serde_json::json!({"t":0.7,"kind":"click","x":100.,"y":100.,"button":"left"})).unwrap());
+        let output=root.join("polish-audio-export.mp4");
+        let spec=ExportSpec{binary:&binary,source:source.to_str().unwrap(),output:&output,project:&project,events:&events,width:320,height:200,fps:15.,duration:2.037,audio:true,cam:None,cam_overlay:None};
+        encode(&spec,Arc::new(AtomicBool::new(false)),&|_|{},VideoEncoder::Libx264).unwrap();
+        let probe=Command::new(binary.with_file_name("ffprobe.exe")).args(["-v","error","-select_streams","v:0","-show_entries","stream=nb_frames","-of","json"]).arg(&output).creation_flags(0x08000000).output().unwrap();assert!(probe.status.success());let probe:serde_json::Value=serde_json::from_slice(&probe.stdout).unwrap();assert_eq!(probe["streams"][0]["nb_frames"],"31");
+        let audio=Command::new(&binary).args(["-v","error","-i"]).arg(&output).args(["-map","0:a","-f","f32le","-ar","16000","-ac","1","-"]).creation_flags(0x08000000).output().unwrap();assert!(audio.status.success());assert!(audio.stdout.len()>16000);assert!(audio.stdout.chunks_exact(4).any(|b|f32::from_le_bytes(b.try_into().unwrap()).abs()>0.001));
+        if let Ok(folder)=std::env::var("GLINT_REPRO_STUDIO") {
+            let folder=std::path::PathBuf::from(folder);let source=folder.join("video.mp4");
+            let mut project:Project=serde_json::from_slice(&std::fs::read(folder.join("project.json")).unwrap()).unwrap();
+            project.clips=serde_json::from_value(serde_json::json!([{"id":1,"start":0.,"end":38.229,"kept":true,"speed":1.,"order":0}])).unwrap();
+            let events:Events=serde_json::from_slice(&std::fs::read(folder.join("events.json")).unwrap()).unwrap();
+            let output=root.join("reported-recording-export.mp4");
+            let spec=ExportSpec{binary:&binary,source:source.to_str().unwrap(),output:&output,project:&project,events:&events,width:1920,height:1080,fps:60.,duration:38.229,audio:true,cam:None,cam_overlay:None};
+            let chosen=detect_encoder(&binary,&AtomicBool::new(false));
+            match encode(&spec,Arc::new(AtomicBool::new(false)),&|_|{},chosen) {
+                Ok(())=>{},Err(error)=>{eprintln!("Reported recording on {chosen:?}: {error}");if chosen==VideoEncoder::Libx264{panic!("{error}");}encode(&spec,Arc::new(AtomicBool::new(false)),&|_|{},VideoEncoder::Libx264).unwrap();}
+            }
+        }
+    }
+
 }

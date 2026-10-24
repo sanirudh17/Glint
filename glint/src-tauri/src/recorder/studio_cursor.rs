@@ -48,6 +48,13 @@ pub fn point_at(path:&[Point],t:f64)->Option<Point> {
     let f=if b.t>a.t {((t-a.t)/(b.t-a.t)).clamp(0.0,1.0)}else{0.0};
     Some(Point{t,x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f,moved_at:a.moved_at})
 }
+pub fn point_for_frame(path:&[Point],t:f64,events:&Events)->Option<Point> {
+    let point=point_at(path,t);
+    let marker=events.events.iter().rev().find(|e|e.data["kind"]=="marker"&&e.t<=t&&t-e.t<1.1);
+    let Some(marker)=marker else{return point;};let g=&events.geometry;
+    let inside=point.is_some_and(|p|p.x>=g.x as f64&&p.x<(g.x as f64+g.width as f64)&&p.y>=g.y as f64&&p.y<(g.y as f64+g.height as f64));
+    Some(Point{t,x:if inside{point.unwrap().x}else{marker.data["x"].as_f64().unwrap_or(g.x as f64+g.width as f64/2.).clamp(g.x as f64,(g.x+g.width as i32-1) as f64)},y:if inside{point.unwrap().y}else{marker.data["y"].as_f64().unwrap_or(g.y as f64+g.height as f64/2.).clamp(g.y as f64,(g.y+g.height as i32-1) as f64)},moved_at:point.map(|p|p.moved_at).unwrap_or(0.).max(marker.t)})
+}
 #[derive(Clone,Copy)]
 pub struct Mapping {pub source_w:f64,pub source_h:f64,pub crop_x:f64,pub crop_y:f64,pub x:f64,pub y:f64,pub w:f64,pub h:f64,pub scale:f64}
 impl Mapping {
@@ -63,6 +70,12 @@ impl Mapping {
     #[test] fn interpolation_and_idle_are_independent() {
         let path=vec![Point{t:0.,x:0.,y:0.,moved_at:0.},Point{t:1.,x:100.,y:50.,moved_at:0.}];
         let p=point_at(&path,0.5).unwrap();assert_eq!(p.x,50.);assert_eq!(p.y,25.);assert_eq!(p.moved_at,0.);
+    }
+    #[test] fn zoom_activity_restores_an_idle_pointer_inside_the_recorded_region(){
+        let events:Events=serde_json::from_value(serde_json::json!({"version":1,"geometry":{"x":100,"y":100,"width":400,"height":300,"monitorX":0,"monitorY":0,"monitorWidth":1920,"monitorHeight":1080,"dpiScale":1.25},"events":[{"t":5.,"kind":"marker","x":220.,"y":250.}]})).unwrap();
+        let path=vec![Point{t:0.,x:900.,y:900.,moved_at:0.}];
+        let p=point_for_frame(&path,5.1,&events).unwrap();assert_eq!((p.x,p.y,p.moved_at),(220.,250.,5.));
+        assert_eq!(point_for_frame(&path,6.2,&events).unwrap().moved_at,0.);
     }
     #[test] fn dpi_crop_and_negative_origin_align() {
         let events:Events=serde_json::from_value(serde_json::json!({"version":1,"geometry":{"x":-1500,"y":200,"width":1200,"height":800,"monitorX":-1920,"monitorY":0,"monitorWidth":1920,"monitorHeight":1080,"dpiScale":2.0},"events":[]})).unwrap();
