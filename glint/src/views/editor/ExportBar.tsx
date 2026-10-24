@@ -1,10 +1,10 @@
 import { type RefObject } from "react";
 import type Konva from "konva";
-import { Copy, Download, Share2, CheckCheck } from "lucide-react";
+import { Download, Share2, CheckCheck } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { useAppStore } from "../../store/useAppStore";
 import { computeLayout, exportPixelRatio } from "../../editor/composition";
-import { editorCopy, editorSave, editorFlattenTemp, editorDone, dragOut } from "../../lib/editor";
+import { editorSave, editorFlattenTemp, editorDone, dragOut } from "../../lib/editor";
 import {withoutEditorChrome} from '../../editor/privacy';
 
 /**
@@ -57,10 +57,6 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
     try { await fn(png); } catch { pushToast("Something went wrong"); }
   };
 
-  const onCopy = withPng(async (png) => {
-    await editorCopy(png);
-    pushToast("Copied to clipboard");
-  });
   const onSave = withPng(async (png) => {
     const dest = await editorSave(png);
     pushToast(`Exported · ${dest.split(/[\\/]/).pop()}`);
@@ -92,9 +88,6 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
         title="Press and drag onto any app"
       >
         <Share2 size={16} strokeWidth={1.5} /> Drag
-      </button>
-      <button className="editor-export-btn" disabled={rendering} onClick={onCopy} title="Copy to clipboard">
-        <Copy size={16} strokeWidth={1.5} /> Copy
       </button>
       <button className="editor-export-btn" disabled={rendering} onClick={onSave} title="Export a PNG to the Library">
         <Download size={16} strokeWidth={1.5} /> Export

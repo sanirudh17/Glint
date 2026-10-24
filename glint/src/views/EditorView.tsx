@@ -36,7 +36,7 @@ export default function EditorView() {
 
   const setTool = useEditorStore((s) => s.setTool);
   const activeTool=useEditorStore(s=>s.tool);
-  useEffect(()=>{if(activeTool==='redact'){setPrivacyOpen(true);setImagesOpen(false);setCornersOpen(false);}},[activeTool]);
+  useEffect(()=>{setPrivacyOpen(false);setSuggestions([]);},[activeTool,base]);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
   const remove = useEditorStore((s) => s.remove);
@@ -232,7 +232,6 @@ export default function EditorView() {
     <div className="editor-view">
       <div className="editor-topbar" data-tauri-drag-region>
         <ProjectBar />
-        <StyleBar onPrivacy={()=>{setPrivacyOpen(v=>!v);setImagesOpen(false);setCornersOpen(false);}}/>
         <div className="editor-frame-slot">
           <button className={`editor-export-btn${imagesOpen?' editor-export-btn--primary':''}`} aria-pressed={imagesOpen} onClick={()=>{setPrivacyOpen(false);setCornersOpen(false);setImagesOpen(!imagesOpen);}} disabled={!base}>Images</button>
           <button
@@ -261,6 +260,7 @@ export default function EditorView() {
         <ExportBar stageRef={stageRef} />
         <WindowControls />
       </div>
+      {activeTool!=='crop'&&(activeTool!=='select'||selectedId)&&<div className="editor-options-row"><StyleBar onPrivacy={()=>{setPrivacyOpen(v=>!v);setImagesOpen(false);setCornersOpen(false);}}/></div>}
       <div className="editor-main">
         <ToolRail />
         {base ? (

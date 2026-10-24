@@ -1,4 +1,4 @@
-import { ArrowLeftRight, Pipette,ChevronUp,ChevronDown } from "lucide-react";
+import { ArrowLeftRight, Pipette,RectangleHorizontal,Circle,ChevronUp,ChevronDown } from "lucide-react";
 import {Select,NumberInput} from '../../components/ui';
 import {textPreset,snapArrowBend} from '../../editor/annotationStyles';
 import type {Style} from '../../editor/model';
@@ -67,6 +67,8 @@ export function StyleBar({onPrivacy}:{onPrivacy?:()=>void}={}) {
   const isStroke = isShape || effType === "line" || effType === "arrow";
   const isArrow = effType === "arrow";
   const isText = effType === "text";
+  const isBlur = effType === 'blur';
+  const isStep = effType === 'step';
   const isRedact = effType === "redact";
   const isSpotlight = effType === "spotlight";
 
@@ -105,6 +107,7 @@ export function StyleBar({onPrivacy}:{onPrivacy?:()=>void}={}) {
     );
   }
 
+  if (isBlur) return <div className="editor-stylebar" role="toolbar" aria-label="Blur controls"><label className="editor-effect-strength"><span>Blur</span><input type="range" min={2} max={32} value={eff.blurRadius??12} aria-label="Blur strength" onPointerDown={()=>{if(selectedAnno)useEditorStore.getState().pushHistory();}} onChange={e=>{const blurRadius=Number(e.target.value);setStyle({blurRadius});patchSelected({blurRadius},false);}}/><output>{eff.blurRadius??12} px</output></label></div>;
   return (
     <div className="editor-stylebar" role="toolbar" aria-label="Style">
       {isRedact&&onPrivacy&&<button className="editor-toggle" onClick={onPrivacy}>Find sensitive text</button>}
@@ -152,7 +155,7 @@ export function StyleBar({onPrivacy}:{onPrivacy?:()=>void}={}) {
         )}
       </div>
       )}
-      {!isSpotlight && (
+      {!isSpotlight && !isStep && (
       <div className="editor-widths">
         {WIDTHS.map((w) => (
           <button
@@ -237,6 +240,7 @@ export function StyleBar({onPrivacy}:{onPrivacy?:()=>void}={}) {
           }}
           onChange={e=>{const curve=snapArrowBend(Number(e.target.value));setStyle({curve});patchSelected({curve},false);}}/>
       </span></label>}
+      {isStep&&<div className="editor-step-size"><NumberInput ariaLabel="Step badge size" value={eff.stepSize??28} min={20} max={48} unit="px" onChange={stepSize=>{setStyle({stepSize});patchSelected({stepSize});}}/></div>}
       {isText && (
         <><div className="editor-text-preset"><Select portal ariaLabel="Text style" value={eff.textPreset??'plain'} options={['plain','heading','label','code'].map(value=>({value,label:value[0].toUpperCase()+value.slice(1)}))} onChange={preset=>{const patch=textPreset(preset as NonNullable<Style['textPreset']>);setStyle(patch);patchSelected(patch);}}/></div><div className="editor-text-size"><NumberInput min={8} max={120} ariaLabel="Font size" value={eff.fontSize} onChange={value=>{if(value!==eff.fontSize){if(selectedAnno)useEditorStore.getState().pushHistory();applyFontSize(value);}}}/></div></>
       )}
@@ -268,14 +272,14 @@ export function StyleBar({onPrivacy}:{onPrivacy?:()=>void}={}) {
               title="Rectangle" aria-label="Rectangle"
               onClick={() => applyRegion("rect")}
             >
-              ▭
+              <RectangleHorizontal size={16} strokeWidth={1.5}/>
             </button>
             <button
               className={`editor-width${eff.region === "ellipse" ? " editor-width--active" : ""}`}
               title="Ellipse" aria-label="Ellipse"
               onClick={() => applyRegion("ellipse")}
             >
-              ◯
+              <Circle size={16} strokeWidth={1.5}/>
             </button>
           </div>
           <input
@@ -290,7 +294,7 @@ export function StyleBar({onPrivacy}:{onPrivacy?:()=>void}={}) {
           />
         </>
       )}
-      {selectedAnno&&<div className="editor-layer-actions" role="group" aria-label="Annotation layer order"><button className="editor-width" aria-label="Bring annotation forward" title="Bring forward" disabled={annotations.filter(a=>a.type!=='image').slice(-1)[0]?.id===selectedAnno.id} onClick={()=>useEditorStore.getState().bringForward(selectedAnno.id)}><ChevronUp size={16}/></button><button className="editor-width" aria-label="Send annotation backward" title="Send backward" disabled={annotations.find(a=>a.type!=='image')?.id===selectedAnno.id} onClick={()=>useEditorStore.getState().sendBackward(selectedAnno.id)}><ChevronDown size={16}/></button></div>}
+      {selectedAnno&&!isSpotlight&&<div className="editor-layer-actions" role="group" aria-label="Annotation layer order"><button className="editor-width" aria-label="Bring annotation forward" title="Bring forward" disabled={annotations.filter(a=>a.type!=='image').slice(-1)[0]?.id===selectedAnno.id} onClick={()=>useEditorStore.getState().bringForward(selectedAnno.id)}><ChevronUp size={16}/></button><button className="editor-width" aria-label="Send annotation backward" title="Send backward" disabled={annotations.find(a=>a.type!=='image')?.id===selectedAnno.id} onClick={()=>useEditorStore.getState().sendBackward(selectedAnno.id)}><ChevronDown size={16}/></button></div>}
     </div>
   );
 }

@@ -1,5 +1,6 @@
+import {blurPixels} from '../../editor/blur';
 import { useMemo } from "react";
-import { Arrow, Line, Rect, Ellipse, Text, Group, Image as KonvaImage, Circle,Label,Tag } from "react-konva";
+import { Arrow, Line, Rect, Ellipse, Text, Group, Image as KonvaImage, Circle,Label,Tag,Shape } from "react-konva";
 import {arrowPoints} from '../../editor/annotationStyles';
 import Konva from "konva";
 import {privacyPixels,opaqueRedactionColor} from "../../editor/privacy";
@@ -179,22 +180,16 @@ export function AnnotationNode({ anno, draggable, baseImage, layerImage, baseWid
     }
     case "step": {
       const a = anno as StepAnno;
-      const r = 14 + a.style.strokeWidth * 2;
+      const r = (a.style.stepSize ?? 28) / 2;
       return (
         <Group {...common} x={a.x} y={a.y}>
           <Circle radius={r} fill={a.style.color} />
-          <Text
-            text={String(a.number)}
-            fontSize={r}
-            fontStyle="bold"
-            fill="#fff"
-            width={r * 2}
-            height={r * 2}
-            offsetX={r}
-            offsetY={r}
-            align="center"
-            verticalAlign="middle"
-          />
+          <Shape listening={false} sceneFunc={context=>{
+            const ctx=context._context,text=String(a.number);ctx.font=`600 ${r}px Manrope, sans-serif`;ctx.textAlign='center';ctx.textBaseline='alphabetic';
+            const metrics=ctx.measureText(text);ctx.fillStyle='#ffffff';
+            ctx.fillText(text,0,(metrics.actualBoundingBoxAscent-metrics.actualBoundingBoxDescent)/2);
+          }}/>
+
         </Group>
       );
     }
@@ -273,12 +268,10 @@ function PrivacyRegion({a,baseImage,draggable,onSelect,onDragStart,onChange,blur
     if(w<1||h<1||!blur&&a.style.redactStyle!=='pixelate')return null;
     const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
     const ctx=canvas.getContext('2d')!;ctx.fillStyle='#777777';ctx.fillRect(0,0,w,h);ctx.drawImage(baseImage,x,y,w,h,0,0,w,h);
-    ctx.putImageData(new ImageData(privacyPixels(ctx.getImageData(0,0,w,h).data,w,h),w,h),0,0);
-    if(!blur)return canvas;
-    const softened=document.createElement('canvas');softened.width=w;softened.height=h;
-    const target=softened.getContext('2d')!;target.fillStyle='#777777';target.fillRect(0,0,w,h);
-    target.filter=`blur(${Math.max(16,Math.min(48,Math.min(w,h)/2))}px)`;target.drawImage(canvas,0,0);return softened;
-  },[x,y,w,h,baseImage,blur,a.style.redactStyle]);
+    const pixels=ctx.getImageData(0,0,w,h);
+    const data=blur?blurPixels(pixels.data,w,h,a.style.blurRadius??12):privacyPixels(pixels.data,w,h);
+    ctx.putImageData(new ImageData(data,w,h),0,0);return canvas;
+  },[x,y,w,h,baseImage,blur,a.style.redactStyle,a.style.blurRadius]);
   if(w<1||h<1)return null;
   const common={id:a.id,x,y,width:w,height:h,draggable,onMouseDown:onSelect,onTap:onSelect,onDragStart,
     onDragEnd:(e:Konva.KonvaEventObject<DragEvent>)=>onChange({x:Math.round(e.target.x()),y:Math.round(e.target.y()),w,h}),

@@ -26,6 +26,8 @@ export interface Style {
   color: string;
   strokeWidth: number;
   fontSize: number;
+  blurRadius?: number;
+  stepSize?: number;
   /** rect/ellipse interior fill; null/undefined = no fill (unchanged look). */
   fill?: string | null;
   /** 0..1 opacity applied to the fill only; default 1. */
