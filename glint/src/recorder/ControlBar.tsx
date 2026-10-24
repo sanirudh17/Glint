@@ -3,7 +3,7 @@ import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, PhysicalSize, PhysicalPosition } from "@tauri-apps/api/window";
 import { recorderStop, recorderPause, recorderResume, recorderStatus, recorderSetMute, recorderSetWebcam, recorderSetFx } from "../lib/recorder";
-import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointerClick, Keyboard, Sun } from "lucide-react";
+import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointerClick, Keyboard, Sun, ScanLine } from "lucide-react";
 import "./recorder.css";
 import {invoke} from '@tauri-apps/api/core';
 import {confirm} from '@tauri-apps/plugin-dialog';
@@ -30,6 +30,9 @@ export function ControlBar() {
   const [fx, setFx] = useState<{ clickViz: boolean; keystrokes: boolean; spotlight: boolean } | null>(null);
   // Hover hint shown above the pill. An in-DOM tooltip (not a native `title`) so it
   // stays inside this capture-excluded window and never bleeds into the recording.
+  const [feedback,setFeedback]=useState<string|null>(null);
+  useEffect(()=>{const un=listen<string>("recorder-marker-feedback",event=>setFeedback(event.payload));return()=>{void un.then(fn=>fn()).catch(()=>{});};},[]);
+  useEffect(()=>{if(!feedback)return;const timer=setTimeout(()=>setFeedback(null),2200);return()=>clearTimeout(timer);},[feedback]);
   const [hint, setHint] = useState<string | null>(null);
   const tip = (label: string) => ({
     onMouseEnter: () => setHint(label),
@@ -162,10 +165,10 @@ export function ControlBar() {
 
   return (
     <div className="rec-bar" ref={barRef}>
-      {hint && <div className="rec-tip">{hint}</div>}
+      {(feedback||hint) && <div className="rec-tip" role="status">{feedback||hint}</div>}
       <span className={`rec-dot${paused ? " rec-dot--paused" : ""}`} aria-hidden />
       <span className="rec-time">{mmss(secs)}</span>
-      {studioMode&&<span className="rec-studio-mode" {...tip("Ctrl+Alt+Z marks a zoom while recording")} title="Ctrl+Alt+Z marks a zoom">Studio</span>}
+      {studioMode&&<button className="rec-atog rec-marker" aria-label="Mark zoom" {...tip("Mark zoom for the editor (Ctrl+Alt+Z)")} onClick={()=>void invoke('recorder_mark_zoom').catch(error=>setFeedback(String(error)))}><ScanLine size={13}/><span>Zoom</span></button>}
       {audio?.system && (
         <button
           className={`rec-atog${audio.sysMuted ? " rec-atog--off" : ""}`}
@@ -194,7 +197,7 @@ export function ControlBar() {
       >
         {camOn ? <Video size={13} /> : <VideoOff size={13} />}
       </button>
-      {fx && !studioMode && (
+      {fx && (
         <>
           <button
             className={`rec-atog${fx.clickViz ? "" : " rec-atog--off"}`}

@@ -7,7 +7,18 @@ use super::studio::Events;
 #[serde(rename_all="camelCase")]
 pub struct CursorConfig {
     pub visible:bool,pub smoothing:f64,pub size:f64,pub style:String,
+    #[serde(default)] pub spotlight:bool,
+    #[serde(default="default_recorded_effects")] pub recorded_effects:bool,
     pub hide_idle:bool,pub idle_seconds:f64,pub clicks:bool,pub click_size:f64,pub keystrokes:bool,
+}
+fn default_recorded_effects()->bool {true}
+pub fn recorded_config(base:&CursorConfig,events:&[super::studio::InputEvent],time:f64)->CursorConfig {
+    let mut config=base.clone();
+    if config.recorded_effects {if let Some(event)=events.get(..events.partition_point(|e|e.t<=time)).and_then(|e|e.last()) {
+        config.clicks &= event.data["clicks"].as_bool().unwrap_or(true);
+        config.keystrokes &= event.data["keystrokes"].as_bool().unwrap_or(true);
+        config.spotlight &= event.data["spotlight"].as_bool().unwrap_or(true);
+    }}config
 }
 impl CursorConfig {
     pub fn validate(&self)->Result<(),String> {
@@ -57,5 +68,13 @@ impl Mapping {
         let events:Events=serde_json::from_value(serde_json::json!({"version":1,"geometry":{"x":-1500,"y":200,"width":1200,"height":800,"monitorX":-1920,"monitorY":0,"monitorWidth":1920,"monitorHeight":1080,"dpiScale":2.0},"events":[]})).unwrap();
         let m=Mapping{source_w:600.,source_h:400.,crop_x:100.,crop_y:50.,x:20.,y:30.,w:400.,h:300.,scale:0.5};
         assert_eq!(m.point(-900.,600.,&events),(120.,105.));
+    }
+
+    #[test] fn recording_toggles_obey_source_time_and_keep_editor_override() {
+        let mut c:CursorConfig=serde_json::from_value(serde_json::json!({"visible":true,"smoothing":0.5,"size":32.,"style":"arrow","hideIdle":true,"idleSeconds":2.,"clicks":true,"clickSize":36.,"keystrokes":true,"spotlight":true})).unwrap();
+        let events:Vec<super::super::studio::InputEvent>=serde_json::from_value(serde_json::json!([{"t":0.,"kind":"effects","clicks":false,"keystrokes":false,"spotlight":false},{"t":2.,"kind":"effects","clicks":true,"keystrokes":true,"spotlight":true}])).unwrap();
+        assert!(!recorded_config(&c,&events,1.).clicks);assert!(recorded_config(&c,&events,2.).keystrokes);
+        c.spotlight=false;assert!(!recorded_config(&c,&events,3.).spotlight);
+        c.recorded_effects=false;assert!(recorded_config(&c,&events,0.).clicks);
     }
 }

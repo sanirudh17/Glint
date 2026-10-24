@@ -312,7 +312,8 @@ fn perform(
         if scene.kind == "video" {
             let media = scene.media.as_ref().unwrap();
             let rendered = workspace.0.join(format!("rendered-{i}.mp4"));
-            let data = project.render_project(scene.start, scene.end)?;
+            let mut data = project.render_project(scene.start, scene.end)?;
+            data.annotations=scene.annotations.clone();
             let events = SceneProject::events(media.width, media.height);
             studio_render::export(
                 &studio_render::ExportSpec {
@@ -394,6 +395,7 @@ fn perform(
                 image::open(&m.path).map_err(|e| e.to_string())?.to_rgba8()
             };
             let mut data = project.render_project(0., duration)?;
+            data.annotations=scene.annotations.clone();
             data.content_motion=scene.entrance.clone();
             data.content_motion_seconds=Some((duration/2.).min(0.6));
             let events = SceneProject::events(source.width(), source.height());
@@ -403,7 +405,7 @@ fn perform(
             let plate = workspace.0.join(format!("plate-{i}.png"));
             frame.save(&plate).map_err(|e| e.to_string())?;
             let mut args=strings(&["-loop","1","-framerate","30","-i",&plate.to_string_lossy()]);
-            if data.content_motion.as_ref().is_some_and(|s|s!="none")||data.look.background["animationSeconds"].as_f64().is_some_and(|s|s>0.) {
+            if !data.annotations.is_empty()||data.content_motion.as_ref().is_some_and(|s|s!="none")||data.look.background["animationSeconds"].as_f64().is_some_and(|s|s>0.) {
                 let original=workspace.0.join(format!("source-{i}.png"));source.save(&original).map_err(|e|e.to_string())?;
                 let rendered=workspace.0.join(format!("animated-{i}.mp4"));
                 studio_render::export(&studio_render::ExportSpec{binary,source:&original.to_string_lossy(),output:&rendered,project:&data,events:&events,width:source.width(),height:source.height(),fps:30.,duration,audio:false,cam:None,cam_overlay:None},cancel.clone(),|pct|progress(pct/100.*0.9))?;

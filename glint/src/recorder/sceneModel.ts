@@ -1,3 +1,4 @@
+import {prepareAnnotations,type VideoAnnotation} from "./videoAnnotations";
 import {DEFAULT_LOOK,cloneLook,type LookConfig} from '../look/model';
 import {DEFAULT_CURSOR,type StudioData} from './studioModel';
 import type {Entrance} from './studioPolish';
@@ -6,6 +7,7 @@ export interface Scene {
   id:string;kind:'video'|'image'|'title';media:SceneMedia|null;start:number;end:number;duration:number;
   title:string;titleColor:string;titleStart:string;titleEnd:string;titleSize:number;raster:string|null;
   transition:{kind:'cut'|'crossfade'|'slide';duration:number};
+  annotations?:VideoAnnotation[];
   entrance?:Entrance;
   shape?:'none'|'line'|'circle'|'rectangle';
 }
@@ -40,7 +42,7 @@ export function effectiveSceneLook(project:SceneProject):LookConfig {
 }
 export function sceneStudio(project:SceneProject,scene:Scene):StudioData {
  const width=scene.media?.width??project.width,height=scene.media?.height??project.height;
- return {project:{version:2,look:effectiveSceneLook(project),cursor:{...DEFAULT_CURSOR,visible:false,clicks:false,keystrokes:false},crop:null,clips:[{id:1,start:scene.start,end:scene.kind==='video'?scene.end:scene.duration,speed:1,kept:true,order:0}],fadeIn:0,fadeOut:0,cam:null,zoomSegments:[],masks:[],contentMotion:scene.kind==='title'?scene.entrance:undefined,contentMotionSeconds:Math.min(.6,scene.duration/2)},events:{version:1,geometry:{x:0,y:0,width,height,monitorX:0,monitorY:0,monitorWidth:width,monitorHeight:height,dpiScale:1},events:[]}};
+ return {project:{version:2,look:effectiveSceneLook(project),cursor:{...DEFAULT_CURSOR,visible:false,clicks:false,keystrokes:false},crop:null,clips:[{id:1,start:scene.start,end:scene.kind==='video'?scene.end:scene.duration,speed:1,kept:true,order:0}],fadeIn:0,fadeOut:0,cam:null,zoomSegments:[],masks:[],annotations:scene.annotations??[],contentMotion:scene.kind==='title'?scene.entrance:undefined,contentMotionSeconds:Math.min(.6,scene.duration/2)},events:{version:1,geometry:{x:0,y:0,width,height,monitorX:0,monitorY:0,monitorWidth:width,monitorHeight:height,dpiScale:1},events:[]}};
 }
 /** Raster titles with the app's installed font, keeping editable text in the document. */
 export function titleRaster(scene:Scene,width:number,height:number):string {
@@ -52,4 +54,4 @@ export function titleRaster(scene:Scene,width:number,height:number):string {
  wrap();while(size>8&&(lines.length*size*1.3>height*.75||lines.some(l=>ctx.measureText(l).width>width*.9))){size*=.95;wrap();}
  ctx.fillStyle=scene.titleColor;ctx.textAlign='center';ctx.textBaseline='middle';lines.forEach((line,i)=>ctx.fillText(line,width/2,height/2+(i-(lines.length-1)/2)*size*1.3));return canvas.toDataURL('image/png');
 }
-export async function prepareSceneProject(project:SceneProject):Promise<SceneProject>{await document.fonts.ready;return {...project,scenes:project.scenes.map(s=>s.kind==='title'?{...s,raster:titleRaster(s,project.width,project.height)}:s)};}
+export async function prepareSceneProject(project:SceneProject):Promise<SceneProject>{await document.fonts.ready;return {...project,scenes:await Promise.all(project.scenes.map(async s=>({...s,...(s.kind==='title'?{raster:titleRaster(s,project.width,project.height)}:{}),annotations:await prepareAnnotations(s.annotations,project.width/project.height)})))};}

@@ -84,6 +84,8 @@ pub struct Project {
     #[serde(default)]
     pub captions_enabled: bool,
     #[serde(default)]
+    pub annotations: Vec<super::video_annotations::Annotation>,
+    #[serde(default)]
     pub content_motion: Option<String>,
     #[serde(default)]
     pub content_motion_seconds: Option<f64>,
@@ -94,6 +96,7 @@ impl Project {
             return Err("Unsupported Studio project version".into());
         }
         self.cursor.validate()?;
+        super::video_annotations::validate(&self.annotations,duration)?;
         super::polish::validate_captions(&self.captions,duration)?;
         if self.content_motion.as_ref().is_some_and(|v|!matches!(v.as_str(),"none"|"fade"|"left"|"right"|"up"|"down"|"zoom-in"|"zoom-out")){return Err("Invalid title entrance".into());}
         if self.content_motion_seconds.is_some_and(|s|!s.is_finite()||!(0.05..=2.).contains(&s)){return Err("Invalid title entrance duration".into());}
@@ -401,6 +404,7 @@ pub struct Renderer {
     effects: Events,
     mapping: Mapping,
     cursor: CursorConfig,
+    effect_toggles: Vec<super::studio::InputEvent>,
     zooms: Vec<Zoom>,
     source_w: u32,
     source_h: u32,
@@ -411,6 +415,7 @@ pub struct Renderer {
     animation_period: f64,
     content_motion: Option<String>,
     content_motion_seconds:f64,
+    annotations: Vec<super::video_annotations::Prepared>,
     captions: Vec<super::polish::Caption>,
     caption_cache: Mutex<Option<(String,Vec<(u32,u32,[u8;3],f64)>)>>,
 }
@@ -700,6 +705,8 @@ impl Renderer {
             motion: project.motion_blur.clone().unwrap_or_default(),
             watermark: super::look_watermark::pixels(look.watermark.as_ref().filter(|_|look.enabled),l.width,l.height)?,
             alternate,animation_period,content_motion:project.content_motion.clone(),content_motion_seconds:project.content_motion_seconds.unwrap_or(0.6),
+            effect_toggles:{let mut events:Vec<_>=events.events.iter().filter(|e|e.data["kind"]=="effects").cloned().collect();events.sort_by(|a,b|a.t.total_cmp(&b.t));events},
+            annotations:super::video_annotations::prepare(&project.annotations,l.width,l.height)?,
             captions:if project.captions_enabled {project.captions.clone()} else {vec![]},caption_cache:Mutex::new(None),
         })
     }
@@ -850,7 +857,9 @@ impl Renderer {
             let n = (b - a) as usize * 3;
             out.as_mut()[dst..dst + n].copy_from_slice(&raw[src..src + n]);
         }
-        let c = &self.cursor;
+        let config=studio_cursor::recorded_config(&self.cursor,&self.effect_toggles,t);
+        let c = &config;
+        if c.spotlight {if let Some(p)=studio_cursor::point_at(&self.path,t) {let(x,y)=m.point(p.x,p.y,&self.effects);let radius=(48.*l.scale*zoom).max(1.);for py in (y-radius).floor() as i32..=(y+radius).ceil() as i32 {for px in (x-radius).floor() as i32..=(x+radius).ceil() as i32 {if self.allowed(px,py)&&((px as f64-x).powi(2)+(py as f64-y).powi(2))<=radius*radius {blend(out,px,py,[255,235,160],0.22);}}}}}
         let mut samples = Vec::new();
         if let Some(p) = studio_cursor::point_at(&self.path, t)
             .filter(|p| c.visible && (!c.hide_idle || t - p.moved_at < c.idle_seconds))
@@ -992,6 +1001,7 @@ impl Renderer {
         for (x, y, c) in &self.border {
             out.put_pixel(*x, *y, Rgb(*c));
         }
+        super::video_annotations::paint(&self.annotations,t,out);
         for(x,y,c,alpha) in &self.watermark {let p=out.get_pixel_mut(*x,*y);for k in 0..3{p[k]=(p[k] as f64*(1.-alpha)+c[k] as f64*alpha).round() as u8;}}
         if let Some(caption)=self.captions.iter().find(|c|c.start<=t&&t<c.end){
             let mut cache=self.caption_cache.lock().unwrap();
@@ -1796,5 +1806,40 @@ mod tests {
             .source_frame(&raw, 0.15, &mut content, &mut blurred);
         assert_eq!(blurred.get_pixel(160, 100).0, [18, 52, 86]);
         assert_ne!(blurred.as_raw(), plain.as_raw());
+    }
+
+    #[test]
+    fn annotation_rasters_reach_composed_pixels_only_during_their_source_span() {
+        use base64::Engine;
+        let (mut project,events)=background_fixture();
+        let mut ink=image::RgbaImage::new(320,200);
+        for y in 70..130 {for x in 120..200 {ink.put_pixel(x,y,image::Rgba([255,0,0,255]));}}
+        let mut bytes=std::io::Cursor::new(vec![]);ink.write_to(&mut bytes,image::ImageFormat::Png).unwrap();
+        project.annotations=serde_json::from_value(serde_json::json!([{"id":"mark","kind":"rectangle","start":0.5,"end":1.5,"points":[{"x":0.375,"y":0.35},{"x":0.625,"y":0.65}],"color":"#ff0000","width":0.006,"size":0.05,"text":"","raster":format!("data:image/png;base64,{}",base64::engine::general_purpose::STANDARD.encode(bytes.into_inner()))}])).unwrap();
+        let renderer=Renderer::new(&project,&events,320,200).unwrap();let l=renderer.layout;
+        let raw:Vec<u8>=[180,80,40].into_iter().cycle().take(l.content_w as usize*l.content_h as usize*3).collect();
+        for(t,red)in [(0.4,false),(0.5,true),(1.4,true),(1.5,false)] {
+            let mut out=RgbImage::new(l.width,l.height);renderer.frame(&raw,t,&mut out);
+            assert_eq!(out.get_pixel(l.width/2,l.height/2).0==[255,0,0],red);
+        }
+    }
+    #[test]
+    #[ignore = "requires bundled FFmpeg; performs a real MP4 encode and decode"]
+    fn annotation_mp4_roundtrip() {
+        use base64::Engine;
+        use std::os::windows::process::CommandExt;
+        let binary=std::path::PathBuf::from(std::env::var("GLINT_TEST_FFMPEG").unwrap());
+        let root=std::path::PathBuf::from(std::env::var("GLINT_VIDEO_FIXTURES").unwrap());std::fs::create_dir_all(&root).unwrap();
+        let source=root.join("annotation-source.mp4");let output=root.join("annotation-export.mp4");
+        let status=Command::new(&binary).args(["-y","-f","lavfi","-i","color=c=blue:s=320x200:r=10:d=2","-c:v","libx264","-pix_fmt","yuv420p"]).arg(&source).creation_flags(0x08000000).output().unwrap();assert!(status.status.success());
+        let (mut project,events)=background_fixture();
+        let mut ink=image::RgbaImage::new(320,200);for y in 70..130 {for x in 120..200 {ink.put_pixel(x,y,image::Rgba([255,0,0,255]));}}
+        let mut bytes=std::io::Cursor::new(vec![]);ink.write_to(&mut bytes,image::ImageFormat::Png).unwrap();
+        project.annotations=serde_json::from_value(serde_json::json!([{"id":"mp4-mark","kind":"rectangle","start":0.5,"end":1.5,"points":[{"x":0.375,"y":0.35},{"x":0.625,"y":0.65}],"color":"#ff0000","width":0.006,"size":0.05,"text":"","raster":format!("data:image/png;base64,{}",base64::engine::general_purpose::STANDARD.encode(bytes.into_inner()))}])).unwrap();
+        let spec=ExportSpec{binary:&binary,source:source.to_str().unwrap(),output:&output,project:&project,events:&events,width:320,height:200,fps:10.,duration:2.,audio:false,cam:None,cam_overlay:None};
+        encode(&spec,Arc::new(AtomicBool::new(false)),&|_|{},VideoEncoder::Libx264).unwrap();
+        for(t,red)in [("0.2",false),("1.0",true),("1.8",false)] {
+            let result=Command::new(&binary).args(["-v","error","-ss",t,"-i"]).arg(&output).args(["-frames:v","1","-f","image2pipe","-vcodec","png","-"]).creation_flags(0x08000000).output().unwrap();assert!(result.status.success());let frame=image::load_from_memory(&result.stdout).unwrap().to_rgb8();let p=frame.get_pixel(frame.width()/2,frame.height()/2);assert_eq!(p[0]>200&&p[2]<80,red,"frame at {t}: {:?}",p.0);
+        }
     }
 }

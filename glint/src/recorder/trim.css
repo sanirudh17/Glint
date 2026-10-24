@@ -325,3 +325,23 @@
 .studio-panel .look-row > .g-switch-root { align-self: center; }
 .studio-panel .look-controls > .studio-section-title { display: none; }
 .studio-panel .look-controls { gap: 12px; }
+
+.video-annotation-host { position: absolute; pointer-events: none; z-index: 5; }
+.video-annotation-overlay { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; }
+.video-annotation-overlay.is-editing { pointer-events: auto; touch-action: none; cursor: crosshair; }
+.video-annotation-tools { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; }
+.video-annotation-tools > button { min-width: 28px; height: 28px; padding: 4px 6px; display: inline-flex; align-items: center; justify-content: center; border: 1px solid var(--border-strong); border-radius: var(--r-btn); background: var(--bg-elev2); color: var(--text-dim); cursor: pointer; }
+.video-annotation-tools button[aria-pressed=true], .video-annotation-list button[aria-pressed=true] { color: var(--accent); background: var(--accent-subtle); }
+.video-annotation-list { display: flex; flex-direction: column; gap: 4px; max-height: 180px; overflow: auto; }
+.video-annotation-list button { display: flex; justify-content: space-between; gap: 8px; border: 0; border-radius: var(--r1); background: transparent; color: var(--text); padding: 8px; font: inherit; font-size: 12px; text-align: left; overflow-wrap: anywhere; cursor: pointer; }
+.video-annotation-list small { flex: none; color: var(--text-dim); }
+.video-annotation-text { display: flex; flex-direction: column; gap: 8px; color: var(--text-dim); font-size: 12px; }
+.video-annotation-text textarea { min-height: 64px; padding: 8px; resize: vertical; color: var(--text); background: var(--bg-elev2); border: 1px solid var(--border-strong); border-radius: var(--r-btn); font: inherit; }
+
+.video-annotation-selection { position: absolute; pointer-events: none; border: 1px dashed var(--accent); min-width: 10px; min-height: 10px; box-sizing: border-box; }
+.video-annotation-tools ~ .studio-effect-track-row { padding: 6px 0; }
+
+.trim-root { position: relative; }
+.trim-root.is-booting > :not(.trim-loading-shell) { visibility: hidden; pointer-events: none; }
+.trim-loading-shell { position: absolute; inset: 0; z-index: 20; display: grid; place-items: center; background: var(--bg); color: var(--text-dim); }
+.trim-loading-controls { position: absolute; inset: 0 0 auto; height: 32px; display: flex; justify-content: flex-end; padding: 2px 4px; }

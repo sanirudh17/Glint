@@ -417,6 +417,8 @@ pub fn run() {
             recorder::recorder_stop,
             recorder::recorder_cancel,
             recorder::recorder_status,
+            recorder::recorder_mark_zoom,
+            recorder::recorder_trim_ready,
             recorder::recorder_set_mute,
             recorder::recorder_set_webcam,
             recorder::cam::recorder_cam_write_chunk,

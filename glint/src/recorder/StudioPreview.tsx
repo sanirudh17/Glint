@@ -1,3 +1,4 @@
+import {annotationAt,paintAnnotation} from "./videoAnnotations";
 import { cursorAt, drawCursorLayer, followSourcePoint, smoothPath } from "./studioCursor";
 import { useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import {useGradientPlate} from '../look/useGradientPlate';
@@ -17,8 +18,8 @@ import {getGradient} from '../editor/gradients';
 import {gradientStops} from '../look/gradientRender';
 import {entrancePose,captionRaster} from './studioPolish';
 
-export function StudioPreview({ studio:inputStudio, video, camVideo, cam, width, height, pickingFocus=false, onFocus,onAim,still=null,previewTime }: {
-  previewTime?:number;
+export function StudioPreview({ studio:inputStudio, video, camVideo, cam, width, height, pickingFocus=false, onFocus,onAim,still=null,previewTime,annotationHostId }: {
+  annotationHostId?:string;previewTime?:number;
   still?:HTMLImageElement|null;
   studio: StudioData; video: RefObject<HTMLVideoElement | null>; camVideo: RefObject<HTMLVideoElement | null>;
   cam: CamPlacement | null; width: number; height: number;
@@ -30,6 +31,8 @@ export function StudioPreview({ studio:inputStudio, video, camVideo, cam, width,
   const path = useMemo(() => smoothPath(studio.events.events, studio.project.cursor.smoothing), [studio.events, studio.project.cursor.smoothing]);
   const effectEvents = useMemo(() => ({ ...studio.events, events: studio.events.events.filter((e) => e.kind !== "cursor") }), [studio.events]);
   const ref = useRef<HTMLCanvasElement>(null);
+  const [annotationBox,setAnnotationBox]=useState({left:20,top:20,width:0,height:0});
+  useEffect(()=>{const parent=ref.current?.parentElement;if(!parent)return;const place=()=>{const l=studioLayout(width,height,studio.project.crop,studio.project.look,960);const fit=Math.max(0,Math.min((parent.clientWidth-40)/l.width,(parent.clientHeight-40)/l.height));setAnnotationBox({left:(parent.clientWidth-l.width*fit)/2,top:(parent.clientHeight-l.height*fit)/2,width:l.width*fit,height:l.height*fit});};const observer=new ResizeObserver(place);observer.observe(parent);place();return()=>observer.disconnect();},[width,height,studio.project.crop,studio.project.look]);
   const captionImages=useRef(new Map<string,HTMLImageElement>());
   const [marker,setMarker]=useState<{left:number;top:number;point:FocusPoint}|null>(null);
   useEffect(()=>{setMarker(null);if(pickingFocus)ref.current?.focus({preventScroll:true});},[pickingFocus]);
@@ -135,6 +138,7 @@ export function StudioPreview({ studio:inputStudio, video, camVideo, cam, width,
         if (look.enabled && (look.border?.width ?? 0) > 0) {
           ctx.beginPath(); ctx.roundRect(l.contentX, top, l.contentW, cardH, radius); ctx.strokeStyle = look.border!.color; ctx.lineWidth = look.border!.width; ctx.setLineDash(look.border!.style === "dashed" ? [8, 6] : []); ctx.stroke(); ctx.setLineDash([]);
         }
+        for(const mark of studio.project.annotations??[])if(annotationAt(mark,time))paintAnnotation(ctx,mark,l.compositionW,l.compositionH);
         if(look.enabled&&look.watermark&&watermark) {const b=watermarkPlacement(l.compositionW,l.compositionH,look.watermark);ctx.save();ctx.globalAlpha=look.watermark.opacity;ctx.drawImage(watermark,b.x,b.y,b.w,b.h);ctx.restore();}
         const caption=studio.project.captionsEnabled?studio.project.captions?.find(c=>c.start<=time&&time<c.end):null;
         if(caption){const key=caption.id+caption.text;let image=captionImages.current.get(key);if(!image){image=new Image();image.src=caption.raster??captionRaster(caption.text);captionImages.current.set(key,image);if(captionImages.current.size>4)captionImages.current.delete(captionImages.current.keys().next().value!);}if(image.complete&&image.naturalWidth){const margin=Math.min(Math.max(12,Math.min(l.compositionW,l.compositionH)*.025),l.compositionW/4,l.compositionH/4);const width=Math.min(l.compositionW-margin*2,l.compositionH*.18*1280/170),height=width*170/1280;ctx.drawImage(image,(l.compositionW-width)/2,l.compositionH-margin-height,width,height);}}
@@ -159,7 +163,7 @@ export function StudioPreview({ studio:inputStudio, video, camVideo, cam, width,
     const view=zoomAt(studio.project.zoomSegments,t,{x:l.cropX,y:l.cropY,w:l.contentW,h:l.contentH},width,height,followSourcePoint(path,t,studio.events,width,height));
     return previewFocus({x:clientX,y:clientY},rect,canvas,l,scale,view,{width,height});
   };
-  return <><canvas ref={ref} className={`studio-preview${pickingFocus?' is-picking':''}`} aria-label="Studio video preview" tabIndex={pickingFocus?0:undefined} data-editor-control={pickingFocus?true:undefined}
+  return <><div id={annotationHostId} data-video-annotation-host className="video-annotation-host" style={annotationBox}/><canvas ref={ref} className={`studio-preview${pickingFocus?' is-picking':''}`} aria-label="Studio video preview" tabIndex={pickingFocus?0:undefined} data-editor-control={pickingFocus?true:undefined}
     onPointerMove={e=>{if(!pickingFocus)return;const point=pointAt(e.clientX,e.clientY);onAim?.(point);const r=e.currentTarget.getBoundingClientRect();setMarker(point?{left:e.clientX-r.x,top:e.clientY-r.y,point}:null);}}
     onPointerLeave={()=>{if(pickingFocus){setMarker(null);onAim?.(null);}}}
     onClick={e=>{if(!pickingFocus)return;const point=pointAt(e.clientX,e.clientY);if(point)onFocus?.(point);}}

@@ -19,7 +19,7 @@ pub struct InputEvent {
 pub struct Events { pub version: u32, pub geometry: Geometry, pub events: Vec<InputEvent> }
 
 #[derive(Default)]
-struct Clock { base: f64, accepting: bool, anchor: Option<(Instant, f64)> }
+struct Clock { base: f64, paused_at:f64, accepting: bool, anchor: Option<(Instant, f64)> }
 /// Each FFmpeg span has its own PTS clock. Pause time is excluded, and the next
 /// span is based on the probed duration of the actual finished MP4, not wall time.
 #[derive(Clone, Default)]
@@ -28,14 +28,18 @@ impl EventClock {
     pub fn arm(&self) {self.0.lock().unwrap().accepting=true;}
     pub fn sync(&self, pts: f64) { let mut c=self.0.lock().unwrap(); if !c.accepting {return;} c.anchor=Some((Instant::now(), pts.max(0.0))); }
     pub fn stamp(&self) -> Option<f64> { let c=self.0.lock().unwrap(); c.anchor.map(|(start, pts)| c.base+pts+start.elapsed().as_secs_f64()) }
-    pub fn pause(&self) { let mut c=self.0.lock().unwrap();c.accepting=false;c.anchor=None; }
-    pub fn finish_span(&self, duration: f64) { let mut c=self.0.lock().unwrap(); c.base+=duration.max(0.0); c.anchor=None; }
+    pub fn pause(&self) { let mut c=self.0.lock().unwrap();if let Some((start,pts))=c.anchor {c.paused_at=c.base+pts+start.elapsed().as_secs_f64();}c.accepting=false;c.anchor=None; }
+    pub fn finish_span(&self, duration: f64) { let mut c=self.0.lock().unwrap(); c.base+=duration.max(0.0); c.paused_at=c.base; c.anchor=None; }
 }
 #[derive(Clone)]
 pub struct EventSink { pub clock: EventClock, tx: mpsc::SyncSender<InputEvent> }
 impl EventSink {
-    pub fn push(&self, data: serde_json::Value) {
-        if let Some(t)=self.clock.stamp() { let _=self.tx.try_send(InputEvent {t,data}); }
+    pub fn push_effects(&self,cfg:super::fx::FxConfig) {
+        let t=self.clock.stamp().unwrap_or_else(||{let c=self.clock.0.lock().unwrap();c.base.max(c.paused_at)});
+        let _=self.tx.try_send(InputEvent{t,data:serde_json::json!({"kind":"effects","clicks":cfg.click_viz,"keystrokes":cfg.keystrokes,"spotlight":cfg.spotlight})});
+    }
+    pub fn push(&self, data: serde_json::Value) -> Option<f64> {
+        let t=self.clock.stamp()?;self.tx.try_send(InputEvent {t,data}).ok()?;Some(t)
     }
 }
 pub struct StudioCapture {
@@ -45,7 +49,7 @@ pub struct StudioCapture {
     writer: Option<std::thread::JoinHandle<Result<(), String>>>,
 }
 impl StudioCapture {
-    pub fn create(folder: PathBuf, geometry: Geometry) -> Result<Self,String> {
+    pub fn create(folder: PathBuf, geometry: Geometry, fx:super::fx::FxConfig) -> Result<Self,String> {
         std::fs::create_dir(&folder).map_err(|e|e.to_string())?;
         let file=File::create(folder.join("events.partial")).map_err(|e|e.to_string())?;
         let header=serde_json::to_string(&geometry).map_err(|e|e.to_string())?;
@@ -53,7 +57,8 @@ impl StudioCapture {
         let writer=std::thread::spawn(move || {
             let mut file=BufWriter::new(file);
             write!(file,"{{\"version\":1,\"geometry\":{header},\"events\":[").map_err(|e|e.to_string())?;
-            let mut first=true;
+            serde_json::to_writer(&mut file,&serde_json::json!({"t":0.0,"kind":"effects","clicks":fx.click_viz,"keystrokes":fx.keystrokes,"spotlight":fx.spotlight})).map_err(|e|e.to_string())?;
+            let mut first=false;
             for event in rx { if !first {file.write_all(b",").map_err(|e|e.to_string())?;} first=false; serde_json::to_writer(&mut file,&event).map_err(|e|e.to_string())?; }
             file.write_all(b"]}").map_err(|e|e.to_string())?;
             file.flush().map_err(|e|e.to_string())?;
@@ -202,4 +207,11 @@ mod tests {
         assert_eq!(std::fs::read(folder.join("project.json")).unwrap(),b"keep these edits");
         std::fs::remove_file(folder.join("project.json")).unwrap();std::fs::remove_dir(folder).unwrap();std::fs::remove_file(source).unwrap();std::fs::remove_dir(root).unwrap();
     }
+}
+
+/// All new recordings keep editable Studio metadata; old Quick files still open.
+pub fn recording_mode(_requested:Option<bool>)->bool {true}
+
+#[cfg(test)] mod mode_tests {
+    #[test] fn every_new_capture_uses_studio_metadata(){for requested in [None,Some(false),Some(true)]{assert!(super::recording_mode(requested));}}
 }

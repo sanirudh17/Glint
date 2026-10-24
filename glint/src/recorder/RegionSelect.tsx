@@ -74,7 +74,7 @@ export function RegionSelect() {
   // Audio-source intent for THIS recording, seeded from saved settings. The chips
   // hold local state only — they don't persist back (Settings owns the default).
   const settings = useAppStore((s) => s.settings);
-  const [studioMode, setStudioMode] = useState(false);
+  const studioMode = true;
   const [sys, setSys] = useState(true);
   const [mic, setMic] = useState(false);
   const [cam, setCam] = useState(false);
@@ -93,7 +93,6 @@ export function RegionSelect() {
   // whenever Rust re-opens the pre-warmed selector (`rec-select-reset`), so a reused
   // window always reflects the latest saved defaults. Setters are stable → no deps.
   const applySeed = useCallback((s: Settings) => {
-    setStudioMode(false);
     setSys(s.record_system_audio ?? true);
     setMic(s.record_microphone ?? false);
     const movable = s.record_webcam_movable ?? false;
@@ -299,7 +298,6 @@ export function RegionSelect() {
                 : "Drag to select a region · Esc to cancel"}
         </span>
         <div className="rec-sel-chipgroup">
-          <button className={`rec-sel-chip${studioMode ? "" : " rec-sel-chip--off"}`} aria-pressed={studioMode} onPointerDown={(e) => e.stopPropagation()} onClick={() => setStudioMode((v) => !v)} title="Record an editable project with cursor and effects saved separately">Studio mode</button>
           <button
             className={`rec-sel-chip${sys ? "" : " rec-sel-chip--off"}`}
             onPointerDown={(e) => e.stopPropagation()}

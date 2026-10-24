@@ -123,3 +123,20 @@
   filter: drop-shadow(0 2px 8px rgba(0, 0, 0, 0.6));
 }
 .hud-card:hover .rec-hud-play-badge { opacity: 0; }
+
+/* Recording chrome uses one neutral surface over arbitrary screen content. */
+.rec-bar { gap: 8px; padding: 6px 10px; background: rgba(13,14,16,.96); border-color: rgba(255,255,255,.16); }
+.rec-pause, .rec-atog, .rec-stop { width: 28px; height: 28px; border-radius: 7px; flex: none; }
+.rec-pause, .rec-atog { background: rgba(255,255,255,.08); }
+.rec-atog--off { background: transparent; color: rgba(255,255,255,.55); }
+.rec-stop { background: rgba(255,80,80,.16); color: #ff6b6b; }
+.rec-stop:hover { background: rgba(255,80,80,.26); }
+.rec-bar button:focus-visible, .rec-sel-toolbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.rec-sel-toolbar { width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 8px; background: rgba(13,14,16,.96); border: 1px solid rgba(255,255,255,.16); border-radius: 10px; }
+.rec-sel-hint { background: transparent; font-size: 12px; padding: 6px 8px; white-space: normal; }
+.rec-sel-chipgroup { flex-wrap: wrap; justify-content: center; gap: 6px; }
+.rec-sel-chip { width: auto; min-width: 108px; height: 32px; background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.12); }
+.rec-sel-chip--off { background: transparent; color: rgba(255,255,255,.58); }
+.rec-sel-fullbtn { height: 32px; padding-inline: 12px; }
+
+.rec-marker { width: auto; gap: 5px; padding-inline: 8px; font: inherit; font-size: 12px; }

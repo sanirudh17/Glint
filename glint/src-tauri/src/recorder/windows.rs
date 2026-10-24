@@ -336,7 +336,7 @@ pub const TRIM_LABEL: &str = "rec-trim";
 /// (startup prewarm) with identical chrome.
 fn trim_builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
     WebviewWindowBuilder::new(app, TRIM_LABEL, WebviewUrl::App("index.html#/rec-trim".into()))
-        .title("Glint — Trim Recording")
+        .title("Glint Studio")
         .decorations(false)
         .shadow(true)
         .resizable(true)

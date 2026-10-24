@@ -32,12 +32,19 @@ export function followSourcePoint(path: CursorPoint[], t:number, events:StudioEv
   const latest=sourcePoint(positions[0].x,positions[0].y,events,width,height);
   return {...sourcePoint(positions.reduce((sum,p)=>sum+p.x,0)/positions.length,positions.reduce((sum,p)=>sum+p.y,0)/positions.length,events,width,height),latestX:latest.x,latestY:latest.y};
 }
+export function recordedCursor(config:CursorConfig,events:StudioEvents,time:number):CursorConfig {
+  if(config.recordedEffects===false)return config;
+  for(let i=events.events.length-1;i>=0;i--){const event=events.events[i];if(event.kind==='effects'&&event.t<=time)return {...config,clicks:config.clicks&&event.clicks!==false,keystrokes:config.keystrokes&&event.keystrokes!==false,spotlight:!!config.spotlight&&event.spotlight!==false};}
+  return config;
+}
 export function drawCursorLayer(ctx: CanvasRenderingContext2D, t: number, path: CursorPoint[], events: StudioEvents, config: CursorConfig, layout: Layout, width: number, height: number) {
+  config=recordedCursor(config,events,t);
   const l = layout;
   const inside = (p: { x: number; y: number }) => p.x >= l.cropX && p.x < l.cropX + l.contentW && p.y >= l.cropY && p.y < l.cropY + l.contentH;
   const xy = (x: number, y: number) => { const p = sourcePoint(x, y, events, width, height); return { ...p, outX: l.contentX + p.x - l.cropX, outY: l.contentY + p.y - l.cropY }; };
   ctx.save(); ctx.beginPath(); ctx.rect(l.contentX, l.contentY, l.contentW, l.contentH); ctx.clip();
   const point = cursorAt(path, t);
+  if(point&&config.spotlight){const p=xy(point.x,point.y);if(inside(p)){ctx.save();ctx.fillStyle='rgba(255,235,160,.22)';ctx.beginPath();ctx.arc(p.outX,p.outY,48,0,Math.PI*2);ctx.fill();ctx.restore();}}
   if (point && config.visible && (!config.hideIdle || t - point.movedAt < config.idleSeconds)) {
     const p = xy(point.x, point.y);
     if (inside(p)) {

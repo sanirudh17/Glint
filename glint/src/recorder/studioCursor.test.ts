@@ -1,3 +1,5 @@
+import {recordedCursor} from "./studioCursor";
+import {DEFAULT_CURSOR} from "./studioModel";
 import { expect, it } from "vitest";
 import { cursorAt, smoothPath, sourcePoint } from "./studioCursor";
 import type { StudioEvents } from "./studioModel";
@@ -17,4 +19,12 @@ it("strong smoothing suppresses rapid cursor jitter while zero preserves every s
   const travel = (points: typeof raw) => points.slice(121).reduce((sum, p, i) => sum + Math.abs(p.x - points[i + 120].x), 0);
   expect(raw[1].x).toBe(530);
   expect(travel(filtered)).toBeLessThan(travel(raw) * .05);
+});
+
+it('recording effect toggles follow source time, with an explicit editing override',()=>{
+ const config={...DEFAULT_CURSOR,clicks:true,keystrokes:true,spotlight:true};
+ const events={version:1,geometry:{x:0,y:0,width:100,height:100,monitorX:0,monitorY:0,monitorWidth:100,monitorHeight:100,dpiScale:1},events:[{t:0,kind:'effects' as const,clicks:false,keystrokes:false,spotlight:false},{t:2,kind:'effects' as const,clicks:true,keystrokes:true,spotlight:true}]};
+ expect(recordedCursor(config,events,1).clicks).toBe(false);expect(recordedCursor(config,events,2).keystrokes).toBe(true);
+ expect(recordedCursor({...config,spotlight:false},events,3).spotlight).toBe(false);
+ expect(recordedCursor({...config,recordedEffects:false},events,0).clicks).toBe(true);
 });

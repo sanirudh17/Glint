@@ -37,6 +37,8 @@ pub struct Scene {
     #[serde(default)]
     pub entrance: Option<String>,
     #[serde(default)]
+    pub annotations: Vec<super::video_annotations::Annotation>,
+    #[serde(default)]
     pub shape: Option<String>,
 }
 impl Scene {
@@ -81,6 +83,7 @@ impl SceneProject {
             {
                 return Err("Invalid or duplicate scene.".into());
             }
+            super::video_annotations::validate(&s.annotations,if s.kind=="video" {s.media.as_ref().map_or(s.end,|m|m.duration)} else {s.duration})?;
             let seconds = s.seconds();
             if !seconds.is_finite()
                 || !(0.25..=900.).contains(&seconds)

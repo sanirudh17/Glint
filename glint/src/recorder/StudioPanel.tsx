@@ -1,3 +1,4 @@
+import {VideoAnnotationEditor} from "./VideoAnnotationEditor";
 import { WindowControls } from "../components/Titlebar";
 import { useState } from "react";
 import { Check, Copy, FolderOpen, Save } from "lucide-react";
@@ -51,6 +52,7 @@ export function StudioPanel({ onClose, project, path, width, height, saveStatus,
       <LookControls video look={project.look} dimensions={{width:crop.w,height:crop.h}} onChange={(patch) => onChange({ look: { ...project.look, ...patch } })} />
       </div><div hidden={tab!=='edit'} className="studio-edit-controls">
       <StudioZoomControls segments={project.zoomSegments} selected={selectedZoom} time={time} duration={duration} events={events} width={width} height={height} smoothing={project.cursor.smoothing} aim={focusAim} picking={pickingFocus} onChange={zoomSegments=>onChange({zoomSegments})} onSelect={onSelectZoom} onPick={onPickZoom}/>
+      <VideoAnnotationEditor onSeek={onSeek} items={project.annotations??[]} time={time} duration={duration} disabled={exporting||tab!=='edit'} onPause={()=>onSeek(time)} onChange={annotations=>onChange({annotations})}/>
       <StudioMaskControls masks={project.masks} selected={selectedMask} time={time} duration={duration} width={width} height={height} drawing={drawingMask} onDraw={onDrawMask} onChange={masks=>onChange({masks})} onSelect={onSelectMask} onSeek={onSeek}/>
       {project.masks.length>0&&!project.importedVideo&&<div className="look-row"><span className="look-label">Delete source after export</span><Switch ariaLabel="Delete unmasked source after export" checked={project.deleteSourceAfterExport??false} onChange={deleteSourceAfterExport=>onChange({deleteSourceAfterExport})}/></div>}
       {hasCursor?<CursorControls cursor={project.cursor} onChange={(patch) => onChange({ cursor: { ...project.cursor, ...patch } })} />

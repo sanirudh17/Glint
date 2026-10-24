@@ -1,3 +1,4 @@
+import {prepareAnnotations} from "./videoAnnotations";
 import { WindowControls } from "../components/Titlebar";
 import { StudioPanel } from "./StudioPanel";
 import {EditorCommands} from './EditorCommands';
@@ -52,6 +53,10 @@ export function TrimView() {
   const [selectedMask,setSelectedMask]=useState<string|null>(null);
   const [drawingMask,setDrawingMask]=useState(false);
   const [studio, setStudio] = useState<StudioData | null>(null);
+  async function prepareVideoProject(project: StudioData['project']) {
+    const layout=studioLayout(probe?.width??1280,probe?.height??720,project.crop,project.look);
+    return {...await prepareCaptions(project),annotations:await prepareAnnotations(project.annotations,layout.width/layout.height)};
+  }
   const [saveStatus, setSaveStatus] = useState("Saved");
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const autosaveRef = useRef<{ path: string; project: StudioProject } | null>(null);
@@ -203,7 +208,9 @@ export function TrimView() {
         setSelectedId(clips0[0]?.id ?? null); // start with the whole clip selected
         if (p.has_audio) {
           // Extra buckets so zoomed-in detail resolves (at 8× ≈ 150 bars across the track).
-          trimWaveform(t.path, 1200, p.duration_secs).then(setWaveform).catch(() => setWaveform(null));
+          trimWaveform(t.path, 1200, p.duration_secs)
+            .then(waveform => { if (generation === loadGeneration.current) setWaveform(waveform); })
+            .catch(() => { if (generation === loadGeneration.current) setWaveform(null); });
         }
         if (p.has_cam) {
           setCamSrc(convertFileSrc(camSiblingPath(t.path)));
@@ -223,7 +230,7 @@ export function TrimView() {
     void loadTarget();
   }, [loadTarget]);
 
-  useEffect(() => { void getCurrentWindow().setTitle(studio ? "Glint Studio" : "Glint — Trim recording").catch(() => {}); }, [studio !== null]);
+  useEffect(() => { void getCurrentWindow().setTitle("Glint Studio").catch(() => {}); }, [studio !== null]);
 
   // Safety valve: if the video never reaches canplay (corrupt file edge cases),
   // reveal the UI anyway after a grace period so it can't stay blank.
@@ -480,7 +487,7 @@ export function TrimView() {
     try{
       await flushSave();
       const camOverlay=probe.has_cam&&cam?.visible?{...toPixels(cam,probe.width,probe.height,probe.width/probe.height),shape:cam.shape}:null;
-      const path=await invoke<string>('recorder_gif_export',{path:target.path,project:studio?await prepareCaptions({...studio.project,...edit,cam}):null,segments:keptSegments(clips),fadeIn,fadeOut,camOverlay,options});
+      const path=await invoke<string>('recorder_gif_export',{path:target.path,project:studio?await prepareVideoProject({...studio.project,...edit,cam}):null,segments:keptSegments(clips),fadeIn,fadeOut,camOverlay,options});
       setExportMessage(`Exported: ${path}`);
     }catch(error){setExportMessage(String(error));}finally{setExporting(null);setExportingGif(false);}
   };
@@ -489,7 +496,7 @@ export function TrimView() {
     setExporting(0); setExportMessage(null);
     if (studio) {
       const project = { ...studio.project, ...edit, cam };
-      void flushSave().then(() => prepareCaptions(project)).then(project=>studioExport(target.path, project)).then(async(path) => {
+      void flushSave().then(() => prepareVideoProject(project)).then(project=>studioExport(target.path, project)).then(async(path) => {
         setExportMessage(`Exported: ${path}`);
         if(project.deleteSourceAfterExport&&await confirm('Your exported MP4 is saved. Delete the unmasked recording, camera track and input events? The original recording cannot be restored.',{title:'Delete unmasked source?',kind:'warning',okLabel:'Delete source',cancelLabel:'Keep source'})) {
           videoRef.current?.pause();videoRef.current?.removeAttribute('src');videoRef.current?.load();
@@ -509,17 +516,24 @@ export function TrimView() {
       .catch(() => setExporting(null)); // a toast already surfaced; window stays open
   };
 
-  if (err) return <div className="trim-root"><div className="trim-error">{err}</div></div>;
+  const workspaceReady=!!probe&&!!studio&&mediaReady;
+  useEffect(()=>{
+    if(!workspaceReady&&!err)return;
+    let second=0;const first=requestAnimationFrame(()=>{second=requestAnimationFrame(()=>{void invoke('recorder_trim_ready',{path:target?.path??null}).catch(()=>{});});});
+    return()=>{cancelAnimationFrame(first);cancelAnimationFrame(second);};
+  },[workspaceReady,err,target?.path]);
+  if (err) return <div className="trim-root"><div className="trim-window-toolbar" data-tauri-drag-region><span>Studio</span><WindowControls onClose={requestClose}/></div><div className="trim-error" role="alert">{err}</div></div>;
 
   // Contents stay mounted (the <video> must be in the DOM to load/decode) but
   // invisible until its first frame is ready — then everything appears together.
-  const booting = !mediaReady;
+  const booting = !mediaReady || !probe || !studio;
   const outputSize=probe&&studio?studioLayout(probe.width,probe.height,studio.project.crop,studio.project.look):probe;
   const estimated=outputSize?estimateExportBytes(outDur,outputSize.width,outputSize.height):null;
 
   return (
-    <div className={`trim-root${booting ? " is-booting" : ""}`}>
-      <EditorCommands actions={[
+    <div className={`trim-root${booting ? " is-booting" : ""}`} aria-busy={booting}>
+      {booting&&<div className="trim-loading-shell"><div className="trim-loading-controls" data-tauri-drag-region><WindowControls onClose={requestClose}/></div><p role="status">Opening Studio...</p></div>}
+      <EditorCommands key={target?.path ?? 'loading'} actions={[
         {id:'play',label:playing?'Pause playback':'Play video',run:togglePlay,disabled:exporting!==null},
         {id:'split',label:'Split clip at playhead',run:doSplit,disabled:exporting!==null},
         {id:'delete',label:'Remove selected clip',run:doDelete,disabled:!canDelete},
@@ -548,6 +562,7 @@ export function TrimView() {
           onRect={rect=>setStudio(data=>data&&({...data,project:{...data.project,masks:data.project.masks.map(m=>m.id===selectedMask?setMaskKeyframe(m,rect,playhead):m)}}))}/>}
         {src && (
           <video
+            key={target?.path}
             ref={videoRef}
             className="trim-video"
             src={src}
