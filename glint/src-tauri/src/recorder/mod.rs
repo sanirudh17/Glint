@@ -18,6 +18,7 @@ pub mod video_annotations;
 mod look_gradient;
 mod look_watermark;
 pub mod studio_export;
+pub mod ink;
 pub mod scene_project;
 pub mod scene_commands;
 pub mod gif;
@@ -895,6 +896,7 @@ pub async fn recorder_start(
         studio: studio_capture,
     });
     let _ = windows::build_control_bar(&app);
+    if studio_mode {let _=ink::open(&app,target);}
 
     // Bring segment 0 up behind the visible bar. Pause/resume appends further
     // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual
@@ -916,6 +918,7 @@ pub async fn recorder_start(
         Err(e) => {
             windows::close_countdown(&app);
             windows::close_control_bar(&app);
+            ink::close(&app);
             windows::close_cam_bubble(&app);
             *app.state::<RecorderState>().0.lock().unwrap() = None;
             app.state::<RecorderState>().1.store(false, Ordering::SeqCst);
@@ -1098,6 +1101,7 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
+    ink::close(&app);
     // Movable webcam: flush + finalize the .cam.webm BEFORE destroying the bubble webview.
     if rec.as_ref().is_some_and(|r| r.cam_path.is_some()) {
         let _ = app.emit_to(windows::CAM_LABEL, "rec-cam-record-stop", ());
@@ -1135,6 +1139,7 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     let studio_folder=if let Some(studio)=studio {
+        let annotations=studio.annotations.clone();
         let folder=studio.finish()?;
         let probe=trim::recorder_trim_probe(app.clone(),out_path.clone()).await?;
         let mut project=studio::initial_project(probe.duration_secs);
@@ -1142,6 +1147,7 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
         project["cursor"]["keystrokes"]=serde_json::json!(true);
         project["cursor"]["spotlight"]=serde_json::json!(true);
         project["cursor"]["recordedEffects"]=serde_json::json!(true);
+        project["annotations"]=serde_json::to_value(ink::finalize(&annotations,probe.duration_secs,probe.width,probe.height,&project)?).map_err(|e|e.to_string())?;
         studio::write_project(&folder,&project)?;
         Some(folder)
     } else {None};
@@ -1204,6 +1210,7 @@ pub async fn recorder_restart(app:tauri::AppHandle)->Result<(),String>{
 pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
+    ink::close(&app);
     windows::close_cam_bubble(&app);
     windows::close_countdown(&app); // in case cancel races the countdown
     if let Some(ActiveRecording { mut done, current, out_path, fx, cam_path, studio, .. }) = rec {
@@ -1326,6 +1333,7 @@ pub fn recorder_mark_zoom(app:tauri::AppHandle)->Result<(),String> {
     let mut cursor=point;
     if unsafe {::windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut cursor)}.is_ok()&&cursor.x>=x&&cursor.y>=y&&cursor.x<x+w as i32&&cursor.y<y+h as i32 {point=cursor;}
     sink.push(serde_json::json!({"kind":"marker","x":point.x,"y":point.y})).ok_or("Resume recording to mark a zoom")?;
+    ink::flash(&app,point.x as f64,point.y as f64);
     let _=app.emit_to(windows::BAR_LABEL,"recorder-marker-feedback","Zoom marked for the editor");Ok(())
 }
 #[tauri::command]

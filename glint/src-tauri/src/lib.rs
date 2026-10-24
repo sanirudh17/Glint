@@ -418,6 +418,7 @@ pub fn run() {
             recorder::recorder_cancel,
             recorder::recorder_status,
             recorder::recorder_mark_zoom,
+            recorder::ink::recorder_ink_state,recorder::ink::recorder_ink_clock,recorder::ink::recorder_ink_mode,recorder::ink::recorder_ink_begin,recorder::ink::recorder_ink_commit,recorder::ink::recorder_ink_undo,
             recorder::recorder_trim_ready,
             recorder::recorder_set_mute,
             recorder::recorder_set_webcam,

@@ -57,7 +57,7 @@ fn emit(event: &str, mut payload: serde_json::Value) {
         if let Some(sink)=s.borrow().as_ref() {
             payload["kind"]=serde_json::json!(match event { "fx-cursor" => "cursor", "fx-click" => "click", "fx-marker"=>"marker", _ => "key" });
             let time=sink.push(payload.clone());
-            if event=="fx-marker" {APP.with(|cell|{if let Some(app)=cell.take(){let message=if time.is_some(){"Zoom marked for the editor"}else{"Resume recording to mark a zoom"};let _=app.emit_to(crate::recorder::windows::BAR_LABEL,"recorder-marker-feedback",message);cell.set(Some(app));}});}
+            if event=="fx-marker" {APP.with(|cell|{if let Some(app)=cell.take(){let message=if time.is_some(){"Zoom marked for the editor"}else{"Resume recording to mark a zoom"};let _=app.emit_to(crate::recorder::windows::BAR_LABEL,"recorder-marker-feedback",message);if time.is_some(){crate::recorder::ink::flash(&app,payload["x"].as_f64().unwrap_or(0.),payload["y"].as_f64().unwrap_or(0.));}cell.set(Some(app));}});}
             true
         } else {false}
     });

@@ -7,6 +7,7 @@ import HomeView from "./views/HomeView";
 const OverlayApp = lazy(() => import("./overlay/OverlayApp").then((m) => ({ default: m.OverlayApp })));
 const HudApp = lazy(() => import("./hud/HudApp").then((m) => ({ default: m.HudApp })));
 const PinApp = lazy(() => import("./pin/PinApp").then((m) => ({ default: m.PinApp })));
+const RecordingInk=lazy(()=>import('./recorder/RecordingInk').then(m=>({default:m.RecordingInk})));
 const ControlBar = lazy(() => import("./recorder/ControlBar").then((m) => ({ default: m.ControlBar })));
 const Countdown = lazy(() => import("./recorder/Countdown").then((m) => ({ default: m.Countdown })));
 const RegionSelect = lazy(() => import("./recorder/RegionSelect").then((m) => ({ default: m.RegionSelect })));
@@ -86,6 +87,7 @@ export const router = createHashRouter([
     path: "/pin",
     element: lazyRoute(<PinApp />),
   },
+  {path:"/rec-ink",element:lazyRoute(<RecordingInk/>)},
   {
     path: "/rec-bar",
     element: lazyRoute(<ControlBar />),

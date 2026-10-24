@@ -140,3 +140,24 @@
 .rec-sel-fullbtn { height: 32px; padding-inline: 12px; }
 
 .rec-marker { width: auto; gap: 5px; padding-inline: 8px; font: inherit; font-size: 12px; }
+
+.rec-shell { position:fixed; left:50%; bottom:4px; transform:translateX(-50%); display:flex; flex-direction:column; align-items:center; gap:6px; width:max-content; }
+.rec-shell .rec-bar { position:static; transform:none; border-radius:12px; gap:7px; padding:7px 10px; }
+.rec-shell .rec-tip { bottom:calc(100% + 6px); }
+.rec-ink-tools { display:flex; align-items:center; justify-content:center; gap:5px; width:max-content; padding:6px 8px; border:1px solid rgba(255,255,255,.16); border-radius:9px; background:rgba(13,14,16,.98); color:#eee; }
+.rec-ink-tools button { display:flex; align-items:center; justify-content:center; width:28px; height:28px; padding:0; border:0; border-radius:5px; background:transparent; color:inherit; cursor:pointer; }
+.rec-ink-tools button:hover { background:rgba(255,255,255,.1); }
+.rec-ink-tools button[aria-pressed=true],.rec-bar .is-active { background:var(--accent-subtle); color:var(--accent); }
+.rec-ink-tools select,.rec-ink-text { height:28px; padding:0 6px; border:1px solid rgba(255,255,255,.16); border-radius:5px; background:#17191d; color:#eee; font:inherit; font-size:11px; }
+.rec-ink-text { width:110px; }
+.rec-ink-tools :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
+.rec-sel-toolbar { top:20px; display:grid; grid-template-columns:auto auto; gap:8px 12px; padding:10px 12px; }
+.rec-sel-hint { grid-column:1/-1; padding:0 2px 3px; color:rgba(255,255,255,.8); font-size:11px; text-align:left; }
+.rec-sel-chipgroup { justify-content:flex-start; }
+.rec-sel-chip { min-width:88px; border-color:transparent; }
+.rec-sel-fullbtn { margin-left:4px; }
+@media(max-width:620px){.rec-sel-toolbar{grid-template-columns:1fr;}.rec-sel-hint{grid-column:1;}.rec-sel-fullbtn{margin-left:0;}}
+
+.rec-ink-colors { display:flex; align-items:center; gap:5px; padding:0 6px; border-inline:1px solid rgba(255,255,255,.12); }
+.rec-ink-tools .rec-ink-swatch { width:17px; height:17px; border-radius:50%; border:1px solid rgba(255,255,255,.25); }
+.rec-ink-tools .rec-ink-swatch[aria-pressed=true] { outline:2px solid var(--accent); outline-offset:2px; }

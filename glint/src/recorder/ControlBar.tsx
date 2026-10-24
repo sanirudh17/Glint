@@ -1,3 +1,5 @@
+import {DEFAULT_INK,type InkConfig} from './RecordingInk';
+import {Pencil,Highlighter,MoveUpRight,RectangleHorizontal,Circle,Type,Undo2,X} from 'lucide-react';
 /** ControlBar.tsx — the floating REC indicator (route #/rec-bar). */
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
@@ -15,6 +17,11 @@ export function mmss(total: number): string {
 }
 
 export function ControlBar() {
+  const [ink,setInk]=useState<InkConfig>(DEFAULT_INK);
+  const inkIcons={pen:Pencil,highlight:Highlighter,arrow:MoveUpRight,rectangle:RectangleHorizontal,ellipse:Circle,text:Type};
+  const changeInk=async(patch:Partial<InkConfig>)=>{const next={...ink,...patch};try{await invoke('recorder_ink_mode',{config:next});setInk(next);}catch(e){setFeedback(String(e));}};
+  useEffect(()=>{const un=listen<InkConfig>('recorder-ink-mode',e=>setInk(e.payload));return()=>{void un.then(fn=>fn());};},[]);
+  useEffect(()=>{if(!ink.tool)return;const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();void changeInk({tool:null});}};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[ink]);
   const barRef = useRef<HTMLDivElement>(null);
   const [studioMode, setStudioMode] = useState(false);
   const [secs, setSecs] = useState(0);
@@ -164,11 +171,21 @@ export function ControlBar() {
   }
 
   return (
-    <div className="rec-bar" ref={barRef}>
+    <div className="rec-shell" ref={barRef}>
+      {ink.tool&&<div className="rec-ink-tools" role="toolbar" aria-label="Live annotation tools">
+        {Object.entries(inkIcons).map(([kind,Icon])=><button key={kind} type="button" aria-label={`Draw ${kind}`} aria-pressed={ink.tool===kind} onClick={()=>void changeInk({tool:kind as InkConfig['tool']})}><Icon size={15} strokeWidth={1.5}/></button>)}
+        <div className="rec-ink-colors" role="group" aria-label="Live ink color">{['#ef5555','#ffc249','#43bd86','#4d9aff','#ffffff','#17191c'].map(color=><button className="rec-ink-swatch" key={color} aria-label={`Ink ${color}`} aria-pressed={ink.color===color} style={{background:color}} onClick={()=>void changeInk({color})}/>)}</div>
+        <select aria-label="Live ink stroke width" value={ink.width} onChange={e=>void changeInk({width:Number(e.target.value)})}><option value={.003}>Thin</option><option value={.006}>Medium</option><option value={.012}>Thick</option></select>
+        {ink.tool==='text'&&<input className="rec-ink-text" aria-label="Live annotation text" maxLength={500} value={ink.text} onChange={e=>void changeInk({text:e.target.value})}/>}
+        <button type="button" aria-label="Undo last live annotation" onClick={()=>void invoke('recorder_ink_undo').catch(e=>setFeedback(String(e)))}><Undo2 size={15}/></button>
+        <button type="button" aria-label="Finish live drawing" onClick={()=>void changeInk({tool:null})}><X size={15}/></button>
+      </div>}
+    <div className="rec-bar">
       {(feedback||hint) && <div className="rec-tip" role="status">{feedback||hint}</div>}
       <span className={`rec-dot${paused ? " rec-dot--paused" : ""}`} aria-hidden />
       <span className="rec-time">{mmss(secs)}</span>
       {studioMode&&<button className="rec-atog rec-marker" aria-label="Mark zoom" {...tip("Mark zoom for the editor (Ctrl+Alt+Z)")} onClick={()=>void invoke('recorder_mark_zoom').catch(error=>setFeedback(String(error)))}><ScanLine size={13}/><span>Zoom</span></button>}
+      {studioMode&&<button className={`rec-atog rec-marker${ink.tool?' is-active':''}`} aria-label="Draw live annotations" aria-pressed={!!ink.tool} {...tip("Draw editable annotations while recording")} onClick={()=>void changeInk({tool:ink.tool?null:'pen'})}><Pencil size={14}/><span>Draw</span></button>}
       {audio?.system && (
         <button
           className={`rec-atog${audio.sysMuted ? " rec-atog--off" : ""}`}
@@ -241,6 +258,6 @@ export function ControlBar() {
       <button className="rec-stop" onClick={() => recorderStop()} {...tip("Stop recording")} aria-label="Stop">
         <Square size={13} strokeWidth={2.5} fill="currentColor" />
       </button>
-    </div>
+    </div></div>
   );
 }

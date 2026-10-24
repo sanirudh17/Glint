@@ -27,6 +27,7 @@ pub struct EventClock(Arc<Mutex<Clock>>);
 impl EventClock {
     pub fn arm(&self) {self.0.lock().unwrap().accepting=true;}
     pub fn sync(&self, pts: f64) { let mut c=self.0.lock().unwrap(); if !c.accepting {return;} c.anchor=Some((Instant::now(), pts.max(0.0))); }
+    pub fn current(&self)->f64 { self.stamp().unwrap_or_else(||{let c=self.0.lock().unwrap();c.paused_at.max(c.base)}) }
     pub fn stamp(&self) -> Option<f64> { let c=self.0.lock().unwrap(); c.anchor.map(|(start, pts)| c.base+pts+start.elapsed().as_secs_f64()) }
     pub fn pause(&self) { let mut c=self.0.lock().unwrap();if let Some((start,pts))=c.anchor {c.paused_at=c.base+pts+start.elapsed().as_secs_f64();}c.accepting=false;c.anchor=None; }
     pub fn finish_span(&self, duration: f64) { let mut c=self.0.lock().unwrap(); c.base+=duration.max(0.0); c.paused_at=c.base; c.anchor=None; }
@@ -44,6 +45,8 @@ impl EventSink {
 }
 pub struct StudioCapture {
     pub folder: PathBuf,
+    pub annotations:Vec<super::video_annotations::Annotation>,
+    pub ink:super::ink::Config,
     pub sink: EventSink,
     pub hooks: Option<super::fx::hooks::HookHandle>,
     writer: Option<std::thread::JoinHandle<Result<(), String>>>,
@@ -64,7 +67,7 @@ impl StudioCapture {
             file.flush().map_err(|e|e.to_string())?;
             file.get_ref().sync_all().map_err(|e|e.to_string())
         });
-        Ok(Self { folder, sink:EventSink { clock:EventClock::default(),tx },hooks:None,writer:Some(writer) })
+        Ok(Self { folder, annotations:vec![],ink:super::ink::Config::default(), sink:EventSink { clock:EventClock::default(),tx },hooks:None,writer:Some(writer) })
     }
     pub fn finish(mut self) -> Result<PathBuf,String> {
         self.sink.clock.pause();

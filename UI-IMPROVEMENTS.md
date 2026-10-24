@@ -54,3 +54,13 @@ Screenshot-text search remains optional. Native PP-OCRv6 Small plus the actual S
 Actual WebView2 checks covered the unobstructed crop dock, OCR popup, recording selector, scrolling-shortcut launch, and drawing/saving an editable video arrow. The recording pill and scrolling controller can be excluded from screen capture; accessibility/state inspection remains available. A separate headless preview command was rejected by automatic approval review, so it was not used as visual evidence. The user's active recording was left untouched.
 
 Final follow-up checks: 269 frontend tests and 272 native tests passed (7 native tests require explicit integration fixtures). The production frontend build passed. Video annotations, Studio recording behavior and startup changes are documented separately in VIDEO-ANNOTATIONS.md.
+
+## Editor refinement follow-up
+
+The screenshot editor keeps Images, Frame and Corners together, with Drag, Export and Done as its three output actions. Copy remains available from the HUD. Contextual styling has its own compact row, keeping sliders and color choices visible without horizontal scrolling. Crop uses one compact row outside the image, with a grouped aspect selector, current pixel dimensions and Apply crop/Cancel; the selected ratio remains constrained during resizing.
+
+Privacy review opens only through Find sensitive text and closes when changing tools. Blur has a dedicated strength slider and a deterministic pixel blur instead of shared color/stroke controls and coarse whitening. Step badges are smaller, independently sized and center the actual numeral glyph bounds. Spotlight uses aligned SVG shape icons and omits layer-order actions, since its shared dim layer does not use that ordering.
+
+Recording selection separates its instruction from the input controls. The pill retains audio, camera and effects, and adds a compact live-drawing strip. The capture-excluded drawing surface keeps marks editable in Studio. Studio saves and export validation are recorded in VIDEO-ANNOTATIONS.md.
+
+Validation for this follow-up: 273 frontend tests, 274 native tests (8 gated integration tests), TypeScript/production build and optimized native review build passed. The synthetic audio-tail export and annotation MP4 roundtrip passed. The complete reported 38.229-second recording exported successfully with 2294 video frames; the source and project were preserved. The app was launched only after implementation and automated checks. Windows kept a full-screen video above it; the user then opened Studio and chose to complete the remaining visual/live-drawing review later. No completed interactive live-stroke or new theme screenshot check is claimed for this follow-up. The app is left running for that review.

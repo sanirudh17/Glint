@@ -22,7 +22,7 @@ New recordings always use Studio metadata; the selector no longer asks for a mod
 - Actual WebView2 drawing produced a visible arrow and saved its editable vector/timing into the isolated Studio project.
 - Actual native review confirmed Studio is the default, the recording pill exposes all three FX toggles plus webcam, a live click-effect change is timestamped, Speaker Notes has one integrated Close button, and the Zoom button saves a marker that becomes a 2x zoom segment in Studio.
 
-Live drawing while capturing is not part of this editing feature; annotations are added in the video editors.
+Live drawing is now available from Draw on the recording pill. Choose pen, highlight, arrow, rectangle, ellipse or text; choose a color and stroke width, undo the last mark, or press Escape to return to normal interaction. Marks remain visible for three source seconds after the stroke and retain editable timing in Studio. The ink window and zoom confirmation ring are excluded from source capture, so the recording stays clean. Live vectors are mapped to the initial Studio composition when recording finishes.
 
 ## Opening Studio and marking zooms
 
@@ -31,3 +31,13 @@ The trim workspace waits for both media and Studio metadata before revealing its
 Ctrl+Alt+Z places a source-time zoom marker around the cursor. It does not zoom the desktop during capture: Studio imports it as an editable 2x focus segment for preview/export. The Zoom button on the recording pill performs the same action and displays confirmation. The shortcut uses a Windows session hotkey on the recorder message-pump thread, with no repeat while held and automatic release when recording stops. If another application has reserved it, the input-hook fallback and Zoom button remain available. Paused recordings reject new markers with a Resume recording message.
 
 Final verification: 269 frontend tests, 272 native tests (7 explicitly gated integration tests), production frontend build and native review build passed. The real MP4 roundtrip passed again after the recording changes. Native Windows key injection generated a Ctrl+Alt+Z marker and confirmation, the saved marker appeared as Zoom 1 in Studio, and RegisterHotKey confirmed the chord became available after Stop. Both a new Studio recording and a previously imported video reopened in the same native Studio window with the correct target. Protected popup pixels are not claimed as screenshot evidence.
+
+## Recording and export corrections (24 October follow-up)
+
+Explicit Save project snapshots the current edits, waits for queued writes and confirms Project saved. The footer explains where the edit metadata lives. Existing zoom markers are selected on load, their Zoom disclosure opens, and recordings containing markers or annotations start on Edit & draw. Annotations is the first editing section.
+
+Changing Click size opts into the editor's effect settings and seeks to a recorded click, so an off toggle from the recording does not suppress the preview. A recent zoom marker counts as pointer activity and holds a valid position briefly; it remains a marker, not a mouse click. A capture-excluded ring confirms its position while recording.
+
+The reported recording's video ended at 38.183984 seconds, while its audio ended at 38.229 seconds. Each decoded source span now pads a small missing video tail before trim/speed/reorder, and decoded output is bounded to the requested frame count. This prevents an incorrect incomplete-export rejection and writing surplus frames into a closed encoder pipe. Failures retain the actual encoder diagnostics. A complete export of that recording succeeded on the selected hardware encoder: 2294 frames, 38.233333 seconds at 60 FPS.
+
+The synthetic regression uses a 1.8-second video track with 2.037 seconds of audio and a fractional timeline end; export produces exactly 31 frames at 15 FPS with non-silent decoded audio. Both audio cleanup switches and click sounds are enabled in that case. The actual reported full recording also passed after the fix. Automated checks cover live-vector timing/placement and marker pointer activity; the user deferred the remaining interactive live-drawing review after the updated app opened.
