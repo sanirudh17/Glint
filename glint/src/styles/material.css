@@ -9,7 +9,8 @@
   --control-hover: rgb(255 255 255 / 11%);
   --bg-frame: rgb(8 8 8 / 65%);
   --glass-card: rgb(24 24 24 / 72%);
-  --glass-menu: rgb(24 24 24 / 92%);
+  --glass-menu: rgb(24 24 24 / 78%);
+  --glass-select: rgb(255 255 255 / 5%);
   --glass-utility: rgb(255 255 255 / 4%);
   --bg-elev: rgb(20 20 20 / 94%);
   --bg-elev2: rgb(255 255 255 / 6%);
@@ -29,7 +30,8 @@
   --control-hover: rgb(255 255 255 / 62%);
   --bg-frame: rgb(255 255 255 / 42%);
   --glass-card: rgb(255 255 255 / 70%);
-  --glass-menu: rgb(255 255 255 / 92%);
+  --glass-menu: rgb(255 255 255 / 82%);
+  --glass-select: rgb(255 255 255 / 26%);
   --glass-utility: rgb(255 255 255 / 18%);
   --bg-elev: rgb(255 255 255 / 96%);
   --bg-elev2: rgb(0 0 0 / 4%);
@@ -59,6 +61,15 @@ html[data-glass="true"] :is(.editor-tool--active,.editor-width--active,.editor-t
   background:var(--glass-menu);
   backdrop-filter:blur(24px) saturate(1.1);
   -webkit-backdrop-filter:blur(24px) saturate(1.1);
+}
+/* The closed control needs its own material as well as the open menu. */
+:root[data-glass="true"][data-theme] .g-select-trigger {
+  background:var(--glass-select);
+  backdrop-filter:blur(18px) saturate(1.05);
+  -webkit-backdrop-filter:blur(18px) saturate(1.05);
+}
+:root[data-glass="true"][data-theme] .g-select-trigger:hover:not(:disabled) {
+  background:color-mix(in srgb,var(--glass-select) 80%,var(--control-hover));
 }
 /* Preserve the original quiet hover strip: one floating surface, bare icons. */
 html[data-glass="true"] .cap-actions {
