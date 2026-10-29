@@ -337,6 +337,7 @@ pub const TRIM_LABEL: &str = "rec-trim";
 fn trim_builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
     WebviewWindowBuilder::new(app, TRIM_LABEL, WebviewUrl::App("index.html#/rec-trim".into()))
         .title("Glint Studio")
+        .transparent(true)
         .decorations(false)
         .shadow(true)
         .resizable(true)

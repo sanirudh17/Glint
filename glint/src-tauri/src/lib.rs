@@ -18,6 +18,7 @@ mod shortcuts;
 mod tray;
 mod updater;
 mod window;
+mod material;
 use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 use capture::commands::{
@@ -200,7 +201,7 @@ pub fn run() {
                 .inner_size(1100.0, 720.0)
                 .min_inner_size(880.0, 560.0)
                 .decorations(false)
-                .transparent(false)
+                .transparent(true)
                 .resizable(true)
                 .center()
                 .visible(false)
@@ -329,6 +330,7 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            material::window_material,
             clipboard::clipboard_copy_text,
             attachments::drag_prepare,
             settings_get_all,

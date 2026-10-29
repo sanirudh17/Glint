@@ -16,6 +16,7 @@ export type RecordFxKey =
 
 export interface Settings {
   theme: Theme;
+  glass?: boolean;
   accent: string;
   hotkeys: Record<string, string>;
   auto_save: boolean;
@@ -60,6 +61,7 @@ interface AppState {
   toasts: Toast[];
   loadSettings: () => Promise<void>;
   setTheme: (t: Theme) => Promise<void>;
+  setGlass: (on: boolean) => Promise<void>;
   setAccent: (hex: string) => Promise<void>;
   setAutoSave: (on: boolean) => Promise<void>;
   setAutoCopy: (on: boolean) => Promise<void>;
@@ -232,6 +234,12 @@ export const useAppStore = create<AppState>((set, get) => {
       }
       get().pushToast(`Couldn't save accent colour (${errText(err)})`);
     }
+  },
+
+  setGlass: async (on:boolean) => {
+    await commit("glass",on,"Acrylic glass");
+    const s=get().settings;
+    if(s) broadcastVisual(s.theme,s.accent);
   },
 
   setAutoSave: (on: boolean) => commit("auto_save", on, "Auto-save"),
@@ -433,13 +441,14 @@ export const ACCENT_STORAGE_KEY = "glint.accent";
 export const VISUAL_SETTINGS_EVENT = "settings-visual-changed";
 export interface VisualSettings {
   theme: Theme;
+  glass?: boolean;
   accent: string;
 }
 
 /** Fire-and-forget broadcast of the current theme+accent to all windows (incl.
  *  self — re-applying is idempotent). No-op if not running under Tauri. */
 function broadcastVisual(theme: Theme, accent: string): void {
-  void emit(VISUAL_SETTINGS_EVENT, { theme, accent } satisfies VisualSettings).catch(() => {
+  void emit(VISUAL_SETTINGS_EVENT, { theme, accent, glass: useAppStore.getState().settings?.glass ?? true } satisfies VisualSettings).catch(() => {
     /* not in a Tauri window (plain Vite) — nothing to broadcast */
   });
 }

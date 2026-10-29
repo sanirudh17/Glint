@@ -17,6 +17,7 @@ pub const EDITOR_LABEL: &str = "editor";
 fn builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
     WebviewWindowBuilder::new(app, EDITOR_LABEL, WebviewUrl::App("index.html#/editor".into()))
         .title("Glint")
+        .transparent(true)
         .decorations(false)
         .shadow(true)
         .inner_size(1180.0, 780.0)

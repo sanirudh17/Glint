@@ -1,0 +1,21 @@
+import { invoke } from '@tauri-apps/api/core';
+
+let revision = 0;
+/** Native desktop acrylic, enabled only after the compositor accepts it. */
+export async function applyMaterial(glass: boolean): Promise<void> {
+  const current = ++revision;
+  const dark = document.documentElement.dataset.theme !== 'light';
+  if (!glass) {
+    // Paint opaque content before removing the compositor's backdrop. Otherwise
+    // the desktop can show through the still-transparent WebView for one frame.
+    document.documentElement.dataset.glass = 'false';
+    await new Promise<void>(resolve => requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
+    if (current !== revision) return;
+  }
+  try {
+    const applied = await invoke<boolean>('window_material', { glass, dark });
+    if (current === revision) document.documentElement.dataset.glass = String(applied);
+  } catch {
+    if (current === revision) document.documentElement.dataset.glass = 'false';
+  }
+}

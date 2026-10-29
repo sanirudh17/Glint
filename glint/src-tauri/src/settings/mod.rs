@@ -44,10 +44,13 @@ impl Default for Hotkeys {
     }
 }
 
+fn default_glass()->bool{true}
 fn default_ocr_engine()->String{"tesseract".into()}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub theme: Theme,
+    #[serde(default="default_glass")]
+    pub glass: bool,
     pub accent: String,
     pub hotkeys: Hotkeys,
     pub auto_save: bool,
@@ -120,6 +123,7 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: Theme::Dark,
+            glass: true,
             accent: "#2BAAAD".into(),
             hotkeys: Hotkeys::default(),
             auto_save: true,
@@ -159,6 +163,7 @@ impl Default for Settings {
 /// Validate and set one field by key. Keeps the source of truth for valid shapes in Rust.
 pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Result<(), String> {
     match key {
+        "glass" => { s.glass=value.as_bool().ok_or("glass must be boolean")?; }
         "theme" => {
             s.theme = serde_json::from_value(value).map_err(|e| e.to_string())?;
         }
@@ -327,6 +332,17 @@ mod tests {
         let s = Settings::default();
         assert!(matches!(s.theme, Theme::Dark));
         assert_eq!(s.hotkeys.capture_area, "CmdOrCtrl+Shift+1");
+    }
+
+    #[test]
+    fn acrylic_can_be_disabled_and_older_preferences_keep_the_default() {
+        let mut s=Settings::default();
+        let mut old=serde_json::to_value(&s).unwrap();
+        old.as_object_mut().unwrap().remove("glass");
+        assert!(serde_json::from_value::<Settings>(old).unwrap().glass);
+        apply_update(&mut s,"glass",json!(false)).unwrap();
+        assert!(!s.glass);
+        assert!(apply_update(&mut s,"glass",json!("yes")).is_err());
     }
 
     #[test]

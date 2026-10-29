@@ -1,5 +1,6 @@
 /* Glint — global base styles */
 @import "./tokens.css";
+@import "./material.css";
 /* Premium grotesque, bundled locally (no runtime network). Weights 400/500/600/700. */
 @import "@fontsource/manrope/400.css";
 @import "@fontsource/manrope/500.css";
