@@ -1,8 +1,18 @@
 import { invoke } from '@tauri-apps/api/core';
 
 let revision = 0;
+let settled: Promise<void> = Promise.resolve();
+export function applyMaterial(glass: boolean): Promise<void> {
+  settled = updateMaterial(glass);
+  return settled;
+}
+/** Follow a newer theme/material request if it supersedes one we're awaiting. */
+export async function waitForMaterial(): Promise<void> {
+  let pending: Promise<void>;
+  do { pending = settled; await pending; } while (pending !== settled);
+}
 /** Native desktop acrylic, enabled only after the compositor accepts it. */
-export async function applyMaterial(glass: boolean): Promise<void> {
+async function updateMaterial(glass: boolean): Promise<void> {
   const current = ++revision;
   const dark = document.documentElement.dataset.theme !== 'light';
   if (!glass) {

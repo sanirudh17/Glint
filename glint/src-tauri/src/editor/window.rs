@@ -13,8 +13,21 @@
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, Wry};
 
 pub const EDITOR_LABEL: &str = "editor";
+static PRESENT_PENDING:std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::new(false);
+pub fn cancel_present(){PRESENT_PENDING.store(false,std::sync::atomic::Ordering::SeqCst);}
 
 fn builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
+    let (theme,accent)={
+        let state=app.state::<crate::settings::commands::SettingsState>();
+        let settings=state.0.lock().unwrap();
+        (settings.theme.clone(),settings.accent.clone())
+    };
+    let light=match theme {
+        crate::settings::Theme::Light=>true,
+        crate::settings::Theme::Dark=>false,
+        crate::settings::Theme::System=>app.get_webview_window("main").and_then(|w|w.theme().ok()).is_some_and(|t|t==tauri::Theme::Light),
+    };
+    let boot=format!("window.__GLINT_BOOT__ = {};",serde_json::json!({"theme":if light {"light"} else {"dark"},"accent":accent}));
     WebviewWindowBuilder::new(app, EDITOR_LABEL, WebviewUrl::App("index.html#/editor".into()))
         .title("Glint")
         .transparent(true)
@@ -24,9 +37,10 @@ fn builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
         .min_inner_size(760.0, 540.0)
         .resizable(true)
         .center()
-        .focused(true)
+        .focused(false)
+        .initialization_script(boot)
         // Dark substrate from the first frame — never white/black placeholder.
-        .background_color(tauri::window::Color(8, 8, 8, 255))
+        .background_color(if light {tauri::window::Color(246,247,249,255)} else {tauri::window::Color(8,8,8,255)})
 }
 
 /// Build the editor window once, hidden, so the first "Annotate" click doesn't pay
@@ -49,24 +63,27 @@ pub fn prewarm(app: &AppHandle) {
 /// open (or pre-warmed hidden), raise it (the caller then emits `editor-open` so
 /// its EditorView reloads the new source); otherwise build it on demand.
 pub fn ensure_editor_window(app: &AppHandle) -> tauri::Result<()> {
+    PRESENT_PENDING.store(true,std::sync::atomic::Ordering::SeqCst);
     if let Some(win) = app.get_webview_window(EDITOR_LABEL) {
-        let _ = win.unminimize();
-        let _ = win.show();
-        // Windows won't reliably raise a background window with show()+set_focus()
-        // alone (OS foreground lock). A brief always-on-top toggle forces it front;
-        // we drop the flag immediately so it behaves like a normal window after.
-        let _ = win.set_always_on_top(true);
-        let _ = win.set_focus();
-        let _ = win.set_always_on_top(false);
+        // Reused webviews can still hold the previous canvas or material. Reload
+        // while hidden; editor_present reveals the new completed frame.
+        let _ = win.hide();
         return Ok(());
     }
-
-    // Cold fallback (prewarm hasn't run / window was destroyed): show immediately.
-    // The dark background_color paints before the webview's first frame, so there
-    // is no white flash — just an instant dark window that fills with content.
-    let win = builder(app).visible(true).build()?;
-    // Kill OS open transition so editor snaps in instantly, not fading.
+    let win = builder(app).visible(false).build()?;
     crate::window::disable_transitions(&win);
-    let _ = win.set_focus();
+    Ok(())
+}
+
+/// Called by this editor only after image, theme, material and paint are ready.
+#[tauri::command]
+pub fn editor_present(window:tauri::WebviewWindow)->Result<(),String>{
+    if window.label()!=EDITOR_LABEL{return Err("Only the editor can present this window".into());}
+    if !PRESENT_PENDING.swap(false,std::sync::atomic::Ordering::SeqCst){return Ok(());}
+    let _=window.unminimize();
+    window.show().map_err(|e|e.to_string())?;
+    let _=window.set_always_on_top(true);
+    let _=window.set_focus();
+    let _=window.set_always_on_top(false);
     Ok(())
 }

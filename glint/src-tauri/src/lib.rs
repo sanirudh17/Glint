@@ -301,6 +301,7 @@ pub fn run() {
                     // Notify frontend so it clears any displayed image from memory.
                     api.prevent_close();
                     let _ = window.hide();
+                    crate::editor::window::cancel_present();
                     let _ = window.emit("editor-close", ());
                 } else if label == crate::recorder::windows::TRIM_LABEL {
                     if window.state::<crate::recorder::studio_export::ExportState>().0.lock().unwrap().is_some() {
@@ -396,6 +397,7 @@ pub fn run() {
             ocr::indexing::library_index_clear,
             editor_copy,
             editor_save,
+            editor::window::editor_present,
             editor_flatten_temp,
             editor_done,
             project_save,
