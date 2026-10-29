@@ -117,7 +117,7 @@ export function CaptureCard({
     ? [
         { label: "Copy file path", icon: Copy, run: doCopyPath },
         { label: "Trim", icon: Scissors, run: () => act(() => openTrim(item.id, item.path)) },
-        { label: "Pin to screen", icon: Pin, run: () => act(() => pinCreateFromCapture(item.id)) },
+        { label: "Open video", icon: ExternalLink, run: () => act(() => openCapture(item.id)) },
       ]
     : [
         { label: "Copy", icon: Copy, run: () => act(() => copyCapture(item.id)) },
