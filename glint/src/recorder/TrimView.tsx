@@ -426,7 +426,8 @@ export function TrimView() {
       let idx = segmentIndexAtSource(segs, v.currentTime);
       if (idx < 0) { idx = 0; try { v.currentTime = segs[0].start; } catch { /* ignore */ } }
       segCursorRef.current = idx;
-      v.play(); setPlaying(true);
+      v.playbackRate=segs[idx].speed;
+      void v.play().catch(()=>{setPlaying(false);useAppStore.getState().pushToast("Could not resume the video. Try Play again.");});
     } else { v.pause(); setPlaying(false); }
   };
 
@@ -439,7 +440,8 @@ export function TrimView() {
     segCursorRef.current = 0;
     try { v.currentTime = segs[0].start; } catch { /* ignore */ }
     setPlayhead(segs[0].start);
-    v.play(); setPlaying(true);
+    v.playbackRate=segs[0].speed;
+    void v.play().catch(()=>{setPlaying(false);useAppStore.getState().pushToast("Could not start the video. Try Play again.");});
   };
 
   // Keep the webcam overlay's play state mirrored to the main player (muted, so autoplay

@@ -651,7 +651,7 @@
 .editor-step-size { width:112px; }
 @media(max-width:720px) { .crop-dimensions { display:none; } .crop-caption { margin-right:0; } .editor-crop-dock .crop-bar { gap:6px; } }
 
-.editor-options-row { flex:none; min-width:0; border-bottom:1px solid var(--border); background:var(--bg-frame); padding-left:54px; }
-.editor-options-row .editor-stylebar { min-height:38px; box-sizing:border-box; padding:4px 14px; gap:12px; flex-wrap:wrap; background:transparent; }
+.editor-options-row { flex:none; min-width:0; border-bottom:1px solid var(--border); background:var(--bg-frame); padding-inline:12px; }
+.editor-options-row .editor-stylebar { min-height:38px; box-sizing:border-box; padding:4px 14px; gap:12px; flex-wrap:wrap; justify-content:center; background:transparent; }
 .editor-topbar .editor-frame-slot { justify-content:flex-end; }
-@media(max-width:1020px){.editor-topbar .editor-frame-slot { justify-content:flex-start; }.editor-options-row { padding-left:0; }}
+@media(max-width:1020px){.editor-topbar .editor-frame-slot { justify-content:flex-start; }.editor-options-row { padding-inline:8px; }}
