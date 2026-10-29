@@ -34,12 +34,12 @@ html[data-glass="true"] .cap-card { background: transparent; }
 html[data-glass="true"] .cap-meta { background: var(--glass-card); border-top:1px solid var(--glass-edge); }
 html[data-glass="true"] :is(.cap-meta,.editor-topbar) { backdrop-filter:blur(18px); }
 html[data-glass="true"] :is(.g-titlebar .g-winctl) { background: transparent; }
-html[data-glass="true"] :is(.g-btn-subtle,.g-btn-ghost,.g-icon-btn,.g-select-trigger,.editor-export-btn,.editor-tool,.editor-width,.editor-toggle,.trim-btn,.trim-iconbtn,.home-resume-chip,.settings-hotkey-btn) {
+html[data-glass="true"] :is(.g-btn-subtle,.g-btn-ghost,.g-icon-btn,.g-select-trigger,.editor-export-btn,.editor-width,.editor-toggle,.trim-btn,.trim-iconbtn,.home-resume-chip,.settings-hotkey-btn) {
   background: var(--glass-control);
   border-color: var(--glass-edge);
   box-shadow: inset 0 1px 0 var(--glass-highlight);
 }
-html[data-glass="true"] :is(.g-btn-subtle,.g-btn-ghost,.g-icon-btn,.g-select-trigger,.editor-export-btn,.editor-tool,.editor-width,.editor-toggle,.trim-btn,.trim-iconbtn,.home-resume-chip,.settings-hotkey-btn):hover:not(:disabled) { background: var(--bg-elev3); }
+html[data-glass="true"] :is(.g-btn-subtle,.g-btn-ghost,.g-icon-btn,.g-select-trigger,.editor-export-btn,.editor-width,.editor-toggle,.trim-btn,.trim-iconbtn,.home-resume-chip,.settings-hotkey-btn):hover:not(:disabled) { background: var(--bg-elev3); }
 html[data-glass="true"] :is(.g-btn-primary,.editor-export-btn--primary,.trim-btn--primary) {
   background: linear-gradient(rgb(255 255 255 / 17%),rgb(255 255 255 / 0%)), color-mix(in srgb,var(--accent) 88%,transparent);
   color: var(--accent-fg); border-color: color-mix(in srgb,var(--accent) 60%,var(--glass-highlight));

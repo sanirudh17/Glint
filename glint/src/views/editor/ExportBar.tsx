@@ -1,10 +1,10 @@
 import { type RefObject } from "react";
 import type Konva from "konva";
-import { Download, Share2, CheckCheck } from "lucide-react";
+import { Copy, Download, Share2, CheckCheck } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { useAppStore } from "../../store/useAppStore";
 import { computeLayout, exportPixelRatio } from "../../editor/composition";
-import { editorSave, editorFlattenTemp, editorDone, dragOut } from "../../lib/editor";
+import { editorCopy, editorSave, editorFlattenTemp, editorDone, dragOut } from "../../lib/editor";
 import {withoutEditorChrome} from '../../editor/privacy';
 
 /**
@@ -61,6 +61,10 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
     const dest = await editorSave(png);
     pushToast(`Exported · ${dest.split(/[\\/]/).pop()}`);
   });
+  const onCopy = withPng(async (png) => {
+    await editorCopy(png);
+    pushToast("Image copied");
+  });
   const onDrag = async () => {
     const stage = stageRef.current;
     if (!stage || !base) return;
@@ -79,7 +83,7 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
     <div className="editor-exportbar">
       <button
         className="editor-export-btn"
-        disabled={rendering}
+        disabled={!base || rendering}
         // Press-and-drag: the OS drag must start while the mouse button is held,
         // so this fires on pointer-down (like the HUD/Library drag). onClick
         // fires on release, when there's no held button to attach a drag to —
@@ -89,10 +93,13 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
       >
         <Share2 size={16} strokeWidth={1.5} /> Drag
       </button>
-      <button className="editor-export-btn" disabled={rendering} onClick={onSave} title="Export a PNG to the Library">
+      <button className="editor-export-btn" disabled={!base || rendering} onClick={onCopy} title="Copy the edited image">
+        <Copy size={16} strokeWidth={1.5} /> Copy
+      </button>
+      <button className="editor-export-btn" disabled={!base || rendering} onClick={onSave} title="Export a PNG to the Library">
         <Download size={16} strokeWidth={1.5} /> Export
       </button>
-      <button className="editor-export-btn editor-export-btn--primary editor-done-btn" disabled={rendering} onClick={onDone} title="Finish — send to the corner HUD">
+      <button className="editor-export-btn editor-export-btn--primary editor-done-btn" disabled={!base || rendering} onClick={onDone} title="Finish — send to the corner HUD">
         <CheckCheck size={16} strokeWidth={1.5} aria-hidden="true" /><span>Done</span>
       </button>
     </div>

@@ -106,19 +106,24 @@
 }
 .editor-rail {
   display: flex; flex-direction: column; gap: 4px;
-  flex-shrink:0; min-height:0; overflow-y:auto; scrollbar-width:none;
+  flex-shrink:0; min-height:0; overflow:hidden;
   padding: var(--s3) var(--s2); border-right: 1px solid var(--border); background: var(--bg-frame, var(--bg-elev));
 }
-.editor-rail::-webkit-scrollbar { display:none; }
+/* Only tools overflow in genuinely short windows; history stays reachable. */
+.editor-rail-tools {
+  display:flex; flex-direction:column; gap:4px; flex:1; min-height:0;
+  overflow-y:auto; overflow-x:hidden; scrollbar-width:none;
+}
+.editor-rail-tools::-webkit-scrollbar { display:none; }
 /* All tool items have uniform 4px spacing */
 .editor-rail-group {
   display: flex; flex-direction: column; gap: 4px;
-  margin: 0; padding: 0;
+  margin: 0; padding: 0; flex:none;
 }
 .editor-rail-group:last-of-type { margin-bottom: 0; padding-bottom: 0; }
 .editor-tool {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; border-radius: var(--r-btn);
+  width: 36px; height: 32px; flex:none; border-radius: var(--r-btn);
   border: none; background: transparent; color: var(--text-dim); cursor: pointer; line-height: 1;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
@@ -132,9 +137,9 @@
   color: var(--danger);
 }
 /* Bottom action group (undo/redo/clear) has uniform 4px spacing with clean separation */
-.editor-rail-sep { height: 1px; margin-top: auto; margin-bottom: 4px; }
+.editor-rail-sep { height:1px; flex:none; margin:4px 0; }
 .editor-rail-bottom {
-  display: flex; flex-direction: column; gap: 4px;
+  flex:none; display: flex; flex-direction: column; gap: 4px;
 }
 
 /* Inline text-annotation editor: a real <textarea> floated over the Konva text
@@ -655,3 +660,15 @@
 .editor-options-row .editor-stylebar { min-height:38px; box-sizing:border-box; padding:4px 14px; gap:12px; flex-wrap:wrap; justify-content:center; background:transparent; }
 .editor-topbar .editor-frame-slot { justify-content:flex-end; }
 @media(max-width:1020px){.editor-topbar .editor-frame-slot { justify-content:flex-start; }.editor-options-row { padding-inline:8px; }}
+
+@media(max-height:700px) {
+  .editor-tool { height:28px; }
+  .editor-rail { padding-block:6px; }
+  .editor-rail-tools,.editor-rail-group,.editor-rail-bottom { gap:3px; }
+}
+/* Keep four output actions and window controls clear at the minimum width. */
+@media(max-width:860px) {
+  .editor-topbar .editor-exportbar { gap:5px; padding-inline:6px; }
+  .editor-exportbar .editor-export-btn { padding-inline:8px; gap:5px; }
+  .editor-exportbar .editor-done-btn { min-width:64px; }
+}
