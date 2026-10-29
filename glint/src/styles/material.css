@@ -4,6 +4,7 @@
   --window-canvas: rgb(8 8 8 / 62%);
   --bg-frame: rgb(8 8 8 / 48%);
   --glass-card: rgb(24 24 24 / 72%);
+  --glass-utility: rgb(16 16 16 / 34%);
   --bg-elev: rgb(20 20 20 / 94%);
   --bg-elev2: rgb(255 255 255 / 6%);
   --bg-elev3: rgb(255 255 255 / 10%);
@@ -17,6 +18,7 @@
   --window-canvas: rgb(255 255 255 / 60%);
   --bg-frame: rgb(255 255 255 / 42%);
   --glass-card: rgb(255 255 255 / 70%);
+  --glass-utility: rgb(255 255 255 / 38%);
   --bg-elev: rgb(255 255 255 / 96%);
   --bg-elev2: rgb(0 0 0 / 4%);
   --bg-elev3: rgb(0 0 0 / 7%);
@@ -66,3 +68,13 @@ html[data-glass="true"] .cap-actions {
   backdrop-filter:blur(20px);
   border-color:transparent;
 }
+
+/* Utility bands stay quieter and more opaque than the workspace, without
+   restoring a solid slab. Media pixels and transparency grids are unaffected. */
+:root[data-glass="true"][data-theme] :is(.trim-gif,.studio-export-result,.editor-crop-dock,.editor-image-list,.editor-zoombar,.trim-zoomctl) {
+  background:var(--glass-utility);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+}
+
+:root[data-glass="true"][data-theme] .frame-panel { background:var(--glass-card); }
