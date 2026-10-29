@@ -95,3 +95,14 @@ The user still observed an editor-only white flash after the first-frame gate. T
 Home/Library capture footers now reserve the same 56px minimum and fill the available card height. Named and unnamed captures retain the same thumbnail geometry and a continuous footer tint to the card bottom.
 
 The rebuilt isolated app was launched with an owned fixture. Native readback on its visible editor HWND confirmed WS_EX_NOREDIRECTIONBITMAP enabled, desktop acrylic (material 3), and dark appearance. The subsequent window disappeared from visible-window enumeration, so further GUI manipulation was stopped. No high-frame-rate visual confirmation of the flash disappearing is claimed. All 283 frontend tests and 275 native tests passed (8 gated integrations); real MP4 annotation and audio/polish export tests both passed, and frontend/native review builds completed successfully. Nothing merged into main.
+
+
+## Shared compact controls and glass consistency
+
+Image 1's compact action buttons are the common reference for the screenshot editor, Studio, selects, number inputs, and Settings actions. Shared control tokens replace the conflicting editor no-border overrides and doubled inset highlights: one thin edge, a quiet fill, the existing compact dimensions, and preserved keyboard focus. Light-theme boundaries and selected Studio tabs are explicit. Drawing rail icons remain bare except for hover/selection.
+
+Capture previews use 16:9 framing and 50px metadata footers with reduced padding. Home recording actions are Copy path, Trim, and Open video; video files no longer reach the image-pin decoder. Screenshot pinning remains available. Two rendered-component tests verify that distinction.
+
+Native acrylic remains the desktop backdrop. MonoCode's `src/styles/index.css` was reviewed for its separation of native glass and translucent pane layers, avoiding compounded opaque fills; source reference: https://github.com/hardbeat920/monocode. The resulting Glint changes use neutral control tokens, distinct translucent Settings cards and version/folder surfaces, quieter GIF/Studio utility bands, and darker neutral rails. Light capture-hover and HUD action surfaces use white with dark icons. Menus retain higher opacity for readable choices while preserving frosting. Shortcut-help keycaps have explicit spacing and line rhythm.
+
+Validation: 285 frontend tests and TypeScript/production build passed. Native behavior is unchanged in this pass. Actual WebView inspection covered dark Home/Hotkeys and light Appearance, Hotkeys, Storage, and Updates. The recording Home actions showed Open video. Studio's native accessibility state loaded the owned fixture and exposed the updated controls; its window was then covered/hidden, so no completed Studio/GIF or live HUD visual check is claimed. The isolated review app remains available. All changes stay on ui-improvements, unmerged.

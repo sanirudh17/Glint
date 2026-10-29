@@ -1,6 +1,7 @@
 /* Glint — global base styles */
 @import "./tokens.css";
 @import "./material.css";
+@import "./controls.css";
 /* Premium grotesque, bundled locally (no runtime network). Weights 400/500/600/700. */
 @import "@fontsource/manrope/400.css";
 @import "@fontsource/manrope/500.css";
@@ -161,13 +162,6 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 ::selection {
   background: var(--accent-subtle);
   color: var(--text);
-}
-
-/* Editor commands use surface contrast rather than outlined mini-containers.
-   Keep border geometry so controls do not shift; keyboard focus stays visible. */
-:root[data-theme] :is(.editor-view,.trim-root) :is(.g-btn,.g-icon-btn,.editor-export-btn,.editor-tool,.editor-width,.editor-toggle,.trim-btn,.trim-iconbtn) {
-  border-color:transparent;
-  box-shadow:none;
 }
 
 :root[data-theme] .editor-view :is(.editor-width--active,.editor-toggle--active) {

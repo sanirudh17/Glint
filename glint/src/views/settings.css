@@ -454,3 +454,11 @@
  .settings-nav-item { width: auto; white-space: nowrap; }
  .settings-panel { padding: 20px; }
 }
+
+/* Prose containing keycaps needs line spacing, not enlarged text. */
+.settings-hotkey-help { padding:16px; }
+.settings-hotkey-help strong { margin-bottom:10px; }
+.settings-hotkey-help ol { display:grid; gap:8px; margin-bottom:12px; padding-left:22px; }
+.settings-hotkey-help li { line-height:1.8; padding-left:2px; }
+.settings-hotkey-help .settings-kbd { margin-inline:3px; vertical-align:baseline; box-shadow:none; background:var(--control-bg); border-color:var(--control-edge); }
+.settings-hotkey-help p { line-height:1.6; opacity:1; color:var(--text-dim); }
