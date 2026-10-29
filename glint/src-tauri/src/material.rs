@@ -1,12 +1,16 @@
 //! Compositor-owned desktop acrylic, matching Seek's material. Capture overlays
 //! deliberately never receive a window-wide backdrop or a changed affinity.
-use tauri::WebviewWindow;
+use tauri::{Manager,WebviewWindow};
 
 #[tauri::command]
 pub fn window_material(window: WebviewWindow, glass: bool, dark: bool) -> bool {
     if !matches!(window.label(), "main" | "editor" | "rec-trim" | "rec-notes") {
         return false;
     }
+    // Keep Tao/WebView2's preferred theme aligned too. A DWM attribute alone
+    // leaves activation/theme-change handling free to restore the OS light theme.
+    let system=window.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().theme==crate::settings::Theme::System;
+    let _=window.set_theme(if system {None} else {Some(if dark {tauri::Theme::Dark} else {tauri::Theme::Light})});
     // Cover the native surface BEFORE tearing down acrylic, too. Frontend paint
     // and native composition do not necessarily complete in the same frame.
     if !glass {

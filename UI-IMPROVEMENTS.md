@@ -86,3 +86,12 @@ The native editor now builds and reloads hidden, seeded with the persisted theme
 Three regression tests cover delayed material/font readiness and cancellation between paint frames. All 282 frontend and 275 native tests passed (8 native integration tests gated); production frontend and native review builds passed. The isolated app was restarted with the new native executable. Cold and reused opens completed with the owned fixture, confirmed through native window/accessibility state. A covering window prevented direct visual confirmation of the brief transition; no high-frame-rate no-flash claim is made.
 
 The GIF export strip, export-result surface, crop dock, image-list surface, floating zoom controls and screenshot inspector now use distinct quieter glass tints in both themes. Image/video pixels and transparency grids remain untouched.
+
+
+## Repeated editor flash report: Windows composition follow-up
+
+The user still observed an editor-only white flash after the first-frame gate. The follow-up updates Tauri from 2.11.3 to 2.12.4 to use its documented `no_redirection_bitmap(true)` option on the screenshot editor only. This removes the legacy Windows redirection bitmap that can flash before transparent WebView2 content is composed. Reference: https://docs.rs/tauri/2.12.4/tauri/webview/struct.WebviewWindowBuilder.html#method.no_redirection_bitmap. The existing image/material readiness gate remains; explicit native theme selection respects System mode, repeated identical glass requests no longer reset the surface, and editor presentation no longer toggles always-on-top.
+
+Home/Library capture footers now reserve the same 56px minimum and fill the available card height. Named and unnamed captures retain the same thumbnail geometry and a continuous footer tint to the card bottom.
+
+The rebuilt isolated app was launched with an owned fixture. Native readback on its visible editor HWND confirmed WS_EX_NOREDIRECTIONBITMAP enabled, desktop acrylic (material 3), and dark appearance. The subsequent window disappeared from visible-window enumeration, so further GUI manipulation was stopped. No high-frame-rate visual confirmation of the flash disappearing is claimed. All 283 frontend tests and 275 native tests passed (8 gated integrations); real MP4 annotation and audio/polish export tests both passed, and frontend/native review builds completed successfully. Nothing merged into main.

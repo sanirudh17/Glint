@@ -1,9 +1,9 @@
 import {beforeEach,expect,it,vi} from 'vitest';
 const invoke=vi.hoisted(()=>vi.fn());
 vi.mock('@tauri-apps/api/core',()=>({invoke}));
-import {applyMaterial} from './material';
+let applyMaterial:typeof import('./material').applyMaterial;
 const root={dataset:{theme:'dark',glass:'false'}};
-beforeEach(()=>{vi.stubGlobal('document',{documentElement:root});vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>{callback(0);return 1;});root.dataset={theme:'dark',glass:'false'};invoke.mockReset();});
+beforeEach(async()=>{vi.resetModules();({applyMaterial}=await import('./material'));vi.stubGlobal('document',{documentElement:root});vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>{callback(0);return 1;});root.dataset={theme:'dark',glass:'false'};invoke.mockReset();});
 it('uses native acceptance rather than pretending that CSS can blur the desktop',async()=>{
   invoke.mockResolvedValueOnce(true);await applyMaterial(true);
   expect(invoke).toHaveBeenCalledWith('window_material',{glass:true,dark:true});
@@ -27,4 +27,12 @@ it('covers the WebView before the native backdrop is removed',async()=>{
   invoke.mockImplementationOnce(()=>{expect(root.dataset.glass).toBe('false');return Promise.resolve(false);});
   await applyMaterial(false);
   expect(invoke).toHaveBeenCalledTimes(1);
+});
+
+it('does not recreate acrylic or erase the WebView for repeated identical settings',async()=>{
+  invoke.mockResolvedValue(true);
+  await applyMaterial(true);await applyMaterial(true);
+  expect(invoke).toHaveBeenCalledTimes(1);
+  root.dataset.theme='light';await applyMaterial(true);
+  expect(invoke).toHaveBeenCalledTimes(2);
 });

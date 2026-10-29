@@ -22,6 +22,7 @@ fn builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
         let settings=state.0.lock().unwrap();
         (settings.theme.clone(),settings.accent.clone())
     };
+    let system=matches!(theme,crate::settings::Theme::System);
     let light=match theme {
         crate::settings::Theme::Light=>true,
         crate::settings::Theme::Dark=>false,
@@ -30,7 +31,11 @@ fn builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
     let boot=format!("window.__GLINT_BOOT__ = {};",serde_json::json!({"theme":if light {"light"} else {"dark"},"accent":accent}));
     WebviewWindowBuilder::new(app, EDITOR_LABEL, WebviewUrl::App("index.html#/editor".into()))
         .title("Glint")
+        .theme(if system {None} else {Some(if light {tauri::Theme::Light} else {tauri::Theme::Dark})})
         .transparent(true)
+        // Avoid the legacy Windows redirection surface flashing white before
+        // WebView2 composition is attached (also on reused transparent windows).
+        .no_redirection_bitmap(true)
         .decorations(false)
         .shadow(true)
         .inner_size(1180.0, 780.0)
@@ -82,8 +87,6 @@ pub fn editor_present(window:tauri::WebviewWindow)->Result<(),String>{
     if !PRESENT_PENDING.swap(false,std::sync::atomic::Ordering::SeqCst){return Ok(());}
     let _=window.unminimize();
     window.show().map_err(|e|e.to_string())?;
-    let _=window.set_always_on_top(true);
     let _=window.set_focus();
-    let _=window.set_always_on_top(false);
     Ok(())
 }
