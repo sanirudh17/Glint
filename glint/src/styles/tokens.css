@@ -2,8 +2,7 @@
  * Glint — Design tokens
  * Dark-primary. One strategic accent (runtime-switchable palette, Teal default),
  * used sparingly for primary actions and active states; everything else neutral.
- * Aesthetic direction: "ink on glass" — deep slate-charcoal substrate (never
- * pure black), surfaces lifted via 1px hairlines tinted from the surface and
+ * Aesthetic direction: "ink on glass" — neutral black substrate, surfaces lifted via 1px hairlines tinted from the surface and
  * soft ambient shadows (never dark glows). Manrope grotesque for UI,
  * monospace reserved for code/data/measurement.
  *
@@ -13,7 +12,7 @@
 /* ─── Global (theme-independent) ──────────────────────────────────────── */
 :root {
   /* Default substrate before JS sets data-theme — prevents white flash */
-  --bg: #121315;
+  --bg: #080808;
   /* Spacing — 4-pt grid */
   --s1: 4px;
   --s2: 8px;
@@ -106,27 +105,27 @@
 /* ─── Dark theme (primary) ─────────────────────────────────────────────── */
 :root[data-theme="dark"] {
   /* Substrate — smooth dark canvas */
-  --bg:        #121315;
+  --bg:        #080808;
   /* Sidebar & Titlebar frame — subtle distinctness from canvas */
-  --bg-frame:   #0D0E10;
-  --bg-elev:   #121315;
-  --bg-elev2:  #1A1C21;
-  --bg-elev3:  #202329;
+  --bg-frame:   #0B0B0B;
+  --bg-elev:   #080808;
+  --bg-elev2:  #181818;
+  --bg-elev3:  #222222;
 
   /* Micro-borders — the "ink on glass" signature */
-  --border:        #22252C;
-  --border-strong: #2E323A;
+  --border:        #292929;
+  --border-strong: #383838;
 
   /* Text — WCAG AAA body (≥7:1), AA labels (≥4.5:1) on #0C0D0F.
-   * body #F1F5F9 ≈17:1 · dim #B7C0D1 ≈10:1 · faint #94A3B8 ≈7.6:1 */
-  --text:       #F1F5F9;
-  --text-dim:   #B7C0D1;
-  --text-faint: #94A3B8;
+   * body #F4F4F4 ≈17:1 · dim #BDBDBD ≈10:1 · faint #999999 ≈7.6:1 */
+  --text:       #F4F4F4;
+  --text-dim:   #BDBDBD;
+  --text-faint: #999999;
 
   --accent-fg:  #ffffff;
 
   /* Scrollbar */
-  --scrollbar-thumb: #2E323A;
+  --scrollbar-thumb: #383838;
   --scrollbar-track: transparent;
 }
 

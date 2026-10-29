@@ -72,7 +72,7 @@
             theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
           }
           document.documentElement.setAttribute("data-theme", theme);
-          document.documentElement.style.setProperty("--bg", theme === "light" ? "#F6F7F9" : "#121315");
+          document.documentElement.style.setProperty("--bg", theme === "light" ? "#F6F7F9" : "#080808");
 
           if (storedAccent) {
             var key = storedAccent.toLowerCase();

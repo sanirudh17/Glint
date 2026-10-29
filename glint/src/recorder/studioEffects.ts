@@ -16,9 +16,9 @@ export interface ZoomSegment {
 }
 export const effectId = () => crypto.randomUUID();
 export const clamp = (value: number, min: number, max: number) => Math.max(min, Math.min(max, value));
-export function newZoom(time: number, duration: number): ZoomSegment {
+export function newZoom(time: number, duration: number, followCursor = false): ZoomSegment {
   const start = clamp(time, 0, Math.max(0, duration - .1));
-  return { id: effectId(), start, end: Math.min(duration, start + 2), scale: 2, mode: "fixed", focus: { x: .5, y: .5 }, ease: "gentle", easeIn: .4, easeOut: .4, origin: "manual", edited: true };
+  return { id: effectId(), start, end: Math.min(duration, start + 2), scale: 2, mode: followCursor ? "follow-cursor" : "fixed", focus: { x: .5, y: .5 }, ease: "gentle", easeIn: .4, easeOut: .4, origin: "manual", edited: true };
 }
 export function easeValue(t: number, ease: ZoomEase): number {
   const x = clamp(t, 0, 1);

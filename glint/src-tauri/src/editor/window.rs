@@ -25,7 +25,7 @@ fn builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
         .center()
         .focused(true)
         // Dark substrate from the first frame — never white/black placeholder.
-        .background_color(tauri::window::Color(12, 13, 15, 255))
+        .background_color(tauri::window::Color(8, 8, 8, 255))
 }
 
 /// Build the editor window once, hidden, so the first "Annotate" click doesn't pay

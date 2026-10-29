@@ -347,7 +347,7 @@ fn trim_builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
         // is cramped for scrubbing. Still a normal decorated window the user can un-maximize.
         .maximized(true)
         // Dark substrate from the first frame — never a white/black placeholder.
-        .background_color(tauri::window::Color(12, 13, 15, 255))
+        .background_color(tauri::window::Color(8, 8, 8, 255))
 }
 
 /// The trim / quick-edit window: a NORMAL decorated, focused, resizable app window

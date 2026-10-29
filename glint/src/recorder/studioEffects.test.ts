@@ -1,6 +1,26 @@
 import { expect, it } from "vitest";
 import { newZoom, splitZoom, validateZooms, zoomAt } from "./studioEffects";
 const crop = { x: 100, y: 50, w: 800, h: 600 };
+it("new cursor-aware zooms follow a curved path for the whole selected interval", () => {
+  const segment = {...newZoom(1, 10, true), end: 8};
+  expect(segment.mode).toBe('follow-cursor');
+  expect(newZoom(1,10).mode).toBe('fixed');
+  const positions = Array.from({length:121},(_,i)=>({
+    x:500+250*Math.cos(i/120*Math.PI*2),y:350+180*Math.sin(i/120*Math.PI*2),
+  }));
+  const views=positions.map((point,i)=>zoomAt([segment],2+i/30,crop,1920,1080,{...point,latestX:point.x,latestY:point.y}));
+  views.forEach((v,i)=>{
+    expect(v.scale).toBe(2);
+    expect(positions[i].x).toBeGreaterThan(v.x);
+    expect(positions[i].x).toBeLessThan(v.x+v.w);
+    expect(positions[i].y).toBeGreaterThan(v.y);
+    expect(positions[i].y).toBeLessThan(v.y+v.h);
+    expect(v.x).toBeGreaterThanOrEqual(crop.x);
+    expect(v.x+v.w).toBeLessThanOrEqual(crop.x+crop.w);
+  });
+  expect(new Set(views.map(v=>v.x.toFixed(1))).size).toBeGreaterThan(30);
+  expect(zoomAt([segment],8,crop,1920,1080).scale).toBe(1);
+});
 it("zooms smoothly inside the source crop at every focus edge", () => {
   for (const focus of [{x:0,y:0},{x:1,y:1},{x:.5,y:.5}]) {
     const segment = { ...newZoom(0, 10), focus, end: 4 };

@@ -188,7 +188,7 @@ pub fn run() {
                 let bg_color = if theme_str == "light" {
                     tauri::window::Color(246, 247, 249, 255)
                 } else {
-                    tauri::window::Color(12, 13, 15, 255)
+                    tauri::window::Color(8, 8, 8, 255)
                 };
 
                 let builder = tauri::WebviewWindowBuilder::new(
