@@ -214,12 +214,12 @@
 .cap-thumb--empty { width: 100%; height: 100%; background: var(--bg-elev2); }
 
 .cap-meta {
-  min-height: 50px;
+  min-height: 46px;
   flex: 1;
   display: flex;
   align-items: flex-start;
   gap: var(--s2);
-  padding: 8px 10px;
+  padding: 6px 10px;
 }
 /* Kind glyph, top-aligned with the two-line block — shown by icon shape. */
 .cap-kind {
@@ -245,6 +245,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.cap-title--dimensions { font-variant-numeric: tabular-nums; }
 .cap-sub {
   font-family: var(--ff-mono, ui-monospace, monospace);
   font-size: var(--fz-xs);

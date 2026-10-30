@@ -200,10 +200,9 @@ export function CaptureCard({
             <span className="cap-title" title={item.title}>
               {item.title}
             </span>
-          ) : null}
+          ) : <span className="cap-title cap-title--dimensions">{item.width && item.height ? `${item.width}×${item.height}` : "—"}</span>}
           <span className="cap-sub">
-            {item.width && item.height ? `${item.width}×${item.height}` : "—"}
-            <span className="cap-sub-sep" aria-hidden="true">·</span>
+            {(item.title || renaming) && <>{item.width && item.height ? `${item.width}×${item.height}` : "—"}<span className="cap-sub-sep" aria-hidden="true">·</span></>}
             {when(item.created_at)}
           </span>
         </div>

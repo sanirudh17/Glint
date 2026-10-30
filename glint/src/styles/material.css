@@ -9,10 +9,10 @@
   --control-hover: rgb(255 255 255 / 11%);
   --bg-frame: rgb(8 8 8 / 65%);
   --glass-card: rgb(24 24 24 / 72%);
-  --glass-menu: rgb(24 24 24 / 64%);
+  --glass-menu: rgb(18 18 18 / 46%);
   --select-bg: rgb(255 255 255 / 5%);
   --select-menu-bg: var(--glass-menu);
-  --select-blur: blur(20px) saturate(1.1);
+  --select-blur: blur(28px) saturate(1.1);
   --control-blur: blur(16px);
   --glass-utility: rgb(255 255 255 / 4%);
   --bg-elev: rgb(20 20 20 / 94%);
@@ -33,10 +33,10 @@
   --control-hover: rgb(255 255 255 / 62%);
   --bg-frame: rgb(255 255 255 / 42%);
   --glass-card: rgb(255 255 255 / 70%);
-  --glass-menu: rgb(255 255 255 / 66%);
+  --glass-menu: rgb(255 255 255 / 48%);
   --select-bg: rgb(255 255 255 / 18%);
   --select-menu-bg: var(--glass-menu);
-  --select-blur: blur(20px) saturate(1.1);
+  --select-blur: blur(28px) saturate(1.1);
   --control-blur: blur(16px);
   --glass-utility: rgb(255 255 255 / 18%);
   --bg-elev: rgb(255 255 255 / 96%);
@@ -98,4 +98,24 @@ html[data-glass="true"] .cap-actions {
 :root[data-glass="true"][data-theme] .frame-seg {
   background:var(--control-bg);
   border-color:var(--control-edge);
+}
+
+/* Expandable inspectors are material surfaces too, not just their select menus.
+   Tint the whole disclosure once; its body remains clear to avoid stacked slabs. */
+:root[data-glass="true"][data-theme] .studio-panel .g-control-disclosure {
+  background:var(--glass-utility);
+  backdrop-filter:blur(18px) saturate(1.1);
+  -webkit-backdrop-filter:blur(18px) saturate(1.1);
+  border-radius:var(--r2);
+}
+:root[data-glass="true"][data-theme] .studio-panel .g-control-disclosure > summary {
+  padding-inline:10px;
+  min-height:38px;
+  border-bottom:1px solid transparent;
+}
+:root[data-glass="true"][data-theme] .studio-panel .g-control-disclosure[open] > summary {
+  border-bottom-color:var(--border);
+}
+:root[data-glass="true"][data-theme] .studio-panel .g-control-disclosure-body {
+  padding-inline:10px;
 }

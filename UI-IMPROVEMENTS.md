@@ -124,3 +124,12 @@ Reset crop no longer removes its left padding: its label has symmetric horizonta
 Select triggers and open menus consume material tokens in the shared primitive styles, including the explicit light/dark menu rules and portalled inspector menus. The previous highly opaque dropdown fills are reduced to 64% dark/66% light with frosting. Light controls use less opaque fill and a clearer single edge. Solid mode keeps the existing material. Enabled light-theme Switch thumbs are explicitly white, independent of accent button text color; dark and unchecked thumbs retain their existing behavior.
 
 Validation: 285 frontend tests and the TypeScript/production build passed. The review server was restarted after it was found offline, and HTTP readback confirmed it serves the updated material tokens. The app window was enumerated, but its process was no longer available before the visual capture; no new visual light/dark comparison is claimed. All changes remain on ui-improvements.
+
+
+## Capture footer and both kinds of trim dropdown
+
+Home and Library now use the same compact two-line footer for all captures. Named captures show their title above dimensions/date; unnamed captures show dimensions above the date. Both lines carry useful content, with reduced vertical padding and matching thumbnail/card geometry. No placeholder title or empty metadata row is introduced.
+
+The user clarified that dropdown means both choice menus and expandable inspector sections. Acrylic now gives each Studio disclosure one translucent frosted surface, with an inset summary and a subtle divider while open. Its body stays clear rather than layering another fill. Shared choice menus use lighter dark/light tints and stronger frosting; solid mode is unchanged.
+
+Validation: all 285 frontend tests and the TypeScript/production build passed. Both theme branches were checked in source. The isolated app was restarted after its main window became unavailable; a new Glint window was enumerated but disappeared before capture, leaving only the single-instance helper window. No completed visual confirmation in either theme is claimed. Work remains on ui-improvements, with main unchanged.
