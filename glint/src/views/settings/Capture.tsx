@@ -1,3 +1,4 @@
+import { OcrEngineControls } from "../../ocr/OcrEngineControls";
 import { Section, Field, Select, Switch,Button } from "../../components/ui";
 import {invoke} from '@tauri-apps/api/core';
 import { useAppStore } from "../../store/useAppStore";
@@ -29,6 +30,7 @@ export function Capture() {
   const setHideDesktopIcons=useAppStore(s=>s.setHideDesktopIcons);
   const setQuickAccessAutoClose=useAppStore(s=>s.setQuickAccessAutoClose);
   const pushToast=useAppStore(s=>s.pushToast);
+  const setIndexScreenshotText = useAppStore(s => s.setIndexScreenshotText);
   const isJpeg = (settings?.image_format ?? "png") === "jpeg";
   return (
     <Section
@@ -71,6 +73,10 @@ export function Capture() {
       </Field>
       <Field label="Recording notifications" hint="Turn on Do not disturb in Windows before recording. Windows does not provide an unrestricted automatic switch for Glint.">
         <Button size="md" variant="subtle" onClick={()=>void invoke('settings_open_notifications').catch(e=>pushToast(String(e)))}>Notification settings</Button>
+      </Field>
+      <OcrEngineControls />
+      <Field label="Search screenshot text" hint="Search readable text in saved screenshots, on this device. Turning this off clears the text index.">
+        <Switch ariaLabel="Search screenshot text" checked={settings?.index_screenshot_text ?? true} onChange={v => void setIndexScreenshotText(v)} />
       </Field>
     </Section>
   );

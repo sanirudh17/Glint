@@ -1,3 +1,4 @@
+import { listCaptures } from "./lib/captures";
 import { useEffect, lazy, Suspense, type ReactNode } from "react";
 import { createHashRouter, Outlet } from "react-router-dom";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -38,6 +39,7 @@ const lazyRoute = (el: ReactNode) => <Suspense fallback={null}>{el}</Suspense>;
  * resolved client-side regardless of the origin.
  */
 function AppShell() {
+  useEffect(() => { void listCaptures().catch(() => {}); }, []);
   // Reveal the main window only once AppShell and HomeView have committed to the DOM.
   // Double-rAF guarantees the browser has painted the dashboard components with zero flash.
   useEffect(() => {

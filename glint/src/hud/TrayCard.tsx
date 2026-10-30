@@ -40,7 +40,7 @@ export function TrayCard({ item, onChanged }: { item: TrayItem; onChanged: () =>
       // to an error only if it actually fails.
       try {
         switch (a) {
-          case "copy": flash("Copied to clipboard"); await trayCopy(item.id); break;
+          case "copy": flash("Copying..."); await trayCopy(item.id); flash("Copied to clipboard"); break;
           case "copy-path": flash("Path copied"); await trayCopyPath(item.id); break;
           case "save":
             if (saved) { flash("Revealed in folder"); await trayReveal(item.id); }

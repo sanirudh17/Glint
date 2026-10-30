@@ -13,7 +13,6 @@
 }
 
 .home-section { display: flex; flex-direction: column; gap: var(--s4); }
-.home-section--grow { flex: 1 1 auto; }
 
 /* Eyebrow — mono uppercase label (see .label in global.css). No hairline rule. */
 .home-eyebrow { display: block; }
@@ -56,7 +55,7 @@
 /* Recent grid — responsive auto-fill, ~two rows on a normal window */
 .home-recent-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, max(180px, calc((100% - 4 * var(--s4)) / 5))), 1fr));
   gap: var(--s4);
   align-content: start;
 }

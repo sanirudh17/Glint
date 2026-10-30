@@ -20,7 +20,7 @@
 .video-project-scene-tools{flex-wrap:wrap;margin-bottom:12px}
 .video-project-history{display:flex;gap:4px;margin-left:auto}
 .video-project-sequence{min-height:0;display:flex;flex-direction:column;flex:1;border-top:1px solid var(--border);padding-top:16px}
-.video-project-scenes{padding:0;margin:0;list-style:none;overflow:auto;min-height:0;flex:1;scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent;overscroll-behavior:contain}
+.video-project-scenes{padding:0;margin:0;list-style:none;overflow:auto;min-height:0;flex:1;scrollbar-width:thin;scrollbar-color:var(--scrollbar-thumb) transparent;overscroll-behavior:contain}
 .video-project-scenes li{display:flex;align-items:center;gap:8px;min-width:0;border-bottom:1px solid var(--border);padding:8px 4px}
 .video-project-scenes li.is-selected{background:var(--accent-subtle);border-radius:8px}
 .video-project-scenes li>div{display:flex;gap:3px;flex-shrink:0}
@@ -35,7 +35,7 @@
 .video-project-inspector-tabs button:hover,.video-project-compact-tabs button:hover{background:var(--bg-elev2);color:var(--text)}
 .video-project-inspector-tabs button[aria-pressed=true],.video-project-compact-tabs button[aria-pressed=true]{background:var(--accent-subtle);color:var(--accent)}
 .video-project-compact-tabs{display:none}
-.video-project-inspector-body{min-height:0;overflow:auto;padding-right:8px;scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent;overscroll-behavior:contain}
+.video-project-inspector-body{min-height:0;overflow:auto;padding-right:8px;scrollbar-width:thin;scrollbar-color:var(--scrollbar-thumb) transparent;overscroll-behavior:contain}
 .video-project-inspector fieldset{margin:0;padding:0;border:0;min-width:0}
 .video-project-inspector .look-row{display:flex;flex-direction:column;align-items:stretch;gap:8px;margin:20px 0}
 .video-project-inspector .look-label{white-space:nowrap;font-size:13px}
@@ -47,7 +47,7 @@
 .video-project-inspector .look-controls{margin-top:24px;padding-top:24px;border-top:1px solid var(--border)}
 .video-project-scene-settings{padding-bottom:16px}
 .video-project-scene-settings h2{font-size:14px;font-weight:600;margin:0 0 8px}
-.video-project-scene-settings>p{font-size:12px;color:var(--text-dim);margin:0 0 24px;white-space:nowrap;overflow:auto;padding-bottom:6px;scrollbar-width:thin;scrollbar-color:var(--border-strong) transparent}
+.video-project-scene-settings>p{font-size:12px;color:var(--text-dim);margin:0 0 24px;white-space:nowrap;overflow:auto;padding-bottom:6px;scrollbar-width:thin;scrollbar-color:var(--scrollbar-thumb) transparent}
 .video-project-title-label{display:flex;flex-direction:column;gap:8px;margin-top:16px;font-size:13px;color:var(--text-dim)}
 .video-project-title-label textarea{resize:vertical;min-height:80px;border:1px solid var(--border-strong);background:var(--bg-elev2);border-radius:8px;color:var(--text);padding:10px;font:inherit;line-height:1.5;caret-color:var(--accent)}
 .video-project-notice{flex-wrap:wrap;font-size:13px;color:var(--text-dim);padding:10px 0;border-bottom:1px solid var(--border)}

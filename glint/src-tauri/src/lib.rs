@@ -280,6 +280,7 @@ pub fn run() {
                 }
             }
 
+            crate::clipboard::init(app.handle())?;
             log::info!("Glint started");
             Ok(())
         })

@@ -38,12 +38,20 @@ interface CaptureListRow {
  * resolved to an asset URL; the WebView then loads thumbnails lazily and natively
  * instead of the backend base64-inlining every one under the DB lock.
  */
+let cachedCaptures: CaptureItem[] | null = null;
+let pendingCaptures: Promise<CaptureItem[]> | null = null;
+/** Session snapshot: first navigation paints immediately; refresh reconciles disk. */
+export function captureSnapshot(limit?: number): CaptureItem[] {
+  return limit === undefined ? cachedCaptures ?? [] : (cachedCaptures ?? []).slice(0, limit);
+}
 export const listCaptures = async (limit?: number): Promise<CaptureItem[]> => {
-  const rows = await invoke<CaptureListRow[]>("captures_list", { limit: limit ?? null });
-  return rows.map(({ thumb_path, ...r }) => ({
-    ...r,
-    thumb_url: thumb_path ? convertFileSrc(thumb_path) : null,
-  }));
+  // All callers share one inexpensive metadata request. Home also warms Library.
+  const request = pendingCaptures ??= invoke<CaptureListRow[]>("captures_list", { limit: null })
+    .then(rows => rows.map(({ thumb_path, ...r }) => ({ ...r, thumb_url: thumb_path ? convertFileSrc(thumb_path) : null })))
+    .then(rows => { cachedCaptures = rows; return rows; })
+    .finally(() => { pendingCaptures = null; });
+  const rows = await request;
+  return limit === undefined ? rows : rows.slice(0, limit);
 };
 export const openCapture = (id: number): Promise<void> => invoke<void>("capture_open", { id });
 export const revealCapture = (id: number): Promise<void> => invoke<void>("capture_reveal", { id });

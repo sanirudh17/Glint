@@ -9,14 +9,14 @@ import { Button, EmptyState } from "../components/ui";
 import { useAppStore } from "../store/useAppStore";
 import { startCapture } from "../lib/captureIpc";
 import { captureText } from "../lib/ocr";
-import { listCaptures, type CaptureItem } from "../lib/captures";
+import { captureSnapshot, listCaptures, type CaptureItem } from "../lib/captures";
 import { getRecentProjects, openProject, pushRecentProject, type RecentProject } from "../lib/editor";
 import { popoverPlacement } from "../components/ui/popoverPlacement";
 import { CaptureCard } from "./library/CaptureCard";
 import "./home.css";
 
 /** Recent captures previewed on the dashboard (newest first). */
-const RECENT_LIMIT = 8;
+const RECENT_LIMIT = 10;
 /** Recent .glint projects offered in the conditional Resume row. */
 const RESUME_LIMIT = 3;
 
@@ -53,9 +53,9 @@ export default function HomeView() {
   }, [projectsOpen, placeProjects]);
 
   // Recent captures — newest first, capped.
-  const [recent, setRecent] = useState<CaptureItem[]>([]);
+  const [recent, setRecent] = useState<CaptureItem[]>(() => captureSnapshot(RECENT_LIMIT));
   const reloadRecent = useCallback(() => {
-    listCaptures(RECENT_LIMIT).then(setRecent).catch(() => setRecent([]));
+    listCaptures(RECENT_LIMIT).then(setRecent).catch(() => { /* Keep the last successful snapshot. */ });
   }, []);
   useEffect(() => { reloadRecent(); }, [reloadRecent]);
   useEffect(() => {
@@ -146,7 +146,7 @@ export default function HomeView() {
       </section>
 
       {/* ── Recent ──────────────────────────────────────────── */}
-      <section className="home-section home-section--grow" aria-labelledby="rc-label">
+      <section className="home-section" aria-labelledby="rc-label">
         <div className="home-rowhead">
           <span className="label home-eyebrow" id="rc-label">Recent</span>
           {recent.length > 0 && (

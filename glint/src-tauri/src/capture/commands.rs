@@ -375,21 +375,21 @@ pub(super) fn finish_commit(
         crate::settings::sound::play_shutter();
     }
 
-    // Copy to clipboard (gated by auto_copy) on a DEDICATED thread — non-fatal.
-    // arboard's Windows image copy converts the frame to a DIB and can take the better
-    // part of a second for a large capture; done inline it dominated the pre-HUD
-    // critical path (evidence: `[perf] commit clipboard copy` ~700-1000ms). The HUD's
-    // render never depends on the clipboard, so fire-and-forget here and let the HUD
-    // open immediately; the HUD's own re-copy button covers the rare failure.
+    // Do not delay the HUD, but report the actual result and serialize newer copies.
     if auto_copy {
-        let cb_rgba = cropped.clone();
-        let (cw, ch) = (clamped.w, clamped.h);
-        std::thread::spawn(move || {
-            let _cb = std::time::Instant::now();
-            if let Err(e) = clipboard::copy_image(&cb_rgba, cw, ch) {
-                log::warn!("clipboard copy failed: {e}");
+        let ticket=clipboard::reserve();
+        let cb_rgba=cropped.clone();
+        let clipboard_app=app.clone();
+        let (cw,ch)=(clamped.w,clamped.h);
+        std::thread::spawn(move|| {
+            match clipboard::copy_image_reserved(ticket,&cb_rgba,cw,ch) {
+                Ok(true)=>{let _=clipboard_app.emit("capture-copied",());}
+                Ok(false)=>{},
+                Err(error)=>{
+                    log::warn!("clipboard copy failed: {error}");
+                    let _=clipboard_app.emit("glint-toast","Capture saved. Clipboard is busy; use Copy to retry.");
+                }
             }
-            log::info!("[perf] async clipboard copy: {}ms", _cb.elapsed().as_millis());
         });
     }
 
@@ -465,8 +465,8 @@ pub(super) fn finish_commit(
                     "path": path_str,
                     "width": clamped.w,
                     "height": clamped.h,
-                    // Copy runs on its own thread now; report whether it was requested.
-                    "clipboard": auto_copy,
+                    // Completion is announced by the clipboard worker, never guessed.
+                    "clipboard": false,
                 }),
             )
             .map_err(|e| e.to_string())?;

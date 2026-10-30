@@ -133,6 +133,10 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 }
 
 /* ─── Scrollbar (WebKit / Chromium — Tauri webview) ─────────────────── */
+/* Thin native WebView2 scrollbars also reach textarea shadow containers. */
+* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+@media (forced-colors: active) { * { scrollbar-color: auto; } }
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
@@ -145,7 +149,7 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   border-radius: 3px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: var(--border-strong);
+  background: var(--text-dim);
 }
 
 /* ─── Reduced motion ─────────────────────────────────────────────────── */
