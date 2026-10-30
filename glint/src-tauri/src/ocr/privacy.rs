@@ -170,7 +170,7 @@ pub(crate) fn detect_with_fallback(
     cancel: &AtomicBool,
 ) -> Result<Vec<Suggestion>, String> {
     let mut found = detect(words, width, height);
-    if super::neural::engine_id() != "tesseract" {
+    if super::neural::engine_id() != "tesseract" && super::managed::tesseract_installed() {
         let secondary = super::words::recognize_tesseract(rgba, width, height, cancel)?;
         for suggestion in detect(&secondary, width, height) {
             merge_suggestion(&mut found, suggestion);

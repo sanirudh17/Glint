@@ -1,9 +1,10 @@
-//! Local OCR / Capture Text. Bundled Tesseract is available offline; optional
+//! Local OCR / Capture Text. All engines are optional downloads; installed
 //! PP-OCRv6 engines run directly through Rust and ONNX Runtime on CPU.
 //! Recognition sends no images or recognized text to a server. Capture Text,
 //! indexing and privacy use the same selected primary engine.
 
 pub mod neural;
+pub mod managed;
 pub mod commands;
 pub mod window;
 pub mod words;
@@ -235,8 +236,7 @@ const OCR_UPSCALE: f32 = 3.0;
 const OCR_MAX_DIM: u32 = 8000;
 
 /// Message shown when the Tesseract binary can't be located.
-const TESS_MISSING: &str =
-    "Tesseract OCR isn't installed. Install it, then try again: winget install UB-Mannheim.TesseractOCR";
+const TESS_MISSING: &str = "Install Tesseract or another OCR engine in Settings > Auto-save > Text recognition engine.";
 
 /// Target dimensions to feed the OCR engine: enlarge by `OCR_UPSCALE` for accuracy,
 /// but never exceed `max_dim` on the longest side (downscaling a source that already
@@ -279,6 +279,7 @@ pub fn recognize(rgba: &[u8], w: u32, h: u32) -> Result<OcrOutput, String> {
         let words=result?;let text=words::text(&words);return Ok(OcrOutput{line_count:text.lines().count(),word_count:text.split_whitespace().count(),text});
     }
     let png = preprocess_to_png(rgba, w, h)?;
+    let _engine_use=managed::TESS_USE.read().map_err(|_|"Restart Glint to reset OCR")?;
     let tess = resolve_tesseract().ok_or_else(|| TESS_MISSING.to_string())?;
     let raw = run_tesseract(&tess, &png)?;
 
@@ -326,60 +327,11 @@ struct TessLoc {
     tessdata: Option<std::path::PathBuf>,
 }
 
-/// Directories that may hold a BUNDLED, self-contained Tesseract (`tesseract.exe` +
-/// its DLLs + `tessdata/`): the repo `binaries/tesseract` in dev, and the layouts
-/// Tauri's `bundle.resources` produces next to the installed exe in prod.
-fn bundled_tesseract_dirs() -> Vec<std::path::PathBuf> {
-    use std::path::PathBuf;
-    let mut dirs = vec![PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries/tesseract")];
-    if let Ok(exe) = std::env::current_exe() {
-        if let Some(dir) = exe.parent() {
-            dirs.push(dir.join("tesseract"));
-            dirs.push(dir.join("resources/tesseract"));
-            dirs.push(dir.join("binaries/tesseract"));
-        }
-    }
-    dirs
-}
-
-/// Locate Tesseract: the bundled copy first (zero-install), then a standard install,
-/// then PATH.
+/// Resolve only Glint's optional managed engine. Removing it cannot affect or
+/// silently fall back to a separately installed system Tesseract.
 fn resolve_tesseract() -> Option<TessLoc> {
-    use std::path::{Path, PathBuf};
-
-    for base in bundled_tesseract_dirs() {
-        let exe = base.join("tesseract.exe");
-        if exe.exists() {
-            let td = base.join("tessdata");
-            return Some(TessLoc {
-                exe,
-                tessdata: td.is_dir().then_some(td),
-            });
-        }
-    }
-
-    const INSTALLED: [&str; 2] = [
-        r"C:\Program Files\Tesseract-OCR\tesseract.exe",
-        r"C:\Program Files (x86)\Tesseract-OCR\tesseract.exe",
-    ];
-    for c in INSTALLED {
-        if Path::new(c).exists() {
-            return Some(TessLoc { exe: PathBuf::from(c), tessdata: None });
-        }
-    }
-    // Fall back to PATH via `where` (console suppressed).
-    let out = no_window(std::process::Command::new("where").arg("tesseract"))
-        .output()
-        .ok()?;
-    if out.status.success() {
-        if let Some(line) = String::from_utf8_lossy(&out.stdout).lines().next() {
-            let p = PathBuf::from(line.trim());
-            if p.exists() {
-                return Some(TessLoc { exe: p, tessdata: None });
-            }
-        }
-    }
-    None
+    let base=managed::tesseract_root()?;
+    Some(TessLoc{exe:base.join("tesseract.exe"),tessdata:Some(base.join("tessdata"))})
 }
 
 /// Run Tesseract on a PNG (via a temp file) and return its stdout text. `--psm 6`

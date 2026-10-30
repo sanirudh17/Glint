@@ -82,6 +82,7 @@ pub fn recognize_tesseract(
         return Err("Cancelled".into());
     }
     let png = super::preprocess_to_png(rgba, w, h)?;
+    let _engine_use=super::managed::TESS_USE.read().map_err(|_|"Restart Glint to reset OCR")?;
     let tess = super::resolve_tesseract().ok_or(super::TESS_MISSING)?;
     let path = std::env::temp_dir().join(format!(
         "glint-words-{}-{}.png",

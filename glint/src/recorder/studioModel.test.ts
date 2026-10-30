@@ -26,3 +26,13 @@ describe("Studio projects", () => {
     expect(reopened.importedVideo).toBe(true);expect(reopened.cursor.visible).toBe(false);expect(reopened.clips).toEqual(imported.clips);
   });
 });
+
+it('rejects corrupt clip identities and timing before reserving split IDs',()=>{
+ for(const patch of [{id:NaN},{id:Infinity},{id:0},{speed:NaN},{order:NaN}]){
+  expect(()=>hydrateProject({...project,clips:[{...project.clips[0],...patch}]},10)).toThrow('timeline is invalid');
+ }
+ expect(()=>hydrateProject({...project,clips:[project.clips[0],project.clips[0]]},10)).toThrow('timeline is invalid');
+ expect(()=>hydrateProject(project,NaN)).toThrow('timeline is invalid');
+ const split=splitClips(hydrateProject(project,10).clips,3);
+ expect(split.every(c=>Number.isSafeInteger(c.id))).toBe(true);
+});

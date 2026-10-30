@@ -44,7 +44,12 @@ export interface StudioEvents {
 export interface StudioData { project: StudioProject; events: StudioEvents }
 export function hydrateProject(raw: StudioProject, duration: number, events?:StudioEvents, size?:{width:number;height:number}): StudioProject {
   if (raw.version !== 1 && raw.version !== 2) throw new Error("This Studio project needs a newer Glint version.");
-  if (!Array.isArray(raw.clips) || !raw.clips.length || raw.clips.some((c) => !Number.isFinite(c.start) || !Number.isFinite(c.end) || c.start < 0 || c.end > duration + .05 || c.end <= c.start || c.speed < .5 || c.speed > 2)) throw new Error("The Studio timeline is invalid.");
+  if (!Number.isFinite(duration) || duration <= 0 || !Array.isArray(raw.clips) || !raw.clips.length
+    || new Set(raw.clips.map(c=>c.id)).size!==raw.clips.length
+    || raw.clips.some(c=>!Number.isSafeInteger(c.id)||c.id<1||typeof c.kept!=='boolean'
+      || ![c.start,c.end,c.speed,c.order].every(Number.isFinite)
+      || c.start<0||c.end>duration+.05||c.end<=c.start||c.speed<.5||c.speed>2))
+    throw new Error("The Studio timeline is invalid.");
   reserveClipIds(raw.clips);
   if(!validateAnnotations(raw.annotations??[],duration))throw new Error("The video annotations are invalid.");
   if (!validateZooms(raw.zoomSegments ?? [], duration)) throw new Error("The Studio zoom settings are invalid.");

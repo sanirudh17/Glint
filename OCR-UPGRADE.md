@@ -115,3 +115,8 @@ cargo test --manifest-path glint/src-tauri/Cargo.toml --lib evaluate_indra_priva
 All three native privacy probes completed, and the eight existing privacy unit tests passed. The benchmark uses PNGs in OCR mode, so digital PDF text-layer extraction cannot inflate the results. Model assets total about 76.1 MB including metadata/license; the model weights use modified OpenRAIL-M terms, distinct from the Apache-2.0 source license. Consult the upstream terms before any distribution decision.
 
 Primary references: [Indra 1.1 release](https://www.datalab.to/blog/indra-ocr-1-1), [package 1.1.2 model loader and expected tag](https://github.com/datalab-to/indra/blob/v1.1.2/indra_ocr/models.py), [pinned model card](https://huggingface.co/datalab-to/indra-ocr/blob/bd02167fdf2005a19962cc15188f8496a2c87d3b/README.md), [pinned model license](https://huggingface.co/datalab-to/indra-ocr/blob/bd02167fdf2005a19962cc15188f8496a2c87d3b/LICENSE).
+
+
+## 0.2.0 distribution and lifecycle
+
+All three OCR choices are optional installations. No Tesseract runtime, ONNX runtime or OCR weights are bundled with the app installers. Settings shows Install or Remove from disk beside the engine selector; selecting an unavailable engine does not download or activate it. Engine files are managed in the app profile, not a separate system Tesseract installation. Failed/cancelled downloads are cleaned, incomplete downloads fail integrity checks, and interrupted stages are retried/cleaned safely. Removing a loaded neural engine disables/removes its model immediately and reports when the process-wide runtime needs an app restart to finish deletion. The loaded-model/reinstall and next-start cleanup paths were checked with actual PP-OCRv6 recognition.

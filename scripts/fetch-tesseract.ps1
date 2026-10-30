@@ -1,7 +1,7 @@
 # fetch-tesseract.ps1 — populate glint/src-tauri/binaries/tesseract with a
-# self-contained Tesseract OCR runtime (exe + DLLs + English data) so Glint's
-# Capture Text works out of the box and `tauri build` can bundle it. The folder is
-# git-ignored (~160MB), so each machine runs this once after cloning.
+# self-contained runtime for maintaining the separate optional OCR download asset.
+# This folder is NOT an installer resource. Normal Glint builds do not need it.
+# It remains git-ignored; never bundle OCR runtimes or models in the installer.
 #
 # Usage (from the repo root):  powershell -File scripts/fetch-tesseract.ps1
 #
@@ -40,4 +40,4 @@ Copy-Item (Join-Path $installed '*.dll') $dst -Force
 Copy-Item (Join-Path $installed 'tessdata\eng.traineddata') (Join-Path $dst 'tessdata') -Force
 
 $size = '{0:N0} MB' -f ((Get-ChildItem $dst -Recurse | Measure-Object Length -Sum).Sum / 1MB)
-Write-Host "Done. Bundled Tesseract is ready ($size)."
+Write-Host "Done. Optional Tesseract asset staging is ready ($size)."

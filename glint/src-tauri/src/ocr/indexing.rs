@@ -67,6 +67,8 @@ pub fn library_index_start(app: tauri::AppHandle) {
     {
         return;
     }
+    let engine=app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().ocr_engine.clone();
+    if !super::neural::installed(&engine) { return; }
     let state = app.state::<IndexState>();
     if state
         .running

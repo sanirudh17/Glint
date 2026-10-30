@@ -369,3 +369,24 @@ mod tests {
         assert!(palette_filter(&o).contains("h=-1"));
     }
 }
+
+#[cfg(test)] mod release_tests {
+    use super::*;
+    #[test]
+    #[ignore="requires bundled FFmpeg; validates actual bounded GIF encoding"]
+    fn gif_palette_roundtrip() {
+        use std::process::Command;
+        use std::os::windows::process::CommandExt;
+        let binary=PathBuf::from(std::env::var("GLINT_TEST_FFMPEG").unwrap());
+        let root=PathBuf::from(std::env::var("GLINT_VIDEO_FIXTURES").unwrap());std::fs::create_dir_all(&root).unwrap();
+        let source=root.join("gif-fixture.mp4");let palette=root.join("gif-palette.png");let output=root.join("release-gif.gif");
+        let result=Command::new(&binary).args(["-y","-v","error","-f","lavfi","-i","testsrc2=s=320x180:r=15:d=1.6","-c:v","libx264","-pix_fmt","yuv420p"]).arg(&source).creation_flags(0x08000000).output().unwrap();assert!(result.status.success());
+        let options=Options{fps:10,width:320,repeat:true};options.validate().unwrap();let filter=palette_filter(&options);
+        let result=Command::new(&binary).args(["-y","-v","error","-i"]).arg(&source).args(["-vf",&format!("{filter},palettegen=stats_mode=diff"),"-frames:v","1","-update","1"]).arg(&palette).creation_flags(0x08000000).output().unwrap();assert!(result.status.success(),"{}",String::from_utf8_lossy(&result.stderr));
+        let result=Command::new(&binary).args(["-y","-v","error","-i"]).arg(&source).arg("-i").arg(&palette).args(["-filter_complex",&format!("[0:v]{filter}[frames];[frames][1:v]paletteuse=dither=sierra2_4a"),"-loop","0"]).arg(&output).creation_flags(0x08000000).output().unwrap();assert!(result.status.success(),"{}",String::from_utf8_lossy(&result.stderr));
+        assert!(std::fs::metadata(&output).unwrap().len()<MAX_BYTES);
+        assert_eq!(image::ImageReader::open(&output).unwrap().into_dimensions().unwrap(),(320,180));
+        let probe=Command::new(binary.with_file_name("ffprobe.exe")).args(["-v","error","-show_entries","stream=codec_type,nb_frames:format=duration","-of","json"]).arg(&output).creation_flags(0x08000000).output().unwrap();assert!(probe.status.success());
+        let info:serde_json::Value=serde_json::from_slice(&probe.stdout).unwrap();assert_eq!(info["streams"][0]["nb_frames"],"16");assert_eq!(info["streams"].as_array().unwrap().len(),1);
+    }
+}

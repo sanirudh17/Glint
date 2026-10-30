@@ -462,3 +462,10 @@
 .settings-hotkey-help li { line-height:1.8; padding-left:2px; }
 .settings-hotkey-help .settings-kbd { margin-inline:3px; vertical-align:baseline; box-shadow:none; background:var(--control-bg); border-color:var(--control-edge); }
 .settings-hotkey-help p { line-height:1.6; opacity:1; color:var(--text-dim); }
+
+/* Engine actions share the compact glass controls; wrap together on narrow panes. */
+.ocr-engine-row { display:flex; align-items:center; gap:10px; flex-wrap:wrap; width:100%; }
+.ocr-engine-row .g-select-wrap { flex:1 1 240px; max-width:380px; min-width:0; }
+.ocr-engine-row .g-btn { flex:none; }
+.ocr-engine-progress { display:flex; align-items:center; gap:10px; flex-wrap:wrap; color:var(--text-dim); font-size:var(--fz-sm); }
+.ocr-engine-progress progress { width:160px; max-width:100%; accent-color:var(--accent); }

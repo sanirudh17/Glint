@@ -67,7 +67,7 @@ static ENABLED: AtomicBool = AtomicBool::new(false);
 static MEDIUM_SELECTED: AtomicBool = AtomicBool::new(false);
 static ENGINE: Mutex<Option<(&'static str, OAROCR)>> = Mutex::new(None);
 static INSTALLING: AtomicBool = AtomicBool::new(false);
-static CANCEL: AtomicBool = AtomicBool::new(false);
+pub(super) static CANCEL: AtomicBool = AtomicBool::new(false);
 static DOWNLOADED: AtomicU64 = AtomicU64::new(0);
 static DOWNLOAD_BYTES: AtomicU64 = AtomicU64::new(114_002_186);
 fn model_for(id: &str) -> Option<&'static Model> {
@@ -85,6 +85,7 @@ fn active_model() -> &'static Model {
     }
 }
 pub fn initialize(root: PathBuf, engine: &str) {
+    super::managed::initialize(root.clone());
     let _ = ROOT.set(root);
     set_engine(engine);
 }
@@ -124,7 +125,7 @@ fn model_installed(model: &Model) -> bool {
     })
 }
 pub fn installed(engine: &str) -> bool {
-    model_for(engine).is_some_and(model_installed)
+    if engine == "tesseract" { super::managed::tesseract_installed() } else { model_for(engine).is_some_and(model_installed) }
 }
 #[tauri::command]
 pub fn ocr_engine_status(engine: Option<String>) -> bool {
@@ -134,13 +135,13 @@ pub fn ocr_engine_status(engine: Option<String>) -> bool {
 pub fn ocr_engine_cancel() {
     CANCEL.store(true, Ordering::Relaxed);
 }
-fn notify(app: &tauri::AppHandle, stage: &str, percent: f64) {
+pub(super) fn notify(app: &tauri::AppHandle, stage: &str, percent: f64) {
     let _ = app.emit(
         "ocr-engine-progress",
         serde_json::json!({"stage":stage,"percent":percent}),
     );
 }
-fn download(
+pub(super) fn download(
     app: &tauri::AppHandle,
     url: &str,
     path: &Path,
@@ -191,14 +192,15 @@ pub async fn ocr_engine_install(
     app: tauri::AppHandle,
     engine: Option<String>,
 ) -> Result<(), String> {
-    let model = model_for(engine.as_deref().unwrap_or(SMALL.id)).ok_or("Unknown OCR engine")?;
+    let id=engine.as_deref().unwrap_or(SMALL.id);
+    let model=if id=="tesseract" {None} else {Some(model_for(id).ok_or("Unknown OCR engine")?)};
     if INSTALLING.swap(true, Ordering::AcqRel) {
         return Err("An OCR installation is already running".into());
     }
     CANCEL.store(false, Ordering::Relaxed);
     DOWNLOADED.store(0, Ordering::Relaxed);
     DOWNLOAD_BYTES.store(
-        model.files.iter().map(|(_, size, _)| size).sum::<u64>() + 82_887_349,
+        model.map_or(super::managed::TESS_BYTES,|m|m.files.iter().map(|(_,size,_)|size).sum::<u64>()+82_887_349),
         Ordering::Relaxed,
     );
     struct Reset;
@@ -209,10 +211,30 @@ pub async fn ocr_engine_install(
     }
     tauri::async_runtime::spawn_blocking(move || {
         let _reset = Reset;
-        install_files(&app, model)
+        let result=match model {Some(model)=>install_files(&app,model),None=>super::managed::install_tesseract(&app)};
+        if result.is_ok() {let _=app.emit("ocr-engine-changed",());}
+        result
     })
     .await
     .map_err(|e| e.to_string())?
+}
+
+#[tauri::command(async)]
+pub async fn ocr_engine_remove(app:tauri::AppHandle,engine:String)->Result<super::managed::Removal,String> {
+    super::managed::folder(&engine)?;
+    if INSTALLING.swap(true,Ordering::AcqRel) {return Err("Finish or cancel the current OCR installation first".into());}
+    struct Reset;
+    impl Drop for Reset {fn drop(&mut self){INSTALLING.store(false,Ordering::Release);}}
+    super::indexing::library_index_cancel(app.clone());
+    tauri::async_runtime::spawn_blocking(move||{
+        let _reset=Reset;
+        let mut cache=ENGINE.lock().map_err(|_|"Restart Glint to reset the OCR engine")?;
+        if cache.as_ref().is_some_and(|(id,_)|*id==engine) {*cache=None;}
+        let _tess=super::managed::TESS_USE.write().map_err(|_|"Restart Glint to reset OCR")?;
+        let result=super::managed::remove_owned(super::managed::root()?,&engine)?;
+        let _=app.emit("ocr-engine-changed",());
+        Ok(result)
+    }).await.map_err(|e|e.to_string())?
 }
 
 fn install_files(app: &tauri::AppHandle, model: &Model) -> Result<(), String> {
@@ -330,7 +352,7 @@ fn recognize(rgba: &[u8], w: u32, h: u32, cancel: &AtomicBool) -> Result<Vec<Wor
     let model = active_model();
     if !model_installed(model) {
         return Err(
-            "Download the high-accuracy OCR engine in Settings, or select Tesseract.".into(),
+            "Install the selected OCR engine in Settings > Auto-save > Text recognition engine.".into(),
         );
     }
     if w == 0
@@ -685,4 +707,29 @@ mod tests {
         }
         std::fs::write(fixtures.join("native-search-result.json"),serde_json::to_vec_pretty(&reports).unwrap()).unwrap();
     }
+    #[test]
+    #[ignore="requires local PP-OCRv6 models; checks loaded-model removal and reinstall"]
+    fn native_model_removal_roundtrip() {
+        let source=PathBuf::from(std::env::var("GLINT_OCR_MODELS").unwrap());
+        let parent=PathBuf::from(std::env::var("GLINT_MODEL_LIFECYCLE").unwrap());
+        let root=parent.join(format!("owned-{}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
+        let dest=root.join(SMALL.folder);std::fs::create_dir_all(&dest).unwrap();
+        let copy=||{std::fs::create_dir_all(&dest).unwrap();for entry in std::fs::read_dir(&source).unwrap().flatten(){if entry.file_type().unwrap().is_file(){std::fs::copy(entry.path(),dest.join(entry.file_name())).unwrap();}}};
+        copy();initialize(root.clone(),SMALL.id);
+        let fixture=PathBuf::from(std::env::var("GLINT_OCR_FIXTURES").unwrap()).join("document-light.png");
+        let image=image::open(fixture).unwrap().to_rgba8();
+        assert!(!recognize(&image,image.width(),image.height(),&AtomicBool::new(false)).unwrap().is_empty());
+        *ENGINE.lock().unwrap()=None;
+        let removed=super::super::managed::remove_owned(&root,SMALL.id).unwrap();assert!(!installed(SMALL.id));
+        assert!(recognize(&image,image.width(),image.height(),&AtomicBool::new(false)).unwrap_err().contains("Install"));
+        // A loaded process-wide ONNX DLL may require a restart to reclaim its file,
+        // but the model itself is removed and can be installed and used again now.
+        copy();assert!(installed(SMALL.id));
+        assert!(!recognize(&image,image.width(),image.height(),&AtomicBool::new(false)).unwrap().is_empty());
+        *ENGINE.lock().unwrap()=None;
+        super::super::managed::remove_owned(&root,SMALL.id).unwrap();
+        std::fs::write(parent.join("result.json"),serde_json::to_vec_pretty(&serde_json::json!({"passed":true,"pendingRuntimeRestart":removed.pending_restart,"root":root})).unwrap()).unwrap();
+        let _=std::fs::remove_dir_all(root);
+    }
+
 }

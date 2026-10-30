@@ -1836,6 +1836,35 @@ mod tests {
         }
     }
     #[test]
+    #[ignore = "requires bundled FFmpeg; verifies cursor-follow zoom in encoded video"]
+    fn cursor_follow_zoom_mp4_roundtrip() {
+        use std::os::windows::process::CommandExt;
+        let binary=std::path::PathBuf::from(std::env::var("GLINT_TEST_FFMPEG").unwrap());
+        let root=std::path::PathBuf::from(std::env::var("GLINT_VIDEO_FIXTURES").unwrap());std::fs::create_dir_all(&root).unwrap();
+        let gradient=root.join("follow-gradient.png");
+        image::RgbImage::from_fn(320,200,|x,y|image::Rgb([(x*255/319) as u8,(y*255/199) as u8,30])).save(&gradient).unwrap();
+        let source=root.join("follow-source.mp4");
+        let result=Command::new(&binary).args(["-y","-v","error","-loop","1","-i"]).arg(&gradient)
+            .args(["-t","2","-r","15","-c:v","libx264","-pix_fmt","yuv420p"]).arg(&source).creation_flags(0x08000000).output().unwrap();assert!(result.status.success());
+        let (mut project,mut events)=background_fixture();project.look.enabled=false;project.cursor.smoothing=0.;
+        events.events=serde_json::from_value(serde_json::json!([{"t":0.,"kind":"cursor","x":60.,"y":100.},{"t":2.,"kind":"cursor","x":260.,"y":100.}])).unwrap();
+        for mode in ["fixed","follow-cursor"] {
+            project.zoom_segments=serde_json::from_value(serde_json::json!([{"id":"follow-check","start":0.,"end":2.,"scale":2.,"mode":mode,"focus":{"x":0.5,"y":0.5},"ease":"gentle","easeIn":0.2,"easeOut":0.2,"origin":"marker","edited":false}])).unwrap();
+            let output=root.join(format!("zoom-{mode}.mp4"));
+            let spec=ExportSpec{binary:&binary,source:source.to_str().unwrap(),output:&output,project:&project,events:&events,width:320,height:200,fps:15.,duration:2.,audio:false,cam:None,cam_overlay:None};
+            if mode=="follow-cursor" {println!("Cursor-follow encoder: {:?}",export(&spec,Arc::new(AtomicBool::new(false)),|_|{}).unwrap());}
+            else {encode(&spec,Arc::new(AtomicBool::new(false)),&|_|{},VideoEncoder::Libx264).unwrap();}
+            let mut values=Vec::new();
+            for t in ["0.5","1.5"] {
+                let decoded=Command::new(&binary).args(["-v","error","-ss",t,"-i"]).arg(&output).args(["-frames:v","1","-f","image2pipe","-vcodec","png","-"]).creation_flags(0x08000000).output().unwrap();assert!(decoded.status.success());
+                let frame=image::load_from_memory(&decoded.stdout).unwrap().to_rgb8();assert_eq!(frame.dimensions(),(320,200));
+                values.push(frame.get_pixel(160,100).0[0] as i32);
+            }
+            if mode=="fixed" {assert!((values[1]-values[0]).abs()<8,"fixed focus moved: {values:?}");}
+            else {assert!(values[1]-values[0]>45,"encoded view did not follow cursor: {values:?}");}
+        }
+    }
+    #[test]
     #[ignore = "requires bundled FFmpeg; performs a real MP4 encode and decode"]
     fn annotation_mp4_roundtrip() {
         use base64::Engine;

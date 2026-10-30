@@ -390,6 +390,7 @@ pub fn run() {
             ocr::neural::ocr_engine_status,
             ocr::neural::ocr_engine_install,
             ocr::neural::ocr_engine_cancel,
+            ocr::neural::ocr_engine_remove,
             ocr::indexing::library_index_start,
             ocr::indexing::library_index_cancel,
             ocr::indexing::library_index_status,

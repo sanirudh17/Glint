@@ -223,6 +223,34 @@ mod tests {
         serde_json::from_value(json!({"version":1,"width":1280,"height":720,"look":{"enabled":false},"scenes":[{"id":"one","kind":"title","media":null,"start":0,"end":0,"duration":2,"title":"Hello","titleColor":"#ffffff","titleStart":"#223344","titleEnd":"#667788","titleSize":64,"raster":null,"transition":{"kind":"cut","duration":0.3}}]})).unwrap()
     }
     #[test]
+    #[ignore="requires bundled FFmpeg; verifies real scene crossfade and audio/video duration"]
+    fn mixed_scene_media_roundtrip() {
+        use std::process::Command;
+        use std::os::windows::process::CommandExt;
+        let binary=PathBuf::from(std::env::var("GLINT_TEST_FFMPEG").unwrap());
+        let root=PathBuf::from(std::env::var("GLINT_VIDEO_FIXTURES").unwrap());std::fs::create_dir_all(&root).unwrap();
+        let mut p=project();p.scenes[0].duration=1.;let mut next=p.scenes[0].clone();next.id="second".into();next.transition.kind="crossfade".into();next.transition.duration=0.2;p.scenes.push(next);
+        let duration=p.validate().unwrap();assert!((duration-1.8).abs()<0.001);
+        let output=root.join("scene-crossfade.mp4");
+        // Use muxed fixtures, as the actual exporter does.
+        let mut inputs=Vec::new();
+        for (i,color) in ["red","blue"].iter().enumerate() {
+            let input=root.join(format!("scene-input-{i}.mp4"));
+            let result=Command::new(&binary).args(["-y","-v","error","-f","lavfi","-i",&format!("color=c={color}:s=320x180:r=30:d=1"),"-f","lavfi","-i","anullsrc=r=48000:cl=stereo:d=1","-c:v","libx264","-c:a","aac","-shortest"]).arg(&input).creation_flags(0x08000000).output().unwrap();assert!(result.status.success());inputs.push(input);
+        }
+        let result=Command::new(&binary).args(["-y","-v","error","-i"]).arg(&inputs[0]).arg("-i").arg(&inputs[1])
+            .args(["-filter_complex_threads","2","-filter_complex",&p.join_graph(),"-map","[outv]","-map","[outa]","-c:v","libx264","-pix_fmt","yuv420p","-c:a","aac","-t","1.8"]).arg(&output).creation_flags(0x08000000).output().unwrap();
+        assert!(result.status.success(),"{}",String::from_utf8_lossy(&result.stderr));
+        let probe=Command::new(binary.with_file_name("ffprobe.exe")).args(["-v","error","-show_entries","stream=codec_type:format=duration","-of","json"]).arg(&output).creation_flags(0x08000000).output().unwrap();assert!(probe.status.success());
+        let info:serde_json::Value=serde_json::from_slice(&probe.stdout).unwrap();
+        assert!(info["streams"].as_array().unwrap().iter().any(|s|s["codec_type"]=="audio"));
+        assert!((info["format"]["duration"].as_str().unwrap().parse::<f64>().unwrap()-duration).abs()<0.1);
+        for (t,red) in [("0.1",true),("1.5",false)] {
+            let frame=Command::new(&binary).args(["-v","error","-ss",t,"-i"]).arg(&output).args(["-frames:v","1","-f","image2pipe","-vcodec","png","-"]).creation_flags(0x08000000).output().unwrap();assert!(frame.status.success());
+            let image=image::load_from_memory(&frame.stdout).unwrap().to_rgb8();let rgb=image.get_pixel(160,90);assert_eq!(rgb[0]>200&&rgb[2]<50,red);
+        }
+    }
+    #[test]
     fn schema_rejects_future_versions_duplicate_ids_and_invalid_ranges() {
         let mut p = project();
         assert_eq!(p.validate().unwrap(), 2.);
