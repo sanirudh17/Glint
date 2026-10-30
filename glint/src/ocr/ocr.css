@@ -203,3 +203,17 @@
   background: var(--accent-hover);
   border-color: var(--accent-hover);
 }
+
+/* Match the compact shared controls while leaving extracted text room to breathe. */
+.ocr-root { padding: 12px 16px 14px; }
+.ocr-header { min-height: 32px; height: auto; gap: 12px; margin-bottom: 12px; }
+.ocr-label { font-size: 13px; }
+.ocr-counts { font-size: 12px; }
+.ocr-close-btn { width: 28px; height: 28px; }
+.ocr-btn { height: 32px; padding-inline: 12px; border-color: var(--border-strong); background: var(--bg-elev2); }
+.ocr-btn--primary { background: var(--accent); border-color: transparent; }
+.ocr-header-right, .ocr-meta { min-width: 0; flex-wrap: wrap; }
+.ocr-footer, .ocr-actions { flex-wrap: wrap; gap: 8px; }
+.ocr-text:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+
+.ocr-copied-badge { color: var(--text); font-size: 12px; }

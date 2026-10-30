@@ -116,12 +116,8 @@ fn session_meta(
 fn cursor_logical(app: &AppHandle, scale: f64) -> (Option<f64>, Option<f64>) {
     match app.cursor_position() {
         Ok(p) => {
-            let (ox, oy) = app
-                .primary_monitor()
-                .ok()
-                .flatten()
-                .map(|m| (m.position().x, m.position().y))
-                .unwrap_or((0, 0));
+            let (ox,oy)=app.state::<CaptureState>().0.lock().unwrap().as_ref()
+                .map(|s|(s.origin_x,s.origin_y)).unwrap_or((0,0));
             let (lx, ly) =
                 crate::capture::geometry::global_to_overlay_logical(p.x, p.y, ox, oy, scale);
             (Some(lx), Some(ly))
@@ -261,18 +257,21 @@ pub fn capture_commit(
     // Take the session out — it won't be available after this.
     let session = { state.0.lock().unwrap().take() }.ok_or("no active capture session")?;
     overlay::teardown_all(&app);
-    if session.restore_main && session.intent != crate::capture::CaptureIntent::Text {
+    if session.restore_main && session.intent == crate::capture::CaptureIntent::Screenshot {
         crate::capture::restore_main_window(&app);
     }
 
     let app2 = app.clone();
+    let restore_on_error = session.restore_main;
     std::thread::spawn(move || {
         let result = match session.intent {
             crate::capture::CaptureIntent::Text => finish_ocr_commit(&app2, session, rect),
-            crate::capture::CaptureIntent::Screenshot => finish_commit(&app2, session, rect),
+            crate::capture::CaptureIntent::Screenshot => finish_commit(&app2, session, rect,false),
+            crate::capture::CaptureIntent::Scroll => crate::capture::scrolling::start(&app2,session,rect),
         };
         if let Err(e) = result {
             log::error!("capture commit failed: {e}");
+            if restore_on_error { crate::capture::restore_main_window(&app2); }
             let _ = app2.emit("glint-toast", "Couldn't save capture");
         }
     });
@@ -311,10 +310,11 @@ fn finish_ocr_commit(
 
 /// The heavy half of a commit: crop, encode, write, copy to clipboard, emit.
 /// Runs off the main thread (see [`capture_commit`]).
-fn finish_commit(
+pub(super) fn finish_commit(
     app: &AppHandle,
     session: crate::capture::CaptureSession,
     rect: RectArg,
+    force_editor:bool,
 ) -> Result<(), String> {
     let _perf = std::time::Instant::now();
     let phys = logical_to_physical(
@@ -342,7 +342,7 @@ fn finish_commit(
     let (auto_save, auto_copy, open_in_editor, image_format, jpeg_quality) = {
         let state = app.state::<crate::settings::commands::SettingsState>();
         let s = state.0.lock().unwrap();
-        (s.auto_save, s.auto_copy, s.open_in_editor, s.image_format.clone(), s.jpeg_quality.clone())
+        (s.auto_save, s.auto_copy, s.open_in_editor||force_editor, s.image_format.clone(), s.jpeg_quality.clone())
     };
 
     // Decide where the durable file lives: auto-save → Pictures\Glint; otherwise a temp file.
@@ -567,9 +567,10 @@ pub fn tray_copy(state: State<TrayState>, id: u64) -> Result<(), String> {
 }
 
 #[tauri::command(async)]
-pub fn tray_copy_path(state: State<TrayState>, id: u64) -> Result<(), String> {
+pub fn tray_copy_path(app: AppHandle, state: State<TrayState>, id: u64) -> Result<(), String> {
     let it = tray_item(&state, id)?;
-    clipboard::copy_text(&it.path)
+    let path=crate::attachments::preserve(&crate::attachments::directory(&app)?,std::path::Path::new(&it.path))?;
+    clipboard::copy_text(&path.to_string_lossy())
 }
 
 #[tauri::command(async)]
@@ -679,6 +680,18 @@ pub fn tray_dismiss(app: AppHandle, state: State<TrayState>, id: u64) -> Result<
         crate::hud::teardown(&app);
     }
     Ok(())
+}
+
+/// Close the idle tray window while retaining its captures and temporary files.
+#[tauri::command]
+pub fn tray_auto_close(app:AppHandle,latest_id:u64)->Result<bool,String>{
+    if !app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().quick_access_auto_close{return Ok(false);}
+    let current=app.state::<TrayState>().0.lock().unwrap().list().last().map(|i|i.id);
+    if current!=Some(latest_id){return Ok(false);}
+    // Close only the webview, keeping tray items and files. Rebuilding on the next
+    // capture avoids the known WebView2 repaint failure from repeated hide/show.
+    crate::hud::teardown(&app);
+    Ok(true)
 }
 
 /// Empty the whole tray, delete every temp file, close the window.
@@ -805,13 +818,6 @@ fn path_for_existing(db: &State<crate::Db>, id: i64) -> Result<String, String> {
     Ok(path)
 }
 
-/// Select a file in a fresh Explorer window.
-///
-/// Uses `raw_arg` so the path is quoted exactly — `explorer /select,"<path>"`.
-/// Our save names contain spaces (`Glint 2026-… at ….png`); the normal `arg`
-/// API would make Rust quote the whole `/select,…` token, which Explorer can't
-/// parse — it then silently opens the default folder (Documents) instead of
-/// selecting the file.
 /// Spawn a child process without the fleeting black console window Windows pops for
 /// `cmd`/`explorer` children (CREATE_NO_WINDOW = 0x0800_0000). Same flag the OCR path
 /// uses. Without it, Open/Reveal flash a console for a split second.
@@ -822,11 +828,7 @@ fn no_window(cmd: &mut std::process::Command) -> &mut std::process::Command {
 }
 
 fn reveal_in_explorer(path: &str) -> Result<(), String> {
-    use std::os::windows::process::CommandExt;
-    let mut cmd = std::process::Command::new("explorer");
-    cmd.raw_arg(format!("/select,\"{path}\""));
-    no_window(&mut cmd).spawn().map_err(|e| e.to_string())?;
-    Ok(())
+    crate::shell_reveal::reveal(path)
 }
 
 /// Open the capture in the OS default image viewer.
@@ -840,14 +842,14 @@ pub fn capture_open(db: State<crate::Db>, id: i64) -> Result<(), String> {
 }
 
 /// Reveal (select) the capture in Windows Explorer.
-#[tauri::command]
+#[tauri::command(async)]
 pub fn capture_reveal(db: State<crate::Db>, id: i64) -> Result<(), String> {
     let path = path_for_existing(&db, id)?;
     reveal_in_explorer(&path)
 }
 
 /// Reveal an arbitrary file/folder path in Explorer (used by the Storage folder controls).
-#[tauri::command]
+#[tauri::command(async)]
 pub fn reveal_path(path: String) -> Result<(), String> {
     reveal_in_explorer(&path)
 }
@@ -881,6 +883,7 @@ pub fn drag_blank_icon(app: AppHandle) -> Result<String, String> {
 #[tauri::command]
 pub fn capture_copy(db: State<crate::Db>, id: i64) -> Result<(), String> {
     let path = path_for_existing(&db, id)?;
+    if crate::recorder::trim::is_video_path(&path)||std::path::Path::new(&path).extension().is_some_and(|e|e.eq_ignore_ascii_case("gif")){return clipboard::copy_file(std::path::Path::new(&path))}
     let bytes = std::fs::read(&path).map_err(|e| e.to_string())?;
     let img = image::load_from_memory(&bytes).map_err(|e| e.to_string())?.to_rgba8();
     let (w, h) = (img.width(), img.height());

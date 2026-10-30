@@ -336,8 +336,10 @@ pub const TRIM_LABEL: &str = "rec-trim";
 /// (startup prewarm) with identical chrome.
 fn trim_builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
     WebviewWindowBuilder::new(app, TRIM_LABEL, WebviewUrl::App("index.html#/rec-trim".into()))
-        .title("Glint — Trim Recording")
-        .decorations(true)
+        .title("Glint Studio")
+        .transparent(true)
+        .decorations(false)
+        .shadow(true)
         .resizable(true)
         .inner_size(900.0, 600.0)
         .min_inner_size(640.0, 460.0)
@@ -346,7 +348,7 @@ fn trim_builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
         // is cramped for scrubbing. Still a normal decorated window the user can un-maximize.
         .maximized(true)
         // Dark substrate from the first frame — never a white/black placeholder.
-        .background_color(tauri::window::Color(12, 13, 15, 255))
+        .background_color(tauri::window::Color(8, 8, 8, 255))
 }
 
 /// The trim / quick-edit window: a NORMAL decorated, focused, resizable app window

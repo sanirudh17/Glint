@@ -1,40 +1,35 @@
-# Glint
+# Glint development
 
-A polished, **local-first** Windows desktop app for screenshots, screen recording,
-annotation, and OCR — modelled on CleanShot X's core workflow. Everything stays on
-your device: no cloud, no accounts, no network calls, no auth. Single user.
+Glint is a local-first Windows screenshot and Studio recording editor built with Tauri, Rust, React, TypeScript and SQLite. See the repository README for features and installation.
 
-## Stack
+## Run
 
-- **Tauri v2** (Rust core + React/TypeScript webview)
-- **SQLite** via `tauri-plugin-sql` (versioned, sqlx-backed migrations)
-- **Zustand** state, **React Router** (hash router), **Lucide** icons
-- Design tokens as CSS custom properties; dark-primary, single periwinkle accent
+Use Node.js 24 LTS. From this directory:
 
-## Data & log locations
-
-- Database: `%APPDATA%\com.glint.app\glint.db` (WAL mode)
-- Logs: `%LOCALAPPDATA%\com.glint.app\logs\glint.log` (rotating)
-
-## Development
-
-```sh
+```powershell
 npm install
-npm run tauri dev      # run the desktop app
+npm run tauri dev
 ```
 
-### Checks
+Fetch FFmpeg/FFprobe once with `../scripts/fetch-ffmpeg.ps1`. OCR and caption engines are optional downloads from Settings and Studio; none belongs in installer resources.
 
-```sh
-cargo test --manifest-path src-tauri/Cargo.toml
+## Validate
+
+```powershell
+npm test
+npm run build
+cargo test --manifest-path src-tauri/Cargo.toml --lib
 cargo clippy --manifest-path src-tauri/Cargo.toml --all-targets
-npx tsc --noEmit
-npx vite build
 ```
 
-## Status
+Ignored integration tests require the owned fixtures and runtimes described in the release validation report. They must be run explicitly.
 
-**Phase 1 (app shell) complete** — tray, custom titlebar, nav shell, SQLite
-migrations, settings persistence, global shortcuts, rotating logs. See
-`docs/superpowers/PHASE-1-ACCEPTANCE.md`. Capture, HUD, annotation, recording,
-pinned screenshots, and OCR land in later phases.
+## Package
+
+```powershell
+npm run tauri build
+```
+
+The NSIS setup and MSI are written under `src-tauri/target/release/bundle` (or the configured Cargo target directory). Do not include OCR model directories or Tesseract in the installers. The separately downloadable Tesseract asset is created by `../scripts/package-ocr-tesseract.py` and pinned by hash in `src-tauri/src/ocr/managed.rs`.
+
+Production data uses `%APPDATA%/com.glint.app` and `%LOCALAPPDATA%/com.glint.app`. Use a separate application identifier and profile for development and live acceptance checks.

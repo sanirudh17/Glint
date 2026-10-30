@@ -1,0 +1,8 @@
+import {describe,it,expect} from 'vitest';
+import {emptySceneProject,newScene,projectSeconds,sceneTimeline,activeScenes,reorderScene,effectiveSceneLook} from './sceneModel';
+describe('multi-scene timing',()=>{
+ it('uses the same overlapping timeline for playback and export',()=>{const p=emptySceneProject();p.scenes=Array.from({length:4},()=>({...newScene(),duration:2}));p.scenes[1].transition={kind:'crossfade',duration:.4};p.scenes[3].transition={kind:'slide',duration:.4};expect(projectSeconds(p)).toBeCloseTo(7.2);expect(sceneTimeline(p).map(s=>s.start)).toEqual([0,1.6,3.6,5.199999999999999]);const active=activeScenes(p,1.8);expect(active).toHaveLength(2);expect(active[1].progress).toBeCloseTo(.5);});
+ it('clamps overlap for short scenes, and keeps the last frame at the endpoint',()=>{const p=emptySceneProject();p.scenes=[{...newScene(),duration:1},{...newScene(),duration:.25,transition:{kind:'slide',duration:2}}];expect(projectSeconds(p)).toBe(1.125);expect(activeScenes(p,99).slice(-1)[0]?.scene.id).toBe(p.scenes[1].id);});
+ it('reorders without mutating saved state and recomputes overlap',()=>{const p=emptySceneProject();p.scenes=[newScene(),newScene()];const next=reorderScene(p,p.scenes[1].id,-1);expect(next.scenes[0].id).toBe(p.scenes[1].id);expect(p.scenes[0].id).not.toBe(next.scenes[0].id);expect(reorderScene(p,'missing',1)).toBe(p);});
+ it('keeps a consistent canvas when the shared look is disabled',()=>{const p=emptySceneProject();p.look.enabled=false;expect(effectiveSceneLook(p).outputSize).toEqual({width:1280,height:720});expect(effectiveSceneLook(p).padding).toBe(0);expect(p.look.enabled).toBe(false);});
+});

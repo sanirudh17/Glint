@@ -1,8 +1,12 @@
+import {constrainCrop} from '../../editor/cropResize';
+import {Crop as CropIcon} from 'lucide-react';
 import { useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import type { Layout, Crop } from "../../editor/composition";
 import { normalizeRect } from "../../editor/composition";
 
 interface Props {
+  controlsHost: HTMLDivElement | null;
   layout: Layout;
   scale: number;
   imageW: number;
@@ -39,7 +43,7 @@ const ASPECTS: { id: string; label: string; ratio: number | null }[] = [
  * stage box). The dim surround is a huge box-shadow on the rect. Enter confirms,
  * Esc cancels. All geometry is clamped to the image bounds.
  */
-export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel }: Props) {
+export function CropOverlay({ controlsHost, layout, scale, imageW, imageH, onConfirm, onCancel }: Props) {
   // Rect in image space; start at the current content bounds.
   const [rect, setRect] = useState<Crop>({
     x: layout.cropX,
@@ -59,18 +63,14 @@ export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel
   // can never produce a crop larger than the image.
   const min = Math.max(1, Math.min(16, Math.floor(imageW / 4), Math.floor(imageH / 4)));
 
-  // Active aspect preset, matched against the current rect (rounded to 3dp so
-  // float drift doesn't deselect the chip after a resize).
-  const activeAspect = (() => {
-    if (rect.h <= 0) return "free";
-    const r = rect.w / rect.h;
-    return ASPECTS.find((a) => a.ratio !== null && Math.abs(a.ratio - r) < 0.001)?.id ?? "free";
-  })();
+  const [aspect,setAspect]=useState<number|null>(null);
+  // Keep the chosen ratio while resizing; Free removes the constraint.
+  const activeAspect = ASPECTS.find(a=>a.ratio===aspect)?.id??'free';
 
   // Fit an aspect box centred in the image bounds (appearance affordance only —
   // confirm/cancel still flow through the existing callbacks + Enter/Esc).
   const applyAspect = (ratio: number | null) => {
-    if (ratio === null) return;
+    setAspect(ratio);if (ratio === null) return;
     let w = imageW, h = imageW / ratio;
     if (h > imageH) { h = imageH; w = imageH * ratio; }
     w = Math.max(min, Math.floor(w));
@@ -140,7 +140,8 @@ export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel
     if (d.mode.includes("e")) right = clamp(o.x + o.w + dx, left + min, imageW);
     if (d.mode.includes("n")) top = clamp(o.y + dy, 0, bottom - min);
     if (d.mode.includes("s")) bottom = clamp(o.y + o.h + dy, top + min, imageH);
-    setRect({ x: left, y: top, w: right - left, h: bottom - top });
+    const next={ x: left, y: top, w: right - left, h: bottom - top };
+    setRect(aspect?constrainCrop(next,o,d.mode,aspect,imageW,imageH,min):next);
   };
 
   const onPointerUp = (e: React.PointerEvent) => {
@@ -173,7 +174,8 @@ export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel
       </div>
       {/* CleanShot-style crop bar: aspect chips + pill Cancel/Done. Same
           callbacks as Enter/Esc — no new behavior, just pointer affordances. */}
-      <div className="crop-bar" onPointerDown={(e) => e.stopPropagation()}>
+      {controlsHost && createPortal(<><div className="crop-bar" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="crop-caption"><CropIcon size={15} strokeWidth={1.5}/><span>Crop</span></div>
         <div className="crop-aspects" role="group" aria-label="Aspect ratio">
           {ASPECTS.map((a) => (
             <button
@@ -187,18 +189,20 @@ export function CropOverlay({ layout, scale, imageW, imageH, onConfirm, onCancel
             </button>
           ))}
         </div>
-        <button type="button" className="crop-pill" onClick={onCancel}>
+        <output className="crop-dimensions">{Math.round(rect.w)} × {Math.round(rect.h)} px</output>
+        <button type="button" className="crop-pill" title="Cancel crop (Esc)" onClick={onCancel}>
           Cancel
         </button>
         <button
           type="button"
           className="crop-pill crop-pill--primary"
+          title="Apply crop (Enter)"
           onClick={() => onConfirm(normalizeRect(rectRef.current))}
         >
-          Done
+          Apply crop
         </button>
       </div>
-      <div className="crop-hint">Drag to crop · Enter to apply · Esc to cancel</div>
+</>, controlsHost)}
     </div>
   );
 }

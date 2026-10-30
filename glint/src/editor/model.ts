@@ -26,6 +26,8 @@ export interface Style {
   color: string;
   strokeWidth: number;
   fontSize: number;
+  blurRadius?: number;
+  stepSize?: number;
   /** rect/ellipse interior fill; null/undefined = no fill (unchanged look). */
   fill?: string | null;
   /** 0..1 opacity applied to the fill only; default 1. */
@@ -38,6 +40,8 @@ export interface Style {
   redactStyle?: "solid" | "pixelate";
   /** spotlight tool: bright-region shape. "rect" (default) or "ellipse". */
   region?: "rect" | "ellipse";
+  curve?:number;
+  textPreset?:"plain"|"heading"|"label"|"code";
 }
 
 interface Base {
@@ -66,13 +70,17 @@ export interface StepAnno extends Base {
   type: "step";
   x: number; y: number; number: number;
 }
+export interface ImageAnno extends Base {
+  type: "image"; x:number; y:number; w:number; h:number; dataUrl:string; name:string;
+}
 
 export type Annotation =
   | TwoPointAnno
   | BoxAnno
   | TextAnno
   | FreehandAnno
-  | StepAnno;
+  | StepAnno
+  | ImageAnno;
 
 export const DEFAULT_STYLE: Style = {
   color: "#E5484D", strokeWidth: 3, fontSize: 24,
@@ -188,12 +196,13 @@ export function duplicateAnnotation(a: Annotation): Annotation {
     case "arrow":
     case "line":
       return { ...(base as TwoPointAnno), x1: a.x1 + OFF, y1: a.y1 + OFF, x2: a.x2 + OFF, y2: a.y2 + OFF };
+    case "image":
     case "rect":
     case "ellipse":
     case "blur":
     case "redact":
     case "spotlight":
-      return { ...(base as BoxAnno), x: a.x + OFF, y: a.y + OFF };
+      return { ...base, x: a.x + OFF, y: a.y + OFF } as Annotation;
     case "text":
       return { ...(base as TextAnno), x: a.x + OFF, y: a.y + OFF };
     case "step":
@@ -210,6 +219,7 @@ export function nudgeAnnotation(a: Annotation, dx: number, dy: number): Annotati
     case "arrow":
     case "line":
       return { ...a, x1: a.x1 + dx, y1: a.y1 + dy, x2: a.x2 + dx, y2: a.y2 + dy };
+    case "image":
     case "rect":
     case "ellipse":
     case "blur":
@@ -229,7 +239,10 @@ export function nudgeAnnotation(a: Annotation, dx: number, dy: number): Annotati
 export function reorder(list: Annotation[], id: string, dir: "forward" | "backward"): Annotation[] {
   const i = list.findIndex((a) => a.id === id);
   if (i < 0) return list;
-  const j = dir === "forward" ? i + 1 : i - 1;
+  const step = dir === "forward" ? 1 : -1;
+  let j=i+step;
+  // Source image layers stay below annotations; order each group independently.
+  while(j>=0&&j<list.length&&(list[j].type==='image')!==(list[i].type==='image'))j+=step;
   if (j < 0 || j >= list.length) return list;
   const out = [...list];
   [out[i], out[j]] = [out[j], out[i]];

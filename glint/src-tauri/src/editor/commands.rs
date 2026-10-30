@@ -73,6 +73,22 @@ pub fn set_source_and_open(
 }
 
 /// Open the most recent capture (from the HUD) into the editor.
+#[tauri::command(async)]
+pub fn editor_open_latest(app:AppHandle)->Result<(),String>{open_latest(&app)}
+
+pub fn open_latest(app:&AppHandle)->Result<(),String>{
+    if app.state::<crate::capture::LastCaptureState>().0.lock().unwrap().is_some() {
+        return editor_open_from_last(app.clone(),app.state(),app.state());
+    }
+    let id={let state=app.state::<crate::Db>();let conn=state.0.lock().unwrap();
+        let mut stmt=conn.prepare("SELECT id,path FROM captures WHERE kind='screenshot' AND deleted_at IS NULL ORDER BY created_at DESC,id DESC").map_err(|e|e.to_string())?;
+        let rows=stmt.query_map([],|r|Ok((r.get::<_,i64>(0)?,r.get::<_,String>(1)?))).map_err(|e|e.to_string())?;
+        let found=rows.filter_map(Result::ok).find(|(_,path)|std::path::Path::new(path).is_file()).map(|(id,_)|id);found
+    }.ok_or("No screenshot is available to edit")?;
+    editor_open_capture(app.clone(),app.state(),app.state(),id)
+}
+
+/// Open the most recent capture (from the HUD) into the editor.
 #[tauri::command]
 pub fn editor_open_from_last(
     app: AppHandle,
@@ -200,14 +216,7 @@ pub fn editor_save(app: AppHandle, db: State<crate::Db>, png_base64: String) -> 
 #[tauri::command(async)]
 pub fn editor_flatten_temp(app: AppHandle, png_base64: String) -> Result<String, String> {
     let bytes = decode_png_arg(&png_base64)?;
-    let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
-    std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-    let ts = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis();
-    let dest = dir.join(format!("glint-edit-{ts}.png"));
-    std::fs::write(&dest, &bytes).map_err(|e| e.to_string())?;
+    let dest=crate::attachments::store(&crate::attachments::directory(&app)?,&bytes,"png")?;
     Ok(dest.to_string_lossy().to_string())
 }
 

@@ -37,6 +37,7 @@ try {
     hash.startsWith("#/rec-hud") ||
     hash.startsWith("#/rec-cam") ||
     hash.startsWith("#/rec-fx") ||
+    hash.startsWith("#/rec-scroll") ||
     hash.startsWith("#/rec-trim")
   ) {
     document.documentElement.style.background = "transparent";

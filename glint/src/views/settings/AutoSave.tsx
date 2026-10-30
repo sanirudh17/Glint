@@ -1,3 +1,4 @@
+import {OcrEngineControls} from '../../ocr/OcrEngineControls';
 import { Section, Field, Switch } from "../../components/ui";
 import { useAppStore } from "../../store/useAppStore";
 
@@ -6,6 +7,7 @@ export function AutoSave() {
   const setAutoSave = useAppStore((s) => s.setAutoSave);
   const setAutoCopy = useAppStore((s) => s.setAutoCopy);
   const setOpenInEditor = useAppStore((s) => s.setOpenInEditor);
+  const setIndexScreenshotText=useAppStore(s=>s.setIndexScreenshotText);
 
   return (
     <Section
@@ -30,6 +32,11 @@ export function AutoSave() {
           onChange={(v) => setOpenInEditor(v)}
         />
       </Field>
+      <OcrEngineControls/>
+      <Field label="Search screenshot text" hint="Find readable words in saved screenshots. Small, blurred or unusual text may be missed. Recognition stays on this device; turning this off clears the text index.">
+        <Switch ariaLabel="Search screenshot text" checked={settings?.index_screenshot_text??true} onChange={v=>void setIndexScreenshotText(v)}/>
+      </Field>
+
     </Section>
   );
 }

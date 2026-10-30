@@ -31,6 +31,20 @@ pub trait ScreenCapturer {
 
 pub struct XcapCapturer;
 
+pub fn monitors() -> Result<Vec<xcap::Monitor>,CaptureError> {
+    let mut monitors=xcap::Monitor::all().map_err(|e|CaptureError::Backend(e.to_string()))?;
+    monitors.sort_by_key(|m|(!m.is_primary().unwrap_or(false),m.x().unwrap_or(0),m.y().unwrap_or(0)));
+    Ok(monitors)
+}
+
+pub fn capture_monitor(index:u32) -> Result<CapturedImage,CaptureError> {
+    if index==0 {return XcapCapturer.capture_primary();}
+    let monitors=monitors()?;
+    let monitor=monitors.get(index as usize).ok_or_else(||CaptureError::Backend("display is no longer available".into()))?;
+    let image=monitor.capture_image().map_err(|e|CaptureError::Backend(e.to_string()))?;
+    Ok(CapturedImage{width:image.width(),height:image.height(),rgba:image.into_raw()})
+}
+
 impl ScreenCapturer for XcapCapturer {
     fn capture_primary(&self) -> Result<CapturedImage, CaptureError> {
         let monitors =

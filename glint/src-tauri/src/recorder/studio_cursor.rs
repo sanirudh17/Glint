@@ -7,7 +7,18 @@ use super::studio::Events;
 #[serde(rename_all="camelCase")]
 pub struct CursorConfig {
     pub visible:bool,pub smoothing:f64,pub size:f64,pub style:String,
+    #[serde(default)] pub spotlight:bool,
+    #[serde(default="default_recorded_effects")] pub recorded_effects:bool,
     pub hide_idle:bool,pub idle_seconds:f64,pub clicks:bool,pub click_size:f64,pub keystrokes:bool,
+}
+fn default_recorded_effects()->bool {true}
+pub fn recorded_config(base:&CursorConfig,events:&[super::studio::InputEvent],time:f64)->CursorConfig {
+    let mut config=base.clone();
+    if config.recorded_effects {if let Some(event)=events.get(..events.partition_point(|e|e.t<=time)).and_then(|e|e.last()) {
+        config.clicks &= event.data["clicks"].as_bool().unwrap_or(true);
+        config.keystrokes &= event.data["keystrokes"].as_bool().unwrap_or(true);
+        config.spotlight &= event.data["spotlight"].as_bool().unwrap_or(true);
+    }}config
 }
 impl CursorConfig {
     pub fn validate(&self)->Result<(),String> {
@@ -37,6 +48,13 @@ pub fn point_at(path:&[Point],t:f64)->Option<Point> {
     let f=if b.t>a.t {((t-a.t)/(b.t-a.t)).clamp(0.0,1.0)}else{0.0};
     Some(Point{t,x:a.x+(b.x-a.x)*f,y:a.y+(b.y-a.y)*f,moved_at:a.moved_at})
 }
+pub fn point_for_frame(path:&[Point],t:f64,events:&Events)->Option<Point> {
+    let point=point_at(path,t);
+    let marker=events.events.iter().rev().find(|e|e.data["kind"]=="marker"&&e.t<=t&&t-e.t<1.1);
+    let Some(marker)=marker else{return point;};let g=&events.geometry;
+    let inside=point.is_some_and(|p|p.x>=g.x as f64&&p.x<(g.x as f64+g.width as f64)&&p.y>=g.y as f64&&p.y<(g.y as f64+g.height as f64));
+    Some(Point{t,x:if inside{point.unwrap().x}else{marker.data["x"].as_f64().unwrap_or(g.x as f64+g.width as f64/2.).clamp(g.x as f64,(g.x+g.width as i32-1) as f64)},y:if inside{point.unwrap().y}else{marker.data["y"].as_f64().unwrap_or(g.y as f64+g.height as f64/2.).clamp(g.y as f64,(g.y+g.height as i32-1) as f64)},moved_at:point.map(|p|p.moved_at).unwrap_or(0.).max(marker.t)})
+}
 #[derive(Clone,Copy)]
 pub struct Mapping {pub source_w:f64,pub source_h:f64,pub crop_x:f64,pub crop_y:f64,pub x:f64,pub y:f64,pub w:f64,pub h:f64,pub scale:f64}
 impl Mapping {
@@ -53,9 +71,23 @@ impl Mapping {
         let path=vec![Point{t:0.,x:0.,y:0.,moved_at:0.},Point{t:1.,x:100.,y:50.,moved_at:0.}];
         let p=point_at(&path,0.5).unwrap();assert_eq!(p.x,50.);assert_eq!(p.y,25.);assert_eq!(p.moved_at,0.);
     }
+    #[test] fn zoom_activity_restores_an_idle_pointer_inside_the_recorded_region(){
+        let events:Events=serde_json::from_value(serde_json::json!({"version":1,"geometry":{"x":100,"y":100,"width":400,"height":300,"monitorX":0,"monitorY":0,"monitorWidth":1920,"monitorHeight":1080,"dpiScale":1.25},"events":[{"t":5.,"kind":"marker","x":220.,"y":250.}]})).unwrap();
+        let path=vec![Point{t:0.,x:900.,y:900.,moved_at:0.}];
+        let p=point_for_frame(&path,5.1,&events).unwrap();assert_eq!((p.x,p.y,p.moved_at),(220.,250.,5.));
+        assert_eq!(point_for_frame(&path,6.2,&events).unwrap().moved_at,0.);
+    }
     #[test] fn dpi_crop_and_negative_origin_align() {
         let events:Events=serde_json::from_value(serde_json::json!({"version":1,"geometry":{"x":-1500,"y":200,"width":1200,"height":800,"monitorX":-1920,"monitorY":0,"monitorWidth":1920,"monitorHeight":1080,"dpiScale":2.0},"events":[]})).unwrap();
         let m=Mapping{source_w:600.,source_h:400.,crop_x:100.,crop_y:50.,x:20.,y:30.,w:400.,h:300.,scale:0.5};
         assert_eq!(m.point(-900.,600.,&events),(120.,105.));
+    }
+
+    #[test] fn recording_toggles_obey_source_time_and_keep_editor_override() {
+        let mut c:CursorConfig=serde_json::from_value(serde_json::json!({"visible":true,"smoothing":0.5,"size":32.,"style":"arrow","hideIdle":true,"idleSeconds":2.,"clicks":true,"clickSize":36.,"keystrokes":true,"spotlight":true})).unwrap();
+        let events:Vec<super::super::studio::InputEvent>=serde_json::from_value(serde_json::json!([{"t":0.,"kind":"effects","clicks":false,"keystrokes":false,"spotlight":false},{"t":2.,"kind":"effects","clicks":true,"keystrokes":true,"spotlight":true}])).unwrap();
+        assert!(!recorded_config(&c,&events,1.).clicks);assert!(recorded_config(&c,&events,2.).keystrokes);
+        c.spotlight=false;assert!(!recorded_config(&c,&events,3.).spotlight);
+        c.recorded_effects=false;assert!(recorded_config(&c,&events,0.).clicks);
     }
 }

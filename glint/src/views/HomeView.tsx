@@ -1,15 +1,17 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, ScanText, RotateCcw, ArrowRight } from "lucide-react";
+import { confirm, open } from "@tauri-apps/plugin-dialog";
+import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, ScanText, RotateCcw, ArrowRight, ChevronDown } from "lucide-react";
 import { Button, EmptyState } from "../components/ui";
 import { useAppStore } from "../store/useAppStore";
 import { startCapture } from "../lib/captureIpc";
 import { captureText } from "../lib/ocr";
 import { listCaptures, type CaptureItem } from "../lib/captures";
-import { getRecentProjects, openProject, pickOpenPath, pushRecentProject, type RecentProject } from "../lib/editor";
+import { getRecentProjects, openProject, pushRecentProject, type RecentProject } from "../lib/editor";
+import { popoverPlacement } from "../components/ui/popoverPlacement";
 import { CaptureCard } from "./library/CaptureCard";
 import "./home.css";
 
@@ -21,6 +23,34 @@ const RESUME_LIMIT = 3;
 export default function HomeView() {
   const pushToast = useAppStore((s) => s.pushToast);
   const navigate = useNavigate();
+  const projectMenu = useRef<HTMLDivElement>(null);
+  const projectTrigger = useRef<HTMLButtonElement>(null);
+  const [projectsOpen, setProjectsOpen] = useState(false);
+  const placeProjects = useCallback(() => {
+    const rect = projectTrigger.current?.getBoundingClientRect();
+    const menu = projectMenu.current;
+    if (!rect || !menu) return;
+    const position = popoverPlacement(rect, { width: window.innerWidth, height: window.innerHeight });
+    Object.assign(menu.style, {
+      width: `${position.width}px`, left: `${position.left}px`,
+      top: position.top === undefined ? 'auto' : `${position.top}px`,
+      bottom: position.bottom === undefined ? 'auto' : `${position.bottom}px`,
+      maxHeight: `${position.maxHeight}px`,
+    });
+  }, []);
+  useEffect(() => {
+    if (!projectsOpen) return;
+    window.addEventListener('resize', placeProjects);
+    document.addEventListener('scroll', placeProjects, true);
+    const observer = new ResizeObserver(placeProjects);
+    const actionRow = projectTrigger.current?.closest('.home-actions');
+    if (actionRow) observer.observe(actionRow);
+    return () => {
+      window.removeEventListener('resize', placeProjects);
+      document.removeEventListener('scroll', placeProjects, true);
+      observer.disconnect();
+    };
+  }, [projectsOpen, placeProjects]);
 
   // Recent captures — newest first, capped.
   const [recent, setRecent] = useState<CaptureItem[]>([]);
@@ -50,11 +80,20 @@ export default function HomeView() {
   }, [reloadRecent, reloadProjects]);
 
   const onOpenProject = useCallback(async () => {
-    const path = await pickOpenPath();
-    if (!path) return;
-    try { await openProject(path); await pushRecentProject(path); }
+    const path = await open({ filters: [{name:'Glint projects',extensions:['glint','glint-video']}], multiple:false, directory:false });
+    if (typeof path !== 'string') return;
+    projectMenu.current?.hidePopover();
+    try {
+      if (path.toLowerCase().endsWith('.glint-video')) {
+        let replacingDraft = false;
+        try { const draft = JSON.parse(localStorage.getItem('glint-scene-project-draft-v1') ?? 'null'); replacingDraft = !!draft?.dirty && draft.path !== path; } catch { /* No readable draft to replace. */ }
+        if (replacingDraft && !await confirm('Open another video project? This will replace the draft kept on this device.', {title:'Open video project',kind:'warning'})) return;
+        navigate(`/video-project?path=${encodeURIComponent(path)}`);
+      }
+      else { await openProject(path); await pushRecentProject(path); }
+    }
     catch { pushToast("Couldn't open the project"); }
-  }, [pushToast]);
+  }, [pushToast, navigate]);
 
   const onOpenRecent = useCallback(async (p: RecentProject) => {
     if (!p.exists) { pushToast("That project file is no longer on disk"); reloadProjects(); return; }
@@ -79,12 +118,30 @@ export default function HomeView() {
       <section className="home-section" aria-labelledby="nc-label">
         <span className="label home-eyebrow" id="nc-label">New capture</span>
         <div className="home-actions">
-          <Button variant="primary" size="md" icon={Crop} onClick={() => startCapture("area")}>Capture Area</Button>
+          <Button className="home-capture-action" variant="primary" size="md" icon={Crop} onClick={() => startCapture("area")}>Capture Area</Button>
           <Button variant="subtle" size="md" icon={AppWindow} onClick={() => startCapture("window")}>Window</Button>
           <Button variant="subtle" size="md" icon={Monitor} onClick={() => startCapture("fullscreen")}>Fullscreen</Button>
           <Button variant="subtle" size="md" icon={Video} onClick={() => invoke("recorder_open_region_selector")}>Record</Button>
           <Button variant="subtle" size="md" icon={ScanText} onClick={() => captureText()}>Capture Text</Button>
-          <Button variant="ghost" size="md" icon={FolderOpen} onClick={onOpenProject}>Open Project</Button>
+          <div className="home-project-menu">
+            <button type="button" ref={projectTrigger} className="g-btn g-btn-ghost g-btn-md"
+              aria-expanded={projectsOpen} aria-controls="home-project-options"
+              onClick={() => {
+                if (projectsOpen) projectMenu.current?.hidePopover();
+                else { placeProjects(); projectMenu.current?.showPopover(); }
+              }}>
+              <FolderOpen size={16} strokeWidth={1.5}/>Projects<ChevronDown size={14} strokeWidth={1.5}/>
+            </button>
+            <div id="home-project-options" ref={projectMenu} className="home-project-options" popover="auto"
+              role="group" aria-label="Projects" onToggle={(event) => {
+                const open = event.newState === 'open';
+                setProjectsOpen(open);
+                if (!open && document.activeElement === document.body) projectTrigger.current?.focus();
+              }}>
+              <button type="button" onClick={() => { projectMenu.current?.hidePopover(); navigate('/video-project'); }}><Video size={16} strokeWidth={1.5}/><span>Video project<small>Create a video or resume your draft</small></span></button>
+              <button type="button" onClick={() => { projectMenu.current?.hidePopover(); void onOpenProject(); }}><FolderOpen size={16} strokeWidth={1.5}/><span>Open saved project<small>Screenshot or video project</small></span></button>
+            </div>
+          </div>
         </div>
       </section>
 

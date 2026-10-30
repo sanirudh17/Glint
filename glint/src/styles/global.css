@@ -1,5 +1,7 @@
 /* Glint — global base styles */
 @import "./tokens.css";
+@import "./material.css";
+@import "./controls.css";
 /* Premium grotesque, bundled locally (no runtime network). Weights 400/500/600/700. */
 @import "@fontsource/manrope/400.css";
 @import "@fontsource/manrope/500.css";
@@ -160,4 +162,9 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 ::selection {
   background: var(--accent-subtle);
   color: var(--text);
+}
+
+:root[data-theme] .editor-view :is(.editor-width--active,.editor-toggle--active) {
+  background:var(--accent-subtle);
+  color:var(--text);
 }

@@ -1,10 +1,11 @@
 import { type RefObject } from "react";
 import type Konva from "konva";
-import { Copy, Download, Share2, Check } from "lucide-react";
+import { Copy, Download, Share2, CheckCheck } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { useAppStore } from "../../store/useAppStore";
 import { computeLayout, exportPixelRatio } from "../../editor/composition";
 import { editorCopy, editorSave, editorFlattenTemp, editorDone, dragOut } from "../../lib/editor";
+import {withoutEditorChrome} from '../../editor/privacy';
 
 /**
  * Flatten the stage to base64 PNG (no data-url prefix) at the native composition
@@ -12,7 +13,7 @@ import { editorCopy, editorSave, editorFlattenTemp, editorDone, dragOut } from "
  * (fit-to-viewport) stage back up to the full framed composition's native pixels.
  */
 function flatten(stage: Konva.Stage): string {
-  const { base, crop, frame } = useEditorStore.getState();
+  const { base, crop, frame, canvasSize } = useEditorStore.getState();
   if (!base) return "";
 
   // Guard against a not-yet-laid-out stage: a zero width would make pixelRatio
@@ -25,20 +26,24 @@ function flatten(stage: Konva.Stage): string {
   const hadNodes = tr ? tr.nodes() : [];
   if (tr) { tr.nodes([]); tr.getLayer()?.batchDraw(); }
 
-  const layout = computeLayout(base.width, base.height, crop, frame);
+  const layout = computeLayout(canvasSize?.width??base.width, canvasSize?.height??base.height, crop, frame);
   const pixelRatio = exportPixelRatio(layout, stageW); // native resolution
   let url: string;
   try {
-    url = stage.toDataURL({ pixelRatio, mimeType: "image/png" });
+    return withoutEditorChrome(stage,()=>{if(frame.enabled&&frame.outputSize) {
+      const image=stage.toCanvas({pixelRatio:frame.outputSize.width/layout.compositionW});
+      const output=document.createElement('canvas');output.width=frame.outputSize.width;output.height=frame.outputSize.height;
+      output.getContext('2d')!.drawImage(image,0,0,output.width,output.height);url=output.toDataURL('image/png');
+    } else url = stage.toDataURL({ pixelRatio, mimeType: "image/png" });return url.split(',')[1]??'';});
   } finally {
     // Always restore Transformer nodes even if toDataURL throws.
     if (tr) { tr.nodes(hadNodes); tr.getLayer()?.batchDraw(); }
   }
-  return url.split(",")[1] ?? "";
 }
 
 export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null> }) {
   const base = useEditorStore((s) => s.base);
+  const rendering=useEditorStore(s=>s.renderingLook);
   // Feedback goes through the app's toast host (a clean corner toast) rather than
   // an inline status span — a long "Exported · <filename>" used to wrap inside
   // the toolbar and squash the buttons into a cramped box.
@@ -52,13 +57,13 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
     try { await fn(png); } catch { pushToast("Something went wrong"); }
   };
 
-  const onCopy = withPng(async (png) => {
-    await editorCopy(png);
-    pushToast("Copied to clipboard");
-  });
   const onSave = withPng(async (png) => {
     const dest = await editorSave(png);
     pushToast(`Exported · ${dest.split(/[\\/]/).pop()}`);
+  });
+  const onCopy = withPng(async (png) => {
+    await editorCopy(png);
+    pushToast("Image copied");
   });
   const onDrag = async () => {
     const stage = stageRef.current;
@@ -78,6 +83,7 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
     <div className="editor-exportbar">
       <button
         className="editor-export-btn"
+        disabled={!base || rendering}
         // Press-and-drag: the OS drag must start while the mouse button is held,
         // so this fires on pointer-down (like the HUD/Library drag). onClick
         // fires on release, when there's no held button to attach a drag to —
@@ -87,14 +93,14 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
       >
         <Share2 size={16} strokeWidth={1.5} /> Drag
       </button>
-      <button className="editor-export-btn" onClick={onCopy} title="Copy to clipboard">
+      <button className="editor-export-btn" disabled={!base || rendering} onClick={onCopy} title="Copy the edited image">
         <Copy size={16} strokeWidth={1.5} /> Copy
       </button>
-      <button className="editor-export-btn" onClick={onSave} title="Export a PNG to the Library">
+      <button className="editor-export-btn" disabled={!base || rendering} onClick={onSave} title="Export a PNG to the Library">
         <Download size={16} strokeWidth={1.5} /> Export
       </button>
-      <button className="editor-export-btn editor-export-btn--primary" onClick={onDone} title="Finish — send to the corner HUD">
-        <Check size={16} strokeWidth={1.5} /> Done
+      <button className="editor-export-btn editor-export-btn--primary editor-done-btn" disabled={!base || rendering} onClick={onDone} title="Finish — send to the corner HUD">
+        <CheckCheck size={16} strokeWidth={1.5} aria-hidden="true" /><span>Done</span>
       </button>
     </div>
   );

@@ -1,4 +1,5 @@
 mod autostart;
+mod attachments;
 mod capture;
 mod clipboard;
 mod countdown;
@@ -12,10 +13,12 @@ mod pin;
 mod recorder;
 mod settings;
 mod shell_integration;
+mod shell_reveal;
 mod shortcuts;
 mod tray;
 mod updater;
 mod window;
+mod material;
 use tauri::{Emitter, Manager};
 use tauri_plugin_shell::ShellExt;
 use capture::commands::{
@@ -46,10 +49,11 @@ pub struct Db(pub std::sync::Mutex<rusqlite::Connection>);
 /// Start a capture from the main-window UI (the Home quick-start buttons).
 /// Hotkeys and the tray call `capture::begin` directly while the main window is
 /// already hidden; this command additionally hides the main window first — so
-/// Glint isn't baked into the frozen frame — gives the compositor a beat to
-/// remove it, then begins.
+/// Glint isn't baked into the frozen frame — waits for the compositor to remove
+/// it, then begins.
 #[tauri::command]
 fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
+    if capture::scrolling::is_running(&app){return Err("Finish or cancel the scrolling capture first".into());}
     use std::str::FromStr;
     use tauri::Manager;
     let m = crate::capture::CaptureMode::from_str(&mode)
@@ -60,10 +64,10 @@ fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     }
     // Run capture OFF the main thread (this sync command runs on the main thread,
     // and building the overlay webview there deadlocks the event loop). Give the
-    // hide a beat to take effect on screen, then begin.
+    // hide to reach the composed desktop, then begin.
     let app2 = app.clone();
     std::thread::spawn(move || {
-        std::thread::sleep(std::time::Duration::from_millis(200));
+        crate::window::wait_for_compositor();
         // restore_main = true: re-show the main window once the capture settles,
         // since we hid it above.
         crate::capture::begin_restoring(&app2, m, true);
@@ -115,6 +119,7 @@ pub fn run() {
         )
         .manage(SettingsState(Default::default()))
         .manage(crate::capture::CaptureState::default())
+        .manage(crate::capture::scrolling::ScrollState::default())
         .manage(crate::capture::LastCaptureState::default())
         .manage(crate::capture::tray::TrayState::default())
         .manage(crate::editor::EditorState::default())
@@ -125,6 +130,8 @@ pub fn run() {
         .manage(crate::recorder::RecorderTrimState::default())
         .manage(crate::recorder::studio_export::ExportState::default())
         .manage(crate::ocr::OcrState::default())
+        .manage(crate::ocr::privacy::ScanState::default())
+        .manage(crate::ocr::indexing::IndexState::default())
         .setup(|app| {
             tray::build(app.handle())?;
 
@@ -146,12 +153,15 @@ pub fn run() {
             // migration 1 under its old SQL text, so plugin-sql rejects every
             // load and no setting can persist. Runs before any frontend DB use.
             crate::db::repair_migration_bookkeeping(&conn);
+            crate::db::ensure_captures_table(&conn)?;
+            crate::db::text_index::migrate_naming_opt_in(&conn)?;
             // Hydrate persisted settings into the live SettingsState.
             {
                 let state = app.state::<SettingsState>();
                 let mut s = state.0.lock().unwrap();
                 crate::settings::hydrate::hydrate_from_db(&conn, &mut s);
             }
+            crate::ocr::neural::initialize(app.path().app_local_data_dir()?,&app.state::<SettingsState>().0.lock().unwrap().ocr_engine);
             app.manage(Db(std::sync::Mutex::new(conn)));
 
             // Register global shortcuts AFTER hydration so persisted custom hotkeys win —
@@ -179,7 +189,7 @@ pub fn run() {
                 let bg_color = if theme_str == "light" {
                     tauri::window::Color(246, 247, 249, 255)
                 } else {
-                    tauri::window::Color(12, 13, 15, 255)
+                    tauri::window::Color(8, 8, 8, 255)
                 };
 
                 let builder = tauri::WebviewWindowBuilder::new(
@@ -191,7 +201,7 @@ pub fn run() {
                 .inner_size(1100.0, 720.0)
                 .min_inner_size(880.0, 560.0)
                 .decorations(false)
-                .transparent(false)
+                .transparent(true)
                 .resizable(true)
                 .center()
                 .visible(false)
@@ -291,6 +301,7 @@ pub fn run() {
                     // Notify frontend so it clears any displayed image from memory.
                     api.prevent_close();
                     let _ = window.hide();
+                    crate::editor::window::cancel_present();
                     let _ = window.emit("editor-close", ());
                 } else if label == crate::recorder::windows::TRIM_LABEL {
                     if window.state::<crate::recorder::studio_export::ExportState>().0.lock().unwrap().is_some() {
@@ -320,7 +331,9 @@ pub fn run() {
             }
         })
         .invoke_handler(tauri::generate_handler![
+            material::window_material,
             clipboard::clipboard_copy_text,
+            attachments::drag_prepare,
             settings_get_all,
             settings_set,
             settings_set_hotkey,
@@ -339,6 +352,13 @@ pub fn run() {
             capture_commit,
             capture_cancel,
             capture_start,
+            editor::commands::editor_open_latest,
+            capture::scrolling::capture_scroll_begin,
+            capture::scrolling::capture_scroll_control,
+            capture::scrolling::capture_scroll_status,
+            capture::scrolling::capture_scroll_ready,
+            capture::scrolling::capture_displays,
+            capture::scrolling::capture_choose_monitor,
             tray_list,
             tray_copy,
             tray_copy_path,
@@ -349,6 +369,8 @@ pub fn run() {
             tray_extract_text,
             tray_dismiss,
             tray_clear,
+            capture::commands::tray_auto_close,
+            settings::commands::settings_open_notifications,
             tray_resize,
             captures_list,
             capture_open,
@@ -362,8 +384,21 @@ pub fn run() {
             editor_open_from_last,
             editor_open_capture,
             editor_source,
+            editor::layers::editor_read_layer,
+            ocr::privacy::privacy_scan,
+            ocr::privacy::privacy_cancel,
+            ocr::neural::ocr_engine_status,
+            ocr::neural::ocr_engine_install,
+            ocr::neural::ocr_engine_cancel,
+            ocr::neural::ocr_engine_remove,
+            ocr::indexing::library_index_start,
+            ocr::indexing::library_index_cancel,
+            ocr::indexing::library_index_status,
+            ocr::indexing::library_search_text,
+            ocr::indexing::library_index_clear,
             editor_copy,
             editor_save,
+            editor::window::editor_present,
             editor_flatten_temp,
             editor_done,
             project_save,
@@ -387,6 +422,9 @@ pub fn run() {
             recorder::recorder_stop,
             recorder::recorder_cancel,
             recorder::recorder_status,
+            recorder::recorder_mark_zoom,
+            recorder::ink::recorder_ink_state,recorder::ink::recorder_ink_clock,recorder::ink::recorder_ink_mode,recorder::ink::recorder_ink_begin,recorder::ink::recorder_ink_commit,recorder::ink::recorder_ink_undo,
+            recorder::recorder_trim_ready,
             recorder::recorder_set_mute,
             recorder::recorder_set_webcam,
             recorder::cam::recorder_cam_write_chunk,
@@ -399,9 +437,24 @@ pub fn run() {
             crate::recorder::trim::recorder_trim_waveform,
             recorder::recorder_open_trim,
             recorder::studio::studio_load,
+            recorder::studio::studio_import,
             recorder::studio::studio_save,
             recorder::studio_export::studio_export,
+            recorder::gif::recorder_gif_export,
             recorder::studio_export::studio_export_cancel,
+            recorder::studio_export::studio_discard_source,
+            recorder::scene_commands::scene_media_probe,
+            recorder::scene_commands::scene_project_load,
+            recorder::scene_commands::scene_project_save,
+            recorder::scene_commands::scene_project_export,
+            recorder::polish::studio_analyze_silence,
+            recorder::polish::studio_polish_cancel,
+            recorder::polish::studio_copy_video,
+            recorder::captions::studio_captions_status,
+            recorder::captions::studio_captions_install,
+            recorder::captions::studio_captions_generate,
+            recorder::notes::studio_speaker_notes,
+            recorder::recorder_restart,
             recorder::recorder_trim_target,
             crate::ocr::commands::ocr_result,
             crate::ocr::commands::ocr_extract_capture,

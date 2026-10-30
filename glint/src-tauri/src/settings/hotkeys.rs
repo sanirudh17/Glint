@@ -3,9 +3,10 @@
 
 use super::Hotkeys;
 
-pub const HOTKEY_ACTIONS: [&str; 8] = [
+pub const HOTKEY_ACTIONS: [&str; 10] = [
     "capture_area", "capture_window", "capture_fullscreen", "record", "copy_path",
     "capture_area_delayed", "capture_window_delayed", "capture_fullscreen_delayed",
+    "open_latest", "capture_scroll",
 ];
 
 #[derive(Debug, PartialEq)]
@@ -110,6 +111,8 @@ pub fn get_field<'a>(h: &'a Hotkeys, action: &str) -> Option<&'a str> {
         "capture_area_delayed" => h.capture_area_delayed.as_str(),
         "capture_window_delayed" => h.capture_window_delayed.as_str(),
         "capture_fullscreen_delayed" => h.capture_fullscreen_delayed.as_str(),
+        "open_latest"=>h.open_latest.as_str(),
+        "capture_scroll"=>h.capture_scroll.as_str(),
         _ => return None,
     })
 }
@@ -124,6 +127,8 @@ pub fn set_field(h: &mut Hotkeys, action: &str, accel: String) -> bool {
         "capture_area_delayed" => h.capture_area_delayed = accel,
         "capture_window_delayed" => h.capture_window_delayed = accel,
         "capture_fullscreen_delayed" => h.capture_fullscreen_delayed = accel,
+        "open_latest"=>h.open_latest=accel,
+        "capture_scroll"=>h.capture_scroll=accel,
         _ => return false,
     }
     true
@@ -159,6 +164,8 @@ mod tests {
             capture_area_delayed: String::new(),
             capture_window_delayed: String::new(),
             capture_fullscreen_delayed: String::new(),
+            open_latest:String::new(),
+            capture_scroll:String::new(),
         }
     }
 
@@ -228,5 +235,17 @@ mod tests {
         assert_eq!(get_field(&h, "record"), Some("Ctrl+Shift+9"));
         assert!(!set_field(&mut h, "nope", "x".into()));
         assert_eq!(get_field(&h, "nope"), None);
+    }
+
+    #[test]
+    fn scrolling_binding_persists_and_participates_in_duplicate_checks() {
+        let mut h=Hotkeys::default();
+        assert!(set_field(&mut h,"capture_scroll","Ctrl+Alt+S".into()));
+        assert_eq!(get_field(&h,"capture_scroll"),Some("Ctrl+Alt+S"));
+        assert_eq!(duplicate_of(&h,"record","Control+Alt+S"),Some("capture_scroll".into()));
+        let roundtrip:Hotkeys=serde_json::from_str(&serde_json::to_string(&h).unwrap()).unwrap();
+        assert_eq!(roundtrip.capture_scroll,"Ctrl+Alt+S");
+        let mut old=serde_json::to_value(&h).unwrap();old.as_object_mut().unwrap().remove("capture_scroll");
+        assert!(serde_json::from_value::<Hotkeys>(old).unwrap().capture_scroll.is_empty());
     }
 }

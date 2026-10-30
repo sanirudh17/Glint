@@ -1,0 +1,85 @@
+{
+  "version": "0.2.0",
+  "date": "2026-10-30",
+  "frontend": {
+    "files": 49,
+    "passed": 287,
+    "runner": "Vitest 5.0.5"
+  },
+  "native": {
+    "passed": 281,
+    "explicitly_gated": 14,
+    "current_feature_gates_exercised": 13,
+    "not_rerun": "historical Indra candidate benchmark; not a selectable shipped engine"
+  },
+  "recorder_suite": {
+    "passed": 123,
+    "includes_real_media_tests": true
+  },
+  "desktop_capture_suite": {
+    "passed": 39,
+    "includes_display_gates": true
+  },
+  "cursor_follow_export": {
+    "fixed_focus_pixel_check": true,
+    "following_focus_pixel_check": true,
+    "hardware_encoder": "AMD AMF",
+    "decoded_frames_checked": true
+  },
+  "ocr": {
+    "search_cases": 42,
+    "queries": 123,
+    "hits": 122,
+    "errors": 0,
+    "privacy_fixtures_passed": true,
+    "medium_corpus_passed": true,
+    "download_artifacts_verified": 6,
+    "tesseract_optional_package_install_use_remove": true,
+    "loaded_model_remove_reinstall": true,
+    "loaded_runtime_next_start_cleanup": true
+  },
+  "captions": {
+    "local_cpu_transcription_passed": true,
+    "engine": "whisper.cpp tiny.en"
+  },
+  "npm_audit_vulnerabilities": 0,
+  "package_checks": 21,
+  "models_bundled_in_installers": false,
+  "installer_files": [
+    "glint.exe",
+    "ffmpeg.exe",
+    "ffprobe.exe"
+  ],
+  "assets": [
+    {
+      "name": "Glint-OCR-Tesseract-5.4.0-x64.zip",
+      "bytes": 57993532,
+      "sha256": "2add1c85d0f1cf5bede1895ccd8531226cae76906d72e2542a22991dbeca3ab7"
+    },
+    {
+      "name": "Glint_0.2.0_x64-setup.exe",
+      "bytes": 62854252,
+      "sha256": "f50e41f993ebf37f80bfdc0d3d0c15e9878aeb3fe13ceb6fe45a67a4be0008ac"
+    },
+    {
+      "name": "Glint_0.2.0_x64.zip",
+      "bytes": 86211658,
+      "sha256": "c441370cbde8a60e3612741833c9bf1ea65c5d2bf393255a71557f23215b3e93"
+    },
+    {
+      "name": "Glint_0.2.0_x64_en-US.msi",
+      "bytes": 86380544,
+      "sha256": "af5d9140850da638cca8930ec8f5c7ac611ad1538e34620d5f57c75481703037"
+    }
+  ],
+  "manual_scope": [
+    "Home dark layout and capture details",
+    "Dark Appearance acrylic and open themed choice menu"
+  ],
+  "limits": [
+    "Targeted release review; no claim of a fresh manual pass through every popup or physical microphone/webcam combination.",
+    "OCR results are controlled English fixture evidence, not guaranteed recall for arbitrary text.",
+    "A loaded ONNX runtime can remain on disk until Glint restarts; cleanup was tested.",
+    "Installers follow the existing unsigned distribution setup."
+  ]
+}

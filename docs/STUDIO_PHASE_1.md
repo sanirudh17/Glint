@@ -66,23 +66,33 @@ and use a compact inspector with a hover-only themed scrollbar.
   shadow uses a cached linear-time blur; the 0.5-second square fixture completed
   in 4.32 seconds including hardware probing and thumbnail generation.
 
-**Manual acceptance is pending the user's checklist below. Phase 2 has not started.**
+**Accepted by the user on 2026-10-14. Phase 1 is closed.**
+
+The final smoothing check compared real exports at 0% and 100% on a moving cursor
+sidecar (7,201 samples): 22,237 decoded color channels changed in the two-second
+comparison. Regression tests also verify jitter suppression and the native
+cursor's actual frame position. The source MP4 intentionally remains unchanged;
+smoothing is applied in the Studio preview and export.
+
+The shadow's positive vertical offset is intentional and matches the screenshot
+look: a light source above the card produces a stronger shadow underneath and
+softer shadows at the sides. Its blur still extends around every edge.
 
 ## Manual closing checklist
 
-- [ ] Studio panel is compact; scrollbar is hidden at rest and themed on hover.
-- [ ] Dropdowns, switches, color swatches and crop steppers work in dark/light themes.
-- [ ] Studio recording saves video/events/project, excludes baked cursor/effects,
+- [x] Studio panel is compact; scrollbar is hidden at rest and themed on hover.
+- [x] Dropdowns, switches, color swatches and crop steppers work in dark/light themes.
+- [x] Studio recording saves video/events/project, excludes baked cursor/effects,
   handles pause/resume, and opens its editor on Stop.
-- [ ] Solid/gradient/image looks, padding, rounding, shadow/borders and all aspects
+- [x] Solid/gradient/image looks, padding, rounding, shadow/borders and all aspects
   match preview and exported MP4.
-- [ ] Cursor smoothing/style/size/idle hiding and click/key toggles affect export.
-- [ ] Crop keeps the cursor aligned; cuts, speed, reorder and camera overlay work.
-- [ ] Close/reopen preserves every edit; a preset saved in either editor loads in both.
-- [ ] A real 60-second 1080p60 recording exports with audio aligned from start to end.
-- [ ] Cancelling export stops rendering and leaves the source/project intact.
-- [ ] Quick recording and existing screenshot documents behave as before.
+- [x] Cursor smoothing/style/size/idle hiding and click/key toggles affect export.
+- [x] Crop keeps the cursor aligned; cuts, speed, reorder and camera overlay work.
+- [x] Close/reopen preserves every edit; a preset saved in either editor loads in both.
+- [x] A real 60-second 1080p60 recording exports with audio aligned from start to end.
+- [x] Cancelling export stops rendering and leaves the source/project intact.
+- [x] Quick recording and existing screenshot documents behave as before.
 
-No Phase 1 feature was intentionally cut. Manual recorder/device combinations and
-final user acceptance remain to be confirmed. Generated validation media stays
+No Phase 1 feature was intentionally cut. The checklist above includes the user's
+manual sign-off; automated evidence is listed separately. Generated validation media stays
 outside the repository in the OS temp folder; no large assets were added.

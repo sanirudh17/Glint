@@ -1,0 +1,14 @@
+<!doctype html><html><meta charset="utf-8"><title>Glint manual scroll check</title>
+<style>
+*{box-sizing:border-box}body{margin:0;background:#11151b;color:#202832;font:15px/1.5 "Segoe UI",sans-serif}#region{position:absolute;left:100px;top:80px;width:800px;height:480px;border:2px solid #01fec5;display:flex;flex-direction:column;background:#f5f7f9}header,footer{flex:none;padding:10px 18px;background:#18344e;color:white}header{height:44px}footer{height:32px;font-size:12px;padding-top:7px}#scroller{overflow:auto;flex:1;scrollbar-width:none}#scroller::-webkit-scrollbar{display:none}#content{padding:16px 22px;background:#f5f7f9}.entry{height:112px;padding:10px 14px;border-bottom:1px solid #ced6de}.entry h2{font-size:17px;margin:0 0 6px}.entry p{margin:0;color:#48576a}.entry code{color:#124e77}.chat .entry{width:88%;height:112px;background:#e2eaf1;border-radius:10px;margin-bottom:12px;border:none}.chat .entry:nth-child(even){margin-left:auto;background:#ccebe4}.chat .entry h2{font-size:14px}.chat #content{padding-bottom:16px}
+</style>
+<div id="region"><header>Project notes · a stable header</header><div id="scroller"><div id="content"></div></div><footer>Local-only test fixture · a stable footer</footer></div>
+<script>
+const chat=location.pathname.includes('chat');document.body.classList.toggle('chat',chat);
+document.querySelector('#content').innerHTML=Array.from({length:24},(_,i)=>`<article class="entry"><h2>${chat?(i%2?'Mira':'Alex'):'Section'} ${i+1} — ${['Review the capture','Design decisions','Project update','Implementation notes'][i%4]}</h2><p>${i%2?'The layout should remain readable across every stitched strip.':'A longer paragraph gives the overlap finder real text, spacing and varied line breaks.'}</p><code>capture_${i+1} · value ${173+i*97} · ${'abcdefgh'.slice(i%5)}</code></article>`).join('');
+window.expandForGolden=()=>{document.querySelector('#scroller').scrollTop=0;Object.assign(document.querySelector('#region').style,{height:'auto'});Object.assign(document.querySelector('#scroller').style,{overflow:'visible',flex:'none'});return document.querySelector('#region').getBoundingClientRect().toJSON()};
+if(location.pathname.includes('feed')){
+ const style=document.createElement('style');style.textContent='.entry{height:176px}.preview{float:right;width:160px;height:72px;margin:0 12px 12px;background:#ccd4de}';document.head.append(style);
+ document.querySelectorAll('.entry').forEach((entry,i)=>{const canvas=document.createElement('canvas');canvas.className='preview';canvas.width=160;canvas.height=72;entry.prepend(canvas);const ctx=canvas.getContext('2d');let tick=0;const paint=()=>{ctx.fillStyle=`hsl(${(i*47+tick*37)%360} 55% 48%)`;ctx.fillRect(0,0,160,72);ctx.fillStyle='#20304c';ctx.fillRect((tick*17)%110,12,40,48);tick++;};paint();setInterval(paint,180);});
+}
+</script></html>

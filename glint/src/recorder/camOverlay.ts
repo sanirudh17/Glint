@@ -2,7 +2,7 @@
  *  normalized (0..1) to the video frame. `diameter` is the box WIDTH as a fraction of the
  *  video width; the box HEIGHT follows the shape's aspect. `x,y` are the top-left corner. */
 export type CamShape = "circle" | "rounded" | "square" | "rect";
-export type CamPlacement = { x: number; y: number; diameter: number; visible: boolean; shape: CamShape };
+export type CamPlacement = { x: number; y: number; diameter: number; visible: boolean; shape: CamShape; layout?:'overlay'|'side-by-side'|'camera-only' };
 
 export const MIN_D = 0.06;
 export const MAX_D = 0.6;
@@ -34,6 +34,7 @@ export function clampPlacement(p: CamPlacement): CamPlacement {
     y: clamp(p.y, 0, 1 - diameter),
     visible: p.visible,
     shape: p.shape,
+    layout:p.layout,
   };
 }
 

@@ -11,10 +11,12 @@ pub fn build_fx_overlay(app: &AppHandle, target: RecordTarget) -> tauri::Result<
     if app.get_webview_window(FX_LABEL).is_some() {
         return Ok(());
     }
+    let studio=app.state::<crate::recorder::RecorderState>().0.lock().unwrap().as_ref().is_some_and(|r|r.studio.is_some());
     let win = WebviewWindowBuilder::new(app, FX_LABEL, WebviewUrl::App("index.html#/rec-fx".into()))
         .title("Glint FX")
         .decorations(false)
         .transparent(true)
+        .content_protected(studio)
         .always_on_top(true)
         .skip_taskbar(true)
         .resizable(false)

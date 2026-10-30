@@ -5,10 +5,10 @@ import { splitClips } from "./trimModel";
 const project: StudioProject = { version: 1, look: DEFAULT_LOOK, cursor: DEFAULT_CURSOR, crop: { x: 30, y: 20, w: 600, h: 400 }, clips: [{ id: 1, start: 1, end: 5, speed: 2, order: 1, kept: true }, { id: 2, start: 8, end: 10, speed: .5, order: 0, kept: true }], fadeIn: .5, fadeOut: 1, cam: null, zoomSegments: [], masks: [] };
 describe("Studio projects", () => {
   it("round-trips crop, look, effects and reordered timeline", () => {
-    expect(hydrateProject(JSON.parse(JSON.stringify(project)), 10)).toEqual(project);
+    expect(hydrateProject(JSON.parse(JSON.stringify(project)), 10)).toEqual({ ...project, version: 2 });
   });
   it("rejects unknown versions and invalid cuts", () => {
-    expect(() => hydrateProject({ ...project, version: 2 } as unknown as StudioProject, 10)).toThrow("newer");
+    expect(() => hydrateProject({ ...project, version: 3 } as unknown as StudioProject, 10)).toThrow("newer");
     expect(() => hydrateProject(project, 3)).toThrow("invalid");
   });
   it("maps cursor time through speed changes and reordered cuts", () => {
@@ -20,4 +20,19 @@ describe("Studio projects", () => {
     const split = splitClips(reopened.clips, 3);
     expect(new Set(split.map((c) => c.id)).size).toBe(split.length);
   });
+  it("preserves an imported video's source protection and manual effects", () => {
+    const imported={...project,version:2 as const,importedVideo:true,cursor:{...DEFAULT_CURSOR,visible:false,clicks:false}};
+    const reopened=hydrateProject(JSON.parse(JSON.stringify(imported)),10,{version:1,geometry:{x:0,y:0,width:640,height:360,monitorX:0,monitorY:0,monitorWidth:640,monitorHeight:360,dpiScale:1},events:[]});
+    expect(reopened.importedVideo).toBe(true);expect(reopened.cursor.visible).toBe(false);expect(reopened.clips).toEqual(imported.clips);
+  });
+});
+
+it('rejects corrupt clip identities and timing before reserving split IDs',()=>{
+ for(const patch of [{id:NaN},{id:Infinity},{id:0},{speed:NaN},{order:NaN}]){
+  expect(()=>hydrateProject({...project,clips:[{...project.clips[0],...patch}]},10)).toThrow('timeline is invalid');
+ }
+ expect(()=>hydrateProject({...project,clips:[project.clips[0],project.clips[0]]},10)).toThrow('timeline is invalid');
+ expect(()=>hydrateProject(project,NaN)).toThrow('timeline is invalid');
+ const split=splitClips(hydrateProject(project,10).clips,3);
+ expect(split.every(c=>Number.isSafeInteger(c.id))).toBe(true);
 });

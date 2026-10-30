@@ -80,17 +80,19 @@
 .editor-width {
   display: inline-flex; align-items: center; justify-content: center;
   box-sizing: border-box; flex: none; padding: 0;
-  width: 28px; height: 24px; border-radius: var(--r-btn);
+  width: 28px; height: 28px; border-radius: var(--r-btn);
   border: 1px solid var(--border); background: transparent;
   color: var(--text-dim); cursor: pointer; font-size: var(--fz-xs); line-height: 1; text-align: center;
 }
 .editor-width--active { border-color: var(--accent); color: var(--text); }
+.editor-width > svg { flex:none; display:block; }
+.editor-width:disabled { opacity:.35; cursor:default; }
 /* Word-labelled toggles (e.g. Solid / Pixel) need room to breathe — the fixed
    28px width is for single letters (S/M/L), not whole words. */
 .editor-toggle {
   display: inline-flex; align-items: center; justify-content: center;
   box-sizing: border-box; flex: none;
-  height: 24px; padding: 0 10px; border-radius: var(--r-btn);
+  height: 28px; padding: 0 10px; border-radius: var(--r-btn);
   border: 1px solid var(--border); background: transparent;
   color: var(--text-dim); cursor: pointer; font-size: var(--fz-xs); white-space: nowrap; line-height: 1; text-align: center;
 }
@@ -104,17 +106,24 @@
 }
 .editor-rail {
   display: flex; flex-direction: column; gap: 4px;
+  flex-shrink:0; min-height:0; overflow:hidden;
   padding: var(--s3) var(--s2); border-right: 1px solid var(--border); background: var(--bg-frame, var(--bg-elev));
 }
+/* Only tools overflow in genuinely short windows; history stays reachable. */
+.editor-rail-tools {
+  display:flex; flex-direction:column; gap:4px; flex:1; min-height:0;
+  overflow-y:auto; overflow-x:hidden; scrollbar-width:none;
+}
+.editor-rail-tools::-webkit-scrollbar { display:none; }
 /* All tool items have uniform 4px spacing */
 .editor-rail-group {
   display: flex; flex-direction: column; gap: 4px;
-  margin: 0; padding: 0;
+  margin: 0; padding: 0; flex:none;
 }
 .editor-rail-group:last-of-type { margin-bottom: 0; padding-bottom: 0; }
 .editor-tool {
   display: inline-flex; align-items: center; justify-content: center;
-  width: 36px; height: 36px; border-radius: var(--r-btn);
+  width: 36px; height: 32px; flex:none; border-radius: var(--r-btn);
   border: none; background: transparent; color: var(--text-dim); cursor: pointer; line-height: 1;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
@@ -128,9 +137,9 @@
   color: var(--danger);
 }
 /* Bottom action group (undo/redo/clear) has uniform 4px spacing with clean separation */
-.editor-rail-sep { height: 1px; margin-top: auto; margin-bottom: 4px; }
+.editor-rail-sep { height:1px; flex:none; margin:4px 0; }
 .editor-rail-bottom {
-  display: flex; flex-direction: column; gap: 4px;
+  flex:none; display: flex; flex-direction: column; gap: 4px;
 }
 
 /* Inline text-annotation editor: a real <textarea> floated over the Konva text
@@ -154,15 +163,24 @@
 
 /* ── Export bar ──────────────────────────────────────────────────────────── */
 .editor-topbar {
-  display: flex;
-  align-items: stretch;
-  justify-content: space-between;
-  border-bottom: 1px solid var(--border);
-  background: var(--bg-frame, var(--bg-elev));
+ display: grid;
+ grid-template-columns: auto minmax(0,1fr) auto auto;
+ align-items: center;
+ min-height: 44px;
+ border-bottom: 1px solid var(--border);
+ background: var(--bg-frame, var(--bg-elev));
 }
-/* The style bar is the flexible middle: it shrinks and scrolls horizontally so the
-   fixed Export/Done buttons on the right are never pushed off-screen. */
-.editor-topbar .editor-stylebar { border-bottom: none; flex: 1 1 0; min-width: 0; overflow-x: auto; }
+.editor-topbar .editor-stylebar { border-bottom: none; min-width: 0; overflow-x: auto; padding: 6px 12px; }
+.editor-topbar .editor-status { white-space: nowrap; flex: none; }
+.editor-topbar > .g-winctl { margin: 8px 4px 0 2px; }
+@media (max-width: 1020px) {
+ .editor-topbar { grid-template-columns: auto minmax(0,1fr) auto; }
+ .editor-projectbar { grid-column: 1; grid-row: 1; }
+ .editor-exportbar { grid-column: 2; grid-row: 1; justify-content: flex-end; }
+ .editor-topbar > .g-winctl { grid-column: 3; grid-row: 1; }
+ .editor-frame-slot { grid-column: 1; grid-row: 2; padding: 6px 12px; }
+ .editor-topbar .editor-stylebar { grid-column: 2 / 4; grid-row: 2; }
+}
 .editor-exportbar, .editor-frame-slot { flex: none; }
 .editor-exportbar {
   display: flex; align-items: center; gap: var(--s2);
@@ -171,14 +189,16 @@
 .editor-status { font-size: var(--fz-xs); color: var(--text-dim); margin-right: var(--s2); }
 .editor-export-btn {
   display: inline-flex; align-items: center; justify-content: center; gap: var(--s2);
-  height: 30px; padding: 0 var(--s3);
+  height: var(--control-h); padding: 0 var(--s3);
   border: 1px solid var(--border); border-radius: var(--r-btn);
-  background: var(--bg); color: var(--text); cursor: pointer; font-size: var(--fz-sm); line-height: 1; text-align: center;
+  background: var(--bg-elev2); color: var(--text); cursor: pointer; font-size: var(--fz-sm); line-height: 1; text-align: center;
   transition: border-color var(--dur) var(--ease), background var(--dur) var(--ease);
 }
-.editor-export-btn:hover { background: var(--bg-elev2); }
+.editor-export-btn:hover:not(:disabled) { background: var(--bg-elev3); border-color: var(--border-strong); }
 .editor-export-btn--primary { background: var(--accent); border-color: var(--accent); color: var(--accent-fg); }
-.editor-export-btn--primary:hover { background: var(--accent-hover); }
+.editor-export-btn--primary:hover:not(:disabled) { background: var(--accent-hover); border-color: var(--accent-hover); }
+.editor-done-btn { min-width: 76px; font-weight: var(--fw-semi); gap: 10px; }
+.editor-frame-slot .editor-export-btn[aria-pressed="true"] { color: var(--accent); background: var(--accent-subtle); border-color: transparent; }
 
 /* ── Zoom cluster (floating, bottom-right of the canvas) ─────────────────── */
 .editor-zoombar {
@@ -375,23 +395,46 @@
   display: flex;
   align-items: center;
   gap: var(--s2);
-  padding: var(--s2) var(--s4);
+  padding: 6px 12px;
   border-right: 1px solid var(--border);
 }
 
 /* ── Frame panel (right dock) ────────────────────────────────────────────── */
 .frame-panel {
-  width: 280px;
+  width: clamp(292px, 25vw, 380px);
   flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  gap: var(--s4);
+  gap: 20px;
   padding: var(--s4);
   border-left: 1px solid var(--border);
   background: var(--bg-elev);
   overflow-y: auto;
 }
 .frame-row { display: flex; flex-direction: column; gap: var(--s2); }
+.editor-image-list { display:flex; flex-direction:column; gap:var(--s2); }
+.editor-image-list > button { display:block; min-height:34px; padding:6px 10px; text-align:left; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.editor-image-list > button.is-active { color:var(--accent); background:var(--bg-elev2); }
+.editor-layer-actions { display:flex; gap:var(--s2); }
+.privacy-panel > * { flex-shrink:0; }
+.privacy-panel > h3, .privacy-panel > p { margin:0; }
+.privacy-suggestions-list { display:flex; flex-direction:column; gap:var(--s3); list-style:none; padding:0; margin:0; }
+.privacy-suggestions-list > li { display:flex; align-items:center; justify-content:space-between; gap:var(--s3); font-size:var(--fz-sm); }
+.privacy-sharing-note { font-size:var(--fz-sm); line-height:var(--lh-base); color:var(--text-dim); margin:var(--s3) 0 0; }
+.frame-panel[aria-label="Images and canvas"] .look-control { width:54%; }
+.frame-panel[aria-label="Images and canvas"] .look-label { min-width:0; }
+.editor-layer-actions > button { display:inline-flex; align-items:center; justify-content:center; min-width:30px; }
+.editor-text-preset { width:116px; flex:none; }
+.editor-text-size { width:100px; flex:none; }
+.editor-bend { display:flex; gap:var(--s2); align-items:center; color:var(--text-dim); font-size:var(--fz-sm); }
+.editor-bend input { appearance:none; -webkit-appearance:none; height:20px; background:transparent; cursor:pointer; }
+.editor-bend input::-webkit-slider-runnable-track { height:4px; border-radius:2px; background:var(--bg-elev3); }
+.editor-bend input::-webkit-slider-thumb { appearance:none; -webkit-appearance:none; width:12px; height:12px; margin-top:-4px; border-radius:50%; background:var(--accent); }
+.editor-bend-track { position:relative; display:flex; align-items:center; }
+.editor-bend-track::before { content:""; position:absolute; left:50%; top:5px; height:10px; width:1px; background:var(--text-dim); pointer-events:none; }
+.editor-bend-track > input { position:relative; width:88px; height:20px; padding:0; margin:0; accent-color:var(--accent); cursor:pointer; }
+.editor-render-status { position:absolute; top:var(--s3); left:var(--s4); z-index:10; color:var(--text-dim); background:var(--bg-elev); padding:var(--s2) var(--s3); border-radius:var(--r2); font-size:var(--fz-sm); }
+.editor-export-btn:disabled { opacity:.4; cursor:wait; }
 .frame-label {
   font-size: var(--fz-xs);
   color: var(--text-dim);
@@ -586,4 +629,46 @@
   border-bottom-width: 2px;
   border-radius: 6px; padding: 2px 8px; text-align: center;
   box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.10);
+}
+
+/* Crop controls occupy their own row, never the image, even at fit-to-window. */
+.editor-canvas { flex-direction: column; min-width: 0; }
+.editor-crop-dock { position: relative; z-index: 22; flex: none; min-height: 68px; padding: 8px 12px; box-sizing: border-box; background: var(--bg-frame); border-bottom: 1px solid var(--border); }
+.editor-crop-dock .crop-bar { position: static; transform: none; flex-wrap: wrap; justify-content: center; padding: 0; border: 0; border-radius: 0; background: transparent; box-shadow: none; backdrop-filter: none; }
+.editor-crop-dock .crop-hint { position: static; transform: none; margin-top: 6px; padding: 0; text-align: center; white-space: normal; background: transparent; color: var(--text-dim); }
+.editor-crop-dock .crop-chip, .editor-crop-dock .crop-pill { color: var(--text-dim); border-radius: var(--r-btn); }
+.editor-crop-dock .crop-chip:hover, .editor-crop-dock .crop-pill:hover { background: var(--bg-elev2); color: var(--text); }
+.editor-crop-dock .crop-chip--active { color: var(--accent); background: var(--accent-subtle); }
+.editor-crop-dock .crop-pill { border-color: var(--border-strong); }
+.editor-crop-dock .crop-pill--primary { color: var(--accent-fg); background: var(--accent); border-color: transparent; }
+
+/* A single compact crop row, separate from the image and the export actions. */
+.editor-crop-dock { min-height:48px; padding:8px 16px; }
+.editor-crop-dock .crop-bar { justify-content:flex-start; gap:10px; }
+.crop-caption { display:flex; align-items:center; gap:7px; color:var(--text); font-size:12px; font-weight:600; margin-right:6px; }
+.editor-crop-dock .crop-aspects { display:flex; gap:2px; padding:2px; background:var(--bg-elev); border:1px solid var(--border); border-radius:var(--r-btn); }
+.editor-crop-dock .crop-chip { min-width:42px; height:26px; padding:0 9px; font-size:12px; }
+.crop-dimensions { margin-left:auto; color:var(--text-dim); font-size:11px; font-variant-numeric:tabular-nums; }
+.editor-crop-dock .crop-pill { height:30px; padding:0 12px; font-size:12px; }
+.editor-effect-strength { display:flex; align-items:center; gap:10px; font-size:12px; white-space:nowrap; }
+.editor-effect-strength input { width:112px; accent-color:var(--accent); }
+.editor-effect-strength output { min-width:32px; font-variant-numeric:tabular-nums; color:var(--text-dim); }
+.editor-step-size { width:112px; }
+@media(max-width:720px) { .crop-dimensions { display:none; } .crop-caption { margin-right:0; } .editor-crop-dock .crop-bar { gap:6px; } }
+
+.editor-options-row { flex:none; min-width:0; border-bottom:1px solid var(--border); background:var(--bg-frame); padding-inline:12px; }
+.editor-options-row .editor-stylebar { min-height:38px; box-sizing:border-box; padding:4px 14px; gap:12px; flex-wrap:wrap; justify-content:center; background:transparent; }
+.editor-topbar .editor-frame-slot { justify-content:flex-end; }
+@media(max-width:1020px){.editor-topbar .editor-frame-slot { justify-content:flex-start; }.editor-options-row { padding-inline:8px; }}
+
+@media(max-height:700px) {
+  .editor-tool { height:28px; }
+  .editor-rail { padding-block:6px; }
+  .editor-rail-tools,.editor-rail-group,.editor-rail-bottom { gap:3px; }
+}
+/* Keep four output actions and window controls clear at the minimum width. */
+@media(max-width:860px) {
+  .editor-topbar .editor-exportbar { gap:5px; padding-inline:6px; }
+  .editor-exportbar .editor-export-btn { padding-inline:8px; gap:5px; }
+  .editor-exportbar .editor-done-btn { min-width:64px; }
 }

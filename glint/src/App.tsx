@@ -1,3 +1,4 @@
+import { applyMaterial } from "./lib/material";
 import { useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
@@ -21,6 +22,9 @@ type CaptureComplete = {
 };
 
 export default function App() {
+  const glass = useAppStore(s=>s.settings?.glass);
+  const theme = useAppStore(s=>s.settings?.theme);
+  useEffect(()=>{ if(theme) void applyMaterial(glass ?? true); },[glass,theme]);
   const loadSettings = useAppStore((s) => s.loadSettings);
   const pushToast = useAppStore((s) => s.pushToast);
 
@@ -67,6 +71,7 @@ export default function App() {
       listen<VisualSettings>(VISUAL_SETTINGS_EVENT, (e) => {
         applyTheme(e.payload.theme);
         applyAccent(e.payload.accent);
+        void applyMaterial(e.payload.glass ?? true);
       }),
     ];
 
@@ -82,6 +87,7 @@ export default function App() {
       const currentTheme = useAppStore.getState().settings?.theme;
       if (currentTheme === "system") {
         applyTheme("system");
+        void applyMaterial(useAppStore.getState().settings?.glass ?? true);
       }
     };
     media.addEventListener("change", handler);

@@ -37,6 +37,8 @@ fn apply(app: &AppHandle, strict: bool) -> Result<(), String> {
             (h.capture_fullscreen.clone(), "capture_fullscreen"),
             (h.record.clone(), "record"),
             (h.copy_path.clone(), "copy_path"),
+            (h.open_latest.clone(),"open_latest"),
+            (h.capture_scroll.clone(),"capture_scroll"),
             (h.capture_area_delayed.clone(), "capture_area_delayed"),
             (h.capture_window_delayed.clone(), "capture_window_delayed"),
             (h.capture_fullscreen_delayed.clone(), "capture_fullscreen_delayed"),
@@ -89,6 +91,13 @@ fn apply(app: &AppHandle, strict: bool) -> Result<(), String> {
                                 crate::capture::CaptureMode::Fullscreen,
                             );
                         }
+                        "capture_scroll" => {
+                            if let Err(error) = crate::capture::scrolling::capture_scroll_begin(handle.clone()) { crate::capture::toast(handle, &error); }
+                        }
+                        "open_latest"=>{
+                            let app=handle.clone();
+                            std::thread::spawn(move||{if let Err(e)=crate::editor::commands::open_latest(&app){crate::capture::toast(&app,&e);}});
+                        }
                         "record" => {
                             let h = handle.clone();
                             tauri::async_runtime::spawn(async move {
@@ -96,6 +105,8 @@ fn apply(app: &AppHandle, strict: bool) -> Result<(), String> {
                             });
                         }
                         "copy_path" => {
+                            let handle=handle.clone();
+                            std::thread::spawn(move||{
                             // Copy the most recent capture's file path to the clipboard.
                             // Do NOT focus/raise the main window — the "Path copied" toast
                             // already reaches the (always-on-top) HUD, which is feedback
@@ -108,7 +119,9 @@ fn apply(app: &AppHandle, strict: bool) -> Result<(), String> {
                                 .as_ref()
                                 .map(|l| l.path.clone());
                             let msg = match path {
-                                Some(p) => match crate::clipboard::copy_text(&p) {
+                                Some(p) => match handle.path().app_local_data_dir().map_err(|e|e.to_string())
+                                    .and_then(|root|crate::attachments::preserve(&root.join("attachments"),std::path::Path::new(&p)))
+                                    .and_then(|file|crate::clipboard::copy_text(&file.to_string_lossy())) {
                                     Ok(()) => "Path copied",
                                     Err(e) => {
                                         log::warn!("copy_path failed: {e}");
@@ -118,6 +131,7 @@ fn apply(app: &AppHandle, strict: bool) -> Result<(), String> {
                                 None => "No capture to copy yet",
                             };
                             let _ = handle.emit("glint-toast", msg);
+                            });
                         }
                         other => {
                             window::focus_main(handle);

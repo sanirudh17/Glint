@@ -17,6 +17,7 @@ export interface FrameLayoutInput {
   radius: number; // 0–100 (percent of half the shorter content edge; 100 = fully rounded)
   shadow: number;
   aspect: AspectId;
+  outputSize?: {width:number;height:number};
   /** Only the layout-relevant chrome field; theme/title/url are visual-only. Optional so
       existing callers and legacy layouts default to no chrome. */
   chrome?: { style: "none" | "window" | "browser" };
@@ -38,6 +39,8 @@ const ASPECT_RATIO: Record<AspectId, number | null> = {
   "4:3": 4 / 3,
   "9:16": 9 / 16,
   "4:5": 4 / 5,
+  "3:2": 3 / 2,
+  "1.91:1": 1.91,
 };
 
 // Chrome bar height scales with the screenshot's width so it reads consistently
@@ -83,11 +86,11 @@ export function computeLayout(
   let compW = contentW + paddingPx * 2;
   let compH = contentH + chromeH + paddingPx * 2;
 
-  const ratio = ASPECT_RATIO[frame.aspect];
+  const ratio = frame.outputSize ? frame.outputSize.width/frame.outputSize.height : ASPECT_RATIO[frame.aspect];
   if (ratio) {
     // Enlarge whichever single axis is deficient so compW/compH === ratio.
-    if (compW / compH < ratio) compW = Math.round(compH * ratio);
-    else compH = Math.round(compW / ratio);
+    if (compW / compH < ratio) compW = frame.outputSize ? compH * ratio : Math.round(compH * ratio);
+    else compH = frame.outputSize ? compW / ratio : Math.round(compW / ratio);
   }
 
   // The card (chrome bar + image) is centered vertically; the image sits chromeH

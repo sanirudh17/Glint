@@ -1,6 +1,10 @@
+import { WindowControls } from "../components/Titlebar";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
-import { emit, listen } from "@tauri-apps/api/event";
+import { listen } from "@tauri-apps/api/event";
+import { invoke } from "@tauri-apps/api/core";
+import { presentEditorFrame } from "../editor/firstFrame";
+import { useAppStore } from "../store/useAppStore";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Frame as FrameIcon, SquareRoundCorner } from "lucide-react";
 import { useEditorStore } from "../editor/useEditorStore";
@@ -12,12 +16,21 @@ import { StyleBar } from "./editor/StyleBar";
 import { ExportBar } from "./editor/ExportBar";
 import { ProjectBar } from "./editor/ProjectBar";
 import { FramePanel } from "./editor/FramePanel";
+import {ImagesPanel} from './editor/ImagesPanel';
+import {PrivacyPanel} from './editor/PrivacyPanel';
+import type {PrivacySuggestion} from '../editor/privacy';
 import { CornersPanel } from "./editor/CornersPanel";
 import { ShortcutCheatsheet } from "./editor/ShortcutCheatsheet";
 import type { ToolId } from "../editor/model";
 import "./editor/editor.css";
 
 export default function EditorView() {
+  const theme=useAppStore(s=>s.settings?.theme);
+  const renderingLook=useEditorStore(s=>s.renderingLook);
+  const [sourceError,setSourceError]=useState<string|null>(null);
+  const [imagesOpen,setImagesOpen]=useState(false);
+  const [privacyOpen,setPrivacyOpen]=useState(false);
+  const [suggestions,setSuggestions]=useState<PrivacySuggestion[]>([]);
   const base = useEditorStore((s) => s.base);
   const loadDoc = useEditorStore((s) => s.loadDoc);
   const reset = useEditorStore((s) => s.reset);
@@ -28,6 +41,8 @@ export default function EditorView() {
   const [cornersOpen, setCornersOpen] = useState(false);
 
   const setTool = useEditorStore((s) => s.setTool);
+  const activeTool=useEditorStore(s=>s.tool);
+  useEffect(()=>{setPrivacyOpen(false);setSuggestions([]);},[activeTool,base]);
   const undo = useEditorStore((s) => s.undo);
   const redo = useEditorStore((s) => s.redo);
   const remove = useEditorStore((s) => s.remove);
@@ -69,6 +84,7 @@ export default function EditorView() {
         (tag === "INPUT" &&
           !["range", "color", "checkbox", "radio", "button", "submit"].includes(inputType));
       if (isTextEntry) return;
+      if(tag==='INPUT'&&inputType==='range'&&e.key.startsWith('Arrow'))return;
       // `?` (Shift+/) toggles the shortcut cheatsheet — handle before the tool keys.
       if (e.key === "?") {
         e.preventDefault();
@@ -146,6 +162,7 @@ export default function EditorView() {
   // but the route doesn't remount). loadDoc hydrates base + doc atomically.
   const loadFromSource = useCallback(() => {
     let alive = true;
+    setSourceError(null);
     getEditorSource()
       .then((src) => {
         const img = new Image();
@@ -160,10 +177,11 @@ export default function EditorView() {
             project,
           );
         };
+        img.onerror=()=>{if(alive)setSourceError("Couldn't load this image. Close the editor and open it again.");};
         img.src = src.imageDataUrl;
       })
       .catch(() => {
-        /* no source (navigated here directly) — show empty state */
+        if(alive)setSourceError("Couldn't open this image. Close the editor and open it again.");
       });
     return () => {
       alive = false;
@@ -178,18 +196,14 @@ export default function EditorView() {
     };
   }, [loadFromSource, reset]);
 
-  // Editor-ready handshake: tell Rust the window has painted its first frame
-  // so a cold build (visible:false) can be shown without flashing white.
-  // Mirrors HUD's hud-ready. Double-rAF ensures React has committed + painted.
+  // The native window is hidden on both cold and reused opens. Reveal only the
+  // decoded image (or an actionable error), with the hydrated theme/material.
   useEffect(() => {
-    if (!base) return;
-    const r = requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        emit("editor-ready").catch(() => {});
-      });
-    });
-    return () => cancelAnimationFrame(r);
-  }, [base]);
+    if ((!base&&!sourceError)||!theme||renderingLook) return;
+    let cancelled=false;
+    void presentEditorFrame(()=>invoke('editor_present'),()=>cancelled).catch(()=>{});
+    return ()=>{cancelled=true;};
+  }, [base,sourceError,theme,renderingLook]);
 
   // Reopen path: project_open / editor_open emits editor-open after setting EditorState; if we
   // are already on /editor the route won't remount, so reload here.
@@ -220,15 +234,15 @@ export default function EditorView() {
 
   return (
     <div className="editor-view">
-      <div className="editor-topbar">
+      <div className="editor-topbar" data-tauri-drag-region>
         <ProjectBar />
-        <StyleBar />
         <div className="editor-frame-slot">
+          <button className={`editor-export-btn${imagesOpen?' editor-export-btn--primary':''}`} aria-pressed={imagesOpen} onClick={()=>{setPrivacyOpen(false);setCornersOpen(false);setImagesOpen(!imagesOpen);}} disabled={!base}>Images</button>
           <button
-            className={`editor-export-btn${frameEnabled ? " editor-export-btn--primary" : ""}`}
-            onClick={() => toggleFrame()}
+            className={`editor-export-btn${frameEnabled&&!imagesOpen&&!privacyOpen ? " editor-export-btn--primary" : ""}`}
+            onClick={() => {setPrivacyOpen(false);setCornersOpen(false);setImagesOpen(false);toggleFrame(imagesOpen||privacyOpen?true:undefined);}}
             title="Frame & background"
-            aria-pressed={frameEnabled}
+            aria-pressed={frameEnabled&&!imagesOpen&&!privacyOpen}
             disabled={!base}
           >
             <FrameIcon size={16} strokeWidth={1.5} /> Frame
@@ -237,10 +251,10 @@ export default function EditorView() {
               Frame on, its Radius governs rounding instead, so hide Corners then. */}
           {!frameEnabled && (
             <button
-              className={`editor-export-btn${cornersOpen ? " editor-export-btn--primary" : ""}`}
-              onClick={() => setCornersOpen((v) => !v)}
+              className={`editor-export-btn${cornersOpen&&!imagesOpen ? " editor-export-btn--primary" : ""}`}
+              onClick={() => {setPrivacyOpen(false);setImagesOpen(false);setCornersOpen((v) => !v);}}
               title="Round the image corners (trims to transparent on export)"
-              aria-pressed={cornersOpen}
+              aria-pressed={cornersOpen&&!imagesOpen}
               disabled={!base}
             >
               <SquareRoundCorner size={16} strokeWidth={1.5} /> Corners
@@ -248,16 +262,20 @@ export default function EditorView() {
           )}
         </div>
         <ExportBar stageRef={stageRef} />
+        <WindowControls />
       </div>
+      {activeTool!=='crop'&&(activeTool!=='select'||selectedId)&&<div className="editor-options-row"><StyleBar onPrivacy={()=>{setPrivacyOpen(v=>!v);setImagesOpen(false);setCornersOpen(false);}}/></div>}
       <div className="editor-main">
         <ToolRail />
         {base ? (
-          <EditorStage ref={stageRef} />
+          <EditorStage ref={stageRef} suggestions={privacyOpen?suggestions:[]}/>
         ) : (
-          <div className="editor-stage" style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }} />
+          <div className="editor-stage" role={sourceError?'alert':undefined} style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center" }}>{sourceError}</div>
         )}
-        {frameEnabled && <FramePanel />}
-        {!frameEnabled && cornersOpen && <CornersPanel />}
+        {imagesOpen&&<ImagesPanel/>}
+        {privacyOpen&&<PrivacyPanel stageRef={stageRef} suggestions={suggestions} onSuggestions={setSuggestions}/>}
+        {!privacyOpen&&!imagesOpen&&frameEnabled && <FramePanel />}
+        {!privacyOpen&&!imagesOpen&&!frameEnabled && cornersOpen && <CornersPanel />}
       </div>
       <ShortcutCheatsheet open={cheatsheetOpen} onClose={() => setCheatsheetOpen(false)} />
     </div>

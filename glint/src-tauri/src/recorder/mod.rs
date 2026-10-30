@@ -11,8 +11,20 @@ pub mod thumb;
 pub mod trim;
 pub mod studio;
 pub mod studio_cursor;
+pub mod studio_effects;
+pub mod studio_masks;
 pub mod studio_render;
+pub mod video_annotations;
+mod look_gradient;
+mod look_watermark;
 pub mod studio_export;
+pub mod ink;
+pub mod scene_project;
+pub mod scene_commands;
+pub mod gif;
+pub mod polish;
+pub mod captions;
+pub mod notes;
 pub mod windows;
 
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -756,13 +768,13 @@ pub async fn recorder_start(
         let _ = app.emit("glint-toast", "Couldn't start the recorder");
         e.to_string()
     })?;
-    let studio_mode=studio_mode.unwrap_or(false);
+    let studio_mode=studio::recording_mode(studio_mode);
     let geometry=if studio_mode {Some(studio::geometry(&app,target)?)} else {None};
     if studio_mode && matches!(target,RecordTarget::Fullscreen) {
         let g=geometry.as_ref().unwrap(); target=RecordTarget::Region{x:g.x,y:g.y,w:ffmpeg::even(g.width),h:ffmpeg::even(g.height)};
     }
     let name=recording_filename(chrono::Local::now());
-    let mut studio_capture=if let Some(g)=geometry {Some(studio::StudioCapture::create(studio::folder_for(&dir,&name),g)?)} else {None};
+    let mut studio_capture=if let Some(g)=geometry {Some(studio::StudioCapture::create(studio::folder_for(&dir,&name),g,fx::FxConfig{click_viz:click_viz.unwrap_or(false),keystrokes:keystrokes.unwrap_or(false),spotlight:spotlight.unwrap_or(false),..Default::default()})?)} else {None};
     if let Some(capture)=studio_capture.as_mut() {capture.hooks=Some(fx::hooks::start_studio_hooks(app.clone(),capture.sink.clone())?);}
     let clock=studio_capture.as_ref().map(|capture|capture.sink.clock.clone());
     let out = studio_capture.as_ref().map(|capture|capture.folder.join("video.mp4")).unwrap_or_else(||dir.join(name));
@@ -884,6 +896,7 @@ pub async fn recorder_start(
         studio: studio_capture,
     });
     let _ = windows::build_control_bar(&app);
+    if studio_mode {let _=ink::open(&app,target);}
 
     // Bring segment 0 up behind the visible bar. Pause/resume appends further
     // segments; stop concatenates them. 60 fps for smooth motion (gdigrab's actual
@@ -905,6 +918,7 @@ pub async fn recorder_start(
         Err(e) => {
             windows::close_countdown(&app);
             windows::close_control_bar(&app);
+            ink::close(&app);
             windows::close_cam_bubble(&app);
             *app.state::<RecorderState>().0.lock().unwrap() = None;
             app.state::<RecorderState>().1.store(false, Ordering::SeqCst);
@@ -952,7 +966,7 @@ pub async fn recorder_start(
     // earlier) so the overlay never lands in the countdown frames. Stored on the
     // active recording so stop/cancel can tear it down. If the recording was
     // stopped/canceled during ffmpeg init, the slot is gone — stop the session.
-    if !studio_mode && fx_cfg.needs_overlay() {
+    if fx_cfg.needs_overlay() {
         let session = fx::start(&app, target, fx_cfg);
         let stash = {
             let state = app.state::<RecorderState>();
@@ -1087,6 +1101,7 @@ pub async fn recorder_resume(app: tauri::AppHandle) -> Result<(), String> {
 pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
+    ink::close(&app);
     // Movable webcam: flush + finalize the .cam.webm BEFORE destroying the bubble webview.
     if rec.as_ref().is_some_and(|r| r.cam_path.is_some()) {
         let _ = app.emit_to(windows::CAM_LABEL, "rec-cam-record-stop", ());
@@ -1124,9 +1139,16 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
     }
 
     let studio_folder=if let Some(studio)=studio {
+        let annotations=studio.annotations.clone();
         let folder=studio.finish()?;
         let probe=trim::recorder_trim_probe(app.clone(),out_path.clone()).await?;
-        studio::write_project(&folder,&studio::initial_project(probe.duration_secs))?;
+        let mut project=studio::initial_project(probe.duration_secs);
+        project["cursor"]["clicks"]=serde_json::json!(true);
+        project["cursor"]["keystrokes"]=serde_json::json!(true);
+        project["cursor"]["spotlight"]=serde_json::json!(true);
+        project["cursor"]["recordedEffects"]=serde_json::json!(true);
+        project["annotations"]=serde_json::to_value(ink::finalize(&annotations,probe.duration_secs,probe.width,probe.height,&project)?).map_err(|e|e.to_string())?;
+        studio::write_project(&folder,&project)?;
         Some(folder)
     } else {None};
     let thumb_path = thumb::extract_thumb(&app, &out_path).await;
@@ -1178,9 +1200,17 @@ pub async fn recorder_stop(app: tauri::AppHandle) -> Result<(), String> {
 
 /// Discard an in-flight recording: stop ffmpeg and delete the partial file.
 #[tauri::command(async)]
+pub async fn recorder_restart(app:tauri::AppHandle)->Result<(),String>{
+    let (target,system,mic,webcam,movable,fx,studio)={let state=app.state::<RecorderState>();let guard=state.0.lock().unwrap();let r=guard.as_ref().ok_or("No recording to restart")?;(r.target,!r.controls.system_muted.load(Ordering::Relaxed)&&r.sys_avail,!r.controls.mic_muted.load(Ordering::Relaxed)&&r.mic_avail,r.webcam_on,r.webcam_movable,r.fx_cfg,r.studio.is_some())};
+    recorder_cancel(app.clone()).await?;
+    let (mode,x,y,w,h)=match target{RecordTarget::Fullscreen=>("fullscreen",None,None,None,None),RecordTarget::Region{x,y,w,h}=>("region",Some(x),Some(y),Some(w),Some(h))};
+    recorder_start(app,mode.into(),x,y,w,h,Some(system),Some(mic),Some(webcam),Some(movable),Some(fx.click_viz),Some(fx.keystrokes),Some(fx.spotlight),Some(fx.cursor_hide),Some(match fx.cursor_size{1=>"large",2=>"xl",_=>"off"}.into()),Some(studio)).await
+}
+#[tauri::command(async)]
 pub async fn recorder_cancel(app: tauri::AppHandle) -> Result<(), String> {
     let rec = app.state::<RecorderState>().0.lock().unwrap().take();
     windows::close_control_bar(&app);
+    ink::close(&app);
     windows::close_cam_bubble(&app);
     windows::close_countdown(&app); // in case cancel races the countdown
     if let Some(ActiveRecording { mut done, current, out_path, fx, cam_path, studio, .. }) = rec {
@@ -1256,7 +1286,6 @@ pub async fn recorder_set_fx(app: tauri::AppHandle, effect: String, on: bool) ->
         let state = app.state::<RecorderState>();
         let mut guard = state.0.lock().unwrap();
         let rec = guard.as_mut().ok_or("not recording")?;
-        if rec.studio.is_some() { return Err("Studio effects are edited after recording".into()); }
         let had_overlay = rec.fx_cfg.needs_overlay();
         match effect.as_str() {
             "click_viz" => rec.fx_cfg.click_viz = on,
@@ -1265,6 +1294,7 @@ pub async fn recorder_set_fx(app: tauri::AppHandle, effect: String, on: bool) ->
             "cursor_hide" | "cursor_size" => return Err("cursor options are set at start".into()),
             other => return Err(format!("unknown effect: {other}")),
         }
+        if let Some(studio)=&rec.studio {studio.sink.push_effects(rec.fx_cfg);}
         (rec.fx_cfg, had_overlay, rec.target)
     };
     let now_needs = cfg_after.needs_overlay();
@@ -1293,12 +1323,35 @@ pub async fn recorder_set_fx(app: tauri::AppHandle, effect: String, on: bool) ->
     Ok(())
 }
 
+/// Place the same editable zoom marker as Ctrl+Alt+Z, with visible feedback.
+#[tauri::command]
+pub fn recorder_mark_zoom(app:tauri::AppHandle)->Result<(),String> {
+    let (sink,target)={let state=app.state::<RecorderState>();let guard=state.0.lock().unwrap();let rec=guard.as_ref().ok_or("Start recording before marking a zoom")?;(rec.studio.as_ref().ok_or("This recording has no Studio metadata")?.sink.clone(),rec.target)};
+    let geometry=studio::geometry(&app,target)?;
+    let (x,y,w,h)=(geometry.x,geometry.y,geometry.width,geometry.height);
+    let mut point=::windows::Win32::Foundation::POINT{x:x+w as i32/2,y:y+h as i32/2};
+    let mut cursor=point;
+    if unsafe {::windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut cursor)}.is_ok()&&cursor.x>=x&&cursor.y>=y&&cursor.x<x+w as i32&&cursor.y<y+h as i32 {point=cursor;}
+    sink.push(serde_json::json!({"kind":"marker","x":point.x,"y":point.y})).ok_or("Resume recording to mark a zoom")?;
+    ink::flash(&app,point.x as f64,point.y as f64);
+    let _=app.emit_to(windows::BAR_LABEL,"recorder-marker-feedback","Zoom marked for the editor");Ok(())
+}
+#[tauri::command]
+pub fn recorder_trim_ready(app:tauri::AppHandle,path:Option<String>)->Result<(),String> {
+    if let Some(path)=path {let current=app.state::<RecorderTrimState>().0.lock().unwrap().as_ref().map(|t|t.path.clone());if current.as_deref()!=Some(path.as_str()){return Err("The recording changed while opening".into());}}
+    windows::show_trim_window(&app);Ok(())
+}
+
 /// Stash the trim target and grant the asset protocol read access to this exact file so
 /// the trim window's `<video>` can load it even when it lives outside `Videos\Glint`
 /// (external files opened via Explorer). For in-scope recordings the `allow_file` is a
 /// harmless no-op. Cheap + thread-safe — only the window *build* is thread-sensitive.
 fn prepare_trim_target(app: &tauri::AppHandle, id: i64, path: String) {
     let _ = app.asset_protocol_scope().allow_file(&path);
+    let camera = cam::cam_sidecar_path(&path);
+    if camera.is_file() {
+        let _ = app.asset_protocol_scope().allow_file(camera);
+    }
     *app.state::<RecorderTrimState>().0.lock().unwrap() = Some(TrimTarget { id, path });
 }
 
@@ -1312,7 +1365,7 @@ pub async fn recorder_open_trim(app: tauri::AppHandle, id: i64, path: String) ->
     let existed = app.get_webview_window(windows::TRIM_LABEL).is_some();
     prepare_trim_target(&app, id, path);
     if existed {
-        windows::show_trim_window(&app);
+        if let Some(window)=app.get_webview_window(windows::TRIM_LABEL){let _=window.hide();}
         let _ = app.emit_to(windows::TRIM_LABEL, "rec-trim-reload", ());
         return Ok(());
     }
@@ -1335,7 +1388,7 @@ pub fn open_trim_for_external(app: &tauri::AppHandle, path: String) {
         prepare_trim_target(&app, id, path);
         if existed {
             // Warm window: retarget in place — instant, no rebuild.
-            windows::show_trim_window(&app);
+            if let Some(window)=app.get_webview_window(windows::TRIM_LABEL){let _=window.hide();}
             let _ = app.emit_to(windows::TRIM_LABEL, "rec-trim-reload", ());
             return;
         }

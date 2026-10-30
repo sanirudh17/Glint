@@ -2,7 +2,8 @@
 //! run on a dedicated thread with a Win32 message pump (LL hooks require a message
 //! loop on the installing thread). Callbacks stay non-blocking: they emit a small
 //! Tauri event to the overlay and return immediately. Keylogger-shaped but LOCAL —
-//! events only drive on-screen chips, never persisted or sent.
+//! Quick events only drive on-screen chips. Studio events persist locally in
+//! the editable sidecar; neither mode sends input events over the network.
 
 use std::cell::{Cell, RefCell};
 use tauri::{AppHandle, Emitter};
@@ -28,6 +29,20 @@ thread_local! {
     }) };
     static STUDIO: RefCell<Option<crate::recorder::studio::EventSink>> = const { RefCell::new(None) };
     static LAST_MOVE: Cell<u64> = const { Cell::new(0) };
+    static MODIFIER_HELD: RefCell<std::collections::HashSet<u32>> = RefCell::new(std::collections::HashSet::new());
+    static MARKER_HELD: Cell<bool> = const { Cell::new(false) };
+    static MARKER_HOTKEY: Cell<bool> = const { Cell::new(false) };
+}
+
+// Emit once per press; consume repeats and release so the target app does not
+// receive Studio's marker shortcut. Quick-mode input never enters this path.
+pub fn marker_action(vk:u32,down:bool,modifiers:&[&str],held:&mut bool)->(bool,bool) {
+    if vk!=0x5A {return (false,false);}
+    if !down {let consumed=*held;*held=false;return (false,consumed);}
+    if *held {return (false,true);}
+    if modifiers.contains(&"Ctrl")&&modifiers.contains(&"Alt") {
+        *held=true;return (true,true);
+    } (false,false)
 }
 
 const MOVE_GAP_MS: u64 = 16; // ~60 Hz cursor emits
@@ -40,8 +55,10 @@ fn now_ms() -> u64 {
 fn emit(event: &str, mut payload: serde_json::Value) {
     let persisted=STUDIO.with(|s| {
         if let Some(sink)=s.borrow().as_ref() {
-            payload["kind"]=serde_json::json!(match event { "fx-cursor" => "cursor", "fx-click" => "click", _ => "key" });
-            sink.push(payload.clone()); true
+            payload["kind"]=serde_json::json!(match event { "fx-cursor" => "cursor", "fx-click" => "click", "fx-marker"=>"marker", _ => "key" });
+            let time=sink.push(payload.clone());
+            if event=="fx-marker" {APP.with(|cell|{if let Some(app)=cell.take(){let message=if time.is_some(){"Zoom marked for the editor"}else{"Resume recording to mark a zoom"};let _=app.emit_to(crate::recorder::windows::BAR_LABEL,"recorder-marker-feedback",message);if time.is_some(){crate::recorder::ink::flash(&app,payload["x"].as_f64().unwrap_or(0.),payload["y"].as_f64().unwrap_or(0.));}cell.set(Some(app));}});}
+            true
         } else {false}
     });
     if persisted {return;}
@@ -179,8 +196,20 @@ unsafe extern "system" fn keyboard_proc(code: i32, wparam: WPARAM, lparam: LPARA
         let down = msg == WM_KEYDOWN || msg == WM_SYSKEYDOWN;
         let up = msg == WM_KEYUP || msg == WM_SYSKEYUP;
         if down || up {
+            MODIFIER_HELD.with(|keys|{let mut keys=keys.borrow_mut();if down{keys.insert(info.vkCode);}else{keys.remove(&info.vkCode);}});
+            let mut mods=current_modifiers(info.vkCode,down);
+            MODIFIER_HELD.with(|keys|{let keys=keys.borrow();if [0x11,0xa2,0xa3].iter().any(|key|keys.contains(key))&&!mods.contains(&"Ctrl"){mods.push("Ctrl");}if [0x12,0xa4,0xa5].iter().any(|key|keys.contains(key))&&!mods.contains(&"Alt"){mods.push("Alt");}});
+            if STUDIO.with(|sink|sink.borrow().is_some()) && !MARKER_HOTKEY.with(|active|active.get()) {
+                let (mark,consume)=MARKER_HELD.with(|held|{let mut value=held.get();let result=marker_action(info.vkCode,down,&mods,&mut value);held.set(value);result});
+                if mark {
+                    let mut point=windows::Win32::Foundation::POINT::default();
+                    if windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut point).is_ok() {
+                        emit("fx-marker",serde_json::json!({"x":point.x,"y":point.y}));
+                    }
+                }
+                if consume {return LRESULT(1);}
+            }
             if let Some((label, is_mod)) = super::keymap::vk_label(info.vkCode) {
-                let mods = current_modifiers(info.vkCode, down);
                 emit("fx-key", serde_json::json!({
                     "text": label,
                     "isModifier": is_mod,
@@ -229,6 +258,7 @@ fn install_hooks(app: AppHandle, cfg: super::FxConfig, sink: Option<crate::recor
         CFG.with(|c| c.set(cfg));
         let studio = sink.is_some();
         STUDIO.with(|s| *s.borrow_mut()=sink);
+        MODIFIER_HELD.with(|keys|keys.borrow_mut().clear());
         // Publish our thread id so the caller can PostThreadMessage(WM_QUIT).
         let tid = unsafe { windows::Win32::System::Threading::GetCurrentThreadId() };
 
@@ -261,12 +291,27 @@ fn install_hooks(app: AppHandle, cfg: super::FxConfig, sink: Option<crate::recor
             unsafe { if let Some(h)=mouse {let _=UnhookWindowsHookEx(h);} if let Some(h)=keyboard {let _=UnhookWindowsHookEx(h);} }
             STUDIO.with(|s| *s.borrow_mut()=None); return;
         }
+        // Register on this message-pump thread, only for the recording lifetime.
+        // WM_HOTKEY is independent of low-level FX callbacks and MOD_NOREPEAT
+        // gives one marker per press. Keep the hook path as a conflict fallback.
+        use windows::Win32::UI::Input::KeyboardAndMouse::{RegisterHotKey,UnregisterHotKey,MOD_CONTROL,MOD_ALT,MOD_NOREPEAT};
+        const MARKER_ID:i32=0x474c;
+        let marker_hotkey=studio&&unsafe {RegisterHotKey(None,MARKER_ID,MOD_CONTROL|MOD_ALT|MOD_NOREPEAT,0x5a)}.is_ok();
+        MARKER_HOTKEY.with(|active|active.set(marker_hotkey));
+        if studio&&!marker_hotkey {log::warn!("Studio zoom hotkey is reserved by another app; using input-hook fallback or the Zoom button");}
         let _=tx.send(tid);
         let timer=if studio {unsafe {windows::Win32::UI::WindowsAndMessaging::SetTimer(None,0,8,None)}} else {0};
         // Standard LL-hook message pump. GetMessageW returns 0 on WM_QUIT → exit.
         unsafe {
             let mut msg = MSG::default();
             while GetMessageW(&mut msg, None, 0, 0).0 > 0 {
+                if marker_hotkey&&msg.message==windows::Win32::UI::WindowsAndMessaging::WM_HOTKEY&&msg.wParam.0==MARKER_ID as usize {
+                    let mut point=windows::Win32::Foundation::POINT::default();
+                    if windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut point).is_ok() {
+                        emit("fx-marker",serde_json::json!({"x":point.x,"y":point.y}));
+                    }
+                    continue;
+                }
                 if studio && msg.message == windows::Win32::UI::WindowsAndMessaging::WM_TIMER {
                     let mut point=windows::Win32::Foundation::POINT::default();
                     if windows::Win32::UI::WindowsAndMessaging::GetCursorPos(&mut point).is_ok() {
@@ -277,6 +322,7 @@ fn install_hooks(app: AppHandle, cfg: super::FxConfig, sink: Option<crate::recor
                 DispatchMessageW(&msg);
             }
             if timer != 0 {let _=windows::Win32::UI::WindowsAndMessaging::KillTimer(None,timer);}
+            if marker_hotkey {let _=UnregisterHotKey(None,MARKER_ID);}
             if let Some(h) = mouse {
                 let _ = UnhookWindowsHookEx(h);
             }
@@ -295,7 +341,17 @@ fn install_hooks(app: AppHandle, cfg: super::FxConfig, sink: Option<crate::recor
 
 #[cfg(test)]
 mod tests {
-    use super::throttle_ok;
+    use super::{throttle_ok,marker_action};
+
+    #[test]
+    fn marker_chord_ignores_repeats_and_releases_the_capture() {
+        let mut held=false;
+        assert_eq!(marker_action(0x5A,true,&["Ctrl"],&mut held),(false,false));
+        assert_eq!(marker_action(0x5A,true,&["Ctrl","Alt"],&mut held),(true,true));
+        assert_eq!(marker_action(0x5A,true,&["Ctrl","Alt"],&mut held),(false,true));
+        assert_eq!(marker_action(0x5A,false,&[],&mut held),(false,true));
+        assert!(!held);
+    }
 
     #[test]
     fn throttle_allows_after_gap() {

@@ -1,0 +1,328 @@
+{
+  "engine": "PP-OCRv6 Small native",
+  "cases": 16,
+  "queries": 48,
+  "hits": 48,
+  "errors": 0,
+  "median_ms": 944.0,
+  "cases_detail": [
+    {
+      "error": null,
+      "file": "document-light.png",
+      "ms": 2525,
+      "queries": [
+        {
+          "found": true,
+          "query": "quarterly planning"
+        },
+        {
+          "found": true,
+          "query": "migration checklist"
+        },
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "invoice reconciliation"
+        }
+      ],
+      "text": "Glint search evaluation - owned screen\nQuarterly planning notes\nMigration checklist and release preparation\nReview customer feedback before shipping\nInvoice reconciliation for October\nBudget remaining: 1234 dollars\nQuarterly planning notes\nMigration checklist and release preparation\nReview customer feedback before shipping\nInvoice reconciliation for October\nBudget remaining: 1234 dollars\nQuarterly planning notes\nMigration checklist and release preparation\nReview customer feedback before shipping\nInvoice reconciliation for October\nBudget remaining: 1234 dollars\nQuarterly planning notes\nMigration checklist and release preparation\nReview customer feedback before shipping\nInvoice reconciliation for October\nBudget remaining: 1234 dollars\nQuarterly planning notes\nMigration checklist and release preparation"
+    },
+    {
+      "error": null,
+      "file": "terminal-light.png",
+      "ms": 2091,
+      "queries": [
+        {
+          "found": true,
+          "query": "deployment completed"
+        },
+        {
+          "found": true,
+          "query": "integration tests"
+        },
+        {
+          "found": true,
+          "query": "configuration loaded"
+        },
+        {
+          "found": true,
+          "query": "build artifacts"
+        }
+      ],
+      "text": "Glint search evaluation - owned screen\nDeployment completed successfully\nRunning integration tests\nConfiguration loaded from local workspace\nBuild artifacts are ready\nConnection established to localhost\nDeployment completed successfully\nRunning integration tests\nConfiguration loaded from local workspace\nBuild artifacts are ready\nConnection established to localhost\nDeployment completed successfully\nRunning integration tests\nConfiguration loaded from local workspace\nBuild artifacts are ready\nConnection established to localhost\nDeployment completed successfully\nRunning integration tests\nConfiguration loaded from local workspace\nBuild artifacts are ready\nConnection established to localhost\nDeployment completed successfully\nRunning integration tests"
+    },
+    {
+      "error": null,
+      "file": "dashboard-light.png",
+      "ms": 1949,
+      "queries": [
+        {
+          "found": true,
+          "query": "project overview"
+        },
+        {
+          "found": true,
+          "query": "revenue report"
+        },
+        {
+          "found": true,
+          "query": "customer retention"
+        },
+        {
+          "found": true,
+          "query": "pending tasks"
+        }
+      ],
+      "text": "Glint search evaluation - owned screen\nProject overview\nWeekly revenue report\nCustomer retention analysis\nUpload screenshots for review\nPending tasks and notifications\nProject overview\nWeekly revenue report\nCustomer retention analysis\nUpload screenshots for review\nPending tasks and notifications\nProject overview\nWeekly revenue report\nCustomer retention analysis\nUpload screenshots for review\nPending tasks and notifications\nProject overview\nWeekly revenue report\nCustomer retention analysis\nUpload screenshots for review\nPending tasks and notifications\nProject overview\nWeekly revenue report"
+    },
+    {
+      "error": null,
+      "file": "document-dark.png",
+      "ms": 1948,
+      "queries": [
+        {
+          "found": true,
+          "query": "quarterly planning"
+        },
+        {
+          "found": true,
+          "query": "migration checklist"
+        },
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "invoice reconciliation"
+        }
+      ],
+      "text": "Glint search evaluation - owned screen\nQuarterly planning notes\nMigration checklist and release preparation\nReview customer feedback before shipping\nInvoice reconciliation for October\nBudget remaining: 1234 dollars\nQuarterly planning notes\nMigration checklist and release preparation\nReview customer feedback before shipping\nInvoice reconciliation for October\nBudget remaining: 1234 dollars\nQuarterly planning notes\nMigration checklist and release preparation\nReview customer feedback before shipping\nInvoice reconciliation for October\nBudget remaining: 1234 dollars\nQuarterly planning notes\nMigration checklist and release preparation\nReview customer feedback before shipping\nInvoice reconciliation for October\nBudget remaining: 1234 dollars\nQuarterly planning notes\nMigration checklist and release preparation"
+    },
+    {
+      "error": null,
+      "file": "terminal-dark.png",
+      "ms": 2035,
+      "queries": [
+        {
+          "found": true,
+          "query": "deployment completed"
+        },
+        {
+          "found": true,
+          "query": "integration tests"
+        },
+        {
+          "found": true,
+          "query": "configuration loaded"
+        },
+        {
+          "found": true,
+          "query": "build artifacts"
+        }
+      ],
+      "text": "Glint search evaluation - owned screen\nDeployment completed successfully\nRunning integration tests\nConfiguration loaded from local workspace\nBuild artifacts are ready\nConnection established to localhost\nDeployment completed successfully\nRunning integration tests\nConfiguration loaded from local workspace\nBuild artifacts are ready\nConnection established to localhost\nDeployment completed successfully\nRunning integration tests\nConfiguration loaded from local workspace\nBuild artifacts are ready\nConnection established to localhost\nDeployment completed successfully\nRunning integration tests\nConfiguration loaded from local workspace\nBuild artifacts are ready\nConnection established to localhost\nDeployment completed successfully\nRunning integration tests"
+    },
+    {
+      "error": null,
+      "file": "dashboard-dark.png",
+      "ms": 1863,
+      "queries": [
+        {
+          "found": true,
+          "query": "project overview"
+        },
+        {
+          "found": true,
+          "query": "revenue report"
+        },
+        {
+          "found": true,
+          "query": "customer retention"
+        },
+        {
+          "found": true,
+          "query": "pending tasks"
+        }
+      ],
+      "text": "Glint search evaluation - owned screen\nProject overview\nWeekly revenue report\nCustomer retention analysis\nUpload screenshots for review\nPending tasks and notifications\nProject overview\nWeekly revenue report\nCustomer retention analysis\nUpload screenshots for review\nPending tasks and notifications\nProject overview\nWeekly revenue report\n_\nCustomer retention analysis\nUpload screenshots for review\n1\nPending tasks and notifications\nProject overview\n_\nWeekly revenue report\n_\nCustomer retention analysis\nUpload screenshots for review\nPending tasks and notifications\nProject overview\nWeekly revenue report"
+    },
+    {
+      "error": null,
+      "file": "blank.png",
+      "ms": 1046,
+      "queries": [],
+      "text": ""
+    },
+    {
+      "error": null,
+      "file": "blank-transparent.png",
+      "ms": 1005,
+      "queries": [],
+      "text": ""
+    },
+    {
+      "error": null,
+      "file": "accuracy-consolas-11-light.png",
+      "ms": 679,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "text": "Email: user.name+demo@example.co.uk\nAPI key: sk-proj-RwLs2ld80popaT0IidmmtoS1QNgVmWjGhnLCaLhx\nToken: eyJhbGciOiJIUzI1NiJ9.sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfWa9eEduMVfN7.bpdLgfbXJ3c6RzO_JGOYTTwtt7L5tbe6\nconst path = \"C:\\Users\\demo\\file_01.ts\";\nif (value !== null && count >= 10) { return items[0]?.id ?? \"\"; }\nconst ids = [\"00Il1\", \"AbCdEf_9-0\", \"xX_01-1I\"];\nInvoice #AX-2048: $1,234.56 | 2026-10-22"
+    },
+    {
+      "error": null,
+      "file": "accuracy-consolas-11-dark.png",
+      "ms": 726,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "text": "Email: user.name+demo@example.co.uk\nAPI key: sk-proj-RwLs2ld80popaT0IidmmtoS1QNgVmwjGhnLCaLhx\nToken: eyJhbGciOiJIUzI1NiJ9.sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfWa9eEduMVfN7.bpdLgfbXJ3c6RzO_JGOYTTwtt7L5tbe6\nconst path = \"C:\\Users\\demo\\file_01.ts\";\nif (value !== null && count >= 10) { return items[0]?.id ?? \"\"; }\nconst ids = [\"00Il1\", \"AbCdEf_9-0\", \"xX_01-1I\"];\nInvoice #AX-2048: $1,234.562026-10-22"
+    },
+    {
+      "error": null,
+      "file": "accuracy-consolas-15-light.png",
+      "ms": 843,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "text": "Email: user.name+demo@example.co.uk\nAPI key: sk-proj-RwLs21d80popaT0IidmmtOS1QNgVmWjGhnLCaLhx\nToken: eyJhbGciOiJIUzI1NiJ9.sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfWa9eEduMVfN7.bpdLgfbXJ3c6RzO_JGOYTTwtt7L5tbe6\nconst path = \"C:\\Users\\demo\\file_01.ts\";\nif (value !== null && count >= 10) { return items[0]?.id ?? \"\"; }\nconst ids = [\"00I11\", \"AbCdEf_9-0\", \"xX_01-1I\"];\nInvoice #AX-2048: $1,234.56| 2026-10-22"
+    },
+    {
+      "error": null,
+      "file": "accuracy-consolas-15-dark.png",
+      "ms": 883,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "text": "Email: user.name+demo@example.co.uk\nAPI key: sk-proj-RwLs21d80popaT0IidmmtOS1QNgVmWjGhnLCaLhx\nToken: eyJhbGciOiJIUzI1NiJ9.sS8hhss6inCQmw31126fqXAhjVmMyamjXC_9jhUfWa9eEduMVfN7.bpdLgfbXJ3c6RzO_JGOYTTwtt7L5tbe6\nconst path = \"C:\\Users\\demo\\file_01.ts\";\nif (value !== null && count >= 10) { return items[0]?.id ?? \"\"; }\nconst ids = [\"00I11\", \"AbCdEf_9-0\", \"xX_01-1I\"];\nInvoice #AX-2048: $1,234.56| 2026-10-22"
+    },
+    {
+      "error": null,
+      "file": "accuracy-segoe-11-light.png",
+      "ms": 660,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "text": "Email: user.name+demo@example.co.uk\nAPI key: sk-proj-RwLs2ld80popaT0lidmmtOS1QNgVmWjGhnLCaLhx\nToken: eyJhbGciOiJIUzI1NiJ9.sS8hhss6inCQmw31I26fqXAhjVmMyamjXC_9jhUfWa9eEduMVfN7.bpdLgfbXJ3c6RzO_JGOYTTwtt7L5tbe6\nconst path = \"C:\\Users\\demo\\file_01.ts\";\nif (value !== null && count > = 10) { return items[0]?.id ?? \"; }\nconst ids = [\"O0l11\", \"AbCdEf_9-0, \"xX_01-II\"];\nInvoice #AX-2048: $1,234.56 | 2026-10-22"
+    },
+    {
+      "error": null,
+      "file": "accuracy-segoe-11-dark.png",
+      "ms": 746,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "text": "Email: user.name+demo@example.co.uk\nAPI key: sk-proj-RwLs2Id80popaT0lidmmtOS1QNgVmWjGhnLCaLhx\nToken: eyJhbGciOiJIUzI1NiJ9.sS8hhss6inCQmw31I26fgXAhjVmMyamjXC_9jhUfWa9eEduMVfN7.bpdLgfbXJ3c6RzO_JGOYTTwtt7L5tbe6\nconst path = \"C:\\Users\\demo\\file_01.ts\";\nif (value != = null && count > = 10) { return items[0]?.id ?? \"; }\nconst ids = [\"O0II1\", \"AbCdEf_9-0\", \"xX_01-II1\u201d];\nInvoice #AX-2048: $1,234.56 | 2026-10-22"
+    },
+    {
+      "error": null,
+      "file": "accuracy-segoe-15-light.png",
+      "ms": 760,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "text": "Email: user.name+demo@example.co.uk\nAPI key: sk-proj-RwLs2Id80popaT0lidmmtOS1QNgVmWjGhnLCaLhx\nToken: eyJhbGciOiJIUzI1NiJ9.sS8hhss6inCQmw31I26fqXAhjVmMyamjXC_9jhUfWa9eEduMVfN7.bpdLgfbXJ3c6RzO_JGOYTTwtt7L5tbe6\nconst path = \"C:\\Users\\demo\\file_01.ts\";\nif (value !== null && count > = 10) { return items[0]?.id ?? \"\"; }\nconst ids = [\"O0II1\", \"AbCdEf_9-0\", \"xX_01-II\"];\nInvoice #AX-2048: $1,234.56 | 2026-10-22"
+    },
+    {
+      "error": null,
+      "file": "accuracy-segoe-15-dark.png",
+      "ms": 795,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "text": "Email: user.name+demo@example.co.uk\nAPI key: sk-proj-RwLs2Id80popaT0lidmmtOS1QNgVmWjGhnLCaLhx\nToken: eyJhbGciOiJIUzI1NiJ9.sS8hhss6inCQmw31I26fqXAhjVmMyamjXC_9jhUfWa9eEduMVfN7.bpdLgfbXJ3c6RzO_JGOYTTwtt7L5tbe6\nconst path = \"C:\\Users\\demo\\file_01.ts\";\nif (value !== null && count >= 10) { return items[0]?.id ?? \"\"; }\nconst ids = [\"O0II1\", \"AbCdEf_9-0\", \"xX_01-II\"];\nInvoice #AX-2048: $1,234.56 | 2026-10-22"
+    }
+  ]
+}

@@ -6,7 +6,7 @@
 
 **A fast, local-first screenshot, screen-recording, annotation, and OCR tool for Windows.**
 
-A CleanShot X–style capture suite that keeps everything on your machine — no cloud, no accounts, no network.
+A CleanShot X–style capture suite that keeps everything on your machine — no cloud uploads or accounts.
 
 [![Latest release](https://img.shields.io/github/v/release/sanirudh17/Glint?label=download&color=2f6feb)](https://github.com/sanirudh17/Glint/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-2f6feb.svg)](LICENSE)
@@ -21,7 +21,7 @@ A CleanShot X–style capture suite that keeps everything on your machine — no
 
 Glint is an all-in-one screen-capture tool for Windows. Take a screenshot or record your screen, then annotate it, extract its text, pin it above other windows, or drag it straight into another application — all from a quiet corner overlay. Screenshots auto-save to a searchable library, recordings can be trimmed on a multi-cut timeline, and every edit is non-destructive and can be saved as a re-openable project file.
 
-Glint is **local-first by design**. It has no network code whatsoever: no cloud storage, no accounts, no telemetry, no auto-upload. Your captures, recordings, and library never leave your computer.
+Glint is **local-first by design**. There is no cloud storage, account requirement, telemetry or automatic capture upload. Optional engine downloads and release checks use the network; recognition and editing run locally.
 
 ## Table of contents
 
@@ -71,7 +71,7 @@ Turn a raw screenshot into a polished share image. Wrap it in a **solid color, g
 
 ### Capture Text (OCR)
 
-Extract the text out of any capture with a single click, powered by a bundled **Tesseract** OCR engine. There is nothing extra to install — the OCR runtime ships inside the app.
+Extract text using **Tesseract**, **PP-OCRv6 Small**, or **PP-OCRv6 Medium**. No OCR runtime or model is bundled. Open Settings > Auto-save, select an engine and press **Install**. **Remove from disk** deletes Glint's copy; a loaded runtime may finish cleanup after restart. Selecting an engine never starts a download.
 
 ### Screen recording
 
@@ -85,9 +85,23 @@ Record a **region** or the **full screen** to an MP4 (H.264, web-optimized with 
 
 After recording, open the clip on a **multi-cut timeline**. Split it, delete the parts you don't want, undo mistakes, and step frame-by-frame with gap-skipping preview playback. Export as a **Save copy** (a new `… (trimmed).mp4`) or a rollback-safe **Overwrite** that replaces the original in place.
 
+### Studio video editing
+
+Recordings open directly in Studio with editable cursor data, smoothing, click effects and keystrokes. Add fixed or cursor-following zooms, click-based auto zoom, timed masks and video annotations. Ctrl+Alt+Z during recording adds an editable zoom marker; it does not magnify the live desktop. Draw on screen from the recording pill, then refine those annotations in Studio.
+
+Use shared backgrounds, framing and aspect ratios, webcam layouts, animated gradients, audio cleanup, silence review and optional local English captions. Source recordings stay intact. Combine videos, images and title cards into a saved multi-scene project with transitions. Export MP4 or a bounded GIF (up to 60 seconds and 25 MB).
+
+### Scrolling capture and privacy review
+
+Manual scrolling capture stitches the area you scroll and provides a configurable shortcut. Screenshot privacy review suggests sensitive text for you to inspect and cover. Text search and optional naming use the installed OCR engine locally; small or blurred text and identifiers can be missed. Redactions are applied only when accepted.
+
+### Appearance
+
+Neutral dark and light themes share compact controls, a consistent capture grid and optional desktop acrylic on supported Windows systems. Glass can be switched off in Appearance. Native acrylic uses the current desktop backdrop; solid surfaces are used when Windows does not support or allow transparency.
+
 ### Pin to Screen
 
-Float any capture as an **always-on-top, borderless window** — perfect for keeping a reference image visible while you work. Drag to move, use the mouse wheel or corner handles to resize (aspect-locked), adjust opacity, and copy or save from a right-click menu.
+Float a screenshot as an **always-on-top, borderless window** — perfect for keeping a reference image visible while you work. Drag to move, use the mouse wheel or corner handles to resize (aspect-locked), adjust opacity, and copy or save from a right-click menu.
 
 ### Library
 
@@ -116,7 +130,7 @@ Download the latest installer from the [**Releases**](https://github.com/sanirud
 | **`Glint_x.y.z_x64-setup.exe`** | NSIS installer — recommended, smaller download. |
 | **`Glint_x.y.z_x64_en-US.msi`** | MSI installer — for managed/enterprise deployment. |
 
-Everything Glint needs is bundled into the installer, including the recorder (FFmpeg) and OCR (Tesseract) runtimes — there are no additional dependencies to install.
+The installer includes FFmpeg/FFprobe for recording and export. OCR and caption engines are optional downloads; install only the engines you want. Windows WebView2 is required and the installer can arrange it when needed.
 
 > **Note on Windows SmartScreen.** The installer is not code-signed, so on first run Windows may show a *"Windows protected your PC"* prompt. Click **More info → Run anyway** to proceed. This is expected for unsigned software; code-signing is on the roadmap.
 
@@ -128,7 +142,7 @@ Everything Glint needs is bundled into the installer, including the recorder (FF
 
 ### Prerequisites
 
-- **[Node.js](https://nodejs.org/)** 18 or newer, with npm
+- **[Node.js](https://nodejs.org/)** 24 LTS (or a supported version from package.json), with npm
 - **[Rust](https://rustup.rs/)** (stable toolchain)
 - The **[Tauri v2 Windows prerequisites](https://v2.tauri.app/start/prerequisites/)** — Microsoft C++ Build Tools and WebView2 (preinstalled on Windows 11)
 - **PowerShell** (used by the binary-fetch scripts below)
@@ -143,14 +157,13 @@ npm install
 
 ### 2. Fetch the bundled binaries
 
-Glint's recorder and OCR features shell out to FFmpeg/FFprobe and Tesseract. These runtimes are large (roughly 100 MB each) and are intentionally **not committed** to the repository. Fetch them once per machine, from the repository root:
+Glint's recorder shells out to FFmpeg/FFprobe. Those binaries are intentionally **not committed**. Fetch them once per build machine, from the repository root:
 
 ```powershell
 powershell -File scripts/fetch-ffmpeg.ps1
-powershell -File scripts/fetch-tesseract.ps1
 ```
 
-This populates `glint/src-tauri/binaries/`, which the app uses at runtime and which `tauri build` bundles into the installer. Without these files the app will build but the recorder and OCR features will not function.
+This populates `glint/src-tauri/binaries/`, which the app uses at runtime and which `tauri build` bundles into the installer. OCR engines are separate, optional downloads and must not be added to installer resources. The legacy Tesseract staging script is only for maintaining the separately distributed OCR download asset.
 
 ### 3. Run in development
 
@@ -201,13 +214,13 @@ scripts/        Binary-fetch helpers (FFmpeg/FFprobe, Tesseract)
 
 ## Privacy
 
-Glint is built to be **local-first**. It contains no networking code — no cloud sync, no accounts, no analytics, no crash reporting. Screenshots, recordings, and the library index all live exclusively on your machine.
+Glint is **local-first**: there is no cloud sync, account requirement, analytics or automatic capture upload. Optional engine downloads and release checks use the network. Screenshots, recordings, recognition and the library index remain on your machine.
 
 ## License
 
 Released under the [MIT License](LICENSE). © 2026 Sanirudh ([sanirudh17](https://github.com/sanirudh17)).
 
-The bundled FFmpeg/FFprobe and Tesseract executables are third-party software distributed under their own licenses (see the [LICENSE](LICENSE) file for details). They are fetched per-machine and are not part of this repository.
+FFmpeg/FFprobe and optional OCR/caption runtimes are third-party software under their respective licenses. Their binaries are not committed to this repository. The separate Tesseract download includes its upstream license and source references.
 
 ## Acknowledgements
 

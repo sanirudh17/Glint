@@ -1,9 +1,9 @@
 import { GRADIENTS } from "../editor/gradients";
 
-export type AspectId = "auto" | "1:1" | "16:9" | "4:3" | "9:16" | "4:5";
+export type AspectId = "auto" | "1:1" | "16:9" | "4:3" | "9:16" | "4:5" | "3:2" | "1.91:1";
 export type LookBackground =
   | { type: "solid"; color: string }
-  | { type: "gradient"; gradientId: string }
+  | { type: "gradient"; gradientId: string; angleDeg?: number; kind?: "linear" | "radial" | "conic" | "mesh"; stops?: { offset: number; color: string }[]; grain?: number; animationSeconds?:number }
   | { type: "image"; dataUrl: string }
   | { type: "transparent" };
 export interface WindowChrome {
@@ -24,6 +24,8 @@ export interface LookConfig {
   shadowColor?: string;
   border?: { width: number; color: string; style: "solid" | "dashed" };
   aspect: AspectId;
+  outputSize?: { width:number; height:number };
+  watermark?: { text:string; color:string; opacity:number; size?:number; position:"bottom-left"|"bottom-right"; dataUrl:string; width:number; height:number };
   chrome: WindowChrome;
 }
 export const DEFAULT_LOOK: LookConfig = {

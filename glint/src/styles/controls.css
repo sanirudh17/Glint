@@ -1,0 +1,57 @@
+/* Shared compact action surfaces: one hairline, no doubled top inset. */
+:root[data-theme="dark"] {
+  --control-bg: #242424;
+  --control-edge: #414141;
+  --control-hover: #303030;
+}
+:root[data-theme="light"] {
+  --control-bg: #ffffff;
+  --control-edge: #c1c5cb;
+  --control-hover: #f0f1f3;
+}
+:root[data-theme] :is(.g-btn-subtle,.g-btn-ghost,.g-icon-btn,.g-select-trigger,.g-number-input,.editor-export-btn,.editor-toggle,.editor-width,.trim-btn,.trim-iconbtn,.settings-hotkey-btn,.home-resume-chip,.frame-text-btn) {
+  background:var(--control-bg);
+  backdrop-filter:var(--control-blur,none);
+  -webkit-backdrop-filter:var(--control-blur,none);
+  border:1px solid var(--control-edge);
+  border-radius:var(--r-btn);
+  box-shadow:none;
+  color:var(--text-dim);
+}
+:root[data-theme] :is(.g-btn-subtle,.g-btn-ghost,.g-icon-btn,.g-select-trigger,.editor-export-btn,.editor-toggle,.editor-width,.trim-btn,.trim-iconbtn,.settings-hotkey-btn,.home-resume-chip,.frame-text-btn):hover:not(:disabled) {
+  background:var(--control-hover);
+  border-color:var(--control-edge);
+  color:var(--text);
+}
+/* Material belongs to the primitive, including Settings and portalled inspectors. */
+:root[data-theme] .g-select-trigger {
+  background:var(--select-bg,var(--control-bg));
+  backdrop-filter:var(--select-blur,none);
+  -webkit-backdrop-filter:var(--select-blur,none);
+}
+:root[data-glass="true"][data-theme] .g-select-trigger:hover:not(:disabled) {
+  background:color-mix(in srgb,var(--select-bg) 75%,var(--control-hover));
+}
+:root[data-theme] :is(.g-btn-primary,.editor-export-btn--primary,.trim-btn--primary) {
+  background:linear-gradient(rgb(255 255 255 / 8%),transparent),var(--accent);
+  color:var(--accent-fg);
+  border:1px solid color-mix(in srgb,var(--accent) 72%,var(--text) 28%);
+  box-shadow:none;
+}
+:root[data-theme] :is(.g-btn-primary,.editor-export-btn--primary,.trim-btn--primary):hover:not(:disabled) { background:var(--accent-hover); color:var(--accent-fg); }
+:root[data-theme] :is(.editor-width--active,.editor-toggle--active) { background:var(--accent-subtle); border-color:var(--accent); color:var(--text); }
+:root[data-theme] .studio-panel-tabs button { border:1px solid transparent; }
+:root[data-theme] .studio-panel-tabs button[aria-pressed="true"] { background:var(--control-bg); border-color:var(--control-edge); color:var(--text); }
+
+/* Floating image actions follow the selected theme, independent of glass mode. */
+:root[data-theme="light"] :is(.cap-actions,.hud-toolbar) {
+  background:rgb(255 255 255 / 92%);
+  color:#202020;
+  border:1px solid rgb(0 0 0 / 15%);
+  box-shadow:0 5px 16px rgb(0 0 0 / 16%);
+  backdrop-filter:blur(18px);
+}
+:root[data-theme="light"] :is(.cap-btn,.hud-btn) { color:#303030; }
+:root[data-theme="light"] :is(.cap-btn,.hud-btn):hover { background:rgb(0 0 0 / 7%); color:#111111; }
+:root[data-theme="light"] :is(.cap-tip,.hud-tip,.hud-dims,.hud-close) { background:rgb(255 255 255 / 96%); color:#202020; border-color:rgb(0 0 0 / 15%); }
+:root[data-theme] :is(.cap-btn--danger,.hud-btn--danger):hover { color:var(--danger); background:var(--danger-subtle); }

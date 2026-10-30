@@ -1,6 +1,9 @@
-import { useEffect, useRef } from "react";
-import { Arrow, Line, Rect, Ellipse, Text, Group, Image as KonvaImage, Circle } from "react-konva";
+import {blurPixels} from '../../editor/blur';
+import { useMemo } from "react";
+import { Arrow, Line, Rect, Ellipse, Text, Group, Image as KonvaImage, Circle,Label,Tag,Shape } from "react-konva";
+import {arrowPoints} from '../../editor/annotationStyles';
 import Konva from "konva";
+import {privacyPixels,opaqueRedactionColor} from "../../editor/privacy";
 import type { Annotation, BoxAnno, FreehandAnno, StepAnno, TextAnno, TwoPointAnno } from "../../editor/model";
 
 /** "#RRGGBB" + alpha → "rgba(r,g,b,a)". Returns the input untouched if it isn't a
@@ -17,7 +20,8 @@ const DASH = [12, 8];
 interface Props {
   anno: Annotation;
   draggable: boolean;
-  baseImage: HTMLImageElement;
+  baseImage: HTMLImageElement|HTMLCanvasElement;
+  layerImage?:HTMLImageElement;
   baseWidth: number;
   baseHeight: number;
   /** Hide the Konva node — used to make room for the DOM textarea while a text
@@ -28,7 +32,7 @@ interface Props {
   onDragStart: () => void;
 }
 
-export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeight, hidden, onSelect, onChange, onDragStart }: Props) {
+export function AnnotationNode({ anno, draggable, baseImage, layerImage, baseWidth, baseHeight, hidden, onSelect, onChange, onDragStart }: Props) {
   const common = {
     id: anno.id,
     draggable,
@@ -44,13 +48,15 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
   };
 
   switch (anno.type) {
+    case 'image': return <KonvaImage {...common} image={layerImage} x={anno.x} y={anno.y} width={anno.w} height={anno.h} onDragEnd={e=>onChange({x:Math.round(e.target.x()),y:Math.round(e.target.y())})} onTransformEnd={e=>{const n=e.target;const w=Math.max(1,Math.round(n.width()*n.scaleX())),h=Math.max(1,Math.round(n.height()*n.scaleY()));n.scaleX(1);n.scaleY(1);onChange({x:Math.round(n.x()),y:Math.round(n.y()),w,h});}}/>;
     case "arrow": {
       const a = anno as TwoPointAnno;
       return (
         <Arrow
           {...common}
           x={0} y={0}
-          points={[a.x1, a.y1, a.x2, a.y2]}
+          points={arrowPoints(a)}
+          tension={(a.style.curve??0)!==0?0.5:0}
           stroke={a.style.color}
           fill={a.style.color}
           strokeWidth={a.style.strokeWidth}
@@ -59,6 +65,7 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
           pointerLength={10 + a.style.strokeWidth}
           pointerWidth={10 + a.style.strokeWidth}
           hitStrokeWidth={Math.max(12, a.style.strokeWidth)}
+          onTransformEnd={e=>{const n=e.target,t=n.getTransform(),first=t.point({x:a.x1,y:a.y1}),last=t.point({x:a.x2,y:a.y2});n.scaleX(1);n.scaleY(1);n.position({x:0,y:0});onChange({x1:first.x,y1:first.y,x2:last.x,y2:last.y});}}
         />
       );
     }
@@ -131,11 +138,13 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
     }
     case "text": {
       const a = anno as TextAnno;
+      if(a.style.textPreset==='label')return <Label {...common} x={a.x} y={a.y}><Tag fill="#20242c" cornerRadius={5}/><Text id={a.id} text={a.text||' '} fontSize={a.style.fontSize} fill={a.style.color} padding={8} fontStyle="bold"/></Label>;
       return (
         <Text
           {...common}
           x={a.x} y={a.y} text={a.text || " "}
           fontSize={a.style.fontSize} fill={a.style.color}
+          fontFamily={a.style.textPreset==='code'?'Courier New':undefined} fontStyle={a.style.textPreset==='heading'?'bold':'normal'}
         />
       );
     }
@@ -171,22 +180,16 @@ export function AnnotationNode({ anno, draggable, baseImage, baseWidth, baseHeig
     }
     case "step": {
       const a = anno as StepAnno;
-      const r = 14 + a.style.strokeWidth * 2;
+      const r = (a.style.stepSize ?? 28) / 2;
       return (
         <Group {...common} x={a.x} y={a.y}>
           <Circle radius={r} fill={a.style.color} />
-          <Text
-            text={String(a.number)}
-            fontSize={r}
-            fontStyle="bold"
-            fill="#fff"
-            width={r * 2}
-            height={r * 2}
-            offsetX={r}
-            offsetY={r}
-            align="center"
-            verticalAlign="middle"
-          />
+          <Shape listening={false} sceneFunc={context=>{
+            const ctx=context._context,text=String(a.number);ctx.font=`600 ${r}px Manrope, sans-serif`;ctx.textAlign='center';ctx.textBaseline='alphabetic';
+            const metrics=ctx.measureText(text);ctx.fillStyle='#ffffff';
+            ctx.fillText(text,0,(metrics.actualBoundingBoxAscent-metrics.actualBoundingBoxDescent)/2);
+          }}/>
+
         </Group>
       );
     }
@@ -254,138 +257,29 @@ function patchPosition(
   }
 }
 
-/** A non-destructive blur: a cached, blurred copy of the base image clipped to a rect. */
-function BlurRegion({
-  a, baseImage, baseWidth, baseHeight, draggable, onSelect, onDragStart, onChange,
-}: {
-  a: BoxAnno;
-  baseImage: HTMLImageElement;
-  baseWidth: number;
-  baseHeight: number;
-  draggable: boolean;
-  onSelect: () => void;
-  onDragStart: () => void;
-  onChange: (patch: Partial<Annotation>) => void;
+/** Privacy effects rasterize only their bounded region, with an opaque backing. */
+function PrivacyRegion({a,baseImage,draggable,onSelect,onDragStart,onChange,blur}: {
+  a:BoxAnno;baseImage:HTMLImageElement|HTMLCanvasElement;draggable:boolean;onSelect:()=>void;
+  onDragStart:()=>void;onChange:(patch:Partial<Annotation>)=>void;blur:boolean;
 }) {
-  const ref = useRef<Konva.Group>(null);
-  // Normalize negative drag rects.
-  const x = Math.min(a.x, a.x + a.w);
-  const y = Math.min(a.y, a.y + a.h);
-  const w = Math.abs(a.w);
-  const h = Math.abs(a.h);
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node || w < 1 || h < 1) return;
-    // Cache only the visible region — the group is pinned to the origin and the
-    // clip lives at (x,y), so the blur filter runs over just that slice rather
-    // than the whole base image (which can be a multi-megapixel screenshot).
-    node.cache({ x, y, width: w, height: h });
-    node.getLayer()?.batchDraw();
-  }, [x, y, w, h, baseImage]);
-
-  if (w < 1 || h < 1) return null;
-
-  return (
-    <Group
-      id={a.id}
-      ref={ref}
-      draggable={draggable}
-      onMouseDown={onSelect}
-      onTap={onSelect}
-      onDragStart={onDragStart}
-      onDragEnd={(e) =>
-        // The group is pinned to the origin (x={0} y={0} below) with the clip at
-        // the stored rect, so a drag accumulates only its delta into the node
-        // position. Fold that delta into the rect; the re-render snaps the node
-        // back to 0,0 and re-clips to the new position.
-        onChange({ x: x + e.target.x(), y: y + e.target.y(), w, h } as Partial<Annotation>)
-      }
-      x={0}
-      y={0}
-      clipX={x}
-      clipY={y}
-      clipWidth={w}
-      clipHeight={h}
-      filters={[Konva.Filters.Blur]}
-      blurRadius={14}
-    >
-      <KonvaImage image={baseImage} width={baseWidth} height={baseHeight} listening={false} />
-    </Group>
-  );
+  const x=Math.floor(Math.min(a.x,a.x+a.w)),y=Math.floor(Math.min(a.y,a.y+a.h));
+  const w=Math.ceil(Math.max(a.x,a.x+a.w))-x,h=Math.ceil(Math.max(a.y,a.y+a.h))-y;
+  const filtered=useMemo(()=>{
+    if(w<1||h<1||!blur&&a.style.redactStyle!=='pixelate')return null;
+    const canvas=document.createElement('canvas');canvas.width=w;canvas.height=h;
+    const ctx=canvas.getContext('2d')!;ctx.fillStyle='#777777';ctx.fillRect(0,0,w,h);ctx.drawImage(baseImage,x,y,w,h,0,0,w,h);
+    const pixels=ctx.getImageData(0,0,w,h);
+    const data=blur?blurPixels(pixels.data,w,h,a.style.blurRadius??12):privacyPixels(pixels.data,w,h);
+    ctx.putImageData(new ImageData(data,w,h),0,0);return canvas;
+  },[x,y,w,h,baseImage,blur,a.style.redactStyle,a.style.blurRadius]);
+  if(w<1||h<1)return null;
+  const common={id:a.id,x,y,width:w,height:h,draggable,onMouseDown:onSelect,onTap:onSelect,onDragStart,
+    onDragEnd:(e:Konva.KonvaEventObject<DragEvent>)=>onChange({x:Math.round(e.target.x()),y:Math.round(e.target.y()),w,h}),
+    onTransformEnd:(e:Konva.KonvaEventObject<Event>)=>{const n=e.target,nw=Math.max(1,Math.round(n.width()*n.scaleX())),nh=Math.max(1,Math.round(n.height()*n.scaleY()));n.scaleX(1);n.scaleY(1);onChange({x:Math.round(n.x()),y:Math.round(n.y()),w:nw,h:nh});}};
+  return filtered?<KonvaImage {...common} image={filtered}/>:<Rect {...common} fill={opaqueRedactionColor(a.style.color)}/>;
 }
-
-/** Redaction: "solid" paints an opaque block (pixels gone from the export);
- * "pixelate" is a cached, mosaic'd copy of the base image clipped to a rect. */
-function RedactRegion({
-  a, baseImage, baseWidth, baseHeight, draggable, onSelect, onDragStart, onChange,
-}: {
-  a: BoxAnno;
-  baseImage: HTMLImageElement;
-  baseWidth: number;
-  baseHeight: number;
-  draggable: boolean;
-  onSelect: () => void;
-  onDragStart: () => void;
-  onChange: (patch: Partial<Annotation>) => void;
-}) {
-  const ref = useRef<Konva.Group>(null);
-  const x = Math.min(a.x, a.x + a.w);
-  const y = Math.min(a.y, a.y + a.h);
-  const w = Math.abs(a.w);
-  const h = Math.abs(a.h);
-  const pixelate = a.style.redactStyle === "pixelate";
-
-  useEffect(() => {
-    const node = ref.current;
-    if (!node || !pixelate || w < 1 || h < 1) return;
-    node.cache({ x, y, width: w, height: h });
-    node.getLayer()?.batchDraw();
-  }, [x, y, w, h, baseImage, pixelate]);
-
-  if (w < 1 || h < 1) return null;
-
-  if (!pixelate) {
-    // Solid opaque block. The underlying pixels are not present in the export.
-    return (
-      <Rect
-        id={a.id}
-        x={x} y={y} width={w} height={h}
-        fill={a.style.color}
-        draggable={draggable}
-        onMouseDown={onSelect}
-        onTap={onSelect}
-        onDragStart={onDragStart}
-        onDragEnd={(e) => onChange({ x: e.target.x(), y: e.target.y(), w, h } as Partial<Annotation>)}
-      />
-    );
-  }
-
-  return (
-    <Group
-      id={a.id}
-      ref={ref}
-      draggable={draggable}
-      onMouseDown={onSelect}
-      onTap={onSelect}
-      onDragStart={onDragStart}
-      onDragEnd={(e) =>
-        onChange({ x: x + e.target.x(), y: y + e.target.y(), w, h } as Partial<Annotation>)
-      }
-      x={0}
-      y={0}
-      clipX={x}
-      clipY={y}
-      clipWidth={w}
-      clipHeight={h}
-      filters={[Konva.Filters.Pixelate]}
-      pixelSize={14}
-    >
-      <KonvaImage image={baseImage} width={baseWidth} height={baseHeight} listening={false} />
-    </Group>
-  );
-}
-
+function BlurRegion(props:{a:BoxAnno;baseImage:HTMLImageElement|HTMLCanvasElement;baseWidth:number;baseHeight:number;draggable:boolean;onSelect:()=>void;onDragStart:()=>void;onChange:(patch:Partial<Annotation>)=>void}){return <PrivacyRegion {...props} blur/>;}
+function RedactRegion(props:{a:BoxAnno;baseImage:HTMLImageElement|HTMLCanvasElement;baseWidth:number;baseHeight:number;draggable:boolean;onSelect:()=>void;onDragStart:()=>void;onChange:(patch:Partial<Annotation>)=>void}){return <PrivacyRegion {...props} blur={false}/>;}
 /** A spotlight annotation is now ONLY an invisible, hittable rect for selection +
  *  drag/resize/delete. The actual dim + bright cut-out is drawn once for all
  *  spotlights by <SpotlightDimLayer> (see EditorStage). */

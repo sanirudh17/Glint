@@ -1,0 +1,101 @@
+/* Native desktop blur supplies the material. CSS only supplies neutral tint and
+   control highlights; no desktop screenshot, texture, or simulated reflection. */
+:root[data-glass="true"][data-theme="dark"] {
+  --window-canvas: rgb(0 0 0 / 72%);
+  --border: rgb(255 255 255 / 12%);
+  --border-strong: rgb(255 255 255 / 18%);
+  --control-bg: rgb(255 255 255 / 7%);
+  --control-edge: rgb(255 255 255 / 13%);
+  --control-hover: rgb(255 255 255 / 11%);
+  --bg-frame: rgb(0 0 0 / 72%);
+  --glass-card: rgb(24 24 24 / 72%);
+  --glass-menu: rgb(18 18 18 / 84%);
+  --select-bg: rgb(255 255 255 / 5%);
+  --select-menu-bg: var(--glass-menu);
+  --select-blur: blur(20px) saturate(1.1);
+  --control-blur: blur(16px);
+  --glass-utility: rgb(255 255 255 / 4%);
+  --bg-elev: rgb(20 20 20 / 94%);
+  --bg-elev2: rgb(255 255 255 / 6%);
+  --bg-elev3: rgb(255 255 255 / 10%);
+  --glass-control: rgb(255 255 255 / 8%);
+  --glass-edge: rgb(255 255 255 / 9%);
+  --glass-highlight: rgb(255 255 255 / 8%);
+}
+:root[data-glass="true"][data-theme="light"] {
+  --text-dim: #444444;
+  --text-faint: #555555;
+  --window-canvas: rgb(255 255 255 / 60%);
+  --border: rgb(0 0 0 / 14%);
+  --border-strong: rgb(0 0 0 / 21%);
+  --control-bg: rgb(255 255 255 / 26%);
+  --control-edge: rgb(0 0 0 / 23%);
+  --control-hover: rgb(255 255 255 / 62%);
+  --bg-frame: rgb(255 255 255 / 42%);
+  --glass-card: rgb(255 255 255 / 70%);
+  --glass-menu: rgb(255 255 255 / 82%);
+  --select-bg: rgb(255 255 255 / 18%);
+  --select-menu-bg: var(--glass-menu);
+  --select-blur: blur(20px) saturate(1.1);
+  --control-blur: blur(16px);
+  --glass-utility: rgb(255 255 255 / 18%);
+  --bg-elev: rgb(255 255 255 / 96%);
+  --bg-elev2: rgb(0 0 0 / 4%);
+  --bg-elev3: rgb(0 0 0 / 7%);
+  --glass-control: rgb(255 255 255 / 30%);
+  --glass-edge: rgb(0 0 0 / 14%);
+  --glass-highlight: rgb(255 255 255 / 70%);
+}
+html[data-glass="true"], html[data-glass="true"] body { background: transparent; }
+html[data-glass="true"] :is(.g-shell,.editor-view) { background: transparent; }
+html[data-glass="true"] :is(.g-content,.editor-canvas,.editor-topbar,.editor-options-row,.trim-root,.speaker-notes) { background: var(--window-canvas); }
+html[data-glass="true"] .g-content:has(.settings-view) { background: transparent; }
+html[data-glass="true"] .settings-panel { background: var(--window-canvas); }
+html[data-glass="true"] :is(.g-nav-rail,.settings-nav,.editor-rail) { background: var(--bg-frame); }
+html[data-glass="true"] .cap-card { background: transparent; }
+html[data-glass="true"] .cap-meta { background: var(--glass-utility); border-top:1px solid var(--glass-edge); }
+html[data-glass="true"] :is(.cap-meta,.editor-topbar) { backdrop-filter:blur(18px); }
+html[data-glass="true"] :is(.g-titlebar .g-winctl) { background: transparent; }
+@media (prefers-reduced-transparency: reduce) {
+  html[data-glass="true"] :is(.g-shell,.editor-view,.trim-root,.speaker-notes) { background: var(--bg); }
+}
+
+html[data-glass="true"] :is(.editor-tool--active,.editor-width--active,.editor-toggle--active) { background:var(--accent-subtle); }
+
+/* Project menus share the Select material without layering opaque fills. */
+:root[data-glass="true"][data-theme] .home-project-options {
+  background:var(--glass-menu);
+  backdrop-filter:blur(24px) saturate(1.1);
+  -webkit-backdrop-filter:blur(24px) saturate(1.1);
+}
+/* Preserve the original quiet hover strip: one floating surface, bare icons. */
+html[data-glass="true"] .cap-actions {
+  background:rgb(12 12 12 / 78%);
+  backdrop-filter:blur(20px);
+  border-color:transparent;
+}
+
+/* Utility bands stay quieter and more opaque than the workspace, without
+   restoring a solid slab. Media pixels and transparency grids are unaffected. */
+:root[data-glass="true"][data-theme] :is(.trim-gif,.studio-export-result,.editor-crop-dock,.editor-image-list,.editor-zoombar,.trim-zoomctl) {
+  background:var(--glass-utility);
+  backdrop-filter:blur(18px);
+  -webkit-backdrop-filter:blur(18px);
+}
+
+:root[data-glass="true"][data-theme] .frame-panel { background:var(--glass-card); }
+
+/* One translucent surface per utility region, including nested Settings cards. */
+:root[data-glass="true"][data-theme] :is(.settings-panel .g-card,.settings-update-row,.settings-hotkey-help,.settings-folder-path) {
+  background:var(--glass-utility);
+  border-color:var(--border);
+}
+
+:root[data-glass="true"][data-theme] .studio-panel {
+  background:var(--glass-utility);
+  border-inline-start:1px solid var(--border);
+}
+:root[data-glass="true"][data-theme] .frame-seg {
+  background:var(--control-bg);
+  border-color:var(--control-edge);
+}

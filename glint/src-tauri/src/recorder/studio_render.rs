@@ -3,6 +3,8 @@ use super::{
     ffmpeg::{self, VideoEncoder},
     studio::Events,
     studio_cursor::{self, CursorConfig, Mapping, Point},
+    studio_effects::{self, Motion, Zoom},
+    studio_masks::{self, Mask},
     trim::{self, CamOverlay, KeepSegment},
 };
 use font8x8::UnicodeFonts;
@@ -33,6 +35,8 @@ pub struct Border {
     pub color: String,
     pub style: String,
 }
+#[derive(Clone,Debug,Deserialize)]
+pub struct OutputSize { pub width:u32,pub height:u32 }
 #[derive(Clone, Debug, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Look {
@@ -45,6 +49,8 @@ pub struct Look {
     pub chrome: Value,
     pub shadow_color: Option<String>,
     pub border: Option<Border>,
+    pub output_size: Option<OutputSize>,
+    pub watermark: Option<Value>,
 }
 #[derive(Clone, Debug, Deserialize)]
 pub struct Clip {
@@ -65,13 +71,45 @@ pub struct Project {
     pub fade_in: f64,
     pub fade_out: f64,
     pub cam: Option<Value>,
+    #[serde(default)]
+    pub zoom_segments: Vec<Zoom>,
+    #[serde(default)]
+    pub masks: Vec<Mask>,
+    #[serde(default)]
+    pub motion_blur: Option<Motion>,
+    #[serde(default)]
+    pub audio_cleanup: super::polish::AudioCleanup,
+    #[serde(default)]
+    pub captions: Vec<super::polish::Caption>,
+    #[serde(default)]
+    pub captions_enabled: bool,
+    #[serde(default)]
+    pub annotations: Vec<super::video_annotations::Annotation>,
+    #[serde(default)]
+    pub content_motion: Option<String>,
+    #[serde(default)]
+    pub content_motion_seconds: Option<f64>,
 }
 impl Project {
     pub fn segments(&self, duration: f64) -> Result<Vec<KeepSegment>, String> {
-        if self.version != 1 {
+        if self.version != 1 && self.version != 2 {
             return Err("Unsupported Studio project version".into());
         }
         self.cursor.validate()?;
+        super::video_annotations::validate(&self.annotations,duration)?;
+        super::polish::validate_captions(&self.captions,duration)?;
+        if self.content_motion.as_ref().is_some_and(|v|!matches!(v.as_str(),"none"|"fade"|"left"|"right"|"up"|"down"|"zoom-in"|"zoom-out")){return Err("Invalid title entrance".into());}
+        if self.content_motion_seconds.is_some_and(|s|!s.is_finite()||!(0.05..=2.).contains(&s)){return Err("Invalid title entrance duration".into());}
+        if let Some(seconds)=self.look.background.get("animationSeconds"){if !seconds.is_null()&&!seconds.as_f64().is_some_and(|s|(12.0..=120.0).contains(&s)){return Err("Gradient animation period must be 12–120 seconds.".into());}}
+        studio_effects::validate_zooms(&self.zoom_segments, duration)?;
+        studio_masks::validate(&self.masks, duration, f64::INFINITY, f64::INFINITY)?;
+        if self
+            .motion_blur
+            .as_ref()
+            .is_some_and(|m| !(0.0..=1.0).contains(&m.intensity))
+        {
+            return Err("Invalid motion blur".into());
+        }
         for n in [self.look.padding, self.look.radius, self.look.shadow] {
             if !(0.0..=100.0).contains(&n) {
                 return Err("Invalid look settings".into());
@@ -79,7 +117,7 @@ impl Project {
         }
         if !matches!(
             self.look.aspect.as_str(),
-            "auto" | "1:1" | "16:9" | "4:3" | "9:16" | "4:5"
+            "auto" | "1:1" | "16:9" | "4:3" | "9:16" | "4:5" | "3:2" | "1.91:1"
         ) {
             return Err("Invalid aspect".into());
         }
@@ -134,6 +172,8 @@ pub fn layout(w: u32, h: u32, crop: Option<Crop>, look: &Look) -> Result<Layout,
         w: w as f64,
         h: h as f64,
     });
+    let output=look.output_size.as_ref().filter(|_|look.enabled);
+    if output.is_some_and(|s|!(16..=4096).contains(&s.width)||!(16..=4096).contains(&s.height)){return Err("Output dimensions must be between 16 and 4096 pixels".into());}
     if [c.x, c.y, c.w, c.h].iter().any(|v| !v.is_finite())
         || c.x < 0.
         || c.y < 0.
@@ -162,19 +202,21 @@ pub fn layout(w: u32, h: u32, crop: Option<Crop>, look: &Look) -> Result<Layout,
             "4:3" => Some(4. / 3.),
             "9:16" => Some(9. / 16.),
             "4:5" => Some(4. / 5.),
+            "3:2" => Some(3. / 2.),
+            "1.91:1" => Some(1.91),
             _ => None,
         }
     } else {
         None
     };
-    if let Some(r) = ratio {
+    if let Some(r) = output.map(|s|s.width as f64/s.height as f64).or(ratio) {
         if cw / ch < r {
-            cw = (ch * r).round();
+            cw = if output.is_some(){ch*r}else{(ch * r).round()};
         } else {
-            ch = (cw / r).round();
+            ch = if output.is_some(){cw/r}else{(cw / r).round()};
         }
     }
-    let scale = (1920. / cw.max(ch)).min(1.);
+    let scale = output.map(|s|s.width as f64/cw).unwrap_or_else(||(1920. / cw.max(ch)).min(1.));
     let even = |v: f64| ((v * scale / 2.).round() as u32 * 2).max(2);
     let x = ((cw - c.w) / 2.).round();
     let y = ((ch - chrome - c.h) / 2.).round() + chrome;
@@ -195,7 +237,7 @@ pub fn layout(w: u32, h: u32, crop: Option<Crop>, look: &Look) -> Result<Layout,
         },
     })
 }
-fn color(s: &str) -> Result<[u8; 3], String> {
+pub(super) fn color(s: &str) -> Result<[u8; 3], String> {
     let s = s.strip_prefix('#').unwrap_or(s);
     if s.len() != 6 || !s.is_ascii() {
         return Err("Use a six-digit hex color".into());
@@ -251,7 +293,7 @@ fn outline_distance(x: f64, y: f64, w: f64, h: f64, r: f64) -> f64 {
 }
 // Three separable box passes approximate a Gaussian without a radius-sized
 // convolution at every pixel. This is cached once, independent of clip length.
-fn blur_shadow(mask: GrayImage, sigma: f64) -> GrayImage {
+pub(super) fn blur_shadow(mask: GrayImage, sigma: f64) -> GrayImage {
     let (w, h) = (mask.width() as usize, mask.height() as usize);
     let ideal = (4. * sigma * sigma + 1.).sqrt();
     let lower = (ideal.floor() as usize).max(1) | 1;
@@ -341,16 +383,16 @@ fn text(image: &mut RgbImage, label: &str, x: i32, y: i32, scale: u32, c: [u8; 3
         }
     }
 }
+#[cfg(test)]
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct Gradient {
     id: String,
-    angle_deg: f64,
     stops: Vec<Stop>,
 }
+#[cfg(test)]
 #[derive(Deserialize)]
 struct Stop {
-    offset: f64,
     color: String,
 }
 pub struct Renderer {
@@ -362,8 +404,65 @@ pub struct Renderer {
     effects: Events,
     mapping: Mapping,
     cursor: CursorConfig,
+    effect_toggles: Vec<super::studio::InputEvent>,
+    zooms: Vec<Zoom>,
+    source_w: u32,
+    source_h: u32,
+    masks: Vec<Mask>,
+    motion: Motion,
+    watermark: Vec<(u32,u32,[u8;3],f64)>,
+    alternate: Option<RgbImage>,
+    animation_period: f64,
+    content_motion: Option<String>,
+    content_motion_seconds:f64,
+    annotations: Vec<super::video_annotations::Prepared>,
+    captions: Vec<super::polish::Caption>,
+    caption_cache: Mutex<Option<(String,Vec<(u32,u32,[u8;3],f64)>)>>,
 }
 impl Renderer {
+    /// Compose a still through the same layout, shadow, border and watermark
+    /// engine as video. Flatten source alpha against its actual background.
+    pub fn still_frame(&self, source: &image::RgbaImage) -> RgbImage {
+        self.still_frame_at(source,0.)
+    }
+    pub fn still_frame_at(&self,source:&image::RgbaImage,t:f64)->RgbImage {
+        let l = self.layout;
+        let resized;
+        let source=if source.dimensions()==(l.content_w,l.content_h){source}else{resized=image::imageops::resize(source,l.content_w,l.content_h,image::imageops::FilterType::Triangle);&resized};
+        let mut rgb = RgbImage::new(l.content_w, l.content_h);
+        let f=if self.alternate.is_some(){(1.-(t*std::f64::consts::TAU/self.animation_period).cos())/2.}else{0.};
+        for (x,y,p) in source.enumerate_pixels() {
+            let bg=self.plate.get_pixel(l.x+x,l.y+y);
+            let other=self.alternate.as_ref().map(|a|a.get_pixel(l.x+x,l.y+y)).unwrap_or(bg);
+            rgb.put_pixel(x,y,Rgb(std::array::from_fn(|c|((p[c] as f64*p[3] as f64+(bg[c] as f64*(1.-f)+other[c] as f64*f)*(255-p[3] as u32) as f64)/255.).round() as u8)));
+        }
+        let mut out=RgbImage::new(l.width,l.height);self.frame(rgb.as_raw(),t,&mut out);out
+    }
+    /// Binary GIF coverage comes from geometry, never from the recorded colors.
+    /// Keep chrome, the actual border pixels and watermark; omit soft shadows.
+    pub fn gif_alpha_mask(&self) -> GrayImage {
+        let l = self.layout;
+        let top = l.y - l.chrome_h;
+        let mut mask = GrayImage::from_fn(l.width, l.height, |x, y| {
+            let inside = sdf(
+                x as f64 - l.x as f64,
+                y as f64 - top as f64,
+                l.content_w as f64,
+                (l.content_h + l.chrome_h) as f64,
+                l.radius,
+            ) <= 0.;
+            Luma([if inside { 255 } else { 0 }])
+        });
+        for (x, y, _) in &self.border {
+            mask.put_pixel(*x, *y, Luma([255]));
+        }
+        for (x, y, _, alpha) in &self.watermark {
+            if *alpha >= 0.5 {
+                mask.put_pixel(*x, *y, Luma([255]));
+            }
+        }
+        mask
+    }
     pub fn new(
         project: &Project,
         events: &Events,
@@ -374,6 +473,20 @@ impl Renderer {
             return Err("Invalid event geometry".into());
         }
         let l = layout(source_w, source_h, project.crop, &project.look)?;
+        // Fail before encoding rather than silently dropping an invalid caption.
+        if project.captions_enabled {
+            for caption in &project.captions {
+                let value=serde_json::json!({"dataUrl":caption.raster,"opacity":1.0,"caption":true});
+                super::look_watermark::pixels(Some(&value),1,1)
+                    .map_err(|e|format!("Invalid caption image: {e}"))?;
+            }
+        }
+        studio_masks::validate(
+            &project.masks,
+            f64::INFINITY,
+            source_w as f64,
+            source_h as f64,
+        )?;
         let look = &project.look;
         let mut plate = RgbImage::new(l.width, l.height);
         if look.enabled {
@@ -387,42 +500,7 @@ impl Renderer {
                     plate.pixels_mut().for_each(|p| *p = Rgb(c));
                 }
                 "gradient" => {
-                    let gradients: Vec<Gradient> =
-                        serde_json::from_str(include_str!("../../../src/look/gradients.json"))
-                            .map_err(|e| e.to_string())?;
-                    let g = gradients
-                        .iter()
-                        .find(|g| Some(g.id.as_str()) == look.background["gradientId"].as_str())
-                        .unwrap_or(&gradients[0]);
-                    let stops: Vec<_> = g
-                        .stops
-                        .iter()
-                        .map(|s| Ok((s.offset, color(&s.color)?)))
-                        .collect::<Result<_, String>>()?;
-                    let dx = g.angle_deg.to_radians().cos();
-                    let dy = g.angle_deg.to_radians().sin();
-                    let len = dx.abs() * l.width as f64 + dy.abs() * l.height as f64;
-                    for (x, y, p) in plate.enumerate_pixels_mut() {
-                        let t = (((x as f64 - l.width as f64 / 2.) * dx
-                            + (y as f64 - l.height as f64 / 2.) * dy)
-                            / len
-                            + 0.5)
-                            .clamp(0., 1.);
-                        let a = stops.iter().rev().find(|s| s.0 <= t).unwrap_or(&stops[0]);
-                        let b = stops
-                            .iter()
-                            .find(|s| s.0 >= t)
-                            .unwrap_or(stops.last().unwrap());
-                        let f = if b.0 > a.0 {
-                            (t - a.0) / (b.0 - a.0)
-                        } else {
-                            0.
-                        };
-                        for i in 0..3 {
-                            p[i] =
-                                (a.1[i] as f64 + (b.1[i] as f64 - a.1[i] as f64) * f).round() as u8;
-                        }
-                    }
+                    super::look_gradient::paint(&look.background, &mut plate)?;
                 }
                 "image" => {
                     use base64::Engine;
@@ -606,6 +684,11 @@ impl Renderer {
         let mut effects = events.clone();
         effects.events.retain(|e| e.data["kind"] != "cursor");
         effects.events.sort_by(|a, b| a.t.total_cmp(&b.t));
+        let animation_period=look.background["animationSeconds"].as_f64().unwrap_or(0.);
+        let alternate=if look.enabled&&look.background["type"]=="gradient"&&animation_period>0. {
+            let mut other=project.clone();other.look.background=super::look_gradient::drift_background(&look.background)?;
+            Some(Self::new(&other,events,source_w,source_h)?.plate)
+        }else{None};
         Ok(Self {
             layout: l,
             plate,
@@ -615,6 +698,16 @@ impl Renderer {
             effects,
             mapping,
             cursor: project.cursor.clone(),
+            zooms: project.zoom_segments.clone(),
+            source_w,
+            source_h,
+            masks: project.masks.clone(),
+            motion: project.motion_blur.clone().unwrap_or_default(),
+            watermark: super::look_watermark::pixels(look.watermark.as_ref().filter(|_|look.enabled),l.width,l.height)?,
+            alternate,animation_period,content_motion:project.content_motion.clone(),content_motion_seconds:project.content_motion_seconds.unwrap_or(0.6),
+            effect_toggles:{let mut events:Vec<_>=events.events.iter().filter(|e|e.data["kind"]=="effects").cloned().collect();events.sort_by(|a,b|a.t.total_cmp(&b.t));events},
+            annotations:super::video_annotations::prepare(&project.annotations,l.width,l.height)?,
+            captions:if project.captions_enabled {project.captions.clone()} else {vec![]},caption_cache:Mutex::new(None),
         })
     }
     fn allowed(&self, x: i32, y: i32) -> bool {
@@ -630,21 +723,168 @@ impl Renderer {
         x >= l.x as i32 + a as i32 && x < l.x as i32 + b as i32
     }
     pub fn frame(&self, raw: &[u8], t: f64, out: &mut RgbImage) {
-        out.as_mut().copy_from_slice(self.plate.as_raw());
+        self.compose(raw, t, out, self.mapping, 1.);
+    }
+    fn view_at(&self, t: f64) -> studio_effects::View {
+        let g = &self.effects.geometry;
+        let mut follow = (0., 0.);
+        let mut count = 0.;
+        for offset in 0..5 {
+            if let Some(p) =
+                studio_cursor::point_at(&self.path, (t - offset as f64 * 0.035).max(0.))
+            {
+                follow.0 += (p.x - g.x as f64) * self.source_w as f64 / g.width as f64;
+                follow.1 += (p.y - g.y as f64) * self.source_h as f64 / g.height as f64;
+                count += 1.;
+            }
+        }
+        let cursor = studio_cursor::point_at(&self.path, t)
+            .filter(|_| count > 0.)
+            .map(|p| studio_effects::Follow {
+                x: follow.0 / count,
+                y: follow.1 / count,
+                latest_x: (p.x - g.x as f64) * self.source_w as f64 / g.width as f64,
+                latest_y: (p.y - g.y as f64) * self.source_h as f64 / g.height as f64,
+            });
         let l = self.layout;
+        studio_effects::zoom_at(
+            &self.zooms,
+            t,
+            l.crop,
+            self.source_w as f64,
+            self.source_h as f64,
+            cursor,
+        )
+    }
+    pub fn source_frame(&self, raw: &[u8], t: f64, content: &mut [u8], out: &mut RgbImage) {
+        // Every shutter pose uses these same CURRENT masked pixels. Blending old
+        // decoded video could reveal a secret when a mask begins or moves.
+        let masked = if self.masks.iter().any(|m| m.start <= t && t < m.end) {
+            let mut pixels = raw.to_vec();
+            studio_masks::apply(&mut pixels, self.source_w, self.source_h, &self.masks, t);
+            Some(pixels)
+        } else {
+            None
+        };
+        let raw = masked.as_deref().unwrap_or(raw);
+        let l = self.layout;
+        let view = self.view_at(t);
+        let previous = self.view_at((t - 1. / 60.).max(0.));
+        let travel = (view.x - previous.x).abs()
+            + (view.y - previous.y).abs()
+            + (view.w - previous.w).abs() / 2.
+            + (view.h - previous.h).abs() / 2.;
+        let poses = if self.motion.enabled && self.motion.intensity > 0. && travel > 2. {
+            vec![
+                (view, 6u16),
+                (self.view_at((t - self.motion.intensity / 120.).max(0.)), 3),
+                (self.view_at((t - self.motion.intensity / 60.).max(0.)), 1),
+            ]
+        } else {
+            vec![(view, 10)]
+        };
+        let mut accumulator = if poses.len() > 1 {
+            Some(vec![0u16; content.len()])
+        } else {
+            None
+        };
+        for (pose, weight) in poses {
+            let horizontal: Vec<_> = (0..l.content_w)
+                .map(|x| {
+                    let px = (pose.x + (x as f64 + 0.5) * pose.w / l.content_w as f64 - 0.5)
+                        .clamp(0., self.source_w as f64 - 1.);
+                    let a = px.floor() as usize;
+                    (
+                        a,
+                        (a + 1).min(self.source_w as usize - 1),
+                        (px - a as f64) as f32,
+                    )
+                })
+                .collect();
+            for y in 0..l.content_h as usize {
+                let py = (pose.y + (y as f64 + 0.5) * pose.h / l.content_h as f64 - 0.5)
+                    .clamp(0., self.source_h as f64 - 1.);
+                let ya = py.floor() as usize;
+                let yb = (ya + 1).min(self.source_h as usize - 1);
+                let fy = (py - ya as f64) as f32;
+                for (x, (xa, xb, fx)) in horizontal.iter().copied().enumerate() {
+                    let a = (ya * self.source_w as usize + xa) * 3;
+                    let b = (ya * self.source_w as usize + xb) * 3;
+                    let c = (yb * self.source_w as usize + xa) * 3;
+                    let d = (yb * self.source_w as usize + xb) * 3;
+                    let dest = (y * l.content_w as usize + x) * 3;
+                    for channel in 0..3 {
+                        let top =
+                            raw[a + channel] as f32 * (1. - fx) + raw[b + channel] as f32 * fx;
+                        let bottom =
+                            raw[c + channel] as f32 * (1. - fx) + raw[d + channel] as f32 * fx;
+                        let value = (top * (1. - fy) + bottom * fy).round() as u8;
+                        if let Some(sum) = accumulator.as_mut() {
+                            sum[dest + channel] += value as u16 * weight;
+                        } else {
+                            content[dest + channel] = value;
+                        }
+                    }
+                }
+            }
+        }
+        if let Some(sum) = accumulator {
+            for (dest, value) in content.iter_mut().zip(sum) {
+                *dest = ((value + 5) / 10) as u8;
+            }
+        }
+        let mapping = Mapping {
+            crop_x: view.x,
+            crop_y: view.y,
+            scale: l.scale * view.scale,
+            ..self.mapping
+        };
+        self.compose(content, t, out, mapping, view.scale);
+    }
+    fn compose(&self, raw: &[u8], t: f64, out: &mut RgbImage, m: Mapping, zoom: f64) {
+        out.as_mut().copy_from_slice(self.plate.as_raw());
+        if let Some(other)=&self.alternate {let f=(1.-(t*std::f64::consts::TAU/self.animation_period).cos())/2.;for ((p,a),b) in out.as_mut().iter_mut().zip(self.plate.as_raw()).zip(other.as_raw()){*p=(*a as f64*(1.-f)+*b as f64*f).round() as u8;}}
+        let l = self.layout;
+        let pose=super::polish::entrance(self.content_motion.as_deref(),t*0.6/self.content_motion_seconds);
         for (y, (a, b)) in self.spans.iter().copied().enumerate() {
+            if pose.0<1.||pose.1!=0.||pose.2!=0.||pose.3!=1. {
+                for x in a..b {let sx=((x as f64/l.content_w as f64-0.5-pose.1)/pose.3+0.5)*l.content_w as f64;let sy=((y as f64/l.content_h as f64-0.5-pose.2)/pose.3+0.5)*l.content_h as f64;
+                    if sx>=0.&&sx<l.content_w as f64&&sy>=0.&&sy<l.content_h as f64{let i=(sy as usize*l.content_w as usize+sx as usize)*3;blend(out,(l.x+x) as i32,(l.y+y as u32) as i32,[raw[i],raw[i+1],raw[i+2]],pose.0);}}
+                continue;
+            }
             let src = (y * l.content_w as usize + a as usize) * 3;
             let dst = ((y + l.y as usize) * l.width as usize + l.x as usize + a as usize) * 3;
             let n = (b - a) as usize * 3;
             out.as_mut()[dst..dst + n].copy_from_slice(&raw[src..src + n]);
         }
-        let m = self.mapping;
-        let c = &self.cursor;
-        if let Some(p) = studio_cursor::point_at(&self.path, t)
+        let config=studio_cursor::recorded_config(&self.cursor,&self.effect_toggles,t);
+        let c = &config;
+        if c.spotlight {if let Some(p)=studio_cursor::point_at(&self.path,t) {let(x,y)=m.point(p.x,p.y,&self.effects);let radius=(48.*l.scale*zoom).max(1.);for py in (y-radius).floor() as i32..=(y+radius).ceil() as i32 {for px in (x-radius).floor() as i32..=(x+radius).ceil() as i32 {if self.allowed(px,py)&&((px as f64-x).powi(2)+(py as f64-y).powi(2))<=radius*radius {blend(out,px,py,[255,235,160],0.22);}}}}}
+        let mut samples = Vec::new();
+        if let Some(p) = studio_cursor::point_for_frame(&self.path, t,&self.effects)
             .filter(|p| c.visible && (!c.hide_idle || t - p.moved_at < c.idle_seconds))
         {
+            let old = studio_cursor::point_at(&self.path, (t - 1. / 60.).max(0.));
+            let moving = old.is_some_and(|old| {
+                (p.x - old.x).hypot(p.y - old.y) * self.source_w as f64
+                    / self.effects.geometry.width as f64
+                    > 8.
+            });
+            if self.motion.enabled && self.motion.intensity > 0. && moving {
+                for (offset, alpha) in [
+                    (self.motion.intensity / 60., 0.1),
+                    (self.motion.intensity / 120., 0.25),
+                ] {
+                    if let Some(point) = studio_cursor::point_at(&self.path, (t - offset).max(0.)) {
+                        samples.push((point, alpha));
+                    }
+                }
+            }
+            samples.push((p, 1.));
+        }
+        for (p, alpha) in samples {
             let (x, y) = m.point(p.x, p.y, &self.effects);
-            let size = c.size * l.scale;
+            let size = c.size * l.scale * zoom;
             if m.inside(x, y) {
                 let polygon = [
                     (0., 0.),
@@ -686,7 +926,7 @@ impl Renderer {
                                     px,
                                     py,
                                     if edge { [23, 26, 32] } else { [255, 255, 255] },
-                                    1.,
+                                    alpha,
                                 );
                             }
                         }
@@ -705,7 +945,7 @@ impl Renderer {
                 if let (Some(ex), Some(ey)) = (e.data["x"].as_f64(), e.data["y"].as_f64()) {
                     let (x, y) = m.point(ex, ey, &self.effects);
                     let age = t - e.t;
-                    let r = c.click_size * l.scale * (0.3 + age / 0.45 * 0.7);
+                    let r = c.click_size * l.scale * zoom * (0.3 + age / 0.45 * 0.7);
                     let rgb = if e.data["button"] == "right" {
                         [255, 182, 96]
                     } else {
@@ -735,12 +975,12 @@ impl Renderer {
                     .unwrap_or_default();
                 labels.push(e.data["text"].as_str().unwrap_or(""));
                 let label = labels.join(" + ");
-                let font = (3. * l.scale).round().max(1.) as u32;
+                let font = (3. * l.scale * zoom).round().max(1.) as u32;
                 let bw = (label.chars().count() as u32 * 8 * font + 32)
                     .min(l.content_w.saturating_sub(16));
                 let bx = l.x + (l.content_w - bw) / 2;
-                let by = (l.y + l.content_h).saturating_sub((64. * l.scale) as u32);
-                let bh = (42. * l.scale).round().max(12.) as u32;
+                let by = (l.y + l.content_h).saturating_sub((64. * l.scale * zoom) as u32);
+                let bh = (42. * l.scale * zoom).round().max(12.) as u32;
                 for y in by..by + bh {
                     for x in bx..bx + bw {
                         if self.allowed(x as i32, y as i32) {
@@ -761,6 +1001,16 @@ impl Renderer {
         for (x, y, c) in &self.border {
             out.put_pixel(*x, *y, Rgb(*c));
         }
+        super::video_annotations::paint(&self.annotations,t,out);
+        for(x,y,c,alpha) in &self.watermark {let p=out.get_pixel_mut(*x,*y);for k in 0..3{p[k]=(p[k] as f64*(1.-alpha)+c[k] as f64*alpha).round() as u8;}}
+        if let Some(caption)=self.captions.iter().find(|c|c.start<=t&&t<c.end){
+            let mut cache=self.caption_cache.lock().unwrap();
+            if cache.as_ref().is_none_or(|(id,_)|id!=&caption.id){
+                let value=serde_json::json!({"dataUrl":caption.raster,"width":1280,"height":170,"opacity":1.0,"size":200,"position":"bottom-left","caption":true});
+                let pixels=super::look_watermark::pixels(Some(&value),l.width,l.height).unwrap_or_default();*cache=Some((caption.id.clone(),pixels));
+            }
+            if let Some((_,pixels))=cache.as_ref(){for (x,y,c,a) in pixels{blend(out,*x as i32,*y as i32,*c,*a);}}
+        }
     }
 }
 pub fn source_time(segments: &[KeepSegment], t: f64) -> f64 {
@@ -772,7 +1022,10 @@ pub fn source_time(segments: &[KeepSegment], t: f64) -> f64 {
         }
         elapsed += duration;
     }
-    segments.last().map(|s| s.end).unwrap_or(0.)
+    segments
+        .last()
+        .map(|s| (s.end - 1e-7).max(s.start))
+        .unwrap_or(0.)
 }
 fn command(binary: &Path) -> Command {
     let mut cmd = Command::new(binary);
@@ -901,7 +1154,7 @@ pub fn detect_encoder(binary: &Path, cancel: &AtomicBool) -> VideoEncoder {
     }
     VideoEncoder::Libx264
 }
-fn audio_graph(segments: &[KeepSegment], fade_in: f64, fade_out: f64) -> String {
+fn audio_graph(segments: &[KeepSegment], fade_in: f64, fade_out: f64,cleanup:&super::polish::AudioCleanup,events:&Events) -> String {
     let mut graph = String::new();
     for (i, s) in segments.iter().enumerate() {
         graph.push_str(&format!(
@@ -916,6 +1169,8 @@ fn audio_graph(segments: &[KeepSegment], fade_in: f64, fade_out: f64) -> String 
         "concat=n={}:v=0:a=1,aresample=async=1:first_pts=0",
         segments.len()
     ));
+    if cleanup.denoise {graph.push_str(",afftdn=nf=-25");}
+    if cleanup.level {graph.push_str(",dynaudnorm=f=150:g=15:p=0.9:m=5");}
     if fade_in > 0. {
         graph.push_str(&format!(",afade=t=in:st=0:d={fade_in}:curve=qsin"));
     }
@@ -925,7 +1180,10 @@ fn audio_graph(segments: &[KeepSegment], fade_in: f64, fade_out: f64) -> String 
             (trim::output_duration(segments) - fade_out).max(0.)
         ));
     }
-    graph.push_str("[outa]");
+    if cleanup.click_sounds {
+        let mut times=Vec::new();let mut elapsed=0.;for s in segments{for e in &events.events{if e.data["kind"]=="click"&&e.data["down"]!=false&&e.t>=s.start&&e.t<s.end&&times.len()<512{times.push(elapsed+(e.t-s.start)/s.speed);}}elapsed+=(s.end-s.start)/s.speed;}
+        if times.is_empty(){graph.push_str("[outa]");}else{graph.push_str("[basea];");let pulses=times.iter().map(|t|format!("between(t,{t:0.6},{:0.6})",t+0.025)).collect::<Vec<_>>().join("+");graph.push_str(&format!("aevalsrc=exprs='0.04*sin(2*PI*1600*t)*({pulses})':s=48000:d={elapsed},aformat=channel_layouts=stereo[clicka];[basea][clicka]amix=inputs=2:normalize=0[outa]"));}
+    }else {graph.push_str("[outa]");}
     graph
 }
 pub struct ExportSpec<'a> {
@@ -965,42 +1223,71 @@ fn encode(
     encoder: VideoEncoder,
 ) -> Result<(), String> {
     let segments = spec.project.segments(spec.duration)?;
-    let renderer = Renderer::new(spec.project, spec.events, spec.width, spec.height)?;
+    let camera_only=spec.cam.is_some()&&spec.project.cam.as_ref().is_some_and(|c|c["layout"]=="camera-only"&&c["visible"]==true);
+    let mut camera_project=spec.project.clone();
+    if camera_only{let output=layout(spec.width,spec.height,spec.project.crop,&spec.project.look)?;camera_project.crop=None;camera_project.look.output_size=Some(OutputSize{width:output.width,height:output.height});camera_project.zoom_segments.clear();camera_project.masks.clear();camera_project.cursor.visible=false;camera_project.cursor.clicks=false;camera_project.cursor.keystrokes=false;}
+    let renderer = Renderer::new(&camera_project, spec.events, spec.width, spec.height)?;
+    if spec.project.captions_enabled&&spec.project.captions.iter().any(|c|c.raster.is_none()){return Err("Prepare caption text before exporting.".into());}
     let l = renderer.layout;
     let total = trim::output_duration(&segments);
     let fps = spec.fps.clamp(1., 120.);
+    let camera_layout=spec.project.cam.as_ref().and_then(|c|c["layout"].as_str()).filter(|s|*s=="side-by-side").filter(|_|spec.cam.is_some());
     let mut args = trim::build_trim_args(
-        spec.source,
+        if camera_only{spec.cam.unwrap()}else{spec.source},
         "-",
         &segments,
         false,
         spec.project.fade_in,
         spec.project.fade_out,
-        spec.cam,
-        spec.cam_overlay.clone(),
+        if camera_layout.is_some()||camera_only{None}else{spec.cam},
+        if camera_layout.is_some()||camera_only{None}else{spec.cam_overlay.clone()},
     );
+    if !trim::is_video_path(spec.source){if let Some(i)=args.iter().position(|s|s=="-i"){args.splice(i..i,["-loop".into(),"1".into()]);}}
     let tail = args.iter().position(|s| s == "-c:v").unwrap();
     args.truncate(tail);
     let progress_idx = args.iter().position(|s| s == "-progress").unwrap();
     args.drain(progress_idx..progress_idx + 2);
     let graph_idx = args.iter().position(|s| s == "-filter_complex").unwrap() + 1;
-    args[graph_idx] = format!(
-        "{};[edited]crop={}:{}:{}:{}:exact=1,scale={}:{},fps={},format=rgb24[outv]",
-        args[graph_idx].replace("[outv]", "[edited]"),
-        l.crop.w,
-        l.crop.h,
-        l.crop.x,
-        l.crop.y,
-        l.content_w,
-        l.content_h,
-        fps
-    );
+    // Desktop capture is variable-rate; its audio can end a few milliseconds
+    // after the final video frame. Pad each source span BEFORE trim/reorder so
+    // every requested span has its exact duration, including a moved tail clip.
+    args[graph_idx]=args[graph_idx].replace("[0:v]trim=","[0:v]tpad=stop_mode=clone:stop_duration=1,trim=");
+    let source_mode = camera_only || !spec.project.zoom_segments.is_empty()
+        || !spec.project.masks.is_empty()
+        || spec
+            .project
+            .motion_blur
+            .as_ref()
+            .is_some_and(|m| m.enabled && m.intensity > 0.);
+    args[graph_idx] = if camera_only {
+        format!("{};[edited]scale={}:{}:force_original_aspect_ratio=increase,crop={}:{},fps={},format=rgb24[outv]",args[graph_idx].replace("[outv]","[edited]"),spec.width,spec.height,spec.width,spec.height,fps)
+    }else if source_mode {
+        format!(
+            "{};[edited]fps={},format=rgb24[outv]",
+            args[graph_idx].replace("[outv]", "[edited]"),
+            fps
+        )
+    } else {
+        format!(
+            "{};[edited]crop={}:{}:{}:{}:exact=1,scale={}:{},fps={},format=rgb24[outv]",
+            args[graph_idx].replace("[outv]", "[edited]"),
+            l.crop.w,
+            l.crop.h,
+            l.crop.x,
+            l.crop.y,
+            l.content_w,
+            l.content_h,
+            fps
+        )
+    };
     args.extend([
         "-filter_complex_threads".into(),
         "2".into(),
         "-threads".into(),
         "2".into(),
         "-an".into(),
+        "-frames:v".into(),
+        (total*fps).ceil().max(1.).to_string(),
         "-f".into(),
         "rawvideo".into(),
         "-pix_fmt".into(),
@@ -1036,21 +1323,20 @@ fn encode(
     .iter()
     .map(|s| s.to_string())
     .collect();
-    if spec.audio {
+    let has_audio=spec.audio||spec.project.audio_cleanup.click_sounds;
+    let mut graphs=Vec::new();
+    if has_audio {
+        if !spec.audio {args.extend(["-f".into(),"lavfi".into()]);}
         args.extend([
             "-i".into(),
-            spec.source.into(),
-            "-filter_complex".into(),
-            audio_graph(&segments, spec.project.fade_in, spec.project.fade_out),
-            "-map".into(),
-            "[outa]".into(),
-            "-c:a".into(),
-            "aac".into(),
-            "-b:a".into(),
-            "192k".into(),
+            if spec.audio {spec.source.into()}else{"anullsrc=r=48000:cl=stereo".into()},
         ]);
+        graphs.push(audio_graph(&segments,spec.project.fade_in,spec.project.fade_out,&spec.project.audio_cleanup,spec.events));
     }
-    args.extend(["-map".into(), "0:v".into()]);
+    if let Some(layout)=camera_layout{args.extend(["-i".into(),spec.cam.unwrap().into()]);graphs.push(super::polish::camera_graph(if has_audio{2}else{1},l.width,l.height,&segments,layout));}
+    if !graphs.is_empty(){args.extend(["-filter_complex_threads".into(),"2".into(),"-filter_complex".into(),graphs.join(";")]);}
+    if has_audio{args.extend(["-map".into(),"[outa]".into(),"-c:a".into(),"aac".into(),"-b:a".into(),"192k".into()]);}
+    args.extend(["-map".into(),if camera_layout.is_some(){"[outvideo]".into()}else{"0:v".into()}]);
     args.extend(ffmpeg::encoder_args(encoder, "high"));
     args.extend([
         "-t".into(),
@@ -1070,8 +1356,17 @@ fn encode(
     let encode_errors = stderr(&mut encode);
     let encode = children.push(encode);
     children.watch(cancel.clone());
-    let mut input = vec![0u8; l.content_w as usize * l.content_h as usize * 3];
+    let mut input = vec![
+        0u8;
+        if source_mode {
+            spec.width as usize * spec.height as usize * 3
+        } else {
+            l.content_w as usize * l.content_h as usize * 3
+        }
+    ];
+    let mut content = vec![0u8; l.content_w as usize * l.content_h as usize * 3];
     let mut frame = RgbImage::new(l.width, l.height);
+    let still=if !trim::is_video_path(spec.source){Some(image::imageops::resize(&image::open(spec.source).map_err(|e|e.to_string())?.to_rgba8(),l.content_w,l.content_h,image::imageops::FilterType::Triangle))}else{None};
     let mut n = 0u64;
     loop {
         if cancel.load(Ordering::Relaxed) {
@@ -1082,10 +1377,22 @@ fn encode(
             Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
             Err(e) => return Err(e.to_string()),
         }
-        renderer.frame(&input, source_time(&segments, n as f64 / fps), &mut frame);
-        output
-            .write_all(frame.as_raw())
-            .map_err(|e| format!("Encoder stopped: {e}"))?;
+        let time = source_time(&segments, n as f64 / fps);
+        if let Some(image)=&still{
+            frame=renderer.still_frame_at(image,time);
+        }else if source_mode {
+            renderer.source_frame(&input, time, &mut content, &mut frame);
+        } else {
+            renderer.frame(&input, time, &mut frame);
+        }
+        if let Err(error)=output.write_all(frame.as_raw()) {
+            drop(output);
+            let _=decode.lock().unwrap().kill();
+            let _=wait(&decode);let _=wait(&encode);
+            let detail=encode_errors.join().unwrap_or_default();
+            let _=decode_errors.join();
+            return Err(format!("Video export failed: {}",if detail.trim().is_empty(){error.to_string()}else{detail.trim().to_string()}));
+        }
         n += 1;
         if n % 15 == 0 {
             progress((n as f64 / fps / total * 100.).min(99.));
@@ -1100,7 +1407,8 @@ fn encode(
         return Err("Export cancelled".into());
     }
     if !decode_ok || !encode_ok || n == 0 || n as f64 / fps < total - 2. / fps {
-        return Err(format!("Export failed: {de} {ee}"));
+        let detail=format!("{de} {ee}");
+        return Err(if detail.trim().is_empty(){"The video ended before the selected timeline was complete. Shorten the final clip and try again.".into()}else{format!("Video export failed: {}",detail.trim())});
     }
     progress(100.);
     Ok(())
@@ -1109,6 +1417,36 @@ fn encode(
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn animated_gradient_retains_transparency_and_entrances_settle(){
+        let(mut p,e)=background_fixture();p.look.enabled=true;p.look.background=serde_json::json!({"type":"gradient","gradientId":"dusk","kind":"radial","animationSeconds":12});
+        let r=Renderer::new(&p,&e,320,200).unwrap();let l=r.layout;let clear=image::RgbaImage::from_pixel(l.content_w,l.content_h,image::Rgba([255,0,0,0]));
+        let a=r.still_frame_at(&clear,0.);let b=r.still_frame_at(&clear,6.);assert_ne!(a.as_raw(),b.as_raw());
+        let center=(l.x+l.content_w/2,l.y+l.content_h/2);assert_ne!(b.get_pixel(center.0,center.1).0,[0,0,0]);
+        p.content_motion=Some("fade".into());p.content_motion_seconds=Some(0.2);let r=Renderer::new(&p,&e,320,200).unwrap();let red=image::RgbaImage::from_pixel(l.content_w,l.content_h,image::Rgba([255,0,0,255]));let visible=r.still_frame_at(&red,0.3);assert_eq!(visible.get_pixel(center.0,center.1).0,[255,0,0]);
+    }
+    #[test]
+    fn still_alpha_uses_shared_background_and_preserves_framing() {
+        let (mut project,events)=background_fixture();
+        project.look.enabled=true;project.look.background=serde_json::json!({"type":"solid","color":"#204060"});
+        let renderer=Renderer::new(&project,&events,320,200).unwrap();let l=renderer.layout;
+        let transparent=image::RgbaImage::from_pixel(320,200,image::Rgba([255,0,0,0]));
+        let frame=renderer.still_frame(&transparent);
+        assert_eq!(frame.get_pixel(l.x+l.content_w/2,l.y+l.content_h/2).0,[32,64,96]);
+        let opaque=image::RgbaImage::from_pixel(320,200,image::Rgba([255,0,0,255]));
+        let frame=renderer.still_frame(&opaque);
+        assert_eq!(frame.get_pixel(l.x+l.content_w/2,l.y+l.content_h/2).0,[255,0,0]);
+        assert_eq!(frame.get_pixel(0,0).0,[32,64,96]);
+    }
+    #[test]
+    fn named_output_sizes_preserve_card_geometry_and_exact_even_dimensions(){
+        let (mut p, _)=background_fixture();
+        for(width,height) in [(1200,630),(1080,1350),(1290,2796)]{
+            p.look.output_size=Some(OutputSize{width,height});let l=layout(320,200,None,&p.look).unwrap();
+            assert_eq!((l.width,l.height),(width,height));assert!(l.x+l.content_w<=l.width);assert!(l.y+l.content_h<=l.height);
+        }
+        p.look.output_size=Some(OutputSize{width:0,height:100});assert!(layout(320,200,None,&p.look).is_err());
+    }
     fn background_fixture() -> (Project, Events) {
         let mut project: Project =
             serde_json::from_value(super::super::studio::initial_project(2.)).unwrap();
@@ -1387,4 +1725,193 @@ mod tests {
             .frame(&raw, 0.15, &mut frame);
         assert_eq!(frame.get_pixel(171, 132).0, [113, 143, 183]);
     }
+
+    #[test]
+    fn changing_smoothing_changes_the_rendered_cursor_during_movement() {
+        let (mut project, mut events) = background_fixture();
+        project.look.enabled = false;
+        project.cursor.visible = true;
+        project.cursor.hide_idle = false;
+        project.cursor.style = "dot".into();
+        events.events = serde_json::from_value(serde_json::json!([
+            {"t":0.,"kind":"cursor","x":50.,"y":50.},
+            {"t":0.1,"kind":"cursor","x":250.,"y":150.}
+        ]))
+        .unwrap();
+        project.cursor.smoothing = 0.;
+        let renderer = Renderer::new(&project, &events, 320, 200).unwrap();
+        let raw: Vec<u8> = [180, 80, 40]
+            .into_iter()
+            .cycle()
+            .take(320 * 200 * 3)
+            .collect();
+        let mut direct = RgbImage::new(320, 200);
+        renderer.frame(&raw, 0.1, &mut direct);
+        project.cursor.smoothing = 1.;
+        let mut smooth = RgbImage::new(320, 200);
+        Renderer::new(&project, &events, 320, 200)
+            .unwrap()
+            .frame(&raw, 0.1, &mut smooth);
+        assert_eq!(direct.get_pixel(250, 150).0, [255, 255, 255]);
+        assert_eq!(smooth.get_pixel(250, 150).0, [180, 80, 40]);
+        assert_eq!(smooth.get_pixel(129, 89).0, [255, 255, 255]);
+    }
+    #[test]
+    fn zoom_samples_source_pixels_and_keeps_the_card_size_fixed() {
+        let (mut project, events) = background_fixture();
+        project.look.enabled = false;
+        project.zoom_segments=serde_json::from_value(serde_json::json!([{"id":"zoom","start":0.,"end":2.,"scale":2.,"mode":"fixed","focus":{"x":0.5,"y":0.5},"ease":"gentle","easeIn":0.4,"easeOut":0.4,"origin":"manual","edited":true}])).unwrap();
+        let renderer = Renderer::new(&project, &events, 320, 200).unwrap();
+        let raw: Vec<u8> = (0..200)
+            .flat_map(|y| (0..320).flat_map(move |x| [x as u8, y as u8, 0]))
+            .collect();
+        let mut content = vec![0u8; 320 * 200 * 3];
+        let mut frame = RgbImage::new(320, 200);
+        renderer.source_frame(&raw, 1., &mut content, &mut frame);
+        assert_eq!(frame.dimensions(), (320, 200));
+        assert_eq!(frame.get_pixel(0, 0).0, [80, 50, 0]);
+        assert_eq!(frame.get_pixel(160, 100).0, [160, 100, 0]);
+    }
+    #[test]
+    fn source_mask_remains_attached_before_zoom_resampling() {
+        let (mut project, events) = background_fixture();
+        project.look.enabled = false;
+        project.zoom_segments=serde_json::from_value(serde_json::json!([{"id":"zoom","start":0.,"end":2.,"scale":2.,"mode":"fixed","focus":{"x":0.5,"y":0.5},"ease":"gentle","easeIn":0.4,"easeOut":0.4,"origin":"manual","edited":true}])).unwrap();
+        project.masks=serde_json::from_value(serde_json::json!([{"id":"mask","start":0.,"end":2.,"type":"solid","keyframes":[{"t":0.,"x":150.,"y":90.,"w":20.,"h":20.}],"strength":28.,"color":"#123456"}])).unwrap();
+        let renderer = Renderer::new(&project, &events, 320, 200).unwrap();
+        let raw = vec![255u8; 320 * 200 * 3];
+        let mut content = vec![0; raw.len()];
+        let mut frame = RgbImage::new(320, 200);
+        renderer.source_frame(&raw, 1., &mut content, &mut frame);
+        assert_eq!(frame.get_pixel(160, 100).0, [18, 52, 86]);
+        assert_eq!(frame.get_pixel(100, 100).0, [255, 255, 255]);
+        assert!(
+            source_time(
+                &[KeepSegment {
+                    start: 0.,
+                    end: 2.,
+                    speed: 1.
+                }],
+                2.
+            ) < 2.
+        );
+    }
+    #[test]
+    fn motion_shutter_cannot_reveal_unmasked_pixels_when_a_mask_starts() {
+        let (mut project, events) = background_fixture();
+        project.look.enabled = false;
+        project.zoom_segments=serde_json::from_value(serde_json::json!([{"id":"zoom","start":0.,"end":2.,"scale":2.,"mode":"fixed","focus":{"x":0.5,"y":0.5},"ease":"gentle","easeIn":0.4,"easeOut":0.4,"origin":"manual","edited":true}])).unwrap();
+        project.masks=serde_json::from_value(serde_json::json!([{"id":"mask","start":0.15,"end":2.,"type":"solid","keyframes":[{"t":0.15,"x":135.,"y":80.,"w":50.,"h":40.}],"strength":28.,"color":"#123456"}])).unwrap();
+        let raw = vec![255u8; 320 * 200 * 3];
+        let mut content = vec![0; raw.len()];
+        let mut plain = RgbImage::new(320, 200);
+        Renderer::new(&project, &events, 320, 200)
+            .unwrap()
+            .source_frame(&raw, 0.15, &mut content, &mut plain);
+        project.motion_blur = Some(Motion {
+            enabled: true,
+            intensity: 1.,
+        });
+        let mut blurred = RgbImage::new(320, 200);
+        Renderer::new(&project, &events, 320, 200)
+            .unwrap()
+            .source_frame(&raw, 0.15, &mut content, &mut blurred);
+        assert_eq!(blurred.get_pixel(160, 100).0, [18, 52, 86]);
+        assert_ne!(blurred.as_raw(), plain.as_raw());
+    }
+
+    #[test]
+    fn annotation_rasters_reach_composed_pixels_only_during_their_source_span() {
+        use base64::Engine;
+        let (mut project,events)=background_fixture();
+        let mut ink=image::RgbaImage::new(320,200);
+        for y in 70..130 {for x in 120..200 {ink.put_pixel(x,y,image::Rgba([255,0,0,255]));}}
+        let mut bytes=std::io::Cursor::new(vec![]);ink.write_to(&mut bytes,image::ImageFormat::Png).unwrap();
+        project.annotations=serde_json::from_value(serde_json::json!([{"id":"mark","kind":"rectangle","start":0.5,"end":1.5,"points":[{"x":0.375,"y":0.35},{"x":0.625,"y":0.65}],"color":"#ff0000","width":0.006,"size":0.05,"text":"","raster":format!("data:image/png;base64,{}",base64::engine::general_purpose::STANDARD.encode(bytes.into_inner()))}])).unwrap();
+        let renderer=Renderer::new(&project,&events,320,200).unwrap();let l=renderer.layout;
+        let raw:Vec<u8>=[180,80,40].into_iter().cycle().take(l.content_w as usize*l.content_h as usize*3).collect();
+        for(t,red)in [(0.4,false),(0.5,true),(1.4,true),(1.5,false)] {
+            let mut out=RgbImage::new(l.width,l.height);renderer.frame(&raw,t,&mut out);
+            assert_eq!(out.get_pixel(l.width/2,l.height/2).0==[255,0,0],red);
+        }
+    }
+    #[test]
+    #[ignore = "requires bundled FFmpeg; verifies cursor-follow zoom in encoded video"]
+    fn cursor_follow_zoom_mp4_roundtrip() {
+        use std::os::windows::process::CommandExt;
+        let binary=std::path::PathBuf::from(std::env::var("GLINT_TEST_FFMPEG").unwrap());
+        let root=std::path::PathBuf::from(std::env::var("GLINT_VIDEO_FIXTURES").unwrap());std::fs::create_dir_all(&root).unwrap();
+        let gradient=root.join("follow-gradient.png");
+        image::RgbImage::from_fn(320,200,|x,y|image::Rgb([(x*255/319) as u8,(y*255/199) as u8,30])).save(&gradient).unwrap();
+        let source=root.join("follow-source.mp4");
+        let result=Command::new(&binary).args(["-y","-v","error","-loop","1","-i"]).arg(&gradient)
+            .args(["-t","2","-r","15","-c:v","libx264","-pix_fmt","yuv420p"]).arg(&source).creation_flags(0x08000000).output().unwrap();assert!(result.status.success());
+        let (mut project,mut events)=background_fixture();project.look.enabled=false;project.cursor.smoothing=0.;
+        events.events=serde_json::from_value(serde_json::json!([{"t":0.,"kind":"cursor","x":60.,"y":100.},{"t":2.,"kind":"cursor","x":260.,"y":100.}])).unwrap();
+        for mode in ["fixed","follow-cursor"] {
+            project.zoom_segments=serde_json::from_value(serde_json::json!([{"id":"follow-check","start":0.,"end":2.,"scale":2.,"mode":mode,"focus":{"x":0.5,"y":0.5},"ease":"gentle","easeIn":0.2,"easeOut":0.2,"origin":"marker","edited":false}])).unwrap();
+            let output=root.join(format!("zoom-{mode}.mp4"));
+            let spec=ExportSpec{binary:&binary,source:source.to_str().unwrap(),output:&output,project:&project,events:&events,width:320,height:200,fps:15.,duration:2.,audio:false,cam:None,cam_overlay:None};
+            if mode=="follow-cursor" {println!("Cursor-follow encoder: {:?}",export(&spec,Arc::new(AtomicBool::new(false)),|_|{}).unwrap());}
+            else {encode(&spec,Arc::new(AtomicBool::new(false)),&|_|{},VideoEncoder::Libx264).unwrap();}
+            let mut values=Vec::new();
+            for t in ["0.5","1.5"] {
+                let decoded=Command::new(&binary).args(["-v","error","-ss",t,"-i"]).arg(&output).args(["-frames:v","1","-f","image2pipe","-vcodec","png","-"]).creation_flags(0x08000000).output().unwrap();assert!(decoded.status.success());
+                let frame=image::load_from_memory(&decoded.stdout).unwrap().to_rgb8();assert_eq!(frame.dimensions(),(320,200));
+                values.push(frame.get_pixel(160,100).0[0] as i32);
+            }
+            if mode=="fixed" {assert!((values[1]-values[0]).abs()<8,"fixed focus moved: {values:?}");}
+            else {assert!(values[1]-values[0]>45,"encoded view did not follow cursor: {values:?}");}
+        }
+    }
+    #[test]
+    #[ignore = "requires bundled FFmpeg; performs a real MP4 encode and decode"]
+    fn annotation_mp4_roundtrip() {
+        use base64::Engine;
+        use std::os::windows::process::CommandExt;
+        let binary=std::path::PathBuf::from(std::env::var("GLINT_TEST_FFMPEG").unwrap());
+        let root=std::path::PathBuf::from(std::env::var("GLINT_VIDEO_FIXTURES").unwrap());std::fs::create_dir_all(&root).unwrap();
+        let source=root.join("annotation-source.mp4");let output=root.join("annotation-export.mp4");
+        let status=Command::new(&binary).args(["-y","-f","lavfi","-i","color=c=blue:s=320x200:r=10:d=2","-c:v","libx264","-pix_fmt","yuv420p"]).arg(&source).creation_flags(0x08000000).output().unwrap();assert!(status.status.success());
+        let (mut project,events)=background_fixture();
+        let mut ink=image::RgbaImage::new(320,200);for y in 70..130 {for x in 120..200 {ink.put_pixel(x,y,image::Rgba([255,0,0,255]));}}
+        let mut bytes=std::io::Cursor::new(vec![]);ink.write_to(&mut bytes,image::ImageFormat::Png).unwrap();
+        project.annotations=serde_json::from_value(serde_json::json!([{"id":"mp4-mark","kind":"rectangle","start":0.5,"end":1.5,"points":[{"x":0.375,"y":0.35},{"x":0.625,"y":0.65}],"color":"#ff0000","width":0.006,"size":0.05,"text":"","raster":format!("data:image/png;base64,{}",base64::engine::general_purpose::STANDARD.encode(bytes.into_inner()))}])).unwrap();
+        let spec=ExportSpec{binary:&binary,source:source.to_str().unwrap(),output:&output,project:&project,events:&events,width:320,height:200,fps:10.,duration:2.,audio:false,cam:None,cam_overlay:None};
+        encode(&spec,Arc::new(AtomicBool::new(false)),&|_|{},VideoEncoder::Libx264).unwrap();
+        for(t,red)in [("0.2",false),("1.0",true),("1.8",false)] {
+            let result=Command::new(&binary).args(["-v","error","-ss",t,"-i"]).arg(&output).args(["-frames:v","1","-f","image2pipe","-vcodec","png","-"]).creation_flags(0x08000000).output().unwrap();assert!(result.status.success());let frame=image::load_from_memory(&result.stdout).unwrap().to_rgb8();let p=frame.get_pixel(frame.width()/2,frame.height()/2);assert_eq!(p[0]>200&&p[2]<80,red,"frame at {t}: {:?}",p.0);
+        }
+    }
+    #[test]
+    #[ignore = "requires bundled FFmpeg; validates real audio and polish export"]
+    fn recording_audio_and_polish_roundtrip() {
+        use std::os::windows::process::CommandExt;
+        let binary=std::path::PathBuf::from(std::env::var("GLINT_TEST_FFMPEG").unwrap());
+        let root=std::path::PathBuf::from(std::env::var("GLINT_VIDEO_FIXTURES").unwrap());std::fs::create_dir_all(&root).unwrap();
+        let source=root.join("polish-audio-source.mp4");
+        let status=Command::new(&binary).args(["-y","-v","error","-f","lavfi","-i","testsrc2=s=320x200:r=15:d=1.8","-f","lavfi","-i","sine=frequency=440:duration=2.037","-c:v","libx264","-pix_fmt","yuv420p","-c:a","aac"]).arg(&source).creation_flags(0x08000000).output().unwrap();assert!(status.status.success());
+        let (mut project,mut events)=background_fixture();
+        project.clips[0].end=2.037;
+        project.audio_cleanup=super::super::polish::AudioCleanup{denoise:true,level:true,click_sounds:true};
+        events.events.push(serde_json::from_value(serde_json::json!({"t":0.7,"kind":"click","x":100.,"y":100.,"button":"left"})).unwrap());
+        let output=root.join("polish-audio-export.mp4");
+        let spec=ExportSpec{binary:&binary,source:source.to_str().unwrap(),output:&output,project:&project,events:&events,width:320,height:200,fps:15.,duration:2.037,audio:true,cam:None,cam_overlay:None};
+        encode(&spec,Arc::new(AtomicBool::new(false)),&|_|{},VideoEncoder::Libx264).unwrap();
+        let probe=Command::new(binary.with_file_name("ffprobe.exe")).args(["-v","error","-select_streams","v:0","-show_entries","stream=nb_frames","-of","json"]).arg(&output).creation_flags(0x08000000).output().unwrap();assert!(probe.status.success());let probe:serde_json::Value=serde_json::from_slice(&probe.stdout).unwrap();assert_eq!(probe["streams"][0]["nb_frames"],"31");
+        let audio=Command::new(&binary).args(["-v","error","-i"]).arg(&output).args(["-map","0:a","-f","f32le","-ar","16000","-ac","1","-"]).creation_flags(0x08000000).output().unwrap();assert!(audio.status.success());assert!(audio.stdout.len()>16000);assert!(audio.stdout.chunks_exact(4).any(|b|f32::from_le_bytes(b.try_into().unwrap()).abs()>0.001));
+        if let Ok(folder)=std::env::var("GLINT_REPRO_STUDIO") {
+            let folder=std::path::PathBuf::from(folder);let source=folder.join("video.mp4");
+            let mut project:Project=serde_json::from_slice(&std::fs::read(folder.join("project.json")).unwrap()).unwrap();
+            project.clips=serde_json::from_value(serde_json::json!([{"id":1,"start":0.,"end":38.229,"kept":true,"speed":1.,"order":0}])).unwrap();
+            let events:Events=serde_json::from_slice(&std::fs::read(folder.join("events.json")).unwrap()).unwrap();
+            let output=root.join("reported-recording-export.mp4");
+            let spec=ExportSpec{binary:&binary,source:source.to_str().unwrap(),output:&output,project:&project,events:&events,width:1920,height:1080,fps:60.,duration:38.229,audio:true,cam:None,cam_overlay:None};
+            let chosen=detect_encoder(&binary,&AtomicBool::new(false));
+            match encode(&spec,Arc::new(AtomicBool::new(false)),&|_|{},chosen) {
+                Ok(())=>{},Err(error)=>{eprintln!("Reported recording on {chosen:?}: {error}");if chosen==VideoEncoder::Libx264{panic!("{error}");}encode(&spec,Arc::new(AtomicBool::new(false)),&|_|{},VideoEncoder::Libx264).unwrap();}
+            }
+        }
+    }
+
 }

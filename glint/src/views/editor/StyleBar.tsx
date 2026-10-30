@@ -1,4 +1,7 @@
-import { ArrowLeftRight, Pipette } from "lucide-react";
+import { CircleSlash, ArrowLeftRight, Pipette,RectangleHorizontal,Circle,ChevronUp,ChevronDown } from "lucide-react";
+import {Select,NumberInput} from '../../components/ui';
+import {textPreset,snapArrowBend} from '../../editor/annotationStyles';
+import type {Style} from '../../editor/model';
 import { useEditorStore } from "../../editor/useEditorStore";
 import { PALETTE as COLORS } from "../../editor/palette";
 
@@ -15,7 +18,7 @@ const ERASER_SIZES: { label: string; value: number }[] = [
   { label: "L", value: 30 },
 ];
 
-export function StyleBar() {
+export function StyleBar({onPrivacy}:{onPrivacy?:()=>void}={}) {
   const style = useEditorStore((s) => s.style);
   const setStyle = useEditorStore((s) => s.setStyle);
   const selectedId = useEditorStore((s) => s.selectedId);
@@ -64,6 +67,8 @@ export function StyleBar() {
   const isStroke = isShape || effType === "line" || effType === "arrow";
   const isArrow = effType === "arrow";
   const isText = effType === "text";
+  const isBlur = effType === 'blur';
+  const isStep = effType === 'step';
   const isRedact = effType === "redact";
   const isSpotlight = effType === "spotlight";
 
@@ -77,6 +82,7 @@ export function StyleBar() {
   if (tool === "select" && !selectedAnno) {
     return <div className="editor-stylebar" role="toolbar" aria-label="Style" />;
   }
+  if(effType==='image')return <div className="editor-stylebar" role="toolbar" aria-label="Style"><span className="editor-status">Image layer · drag or resize on canvas</span></div>;
 
   // Eraser has no color/stroke — only a footprint size. Show just that so the
   // S/M/L controls unambiguously mean the eraser radius (not pen thickness).
@@ -101,8 +107,10 @@ export function StyleBar() {
     );
   }
 
+  if (isBlur) return <div className="editor-stylebar" role="toolbar" aria-label="Blur controls"><label className="editor-effect-strength"><span>Blur</span><input type="range" min={2} max={32} value={eff.blurRadius??12} aria-label="Blur strength" onPointerDown={()=>{if(selectedAnno)useEditorStore.getState().pushHistory();}} onChange={e=>{const blurRadius=Number(e.target.value);setStyle({blurRadius});patchSelected({blurRadius},false);}}/><output>{eff.blurRadius??12} px</output></label></div>;
   return (
     <div className="editor-stylebar" role="toolbar" aria-label="Style">
+      {isRedact&&onPrivacy&&<button className="editor-toggle" onClick={onPrivacy}>Find sensitive text</button>}
       {/* A spotlight has no color or stroke — it's a dimmed cut-out. Show only its own
           controls (shape + dim, below); hide the color swatches and S/M/L widths that
           don't apply to it. */}
@@ -147,7 +155,7 @@ export function StyleBar() {
         )}
       </div>
       )}
-      {!isSpotlight && (
+      {!isSpotlight && !isStep && (
       <div className="editor-widths">
         {WIDTHS.map((w) => (
           <button
@@ -170,7 +178,7 @@ export function StyleBar() {
             aria-label="No fill"
             onClick={() => applyFill(null)}
           >
-            ⦸
+            <CircleSlash size={14} strokeWidth={1.5} />
           </button>
           <label className="editor-swatch editor-swatch--custom" title="Fill color" style={{ background: eff.fill ?? undefined }}>
             <input
@@ -205,7 +213,7 @@ export function StyleBar() {
           onClick={() => applyDashed(!eff.dashed)}
         >
           <svg width="16" height="16" viewBox="0 0 16 16" aria-hidden="true">
-            <line x1="2" y1="8" x2="14" y2="8" stroke="currentColor" strokeWidth="1.5" strokeDasharray="3 3" strokeLinecap="round" />
+            <path d="M3 8h3 M10 8h3" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" />
           </svg>
         </button>
       )}
@@ -219,16 +227,22 @@ export function StyleBar() {
           <ArrowLeftRight size={15} strokeWidth={1.5} />
         </button>
       )}
+      {isArrow&&<label className="editor-bend"><span>Bend</span><span className="editor-bend-track">
+        <input type="range" min={-100} max={100} value={Math.round((eff.curve??0)*100)} aria-label="Arrow bend"
+          aria-valuetext={(eff.curve??0)===0?'Straight':`${Math.round((eff.curve??0)*100)}% bend`} title="Center snaps to a straight arrow"
+          onPointerDown={()=>{if(selectedAnno)useEditorStore.getState().pushHistory();}}
+          onKeyDown={e=>{
+            if(!e.key.startsWith('Arrow'))return;
+            e.stopPropagation();
+            e.preventDefault();if(selectedAnno)useEditorStore.getState().pushHistory();
+            const direction=e.key==='ArrowRight'||e.key==='ArrowUp'?1:-1,curve=snapArrowBend(Math.round((eff.curve??0)*100)+direction*10);
+            setStyle({curve});patchSelected({curve},false);
+          }}
+          onChange={e=>{const curve=snapArrowBend(Number(e.target.value));setStyle({curve});patchSelected({curve},false);}}/>
+      </span></label>}
+      {isStep&&<div className="editor-step-size"><NumberInput ariaLabel="Step badge size" value={eff.stepSize??28} min={20} max={48} unit="px" onChange={stepSize=>{setStyle({stepSize});patchSelected({stepSize});}}/></div>}
       {isText && (
-        <input
-          className="editor-fontsize"
-          type="number"
-          min={8}
-          max={120}
-          value={eff.fontSize}
-          onChange={(e) => applyFontSize(Number(e.currentTarget.value) || 24)}
-          aria-label="Font size"
-        />
+        <><div className="editor-text-preset"><Select portal ariaLabel="Text style" value={eff.textPreset??'plain'} options={['plain','heading','label','code'].map(value=>({value,label:value[0].toUpperCase()+value.slice(1)}))} onChange={preset=>{const patch=textPreset(preset as NonNullable<Style['textPreset']>);setStyle(patch);patchSelected(patch);}}/></div><div className="editor-text-size"><NumberInput min={8} max={120} ariaLabel="Font size" value={eff.fontSize} onChange={value=>{if(value!==eff.fontSize){if(selectedAnno)useEditorStore.getState().pushHistory();applyFontSize(value);}}}/></div></>
       )}
       {isRedact && (
         <div className="editor-widths" role="group" aria-label="Redaction style">
@@ -258,14 +272,14 @@ export function StyleBar() {
               title="Rectangle" aria-label="Rectangle"
               onClick={() => applyRegion("rect")}
             >
-              ▭
+              <RectangleHorizontal size={16} strokeWidth={1.5}/>
             </button>
             <button
               className={`editor-width${eff.region === "ellipse" ? " editor-width--active" : ""}`}
               title="Ellipse" aria-label="Ellipse"
               onClick={() => applyRegion("ellipse")}
             >
-              ◯
+              <Circle size={16} strokeWidth={1.5}/>
             </button>
           </div>
           <input
@@ -280,6 +294,7 @@ export function StyleBar() {
           />
         </>
       )}
+      {selectedAnno&&!isSpotlight&&<div className="editor-layer-actions" role="group" aria-label="Annotation layer order"><button className="editor-width" aria-label="Bring annotation forward" title="Bring forward" disabled={annotations.filter(a=>a.type!=='image').slice(-1)[0]?.id===selectedAnno.id} onClick={()=>useEditorStore.getState().bringForward(selectedAnno.id)}><ChevronUp size={16}/></button><button className="editor-width" aria-label="Send annotation backward" title="Send backward" disabled={annotations.find(a=>a.type!=='image')?.id===selectedAnno.id} onClick={()=>useEditorStore.getState().sendBackward(selectedAnno.id)}><ChevronDown size={16}/></button></div>}
     </div>
   );
 }

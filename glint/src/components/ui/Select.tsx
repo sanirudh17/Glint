@@ -17,7 +17,7 @@ export interface SelectProps {
   /** When true, the control is inert and styled as unavailable. */
   disabled?: boolean;
   className?: string;
-  /** Float outside a scrolling inspector, keeping the app's themed menu styling. */
+  /** Use a common floating layer so every menu samples the same backdrop. */
   portal?: boolean;
 }
 
@@ -28,7 +28,7 @@ export function Select({
   ariaLabel,
   disabled = false,
   className = "",
-  portal = false,
+  portal = true,
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [placement, setPlacement] = useState<"bottom" | "top">("bottom");
@@ -69,12 +69,14 @@ export function Select({
     if (!isOpen || !portal) return;
     const place = () => {
       const rect = triggerRef.current?.getBoundingClientRect(); if (!rect) return;
-      const below = window.innerHeight - rect.bottom - 12;
-      const above = rect.top - 12;
+      const margin = 8;
+      const below = Math.max(0, window.innerHeight - rect.bottom - margin - 6);
+      const above = Math.max(0, rect.top - margin - 6);
       const up = below < 180 && above > below;
-      setMenuPosition({ position: "fixed", left: rect.left, width: rect.width, right: "auto",
+      const width = Math.min(Math.max(rect.width, 180), window.innerWidth - margin * 2);
+      setMenuPosition({ position: "fixed", left: Math.max(margin, Math.min(rect.left, window.innerWidth - width - margin)), width, minWidth: 0, boxSizing: "border-box", right: "auto",
         top: up ? "auto" : rect.bottom + 6, bottom: up ? window.innerHeight - rect.top + 6 : "auto",
-        maxHeight: Math.min(240, Math.max(80, up ? above : below)) });
+        maxHeight: Math.min(240, up ? above : below) });
     };
     place(); window.addEventListener("resize", place); document.addEventListener("scroll", place, true);
     return () => { window.removeEventListener("resize", place); document.removeEventListener("scroll", place, true); };
@@ -84,7 +86,13 @@ export function Select({
   useEffect(() => {
     if (isOpen && highlightedIndex >= 0 && listRef.current) {
       const item = listRef.current.children[highlightedIndex] as HTMLElement | undefined;
-      item?.scrollIntoView({ block: "nearest" });
+      // Scroll the list itself; scrollIntoView also moves the editor behind it.
+      if (item) {
+        const list = listRef.current;
+        if (item.offsetTop < list.scrollTop) list.scrollTop = item.offsetTop;
+        else if (item.offsetTop + item.offsetHeight > list.scrollTop + list.clientHeight)
+          list.scrollTop = item.offsetTop + item.offsetHeight - list.clientHeight;
+      }
     }
   }, [isOpen, highlightedIndex]);
 

@@ -24,7 +24,7 @@ export function SpotlightDimLayer({
 }: {
   regions: BoxAnno[];
   dim: number;
-  baseImage: HTMLImageElement;
+  baseImage: HTMLImageElement|HTMLCanvasElement;
   baseWidth: number;
   baseHeight: number;
 }) {

@@ -1,0 +1,22 @@
+{
+  "date": "2026-10-22",
+  "fixture_count": 8,
+  "criterion": "mean case-sensitive character error rate after whitespace normalization",
+  "pipeline": "native Rust OAR-OCR, pinned PP-OCRv6 models, ONNX Runtime 1.31.0 CPU",
+  "models": {
+    "small": {
+      "mean_cer": 0.01670792079207921,
+      "exact_key_matches": 0,
+      "exact_long_token_matches": 0,
+      "samples": 8
+    },
+    "medium": {
+      "mean_cer": 0.018873762376237623,
+      "exact_key_matches": 1,
+      "exact_long_token_matches": 0,
+      "samples": 8
+    }
+  },
+  "recommendation": "ppocrv6-small",
+  "limits": "Synthetic English screenshots; neither model perfectly transcribed the long randomized token. Document/handwriting/language universality is not established."
+}

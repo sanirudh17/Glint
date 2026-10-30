@@ -11,9 +11,11 @@
 .library-view {
   display: flex;
   flex-direction: column;
-  gap: var(--s6);
-  padding: var(--s7);
+  gap: var(--s5);
+  padding: 40px 16px 24px;
   height: 100%;
+  width: 100%;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -24,6 +26,7 @@
   flex-direction: column;
   gap: var(--s4);
 }
+.library-index-status { display:flex; align-items:center; justify-content:space-between; flex-wrap:wrap; gap:var(--s3); color:var(--text-dim); font-size:var(--fz-sm); }
 
 /* The grid region grows with its content (never shrinks below it) so thumbnails
    keep their full size and the whole view scrolls, rather than the grid squeezing
@@ -157,7 +160,9 @@
   display: grid;
   /* A comfortable minimum so thumbnails stay large and legible no matter how many
      items pile up; the parent `.library-view` provides the vertical scroll. */
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  width: 100%;
+  min-width: 0;
   gap: var(--s4);
   align-content: start;
 }
@@ -177,8 +182,7 @@
 /* Subtle tactile lift on hover — reads as "pick me up / drag me". */
 .cap-card:hover {
   border-color: var(--border-strong);
-  transform: translateY(-2px);
-  box-shadow: var(--shadow-ambient);
+  /* Stable thumbnails are easier to scan and pick up. */
 }
 .cap-card:active { cursor: grabbing; transform: none; }
 @media (prefers-reduced-motion: reduce) {
@@ -187,8 +191,9 @@
 }
 
 .cap-thumb {
+  flex-shrink: 0;
   position: relative;
-  aspect-ratio: 16 / 10;
+  aspect-ratio: 16 / 9;
   background: var(--bg-elev2);
   overflow: hidden;
 }
@@ -209,14 +214,16 @@
   color: rgba(255, 255, 255, 0.92);
   pointer-events: none;
 }
-.cap-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; pointer-events: none; }
+.cap-thumb img { width: 100%; height: 100%; object-fit: contain; display: block; pointer-events: none; }
 .cap-thumb--empty { width: 100%; height: 100%; background: var(--bg-elev2); }
 
 .cap-meta {
+  min-height: 46px;
+  flex: 1;
   display: flex;
   align-items: flex-start;
   gap: var(--s2);
-  padding: 10px var(--s3) 11px;
+  padding: 6px 10px;
 }
 /* Kind glyph, top-aligned with the two-line block — shown by icon shape. */
 .cap-kind {
@@ -242,6 +249,7 @@
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+.cap-title--dimensions { font-variant-numeric: tabular-nums; }
 .cap-sub {
   font-family: var(--ff-mono, ui-monospace, monospace);
   font-size: var(--fz-xs);
@@ -285,9 +293,9 @@
   max-width: calc(100% - 16px);
   padding: 3px 6px;
   border-radius: 10px;
-  background: rgba(8, 9, 13, 0.94);
+  background: rgba(12, 12, 12, 0.88);
   border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.24);
   opacity: 0;
   pointer-events: none;
 }
@@ -337,5 +345,3 @@
   pointer-events: none;
 }
 .cap-btn:hover .cap-tip { opacity: 1; }
-
-

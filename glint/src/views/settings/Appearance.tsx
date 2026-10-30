@@ -1,5 +1,5 @@
 import { Check } from "lucide-react";
-import { Section, Field, Select } from "../../components/ui";
+import { Section, Field, Select, Switch } from "../../components/ui";
 import { useAppStore, ACCENT_PALETTE, type Theme } from "../../store/useAppStore";
 
 const THEME_OPTIONS = [
@@ -12,6 +12,7 @@ export function Appearance() {
   // Atomic selectors — a single object-returning selector is an infinite
   // re-render under Zustand v5's Object.is equality (see HomeView).
   const settings = useAppStore((s) => s.settings);
+  const setGlass = useAppStore((s) => s.setGlass);
   const setTheme = useAppStore((s) => s.setTheme);
   const setAccent = useAppStore((s) => s.setAccent);
 
@@ -22,6 +23,9 @@ export function Appearance() {
       title="Appearance"
       description="Controls how Glint looks. Theme and accent persist across restarts."
     >
+      <Field label="Acrylic glass" hint="Let the desktop show softly through Glint. Uses Windows transparency settings; turn off for solid surfaces.">
+        <Switch checked={settings.glass ?? true} onChange={v=>void setGlass(v)} />
+      </Field>
       <Field label="Theme">
         <Select
           value={settings.theme}

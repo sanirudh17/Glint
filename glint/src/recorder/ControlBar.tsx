@@ -1,10 +1,15 @@
+import {DEFAULT_INK,type InkConfig} from './RecordingInk';
+import {Pencil,Highlighter,MoveUpRight,RectangleHorizontal,Circle,Type,Undo2,X} from 'lucide-react';
 /** ControlBar.tsx — the floating REC indicator (route #/rec-bar). */
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, PhysicalSize, PhysicalPosition } from "@tauri-apps/api/window";
 import { recorderStop, recorderPause, recorderResume, recorderStatus, recorderSetMute, recorderSetWebcam, recorderSetFx } from "../lib/recorder";
-import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointerClick, Keyboard, Sun } from "lucide-react";
+import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointerClick, Keyboard, Sun, ScanLine } from "lucide-react";
 import "./recorder.css";
+import {invoke} from '@tauri-apps/api/core';
+import {confirm} from '@tauri-apps/plugin-dialog';
+import {FileText,RotateCcw} from 'lucide-react';
 
 export function mmss(total: number): string {
   const m = Math.floor(total / 60), s = total % 60;
@@ -12,6 +17,11 @@ export function mmss(total: number): string {
 }
 
 export function ControlBar() {
+  const [ink,setInk]=useState<InkConfig>(DEFAULT_INK);
+  const inkIcons={pen:Pencil,highlight:Highlighter,arrow:MoveUpRight,rectangle:RectangleHorizontal,ellipse:Circle,text:Type};
+  const changeInk=async(patch:Partial<InkConfig>)=>{const next={...ink,...patch};try{await invoke('recorder_ink_mode',{config:next});setInk(next);}catch(e){setFeedback(String(e));}};
+  useEffect(()=>{const un=listen<InkConfig>('recorder-ink-mode',e=>setInk(e.payload));return()=>{void un.then(fn=>fn());};},[]);
+  useEffect(()=>{if(!ink.tool)return;const key=(event:KeyboardEvent)=>{if(event.key==='Escape'){event.preventDefault();void changeInk({tool:null});}};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[ink]);
   const barRef = useRef<HTMLDivElement>(null);
   const [studioMode, setStudioMode] = useState(false);
   const [secs, setSecs] = useState(0);
@@ -27,6 +37,9 @@ export function ControlBar() {
   const [fx, setFx] = useState<{ clickViz: boolean; keystrokes: boolean; spotlight: boolean } | null>(null);
   // Hover hint shown above the pill. An in-DOM tooltip (not a native `title`) so it
   // stays inside this capture-excluded window and never bleeds into the recording.
+  const [feedback,setFeedback]=useState<string|null>(null);
+  useEffect(()=>{const un=listen<string>("recorder-marker-feedback",event=>setFeedback(event.payload));return()=>{void un.then(fn=>fn()).catch(()=>{});};},[]);
+  useEffect(()=>{if(!feedback)return;const timer=setTimeout(()=>setFeedback(null),2200);return()=>clearTimeout(timer);},[feedback]);
   const [hint, setHint] = useState<string | null>(null);
   const tip = (label: string) => ({
     onMouseEnter: () => setHint(label),
@@ -158,10 +171,21 @@ export function ControlBar() {
   }
 
   return (
-    <div className="rec-bar" ref={barRef}>
-      {hint && <div className="rec-tip">{hint}</div>}
+    <div className="rec-shell" ref={barRef}>
+      {ink.tool&&<div className="rec-ink-tools" role="toolbar" aria-label="Live annotation tools">
+        {Object.entries(inkIcons).map(([kind,Icon])=><button key={kind} type="button" aria-label={`Draw ${kind}`} aria-pressed={ink.tool===kind} onClick={()=>void changeInk({tool:kind as InkConfig['tool']})}><Icon size={15} strokeWidth={1.5}/></button>)}
+        <div className="rec-ink-colors" role="group" aria-label="Live ink color">{['#ef5555','#ffc249','#43bd86','#4d9aff','#ffffff','#17191c'].map(color=><button className="rec-ink-swatch" key={color} aria-label={`Ink ${color}`} aria-pressed={ink.color===color} style={{background:color}} onClick={()=>void changeInk({color})}/>)}</div>
+        <select aria-label="Live ink stroke width" value={ink.width} onChange={e=>void changeInk({width:Number(e.target.value)})}><option value={.003}>Thin</option><option value={.006}>Medium</option><option value={.012}>Thick</option></select>
+        {ink.tool==='text'&&<input className="rec-ink-text" aria-label="Live annotation text" maxLength={500} value={ink.text} onChange={e=>void changeInk({text:e.target.value})}/>}
+        <button type="button" aria-label="Undo last live annotation" onClick={()=>void invoke('recorder_ink_undo').catch(e=>setFeedback(String(e)))}><Undo2 size={15}/></button>
+        <button type="button" aria-label="Finish live drawing" onClick={()=>void changeInk({tool:null})}><X size={15}/></button>
+      </div>}
+    <div className="rec-bar">
+      {(feedback||hint) && <div className="rec-tip" role="status">{feedback||hint}</div>}
       <span className={`rec-dot${paused ? " rec-dot--paused" : ""}`} aria-hidden />
       <span className="rec-time">{mmss(secs)}</span>
+      {studioMode&&<button className="rec-atog rec-marker" aria-label="Mark zoom" {...tip("Mark zoom for the editor (Ctrl+Alt+Z)")} onClick={()=>void invoke('recorder_mark_zoom').catch(error=>setFeedback(String(error)))}><ScanLine size={13}/><span>Zoom</span></button>}
+      {studioMode&&<button className={`rec-atog rec-marker${ink.tool?' is-active':''}`} aria-label="Draw live annotations" aria-pressed={!!ink.tool} {...tip("Draw editable annotations while recording")} onClick={()=>void changeInk({tool:ink.tool?null:'pen'})}><Pencil size={14}/><span>Draw</span></button>}
       {audio?.system && (
         <button
           className={`rec-atog${audio.sysMuted ? " rec-atog--off" : ""}`}
@@ -190,7 +214,7 @@ export function ControlBar() {
       >
         {camOn ? <Video size={13} /> : <VideoOff size={13} />}
       </button>
-      {fx && !studioMode && (
+      {fx && (
         <>
           <button
             className={`rec-atog${fx.clickViz ? "" : " rec-atog--off"}`}
@@ -229,9 +253,11 @@ export function ControlBar() {
           ? <Play size={13} strokeWidth={2.5} fill="currentColor" />
           : <Pause size={13} strokeWidth={2.5} fill="currentColor" />}
       </button>
+      <button className="rec-atog" aria-label="Speaker notes" {...tip('Speaker notes (hidden from capture)')} onClick={()=>void invoke('studio_speaker_notes').catch(e=>setHint(String(e)))}><FileText size={13}/></button>
+      <button className="rec-atog" aria-label="Restart recording" disabled={busy} {...tip('Restart recording')} onClick={()=>void confirm('Discard this recording and start again in the same area?',{title:'Restart recording',kind:'warning'}).then(async ok=>{if(!ok)return;setBusy(true);try{await invoke('recorder_restart');}catch(e){setHint(String(e));setBusy(false);}})}><RotateCcw size={13}/></button>
       <button className="rec-stop" onClick={() => recorderStop()} {...tip("Stop recording")} aria-label="Stop">
         <Square size={13} strokeWidth={2.5} fill="currentColor" />
       </button>
-    </div>
+    </div></div>
   );
 }

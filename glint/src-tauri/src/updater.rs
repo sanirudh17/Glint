@@ -16,7 +16,7 @@ use tauri::{AppHandle, Emitter};
 
 /// Only ever download + launch an installer from Glint's own GitHub releases. The
 /// URL comes from the GitHub API response, but the frontend hands it to us, so we
-/// re-check it here: a strict prefix + `.exe` suffix means a tampered/injected URL
+/// re-check the repository, stable version and exact matching setup filename so a tampered URL
 /// can never make us run an arbitrary executable. Keep in sync with the API repo.
 const RELEASE_DOWNLOAD_PREFIX: &str = "https://github.com/sanirudh17/Glint/releases/download/";
 
@@ -35,13 +35,14 @@ struct Progress {
 /// Reject anything that isn't one of our own release `.exe` assets. Returns the
 /// bare filename to save as, or an error message safe to show the user.
 fn validate_url(url: &str) -> Result<String, String> {
-    if !url.starts_with(RELEASE_DOWNLOAD_PREFIX) {
-        return Err("Update URL is not a Glint release asset.".into());
+    let relative=url.strip_prefix(RELEASE_DOWNLOAD_PREFIX).ok_or("Update URL is not a Glint release asset.")?;
+    let (tag,name)=relative.split_once('/').ok_or("Malformed update URL.")?;
+    let version=tag.strip_prefix('v').ok_or("Invalid update version.")?;
+    let parts:Vec<_>=version.split('.').collect();
+    if parts.len()!=3 || parts.iter().any(|p|p.is_empty()||!p.bytes().all(|b|b.is_ascii_digit()))
+        || name!=format!("Glint_{version}_x64-setup.exe") {
+        return Err("Update asset is not the matching Glint installer.".into());
     }
-    if !url.to_ascii_lowercase().ends_with(".exe") {
-        return Err("Update asset is not an installer.".into());
-    }
-    let name = url.rsplit('/').next().filter(|s| !s.is_empty()).ok_or("Malformed update URL.")?;
     Ok(name.to_string())
 }
 
@@ -129,6 +130,18 @@ fn download_and_launch(
 #[cfg(test)]
 mod tests {
     use super::validate_url;
+    #[test]
+    fn rejects_traversal_and_encoded_release_paths() {
+        for path in ["v0.2.0/../../other/setup.exe","v0.2.0/%2e%2e/setup.exe","v0.2.0/Glint_0.2.0_x64-setup.exe?other.exe"] {
+            assert!(validate_url(&format!("{}{path}",super::RELEASE_DOWNLOAD_PREFIX)).is_err());
+        }
+    }
+    #[test]
+    fn rejects_standalone_binary_and_mismatched_versions() {
+        for path in ["v0.2.0/glint.exe","v0.2.0/Glint_0.1.14_x64-setup.exe"] {
+            assert!(validate_url(&format!("{}{path}",super::RELEASE_DOWNLOAD_PREFIX)).is_err());
+        }
+    }
 
     #[test]
     fn accepts_our_release_exe() {

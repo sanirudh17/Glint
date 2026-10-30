@@ -1,4 +1,5 @@
 use tauri_plugin_sql::{Migration, MigrationKind};
+pub mod text_index;
 
 pub fn migrations() -> Vec<Migration> {
     vec![Migration {
@@ -102,6 +103,8 @@ pub fn ensure_captures_table(conn: &Connection) -> rusqlite::Result<()> {
     )?;
     // Older DBs created before the title column: add it, ignoring "duplicate column".
     let _ = conn.execute("ALTER TABLE captures ADD COLUMN title TEXT", []);
+    let _ = conn.execute("ALTER TABLE captures ADD COLUMN title_origin TEXT", []);
+    text_index::ensure(conn)?;
     Ok(())
 }
 
@@ -177,7 +180,7 @@ pub fn list_captures(conn: &Connection) -> rusqlite::Result<Vec<CaptureRow>> {
 /// Set (or clear, with `None`) a capture's custom title.
 pub fn set_title(conn: &Connection, id: i64, title: Option<&str>) -> rusqlite::Result<()> {
     ensure_captures_table(conn)?;
-    conn.execute("UPDATE captures SET title = ?1 WHERE id = ?2", rusqlite::params![title, id])?;
+    conn.execute("UPDATE captures SET title = ?1, title_origin = 'user' WHERE id = ?2", rusqlite::params![title, id])?;
     Ok(())
 }
 

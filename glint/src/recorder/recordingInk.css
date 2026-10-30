@@ -1,0 +1,5 @@
+.recording-ink { position:fixed; inset:0; background:transparent; pointer-events:none; }
+.recording-ink canvas { display:block; width:100%; height:100%; }
+.recording-ink.is-drawing { pointer-events:auto; cursor:crosshair; outline:1px solid var(--accent); outline-offset:-1px; }
+.recording-ink-hint,.recording-ink-error { position:absolute; top:12px; left:50%; transform:translateX(-50%); max-width:calc(100% - 24px); padding:6px 10px; border-radius:6px; background:#111315; color:#eee; font-size:11px; pointer-events:none; white-space:nowrap; }
+.recording-ink-error { top:44px; color:#ff9696; }

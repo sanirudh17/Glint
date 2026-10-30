@@ -1,0 +1,1101 @@
+{
+  "date": "2026-10-29",
+  "engine": "PP-OCRv6 Small native ONNX CPU",
+  "path": "Actual recognize -> capture_text -> SQLite FTS5 search; in-memory database, owned synthetic screenshots only",
+  "cases": 42,
+  "queries": 123,
+  "hits": 122,
+  "errors": 0,
+  "median_ms": 2537.0,
+  "categories": {
+    "baseline": {
+      "cases": 14,
+      "queries": 48,
+      "hits": 48,
+      "errors": 0
+    },
+    "negative": {
+      "cases": 3,
+      "queries": 0,
+      "hits": 0,
+      "errors": 0
+    },
+    "small_text": {
+      "cases": 6,
+      "queries": 18,
+      "hits": 18,
+      "errors": 0
+    },
+    "core": {
+      "cases": 14,
+      "queries": 42,
+      "hits": 42,
+      "errors": 0
+    },
+    "stress_blur": {
+      "cases": 4,
+      "queries": 12,
+      "hits": 12,
+      "errors": 0
+    },
+    "stress_scaled": {
+      "cases": 1,
+      "queries": 3,
+      "hits": 2,
+      "errors": 0
+    }
+  },
+  "decision": "Keep optional screenshot text search. All baseline, core and small-text queries passed. One half-scale phrase missed because OCR read reconciliation as reconcilliation. Not suitable as guaranteed exact identifier search.",
+  "limitations": [
+    "Synthetic English desktop-style screenshots, not a random corpus of user captures.",
+    "Blank screens produced empty text. Graphics produced bullet glyphs but no searchable words.",
+    "The ignored native runner does not assert query recall; hit counts above were computed explicitly from its output.",
+    "Fixture pixels and complete raw result are retained outside git under %LOCALAPPDATA%/GlintValidation/LibrarySearchFineTune.",
+    "This measures OCR and search integration, not frontend UI interaction or arbitrary-language accuracy."
+  ],
+  "commands": [
+    "GLINT_OCR_FIXTURES=<fixture directory> GLINT_OCR_MODELS=<ppv6-small model directory> cargo test --manifest-path glint/src-tauri/Cargo.toml --lib ocr::neural::tests::native_library_search_retrieval -- --ignored --exact",
+    "cargo test --manifest-path glint/src-tauri/Cargo.toml --lib db::text_index::tests"
+  ],
+  "cases_detail": [
+    {
+      "error": null,
+      "file": "document-light.png",
+      "ms": 2271,
+      "queries": [
+        {
+          "found": true,
+          "query": "quarterly planning"
+        },
+        {
+          "found": true,
+          "query": "migration checklist"
+        },
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "invoice reconciliation"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        1920,
+        1080
+      ],
+      "image_sha256": "b3cd36e47cf2866f1b2f52721360cd45ad0fd1324712abc16733cd40c6663795"
+    },
+    {
+      "error": null,
+      "file": "terminal-light.png",
+      "ms": 2617,
+      "queries": [
+        {
+          "found": true,
+          "query": "deployment completed"
+        },
+        {
+          "found": true,
+          "query": "integration tests"
+        },
+        {
+          "found": true,
+          "query": "configuration loaded"
+        },
+        {
+          "found": true,
+          "query": "build artifacts"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        1920,
+        1080
+      ],
+      "image_sha256": "8706d921f8e5e304e4d3a6c7d0ad2713e4f8d59c35101dbca5b0b392567ac9ae"
+    },
+    {
+      "error": null,
+      "file": "dashboard-light.png",
+      "ms": 2488,
+      "queries": [
+        {
+          "found": true,
+          "query": "project overview"
+        },
+        {
+          "found": true,
+          "query": "revenue report"
+        },
+        {
+          "found": true,
+          "query": "customer retention"
+        },
+        {
+          "found": true,
+          "query": "pending tasks"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        1920,
+        1080
+      ],
+      "image_sha256": "0ed7455655a578a2e6575ad1633d834cc69c85eb0f7abdc7c99c04a0610fe1c3"
+    },
+    {
+      "error": null,
+      "file": "document-dark.png",
+      "ms": 2451,
+      "queries": [
+        {
+          "found": true,
+          "query": "quarterly planning"
+        },
+        {
+          "found": true,
+          "query": "migration checklist"
+        },
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "invoice reconciliation"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        1920,
+        1080
+      ],
+      "image_sha256": "64efc8760afa4859710cfeea012c323291e92d78cbd7e8273d492b15a5e8901b"
+    },
+    {
+      "error": null,
+      "file": "terminal-dark.png",
+      "ms": 2661,
+      "queries": [
+        {
+          "found": true,
+          "query": "deployment completed"
+        },
+        {
+          "found": true,
+          "query": "integration tests"
+        },
+        {
+          "found": true,
+          "query": "configuration loaded"
+        },
+        {
+          "found": true,
+          "query": "build artifacts"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        1920,
+        1080
+      ],
+      "image_sha256": "cadbb4ab13fc7f5fe5d2deadbb5a27dc4ee9721474082c1d5b4778f66946d9a7"
+    },
+    {
+      "error": null,
+      "file": "dashboard-dark.png",
+      "ms": 2425,
+      "queries": [
+        {
+          "found": true,
+          "query": "project overview"
+        },
+        {
+          "found": true,
+          "query": "revenue report"
+        },
+        {
+          "found": true,
+          "query": "customer retention"
+        },
+        {
+          "found": true,
+          "query": "pending tasks"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        1920,
+        1080
+      ],
+      "image_sha256": "39e42353958c79a2585c15bf655898e721737197a9848edb4f9601e975f74463"
+    },
+    {
+      "error": null,
+      "file": "blank.png",
+      "ms": 1391,
+      "queries": [],
+      "text": "",
+      "category": "negative",
+      "image_size": [
+        1920,
+        1080
+      ],
+      "image_sha256": "a3c564651924abf8ee37573eee4833880370b2478138ddd986695a80180611ec"
+    },
+    {
+      "error": null,
+      "file": "blank-transparent.png",
+      "ms": 1436,
+      "queries": [],
+      "text": "",
+      "category": "negative",
+      "image_size": [
+        1920,
+        1080
+      ],
+      "image_sha256": "f9708f9f8361d467ddfc7575e35f49343096b3b5a76cd81faf9b1dfc99462381"
+    },
+    {
+      "error": null,
+      "file": "accuracy-consolas-11-light.png",
+      "ms": 861,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        718,
+        200
+      ],
+      "image_sha256": "ed14b52d70dfcadca668b6ca8548a6cc4b61c6b2694403e4e8de3c5cfcfc83c3"
+    },
+    {
+      "error": null,
+      "file": "accuracy-consolas-11-dark.png",
+      "ms": 921,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        718,
+        200
+      ],
+      "image_sha256": "d1779e3f2a1bd1050607d91dee19359a9a392b3d31f62cc4853f5d80293d902e"
+    },
+    {
+      "error": null,
+      "file": "accuracy-consolas-15-light.png",
+      "ms": 1053,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        944,
+        228
+      ],
+      "image_sha256": "64816108cc375d0f578ff66cd15d42e60231e692783d2deba1640edcde55fb62"
+    },
+    {
+      "error": null,
+      "file": "accuracy-consolas-15-dark.png",
+      "ms": 1124,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        944,
+        228
+      ],
+      "image_sha256": "7564bdade2f79b4450bde852024b7a554b9169e736d9275a17a90c595a2a128c"
+    },
+    {
+      "error": null,
+      "file": "accuracy-segoe-11-light.png",
+      "ms": 846,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        682,
+        200
+      ],
+      "image_sha256": "790599869f9402bebee09a705b2842a8cf33b50664d7ada4d543513be18adb27"
+    },
+    {
+      "error": null,
+      "file": "accuracy-segoe-11-dark.png",
+      "ms": 948,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        682,
+        200
+      ],
+      "image_sha256": "2d7df2a29b1c139ede0ada7869d7b1c43ad6e5e7f518549d99d48fe522e22d97"
+    },
+    {
+      "error": null,
+      "file": "accuracy-segoe-15-light.png",
+      "ms": 996,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        912,
+        228
+      ],
+      "image_sha256": "56ed1618d8753bf2f30fc10faca08e15c1eb6e9172008bebc71c50531f6816f2"
+    },
+    {
+      "error": null,
+      "file": "accuracy-segoe-15-dark.png",
+      "ms": 1031,
+      "queries": [
+        {
+          "found": true,
+          "query": "invoice"
+        },
+        {
+          "found": true,
+          "query": "email"
+        },
+        {
+          "found": true,
+          "query": "const"
+        }
+      ],
+      "category": "baseline",
+      "image_size": [
+        912,
+        228
+      ],
+      "image_sha256": "57f897f48b89dff7b8a9a329529707b8b74e819ad31951d40ba18cf7a31e0a4f"
+    },
+    {
+      "error": null,
+      "file": "mixed-document-12-light.png",
+      "ms": 2587,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "database migration"
+        },
+        {
+          "found": true,
+          "query": "meeting agenda"
+        }
+      ],
+      "category": "small_text",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "6dd05ed5075480f5ffaeec06f4168f3a17289b18325fad326637ebbdb58d36f5"
+    },
+    {
+      "error": null,
+      "file": "mixed-terminal-12-light.png",
+      "ms": 2813,
+      "queries": [
+        {
+          "found": true,
+          "query": "integration tests"
+        },
+        {
+          "found": true,
+          "query": "configuration loaded"
+        },
+        {
+          "found": true,
+          "query": "deployment finished"
+        }
+      ],
+      "category": "small_text",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "5835a1bd690f8da640a002e9e1a90ed5c36bd5d28df8b2954236b71e72471ce7"
+    },
+    {
+      "error": null,
+      "file": "mixed-dashboard-12-light.png",
+      "ms": 2530,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer retention"
+        },
+        {
+          "found": true,
+          "query": "revenue report"
+        },
+        {
+          "found": true,
+          "query": "backup completed"
+        }
+      ],
+      "category": "small_text",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "ad446d5883ab83f068a83b2efaafe33e085a661d7aa87a2d9f6bf220ede36562"
+    },
+    {
+      "error": null,
+      "file": "mixed-document-16-light.png",
+      "ms": 2641,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "database migration"
+        },
+        {
+          "found": true,
+          "query": "meeting agenda"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "68975da886f4ad6988df3a4bdad2f0aff228cb2b370862e82cd6362d2643a055"
+    },
+    {
+      "error": null,
+      "file": "mixed-document-16-light-blur-0.6.png",
+      "ms": 2566,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "database migration"
+        },
+        {
+          "found": true,
+          "query": "meeting agenda"
+        }
+      ],
+      "category": "stress_blur",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "ceece9aa1c62425fe3be93a3d14431cc3fc842d35cfa7d02517d1a4142afafbe"
+    },
+    {
+      "error": null,
+      "file": "mixed-document-16-light-blur-1.2.png",
+      "ms": 2432,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "database migration"
+        },
+        {
+          "found": true,
+          "query": "meeting agenda"
+        }
+      ],
+      "category": "stress_blur",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "96814271ac46015ae0d280d9f65f54b369f41a97b7cea3e8bacca267281c544e"
+    },
+    {
+      "error": null,
+      "file": "mixed-terminal-16-light.png",
+      "ms": 2899,
+      "queries": [
+        {
+          "found": true,
+          "query": "integration tests"
+        },
+        {
+          "found": true,
+          "query": "configuration loaded"
+        },
+        {
+          "found": true,
+          "query": "deployment finished"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "18bd09d683ce161424ee217e5f184256abc03d0b73ad0f5ac5b7e5907921555e"
+    },
+    {
+      "error": null,
+      "file": "mixed-dashboard-16-light.png",
+      "ms": 2578,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer retention"
+        },
+        {
+          "found": true,
+          "query": "revenue report"
+        },
+        {
+          "found": true,
+          "query": "backup completed"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "09e59d90280095be238b238f355a1237573565c4fdfba3d8d2f5fb1b6116de8d"
+    },
+    {
+      "error": null,
+      "file": "mixed-document-20-light.png",
+      "ms": 2649,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "database migration"
+        },
+        {
+          "found": true,
+          "query": "meeting agenda"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "2838f9c4f4e865864b3daa972d89512440a2f7835d1c8124975975d80caf7c43"
+    },
+    {
+      "error": null,
+      "file": "mixed-terminal-20-light.png",
+      "ms": 2860,
+      "queries": [
+        {
+          "found": true,
+          "query": "integration tests"
+        },
+        {
+          "found": true,
+          "query": "configuration loaded"
+        },
+        {
+          "found": true,
+          "query": "deployment finished"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "84816af3ae75293749a0933b5c5fa18129f8b0620890786a2f825e09e00f9591"
+    },
+    {
+      "error": null,
+      "file": "mixed-dashboard-20-light.png",
+      "ms": 2602,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer retention"
+        },
+        {
+          "found": true,
+          "query": "revenue report"
+        },
+        {
+          "found": true,
+          "query": "backup completed"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "30d69b192bfd4e28600219b0c9d5feffa7a6988cf788a7099dc87cb42682cf41"
+    },
+    {
+      "error": null,
+      "file": "mixed-document-12-dark.png",
+      "ms": 2589,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "database migration"
+        },
+        {
+          "found": true,
+          "query": "meeting agenda"
+        }
+      ],
+      "category": "small_text",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "225066524889a388239186065b2614fbf63e50d783985f1d9361649b51ff153f"
+    },
+    {
+      "error": null,
+      "file": "mixed-terminal-12-dark.png",
+      "ms": 2869,
+      "queries": [
+        {
+          "found": true,
+          "query": "integration tests"
+        },
+        {
+          "found": true,
+          "query": "configuration loaded"
+        },
+        {
+          "found": true,
+          "query": "deployment finished"
+        }
+      ],
+      "category": "small_text",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "ee6ede33c6886ddaf111219ad16ba5ac2f350b3013a4a73f4c5d66d3d22d8652"
+    },
+    {
+      "error": null,
+      "file": "mixed-dashboard-12-dark.png",
+      "ms": 2544,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer retention"
+        },
+        {
+          "found": true,
+          "query": "revenue report"
+        },
+        {
+          "found": true,
+          "query": "backup completed"
+        }
+      ],
+      "category": "small_text",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "28b10d461b603be934bd0f07bc67340b66d54fdb8b9a75ec92dfa40b9e5d62b0"
+    },
+    {
+      "error": null,
+      "file": "mixed-document-16-dark.png",
+      "ms": 2584,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "database migration"
+        },
+        {
+          "found": true,
+          "query": "meeting agenda"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "9d42b4539840cc3ec8792e87b765bcae0c9caffb187703224c44c1b9ca29a1cd"
+    },
+    {
+      "error": null,
+      "file": "mixed-document-16-dark-blur-0.6.png",
+      "ms": 2574,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "database migration"
+        },
+        {
+          "found": true,
+          "query": "meeting agenda"
+        }
+      ],
+      "category": "stress_blur",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "7b31ba25f78266540657d17e4490e4ec0cb128cbb3026a422936a63b5df2a1f6"
+    },
+    {
+      "error": null,
+      "file": "mixed-document-16-dark-blur-1.2.png",
+      "ms": 2396,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "database migration"
+        },
+        {
+          "found": true,
+          "query": "meeting agenda"
+        }
+      ],
+      "category": "stress_blur",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "65deeab892dae1592d7a843a89d9fafc22a78bbdefc7eadbe2f7205287163412"
+    },
+    {
+      "error": null,
+      "file": "mixed-terminal-16-dark.png",
+      "ms": 2828,
+      "queries": [
+        {
+          "found": true,
+          "query": "integration tests"
+        },
+        {
+          "found": true,
+          "query": "configuration loaded"
+        },
+        {
+          "found": true,
+          "query": "deployment finished"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "8d4f0096ef08db160bc5980c7b179b3d1a0821f3cc77dae630c07592358d018a"
+    },
+    {
+      "error": null,
+      "file": "mixed-dashboard-16-dark.png",
+      "ms": 2556,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer retention"
+        },
+        {
+          "found": true,
+          "query": "revenue report"
+        },
+        {
+          "found": true,
+          "query": "backup completed"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "8175aa834db7194eff1bcaab6c9743e094c3b4526aceeb121e4ecba5c8f450d9"
+    },
+    {
+      "error": null,
+      "file": "mixed-document-20-dark.png",
+      "ms": 2610,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer feedback"
+        },
+        {
+          "found": true,
+          "query": "database migration"
+        },
+        {
+          "found": true,
+          "query": "meeting agenda"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "b5110865ebf7d7444910778c817625b752d6f01516f3808d7ccf4171f10ce75d"
+    },
+    {
+      "error": null,
+      "file": "mixed-terminal-20-dark.png",
+      "ms": 2834,
+      "queries": [
+        {
+          "found": true,
+          "query": "integration tests"
+        },
+        {
+          "found": true,
+          "query": "configuration loaded"
+        },
+        {
+          "found": true,
+          "query": "deployment finished"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "f3aba28b5edd3eb711960606f7c849add86d38b606b2b7bce3720d96832bc8be"
+    },
+    {
+      "error": null,
+      "file": "mixed-dashboard-20-dark.png",
+      "ms": 2588,
+      "queries": [
+        {
+          "found": true,
+          "query": "customer retention"
+        },
+        {
+          "found": true,
+          "query": "revenue report"
+        },
+        {
+          "found": true,
+          "query": "backup completed"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        1600,
+        1000
+      ],
+      "image_sha256": "7d76d61c65ea395475ac70e3c3cf6f9fc6fdfbb079f60b62a892d8421516ebe2"
+    },
+    {
+      "error": null,
+      "file": "partial-1.png",
+      "ms": 411,
+      "queries": [
+        {
+          "found": true,
+          "query": "account recovery"
+        },
+        {
+          "found": true,
+          "query": "order confirmation"
+        },
+        {
+          "found": true,
+          "query": "payment reconciliation"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        750,
+        240
+      ],
+      "image_sha256": "0ddaf3f9af2ba8a9066cda2b5119841dea46b5111bd6c06a1be1027f1cf74f25"
+    },
+    {
+      "error": null,
+      "file": "partial-0.75.png",
+      "ms": 298,
+      "queries": [
+        {
+          "found": true,
+          "query": "account recovery"
+        },
+        {
+          "found": true,
+          "query": "order confirmation"
+        },
+        {
+          "found": true,
+          "query": "payment reconciliation"
+        }
+      ],
+      "category": "core",
+      "image_size": [
+        562,
+        180
+      ],
+      "image_sha256": "329eaae4e8787644ce7b73459cd0243b1e46a746a3452e5ab4c8a7750f3f46ea"
+    },
+    {
+      "error": null,
+      "file": "partial-0.5.png",
+      "ms": 247,
+      "queries": [
+        {
+          "found": true,
+          "query": "account recovery"
+        },
+        {
+          "found": true,
+          "query": "order confirmation"
+        },
+        {
+          "found": false,
+          "query": "payment reconciliation"
+        }
+      ],
+      "text": "Support ticket triage\nAccount recovery request\nOrder confirmation received\nPayment reconcilliation complete",
+      "category": "stress_scaled",
+      "image_size": [
+        375,
+        120
+      ],
+      "image_sha256": "77257a0ef7aa649e8d1407f85d659745869928278a103df9c836f6d424cc0d4d"
+    },
+    {
+      "error": null,
+      "file": "no-text-graphics.png",
+      "ms": 1279,
+      "queries": [],
+      "text": "\u25cf\u25cf\u25cf\u25cf\u25cf",
+      "category": "negative",
+      "image_size": [
+        1280,
+        720
+      ],
+      "image_sha256": "16e39d97695cfe8d8943e6de352209791f029f09c6bae690bde5e059c8e57478"
+    }
+  ]
+}

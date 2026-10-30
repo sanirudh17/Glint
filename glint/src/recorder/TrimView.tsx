@@ -1,11 +1,24 @@
+import {prepareAnnotations} from "./videoAnnotations";
+import { WindowControls } from "../components/Titlebar";
 import { StudioPanel } from "./StudioPanel";
+import {EditorCommands} from './EditorCommands';
+import {prepareCaptions,estimateExportBytes} from './studioPolish';
+import {studioLayout} from './studioLayout';
+import {useAppStore} from '../store/useAppStore';
+import {GifExportControls,type GifOptions} from './GifExportControls';
+import { StudioEffectTrack } from "./StudioEffectTrack";
+import { StudioMaskOverlay } from "./StudioMaskOverlay";
+import { newMask,setMaskKeyframe } from "./studioMasks";
+import {setZoomFocus,type FocusPoint} from './studioFocus';
+import {smoothPath,followSourcePoint} from './studioCursor';
 import "../look/look.css";
 import { StudioPreview } from "./StudioPreview";
-import { studioLoad, studioSave, studioExport, studioExportCancel } from "../lib/studio";
+import { studioLoad, studioImport, studioSave, studioExport, studioExportCancel,studioDiscardSource } from "../lib/studio";
+import {confirm} from '@tauri-apps/plugin-dialog';
 import { hydrateProject, type StudioData, type StudioProject } from "./studioModel";
 /** TrimView.tsx — recording trim window (#/rec-trim): player + multi-cut timeline. */
 import { useCallback, useEffect, useRef, useState } from "react";
-import { convertFileSrc } from "@tauri-apps/api/core";
+import { convertFileSrc,invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
 import { Scissors, Trash2, Undo2, Redo2, Play, Pause, SkipBack, ZoomIn, ZoomOut, X, RotateCcw } from "lucide-react";
@@ -34,14 +47,23 @@ const EPS = 1e-4;
 const ZOOMS = [1, 2, 4, 8];
 
 export function TrimView() {
+  const [selectedZoom,setSelectedZoom]=useState<string|null>(null);
+  const [pickingFocus,setPickingFocus]=useState(false);
+  const [focusAim,setFocusAim]=useState<FocusPoint|null>(null);
+  const [selectedMask,setSelectedMask]=useState<string|null>(null);
+  const [drawingMask,setDrawingMask]=useState(false);
   const [studio, setStudio] = useState<StudioData | null>(null);
+  async function prepareVideoProject(project: StudioData['project']) {
+    const layout=studioLayout(probe?.width??1280,probe?.height??720,project.crop,project.look);
+    return {...await prepareCaptions(project),annotations:await prepareAnnotations(project.annotations,layout.width/layout.height)};
+  }
   const [saveStatus, setSaveStatus] = useState("Saved");
   const [exportMessage, setExportMessage] = useState<string | null>(null);
   const autosaveRef = useRef<{ path: string; project: StudioProject } | null>(null);
   const saveQueueRef = useRef(Promise.resolve());
   const loadGeneration = useRef(0);
   const flushSave = useCallback(() => {
-    const pending = autosaveRef.current; if (!pending) return Promise.resolve();
+    const pending = autosaveRef.current; if (!pending) return saveQueueRef.current;
     autosaveRef.current = null;
     setSaveStatus("Saving…");
     saveQueueRef.current = saveQueueRef.current.catch(() => {}).then(() => studioSave(pending.path, pending.project))
@@ -60,7 +82,7 @@ export function TrimView() {
   // appears together, once. A safety timeout covers pathological media that never
   // reaches canplay so the UI can never stay hidden.
   const [mediaReady, setMediaReady] = useState(false);
-  type EditState = { clips: Clip[]; fadeIn: number; fadeOut: number };
+  type EditState = { clips: Clip[]; fadeIn: number; fadeOut: number; action?:string };
   const [edit, setEdit] = useState<EditState>({ clips: [], fadeIn: 0, fadeOut: 0 });
   const [undoStack, setUndoStack] = useState<EditState[]>([]);
   const [redoStack, setRedoStack] = useState<EditState[]>([]);
@@ -68,6 +90,7 @@ export function TrimView() {
   const [playhead, setPlayhead] = useState(0);
   const [playing, setPlaying] = useState(false);
   const [exporting, setExporting] = useState<number | null>(null); // percent or null
+  const [exportingGif,setExportingGif]=useState(false);
   const [waveform, setWaveform] = useState<number[] | null>(null);
   // Which clip the speed/delete controls act on. STICKY: set on click, it stays put while
   // playback moves the playhead — so "set this section to 2×" hits the section you clicked,
@@ -90,6 +113,13 @@ export function TrimView() {
   const pendingRef = useRef<number | null>(null);
 
   const duration = probe?.duration_secs ?? 0;
+  const selectedZoomMode=studio?.project.zoomSegments.find(s=>s.id===selectedZoom)?.mode;
+  useEffect(()=>{setPickingFocus(false);setFocusAim(null);},[selectedZoom,selectedZoomMode,target?.path,playhead]);
+  useEffect(()=>{
+    if(!pickingFocus)return;
+    const cancel=(e:KeyboardEvent)=>{if(e.key==='Escape'){e.preventDefault();e.stopPropagation();setPickingFocus(false);setFocusAim(null);}};
+    window.addEventListener('keydown',cancel,true);return()=>window.removeEventListener('keydown',cancel,true);
+  },[pickingFocus]);
   const fps = probe?.fps && probe.fps > 0 ? probe.fps : 30;
   const ranges = keepRanges(clips);
   const outDur = outputDuration(clips);
@@ -149,6 +179,8 @@ export function TrimView() {
     void flushSave();
     const generation = ++loadGeneration.current;
     setStudio(null); setExportMessage(null);
+    setSelectedZoom(null);setPickingFocus(false);
+    setSelectedMask(null);setDrawingMask(false);
     setUndoStack([]); setRedoStack([]); setPlayhead(0); setPlaying(false);
     setSrc(null);
     setTarget(null);
@@ -166,17 +198,19 @@ export function TrimView() {
       setSrc(convertFileSrc(t.path));
       try {
         const p = await trimProbe(t.path);
-        const data = await studioLoad(t.path);
+        const data = await studioLoad(t.path) ?? await studioImport(t.path);
         if (generation !== loadGeneration.current) return;
-        const project = data ? hydrateProject(data.project, p.duration_secs) : null;
-        if (data && project) setStudio({ ...data, project });
+        const project = data ? hydrateProject(data.project, p.duration_secs, data.events, p) : null;
+        if (data && project) {setStudio({ ...data, project });setSelectedZoom(project.zoomSegments[0]?.id??null);}
         setProbe(p);
         const clips0 = project?.clips ?? initClips(p.duration_secs);
         setEdit({ clips: clips0, fadeIn: project?.fadeIn ?? 0, fadeOut: project?.fadeOut ?? 0 });
         setSelectedId(clips0[0]?.id ?? null); // start with the whole clip selected
         if (p.has_audio) {
           // Extra buckets so zoomed-in detail resolves (at 8× ≈ 150 bars across the track).
-          trimWaveform(t.path, 1200, p.duration_secs).then(setWaveform).catch(() => setWaveform(null));
+          trimWaveform(t.path, 1200, p.duration_secs)
+            .then(waveform => { if (generation === loadGeneration.current) setWaveform(waveform); })
+            .catch(() => { if (generation === loadGeneration.current) setWaveform(null); });
         }
         if (p.has_cam) {
           setCamSrc(convertFileSrc(camSiblingPath(t.path)));
@@ -196,7 +230,7 @@ export function TrimView() {
     void loadTarget();
   }, [loadTarget]);
 
-  useEffect(() => { void getCurrentWindow().setTitle(studio ? "Glint Studio" : "Glint — Trim recording").catch(() => {}); }, [studio !== null]);
+  useEffect(() => { void getCurrentWindow().setTitle("Glint Studio").catch(() => {}); }, [studio !== null]);
 
   // Safety valve: if the video never reaches canplay (corrupt file edge cases),
   // reveal the UI anyway after a grace period so it can't stay blank.
@@ -241,7 +275,8 @@ export function TrimView() {
   useEffect(() => () => { void flushSave(); }, [flushSave]);
 
   useEffect(() => {
-    const un = listen<number>("rec-trim-progress", (e) => setExporting(Math.round(e.payload)));
+    const un = listen<number>("rec-trim-progress", (e) => setExporting(current =>
+      current === null || !Number.isFinite(e.payload) ? current : Math.max(current,Math.min(99,Math.round(e.payload)))));
     return () => { un.then((f) => f()).catch(() => {}); };
   }, []);
 
@@ -288,14 +323,14 @@ export function TrimView() {
     applyVideoSeek(clamped);
   }, [duration, applyVideoSeek]);
 
-  const commit = useCallback((next: EditState) => {
-    setUndoStack((s) => [...s, edit]);
+  const commit = useCallback((next: EditState, action='Change timing') => {
+    setUndoStack((s) => [...s.slice(-29), {...edit,action}]);
     setRedoStack([]);
     setEdit(next);
   }, [edit]);
   const doSplit = useCallback(() => {
     const next = splitClips(clips, playhead);
-    commit({ ...edit, clips: next });
+    commit({ ...edit, clips: next },'Split clip');
     // Splitting replaces the parent with two fresh-id halves — reseat selection on the half
     // under the playhead so the sticky selection doesn't dangle on the vanished parent.
     const c = next.find((cc) => playhead >= cc.start - EPS && playhead < cc.end - EPS);
@@ -303,11 +338,11 @@ export function TrimView() {
   }, [commit, edit, clips, playhead]);
   const doDelete = useCallback(() => {
     if (!selected || !selected.kept || keptCount(clips) <= 1) return; // can't delete a gap or the last block
-    commit({ ...edit, clips: setKept(clips, selected.id, false) });
+    commit({ ...edit, clips: setKept(clips, selected.id, false) },'Remove clip');
   }, [commit, edit, clips, selected]);
   const doReorder = useCallback((from: number, to: number) => {
     const next = reorderKept(clips, from, to);
-    if (next !== clips) commit({ ...edit, clips: next });
+    if (next !== clips) commit({ ...edit, clips: next },'Reorder clips');
   }, [commit, edit, clips]);
   // Clicking a filmstrip tile seats the sticky timeline selection on that clip (so the speed
   // buttons/keys act on it) and jumps the playhead there for a clear visual indication.
@@ -321,31 +356,23 @@ export function TrimView() {
   const canSpeed = selected != null && selected.kept && exporting === null;
   const setSel = useCallback((k: number) => {
     if (selectedId == null) return;
-    commit({ ...edit, clips: setSpeed(clips, selectedId, k) });
+    commit({ ...edit, clips: setSpeed(clips, selectedId, k) },'Change clip speed');
   }, [commit, edit, clips, selectedId]);
   const FADE_MAX = 2;
   const bump = (which: "fadeIn" | "fadeOut", delta: number) => {
     const cur = which === "fadeIn" ? fadeIn : fadeOut;
     const next = Math.max(0, Math.min(FADE_MAX, Math.round((cur + delta) * 2) / 2)); // 0.5s steps
     if (next === cur) return;
-    commit({ ...edit, [which]: next });
+    commit({ ...edit, [which]: next },which==='fadeIn'?'Change fade in':'Change fade out');
   };
   const undo = useCallback(() => {
-    setUndoStack((s) => {
-      if (!s.length) return s;
-      setRedoStack((r) => [...r, edit]);
-      setEdit(s[s.length - 1]);
-      return s.slice(0, -1);
-    });
-  }, [edit]);
+    const last=undoStack[undoStack.length-1];if(!last)return;const {action,...previous}=last;
+    setRedoStack(r=>[...r,{...edit,action}]);setEdit(previous);setUndoStack(s=>s.slice(0,-1));useAppStore.getState().pushToast(`Undid: ${action??'Change timing'}`);
+  }, [edit,undoStack]);
   const redo = useCallback(() => {
-    setRedoStack((r) => {
-      if (!r.length) return r;
-      setUndoStack((u) => [...u, edit]);
-      setEdit(r[r.length - 1]);
-      return r.slice(0, -1);
-    });
-  }, [edit]);
+    const last=redoStack[redoStack.length-1];if(!last)return;const {action,...next}=last;
+    setUndoStack(u=>[...u,{...edit,action}]);setEdit(next);setRedoStack(r=>r.slice(0,-1));useAppStore.getState().pushToast(`Redid: ${action??'Change timing'}`);
+  }, [edit,redoStack]);
 
   // Playback engine: a rAF loop (~60 Hz) walks the KEPT segments in PLAY order. Within a
   // segment the <video> plays naturally; at a segment boundary it seeks to the next segment's
@@ -399,7 +426,8 @@ export function TrimView() {
       let idx = segmentIndexAtSource(segs, v.currentTime);
       if (idx < 0) { idx = 0; try { v.currentTime = segs[0].start; } catch { /* ignore */ } }
       segCursorRef.current = idx;
-      v.play(); setPlaying(true);
+      v.playbackRate=segs[idx].speed;
+      void v.play().catch(()=>{setPlaying(false);useAppStore.getState().pushToast("Could not resume the video. Try Play again.");});
     } else { v.pause(); setPlaying(false); }
   };
 
@@ -412,7 +440,8 @@ export function TrimView() {
     segCursorRef.current = 0;
     try { v.currentTime = segs[0].start; } catch { /* ignore */ }
     setPlayhead(segs[0].start);
-    v.play(); setPlaying(true);
+    v.playbackRate=segs[0].speed;
+    void v.play().catch(()=>{setPlaying(false);useAppStore.getState().pushToast("Could not start the video. Try Play again.");});
   };
 
   // Keep the webcam overlay's play state mirrored to the main player (muted, so autoplay
@@ -436,6 +465,7 @@ export function TrimView() {
       if (e.defaultPrevented || (e.target instanceof HTMLElement && e.target.closest("[data-editor-control]"))) return;
       if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement || e.target instanceof HTMLTextAreaElement) return;
       if (exporting !== null) return; // export is modal — ignore edit/transport keys
+      if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='s'){e.preventDefault();void flushSave();return;}
       if (e.key === " ") { e.preventDefault(); togglePlay(); }
       else if (e.key.toLowerCase() === "s") { e.preventDefault(); doSplit(); }
       else if (e.key === "Delete" || e.key === "Backspace") { e.preventDefault(); doDelete(); }
@@ -453,12 +483,29 @@ export function TrimView() {
     return () => window.removeEventListener("keydown", onKey);
   }, [doSplit, doDelete, undo, redo, seek, playhead, fps, exporting, requestClose, zoomIn, zoomOut]);
 
+  const saveGif=async(options:GifOptions)=>{
+    if(!target||!probe||exporting!==null)return;
+    setExporting(0);setExportingGif(true);setExportMessage(null);
+    try{
+      await flushSave();
+      const camOverlay=probe.has_cam&&cam?.visible?{...toPixels(cam,probe.width,probe.height,probe.width/probe.height),shape:cam.shape}:null;
+      const path=await invoke<string>('recorder_gif_export',{path:target.path,project:studio?await prepareVideoProject({...studio.project,...edit,cam}):null,segments:keptSegments(clips),fadeIn,fadeOut,camOverlay,options});
+      setExportMessage(`Exported: ${path}`);
+    }catch(error){setExportMessage(String(error));}finally{setExporting(null);setExportingGif(false);}
+  };
   const save = (mode: "copy" | "overwrite") => {
     if (!target || !probe || !canSave) return;
     setExporting(0); setExportMessage(null);
     if (studio) {
       const project = { ...studio.project, ...edit, cam };
-      void flushSave().then(() => studioExport(target.path, project)).then((path) => { setExportMessage(`Exported: ${path}`); })
+      void flushSave().then(() => prepareVideoProject(project)).then(project=>studioExport(target.path, project)).then(async(path) => {
+        setExportMessage(`Exported: ${path}`);
+        if(project.deleteSourceAfterExport&&await confirm('Your exported MP4 is saved. Delete the unmasked recording, camera track and input events? The original recording cannot be restored.',{title:'Delete unmasked source?',kind:'warning',okLabel:'Delete source',cancelLabel:'Keep source'})) {
+          videoRef.current?.pause();videoRef.current?.removeAttribute('src');videoRef.current?.load();
+          camVideoRef.current?.pause();camVideoRef.current?.removeAttribute('src');camVideoRef.current?.load();
+          await studioDiscardSource(target.path,path);await getCurrentWindow().close();
+        }
+      })
         .catch((error) => setExportMessage(String(error))).finally(() => setExporting(null));
       return;
     }
@@ -471,19 +518,53 @@ export function TrimView() {
       .catch(() => setExporting(null)); // a toast already surfaced; window stays open
   };
 
-  if (err) return <div className="trim-root"><div className="trim-error">{err}</div></div>;
+  const workspaceReady=!!probe&&!!studio&&mediaReady;
+  useEffect(()=>{
+    if(!workspaceReady&&!err)return;
+    let second=0;const first=requestAnimationFrame(()=>{second=requestAnimationFrame(()=>{void invoke('recorder_trim_ready',{path:target?.path??null}).catch(()=>{});});});
+    return()=>{cancelAnimationFrame(first);cancelAnimationFrame(second);};
+  },[workspaceReady,err,target?.path]);
+  if (err) return <div className="trim-root"><div className="trim-window-toolbar" data-tauri-drag-region><span>Studio</span><WindowControls onClose={requestClose}/></div><div className="trim-error" role="alert">{err}</div></div>;
 
   // Contents stay mounted (the <video> must be in the DOM to load/decode) but
   // invisible until its first frame is ready — then everything appears together.
-  const booting = !mediaReady;
+  const booting = !mediaReady || !probe || !studio;
+  const outputSize=probe&&studio?studioLayout(probe.width,probe.height,studio.project.crop,studio.project.look):probe;
+  const estimated=outputSize?estimateExportBytes(outDur,outputSize.width,outputSize.height):null;
 
   return (
-    <div className={`trim-root${booting ? " is-booting" : ""}`}>
+    <div className={`trim-root${booting ? " is-booting" : ""}`} aria-busy={booting}>
+      {booting&&<div className="trim-loading-shell"><div className="trim-loading-controls" data-tauri-drag-region><WindowControls onClose={requestClose}/></div><p role="status">Opening Studio...</p></div>}
+      <EditorCommands key={target?.path ?? 'loading'} actions={[
+        {id:'play',label:playing?'Pause playback':'Play video',run:togglePlay,disabled:exporting!==null},
+        {id:'split',label:'Split clip at playhead',run:doSplit,disabled:exporting!==null},
+        {id:'delete',label:'Remove selected clip',run:doDelete,disabled:!canDelete},
+        {id:'undo',label:`Undo ${undoStack[undoStack.length-1]?.action??'timing edit'}`,run:undo,disabled:!undoStack.length||exporting!==null},
+        {id:'redo',label:`Redo ${redoStack[redoStack.length-1]?.action??'timing edit'}`,run:redo,disabled:!redoStack.length||exporting!==null},
+        {id:'save',label:'Save Studio project',run:()=>void flushSave(),disabled:!studio||exporting!==null},
+        {id:'export',label:'Export MP4',run:()=>save('copy'),disabled:!canSave},
+        {id:'notes',label:'Open speaker notes',run:()=>void invoke('studio_speaker_notes').catch(e=>setExportMessage(String(e)))},
+        {id:'close',label:'Close editor',run:requestClose,disabled:exporting!==null},
+      ]}/>
+      {!studio && <div className="trim-window-toolbar" data-tauri-drag-region>
+        <span className="trim-window-context">Trim recording</span>
+        <WindowControls onClose={requestClose} />
+      </div>}
       <div className="trim-preview-row">
       <div className={`trim-stage${studio ? " studio-stage" : ""}`}>
-        {studio && probe && <StudioPreview studio={studio} video={videoRef} camVideo={camVideoRef} cam={cam} width={probe.width} height={probe.height} />}
+        {studio && probe && <StudioPreview studio={studio} video={videoRef} camVideo={camVideoRef} cam={cam} width={probe.width} height={probe.height} pickingFocus={pickingFocus}
+          onAim={setFocusAim} onFocus={focus=>{
+            const t=videoRef.current?.currentTime??playhead;
+            setStudio(data=>{if(!data)return data;const cursor=followSourcePoint(smoothPath(data.events.events,data.project.cursor.smoothing),t,data.events,probe.width,probe.height);
+              return {...data,project:{...data.project,zoomSegments:data.project.zoomSegments.map(s=>s.id===selectedZoom?setZoomFocus(s,focus,cursor,probe.width,probe.height):s)}};});setPickingFocus(false);setFocusAim(null);
+          }} />}
+        {studio&&probe&&<StudioMaskOverlay studio={studio} width={probe.width} height={probe.height} time={playhead} selected={selectedMask} drawing={drawingMask} video={videoRef}
+          onPause={()=>{videoRef.current?.pause();setPlaying(false);}}
+          onDraw={rect=>{const mask=newMask(rect,playhead,duration);setStudio(data=>data&&({...data,project:{...data.project,masks:[...data.project.masks,mask]}}));setSelectedMask(mask.id);setDrawingMask(false);}}
+          onRect={rect=>setStudio(data=>data&&({...data,project:{...data.project,masks:data.project.masks.map(m=>m.id===selectedMask?setMaskKeyframe(m,rect,playhead):m)}}))}/>}
         {src && (
           <video
+            key={target?.path}
             ref={videoRef}
             className="trim-video"
             src={src}
@@ -507,10 +588,12 @@ export function TrimView() {
         )}
       </div>
 
-      {studio && probe && target && <StudioPanel project={studio.project} path={target.path} width={probe.width} height={probe.height}
+      {studio && probe && target && <StudioPanel key={target.path} onClose={requestClose} project={{...studio.project,...edit}} path={target.path} width={probe.width} height={probe.height}
+        time={playhead} duration={duration} events={studio.events} selectedZoom={selectedZoom} onSelectZoom={setSelectedZoom} focusAim={focusAim} pickingFocus={pickingFocus} onPickZoom={()=>{videoRef.current?.pause();setPlaying(false);setSelectedMask(null);setDrawingMask(false);setFocusAim(null);setPickingFocus(value=>!value);}}
+        selectedMask={selectedMask} onSelectMask={setSelectedMask} drawingMask={drawingMask} onDrawMask={()=>{videoRef.current?.pause();setPickingFocus(false);setSelectedMask(null);setDrawingMask(value=>!value);}} onSeek={time=>{scrub(time,'start');scrub(time,'end');}}
         saveStatus={saveStatus} exportMessage={exportMessage} exporting={exporting !== null} cam={cam} onCamChange={setCam}
-        onChange={(patch) => setStudio((data) => data && ({ ...data, project: { ...data.project, ...patch } }))}
-        onSave={() => void flushSave()} />}
+        onChange={(patch,action) => {if(patch.clips)commit({...edit,clips:patch.clips},action);if(patch.zoomSegments){setPickingFocus(false);setFocusAim(null);}setStudio((data) => data && ({ ...data, project: { ...data.project, ...patch } }));}}
+        onSave={async () => {autosaveRef.current={path:target.path,project:{...studio.project,...edit,cam}};await flushSave();return autosaveRef.current===null;}} />}
 
       </div>
       <div className="trim-transport">
@@ -550,10 +633,18 @@ export function TrimView() {
         />
       )}
 
+      {studio&&probe&&<StudioEffectTrack label="Zoom" segments={studio.project.zoomSegments} duration={duration} zoom={zoom} viewStart={viewStart} selected={selectedZoom} disabled={exporting!==null}
+        onSelect={setSelectedZoom} onDelete={id=>setStudio(data=>data&&({...data,project:{...data.project,zoomSegments:data.project.zoomSegments.filter(s=>s.id!==id)}}))}
+        onRange={(id,start,end)=>setStudio(data=>data&&({...data,project:{...data.project,zoomSegments:data.project.zoomSegments.map(s=>s.id===id?{...s,start,end,edited:true,transitionStart:undefined,transitionEnd:undefined}:s)}}))}/>}
+      {studio&&probe&&<StudioEffectTrack label="Masks" segments={studio.project.masks} duration={duration} zoom={zoom} viewStart={viewStart} selected={selectedMask} disabled={exporting!==null}
+        onSelect={setSelectedMask} onDelete={id=>setStudio(data=>data&&({...data,project:{...data.project,masks:data.project.masks.filter(m=>m.id!==id)}}))}
+        onRange={(id,start,end)=>setStudio(data=>data&&({...data,project:{...data.project,masks:data.project.masks.map(m=>m.id===id?{...m,start,end}:m)}}))}/>}
+
       <TrimFilmstrip clips={clips} disabled={exporting !== null} selectedId={selectedId} onReorder={doReorder} onSelect={selectClip} />
 
+      <GifExportControls disabled={exporting!==null||!probe||keptCount(clips)===0} duration={outDur} onExport={options=>void saveGif(options)}/>
       <div className="trim-actions">
-        <span className="trim-out">Output: {fmt(outDur)} / {fmt(duration)}</span>
+        <span className="trim-out">Output: {fmt(outDur)} / {fmt(duration)}{estimated&&<span className="trim-export-estimate" title="Approximate MP4 size; actual size depends on the content."> · ≈ {(estimated.low/1048576).toFixed(1)}–{(estimated.high/1048576).toFixed(1)} MiB</span>}</span>
         <div className="trim-zoomctl" role="group" aria-label="Timeline zoom">
           <button className="trim-zoombtn" onClick={zoomOut} disabled={zoom <= 1} title="Zoom out (−)"><ZoomOut size={13} /></button>
           <span className="trim-zoomval">{zoom}×</span>
@@ -578,13 +669,13 @@ export function TrimView() {
         </div>
         <span className="trim-spacer" />
         {exporting !== null ? (
-          <><div className="trim-progress"><div className="trim-progress-fill" style={{ width: `${exporting}%` }} /><span>Exporting… {exporting}%</span></div>{studio && <button className="trim-btn" onClick={() => void studioExportCancel()}>Cancel export</button>}</>
+          <><div className="trim-progress"><div className="trim-progress-fill" style={{ width: `${exporting}%` }} /><span>{exporting>=99?'Finishing export…':`Exporting… ${exporting}%`}</span></div>{(studio||exportingGif)&&<button className="trim-btn" onClick={() => void studioExportCancel()}>Cancel export</button>}</>
         ) : (
-          <>
+          <div className="trim-save-actions">
             <button className="trim-btn" onClick={requestClose}>Cancel</button>
             {!studio && <button className="trim-btn" disabled={!canSave} onClick={() => save("overwrite")}>Overwrite</button>}
             <button className="trim-btn trim-btn--primary" disabled={!canSave} onClick={() => save("copy")}>{studio ? "Export MP4" : "Save copy"}</button>
-          </>
+          </div>
         )}
       </div>
     </div>

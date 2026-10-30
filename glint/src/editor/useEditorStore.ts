@@ -13,6 +13,7 @@ import {
 } from "./model";
 import type { Crop } from "./composition";
 import { loadToolStyles, saveToolStyles } from "./toolStylePersistence";
+import {fitImageCanvas,isSideBySideCanvas} from './imageLayers';
 
 /** Non-serializable base image for the live session (5c persists annotations only). */
 export interface EditorBase {
@@ -28,7 +29,7 @@ import { DEFAULT_LOOK, hydrateLook, type LookConfig, type WindowChrome } from ".
 export type FrameConfig = LookConfig;
 
 /** One step of undo/redo history: annotations + crop + frame + the standalone corner trim. */
-interface DocSnapshot { annotations: Annotation[]; crop: Crop | null; frame: FrameConfig; cornerRadius: number }
+interface DocSnapshot { annotations: Annotation[]; crop: Crop | null; frame: FrameConfig; cornerRadius: number; canvasSize: {width:number;height:number}|null; canvasAutoFit:boolean }
 
 /** The serializable editor document persisted to / loaded from a `.glint` file. */
 export interface SerializedDoc {
@@ -38,6 +39,8 @@ export interface SerializedDoc {
   /** Standalone image corner rounding (0–100 %); trims the screenshot's corners to
       transparent on export, independent of the decorative frame. Optional for legacy docs. */
   cornerRadius?: number;
+  canvasSize?: {width:number;height:number}|null;
+  canvasAutoFit?: boolean;
 }
 
 export const DEFAULT_FRAME: FrameConfig = DEFAULT_LOOK;
@@ -55,6 +58,8 @@ interface EditorState {
   /** Standalone image corner rounding (0–100 %) — rounds + trims the screenshot,
       no frame decoration. Governs the image clip when the frame is off. */
   cornerRadius: number;
+  canvasSize: {width:number;height:number}|null;
+  canvasAutoFit: boolean;
   past: DocSnapshot[];
   future: DocSnapshot[];
   projectPath: string | null;
@@ -64,6 +69,8 @@ interface EditorState {
   eraserSize: number;
   /** Eyedropper pick mode: the next canvas click samples a pixel color. */
   picking: boolean;
+  renderingLook:boolean;
+  setRenderingLook:(value:boolean)=>void;
 
   setBase: (b: EditorBase) => void;
   loadDoc: (
@@ -110,6 +117,7 @@ interface EditorState {
   /** Set the standalone image corner radius (0–100 %). History-free — the UI
       checkpoints on the slider's pointer-down, like the frame sliders. */
   setCornerRadius: (v: number) => void;
+  setCanvasSize: (size:{width:number;height:number}|null,autoFit?:boolean)=>void;
   undo: () => void;
   redo: () => void;
 }
@@ -134,6 +142,8 @@ const INITIAL = {
   crop: null as Crop | null,
   frame: freshFrame(),
   cornerRadius: 0,
+  canvasSize: null,
+  canvasAutoFit: false,
   past: [] as DocSnapshot[],
   future: [] as DocSnapshot[],
   projectPath: null as string | null,
@@ -141,6 +151,7 @@ const INITIAL = {
   dirty: false,
   eraserSize: 16,
   picking: false,
+  renderingLook:false,
 };
 
 /** The full reversible doc state for one undo/redo step (annotations + crop + frame). */
@@ -149,6 +160,8 @@ const snapshot = (s: EditorState): DocSnapshot => ({
   crop: s.crop,
   frame: s.frame,
   cornerRadius: s.cornerRadius,
+  canvasSize: s.canvasSize,
+  canvasAutoFit: s.canvasAutoFit,
 });
 
 export const useEditorStore = create<EditorState>((set) => ({
@@ -164,6 +177,8 @@ export const useEditorStore = create<EditorState>((set) => ({
       crop: doc?.crop ?? null,
       frame: mergeFrame(doc?.frame),
       cornerRadius: doc?.cornerRadius ?? 0,
+      canvasSize: doc?.canvasSize ?? null,
+      canvasAutoFit: doc?.canvasAutoFit ?? isSideBySideCanvas(base,doc?.canvasSize,doc?.annotations??[]),
       picking: false,
       past: [],
       future: [],
@@ -247,11 +262,17 @@ export const useEditorStore = create<EditorState>((set) => ({
     })),
   update: (id, patch) => set((s) => ({ annotations: updateAnnotation(s.annotations, id, patch), dirty: true })),
   remove: (id) =>
-    set((s) => ({
-      annotations: deleteAnnotation(s.annotations, id),
+    set((s) => {
+      const annotations=deleteAnnotation(s.annotations,id);
+      const resize=s.canvasAutoFit&&s.base&&s.annotations.find(a=>a.id===id)?.type==='image';
+      const canvasSize=resize?fitImageCanvas(s.base!,annotations):s.canvasSize;
+      return {
+      annotations,
+      canvasSize,
+      canvasAutoFit:s.canvasAutoFit&&canvasSize!==null,
       selectedId: s.selectedId === id ? null : s.selectedId,
       dirty: true,
-    })),
+    };}),
 
   // Wholesale replace (eraser). Drops the selection if the selected annotation
   // is no longer present in the new list.
@@ -264,6 +285,7 @@ export const useEditorStore = create<EditorState>((set) => ({
 
   setEraserSize: (n) => set({ eraserSize: n }),
   setPicking: (v) => set({ picking: v }),
+  setRenderingLook: renderingLook=>set({renderingLook}),
 
   // Wipe every annotation in one gesture (a single undoable step). No-op — and
   // crucially no spurious history entry — when there's nothing to clear. The
@@ -271,7 +293,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   clearAll: () =>
     set((s) =>
       s.annotations.length
-        ? { past: [...s.past, snapshot(s)], future: [], annotations: [], selectedId: null, dirty: true }
+        ? { past: [...s.past, snapshot(s)], future: [], annotations: [], selectedId: null, canvasSize:s.canvasAutoFit?null:s.canvasSize,canvasAutoFit:false,dirty: true }
         : s,
     ),
 
@@ -316,6 +338,7 @@ export const useEditorStore = create<EditorState>((set) => ({
   // Standalone image corner trim. History-free (the Corners slider checkpoints on
   // pointer-down); cornerRadius rides in the undo snapshot so undo restores it.
   setCornerRadius: (v) => set({ cornerRadius: v, dirty: true }),
+  setCanvasSize: (canvasSize,autoFit=false) => set({canvasSize,canvasAutoFit:autoFit,crop:null,dirty:true}),
 
   undo: () =>
     set((s) =>

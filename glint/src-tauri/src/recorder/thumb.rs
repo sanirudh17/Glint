@@ -9,7 +9,10 @@ pub async fn extract_thumb(app: &AppHandle, mp4_path: &str) -> Option<String> {
     let dir = crate::paths::thumbs_dir(&dir);
     std::fs::create_dir_all(&dir).ok()?;
     let stem = std::path::Path::new(mp4_path).file_stem()?.to_string_lossy().to_string();
-    let thumb = dir.join(format!("{stem}.png"));
+    use std::hash::{Hash,Hasher};
+    let mut hash=std::collections::hash_map::DefaultHasher::new();
+    mp4_path.to_lowercase().hash(&mut hash);
+    let thumb = dir.join(format!("{stem}-{:016x}.png",hash.finish()));
     let thumb_str = thumb.to_string_lossy().to_string();
     let status = app
         .shell()

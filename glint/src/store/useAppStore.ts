@@ -1,4 +1,5 @@
 import { create } from "zustand";
+import {accentForeground} from '../lib/accentContrast';
 import { invoke } from "@tauri-apps/api/core";
 import { emit } from "@tauri-apps/api/event";
 import { persistSetting, saveSetting, setHotkey as setHotkeyIpc, resetHotkeys as resetHotkeysIpc, setSaveDir as setSaveDirIpc, windowSetTaskbar } from "../lib/ipc";
@@ -15,10 +16,16 @@ export type RecordFxKey =
 
 export interface Settings {
   theme: Theme;
+  glass?: boolean;
   accent: string;
   hotkeys: Record<string, string>;
   auto_save: boolean;
   auto_copy: boolean;
+  hide_desktop_icons:boolean;
+  quick_access_auto_close:boolean;
+  index_screenshot_text: boolean;
+  auto_name_captures: boolean;
+  ocr_engine: "tesseract"|"ppocrv6-small"|"ppocrv6-medium";
   open_in_editor: boolean;
   explorer_menu_enabled: boolean;
   record_system_audio: boolean;
@@ -54,9 +61,13 @@ interface AppState {
   toasts: Toast[];
   loadSettings: () => Promise<void>;
   setTheme: (t: Theme) => Promise<void>;
+  setGlass: (on: boolean) => Promise<void>;
   setAccent: (hex: string) => Promise<void>;
   setAutoSave: (on: boolean) => Promise<void>;
   setAutoCopy: (on: boolean) => Promise<void>;
+  setIndexScreenshotText:(on:boolean)=>Promise<void>;
+  setOcrEngine:(engine:"tesseract"|"ppocrv6-small"|"ppocrv6-medium")=>Promise<void>;
+  setAutoNameCaptures:(on:boolean)=>Promise<void>;
   setOpenInEditor: (on: boolean) => Promise<void>;
   setExplorerMenu: (on: boolean) => Promise<void>;
   setRecordSystemAudio: (on: boolean) => Promise<void>;
@@ -76,6 +87,8 @@ interface AppState {
   setWebcamDevice: (id: string) => Promise<void>;
   setWebcamShape: (shape: "circle" | "rounded" | "square" | "rect") => Promise<void>;
   setCaptureDelay: (v: 3 | 5 | 10) => Promise<void>;
+  setHideDesktopIcons:(on:boolean)=>Promise<void>;
+  setQuickAccessAutoClose:(on:boolean)=>Promise<void>;
   setRecordResolution: (v: "original" | "1080p" | "720p") => Promise<void>;
   setRecordQuality: (v: "high" | "medium" | "low") => Promise<void>;
   pushToast: (text: string) => void;
@@ -223,7 +236,20 @@ export const useAppStore = create<AppState>((set, get) => {
     }
   },
 
+  setGlass: async (on:boolean) => {
+    await commit("glass",on,"Acrylic glass");
+    const s=get().settings;
+    if(s) broadcastVisual(s.theme,s.accent);
+  },
+
   setAutoSave: (on: boolean) => commit("auto_save", on, "Auto-save"),
+  setOcrEngine:(engine:'tesseract'|'ppocrv6-small'|'ppocrv6-medium')=>commit('ocr_engine',engine,'OCR engine'),
+  setAutoNameCaptures:(on:boolean)=>commit('auto_name_captures',on,'Automatic capture names'),
+  setIndexScreenshotText:async(on:boolean)=>{
+    await commit('index_screenshot_text',on,'Screenshot text search');
+    if(get().settings?.index_screenshot_text!==on)return;
+    try{await invoke(on?'library_index_start':'library_index_clear');}catch{get().pushToast("Couldn't update the screenshot text index");}
+  },
 
   setAutoCopy: (on: boolean) => commit("auto_copy", on, "Auto-copy"),
 
@@ -377,6 +403,8 @@ export const useAppStore = create<AppState>((set, get) => {
 
   setCaptureDelay: (v: 3 | 5 | 10) =>
     commit("capture_delay_secs", v, "Capture delay"),
+  setHideDesktopIcons:on=>commit('hide_desktop_icons',on,'Hide desktop icons'),
+  setQuickAccessAutoClose:on=>commit('quick_access_auto_close',on,'Quick Access auto-close'),
 
   setRecordResolution: (v: "original" | "1080p" | "720p") =>
     commit("record_resolution", v, "Resolution"),
@@ -413,13 +441,14 @@ export const ACCENT_STORAGE_KEY = "glint.accent";
 export const VISUAL_SETTINGS_EVENT = "settings-visual-changed";
 export interface VisualSettings {
   theme: Theme;
+  glass?: boolean;
   accent: string;
 }
 
 /** Fire-and-forget broadcast of the current theme+accent to all windows (incl.
  *  self — re-applying is idempotent). No-op if not running under Tauri. */
 function broadcastVisual(theme: Theme, accent: string): void {
-  void emit(VISUAL_SETTINGS_EVENT, { theme, accent } satisfies VisualSettings).catch(() => {
+  void emit(VISUAL_SETTINGS_EVENT, { theme, accent, glass: useAppStore.getState().settings?.glass ?? true } satisfies VisualSettings).catch(() => {
     /* not in a Tauri window (plain Vite) — nothing to broadcast */
   });
 }
@@ -432,10 +461,11 @@ export function applyTheme(theme: Theme): void {
         ? "dark"
         : "light"
       : theme;
+  document.documentElement.dataset.appearance = theme;
   document.documentElement.dataset.theme = resolved;
   document.documentElement.style.setProperty(
     "--bg",
-    resolved === "light" ? "#F6F7F9" : "#141518",
+    resolved === "light" ? "#F6F7F9" : "#080808",
   );
   try { localStorage.setItem(THEME_STORAGE_KEY, theme); } catch { /* no storage → skip */ }
   // Do not touch .ready here — initial load's ready is managed by index.html/main.tsx/loadSettings
@@ -505,6 +535,7 @@ export function applyAccent(hex: string): void {
     (e) => e.accent.toLowerCase() === hex.toLowerCase(),
   );
   const root = document.documentElement.style;
+  root.setProperty('--accent-fg',accentForeground(hex));
   if (entry) {
     root.setProperty("--accent", entry.accent);
     root.setProperty("--accent-hover", entry.hover);

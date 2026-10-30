@@ -21,6 +21,10 @@ pub struct Hotkeys {
     pub capture_window_delayed: String,
     #[serde(default)]
     pub capture_fullscreen_delayed: String,
+    #[serde(default)]
+    pub open_latest: String,
+    #[serde(default)]
+    pub capture_scroll: String,
 }
 
 impl Default for Hotkeys {
@@ -34,17 +38,31 @@ impl Default for Hotkeys {
             capture_area_delayed: String::new(),
             capture_window_delayed: String::new(),
             capture_fullscreen_delayed: String::new(),
+            open_latest: String::new(),
+            capture_scroll: String::new(),
         }
     }
 }
 
+fn default_glass()->bool{true}
+fn default_ocr_engine()->String{"tesseract".into()}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub theme: Theme,
+    #[serde(default="default_glass")]
+    pub glass: bool,
     pub accent: String,
     pub hotkeys: Hotkeys,
     pub auto_save: bool,
     pub auto_copy: bool,
+    #[serde(default)]
+    pub hide_desktop_icons: bool,
+    #[serde(default)]
+    pub quick_access_auto_close: bool,
+    pub index_screenshot_text: bool,
+    pub auto_name_captures: bool,
+    #[serde(default="default_ocr_engine")]
+    pub ocr_engine: String,
     pub open_in_editor: bool,
     pub explorer_menu_enabled: bool,
     pub record_system_audio: bool,
@@ -105,10 +123,16 @@ impl Default for Settings {
     fn default() -> Self {
         Self {
             theme: Theme::Dark,
+            glass: true,
             accent: "#2BAAAD".into(),
             hotkeys: Hotkeys::default(),
             auto_save: true,
             auto_copy: true,
+            hide_desktop_icons:false,
+            quick_access_auto_close:false,
+            index_screenshot_text: true,
+            auto_name_captures: false,
+            ocr_engine: default_ocr_engine(),
             open_in_editor: false,
             explorer_menu_enabled: true,
             record_system_audio: true,
@@ -139,6 +163,7 @@ impl Default for Settings {
 /// Validate and set one field by key. Keeps the source of truth for valid shapes in Rust.
 pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Result<(), String> {
     match key {
+        "glass" => { s.glass=value.as_bool().ok_or("glass must be boolean")?; }
         "theme" => {
             s.theme = serde_json::from_value(value).map_err(|e| e.to_string())?;
         }
@@ -151,9 +176,14 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         "auto_save" => {
             s.auto_save = value.as_bool().ok_or("auto_save must be boolean")?;
         }
+        "hide_desktop_icons"=>{s.hide_desktop_icons=value.as_bool().ok_or("hide_desktop_icons must be boolean")?;}
+        "quick_access_auto_close"=>{s.quick_access_auto_close=value.as_bool().ok_or("quick_access_auto_close must be boolean")?;}
         "auto_copy" => {
             s.auto_copy = value.as_bool().ok_or("auto_copy must be boolean")?;
         }
+        "index_screenshot_text"=>{s.index_screenshot_text=value.as_bool().ok_or("index_screenshot_text must be boolean")?;}
+        "ocr_engine"=>{let engine=value.as_str().ok_or("OCR engine must be text")?;if !matches!(engine,"tesseract"|"ppocrv6-small"|"ppocrv6-medium"){return Err("Unknown OCR engine".into());}s.ocr_engine=engine.into();}
+        "auto_name_captures"=>{let _=value.as_bool().ok_or("auto_name_captures must be boolean")?;s.auto_name_captures=false;}
         "open_in_editor" => {
             s.open_in_editor = value.as_bool().ok_or("open_in_editor must be boolean")?;
         }
@@ -278,10 +308,41 @@ mod tests {
     use serde_json::json;
 
     #[test]
+    fn ocr_engine_migrates_and_validates() {
+        let mut settings=Settings::default();
+        assert_eq!(settings.ocr_engine,"tesseract");
+        let mut old=serde_json::to_value(&settings).unwrap();
+        old.as_object_mut().unwrap().remove("ocr_engine");
+        let restored:Settings=serde_json::from_value(old).unwrap();
+        assert_eq!(restored.ocr_engine,"tesseract");
+        apply_update(&mut settings,"ocr_engine",json!("ppocrv6-small")).unwrap();
+        assert_eq!(settings.ocr_engine,"ppocrv6-small");
+        apply_update(&mut settings,"ocr_engine",json!("ppocrv6-medium")).unwrap();
+        assert_eq!(settings.ocr_engine,"ppocrv6-medium");
+        apply_update(&mut settings,"auto_name_captures",json!(true)).unwrap();
+        assert!(!settings.auto_name_captures);
+        assert!(apply_update(&mut settings,"ocr_engine",json!("cloud")).is_err());
+        assert!(apply_update(&mut settings,"ocr_engine",json!(true)).is_err());
+        apply_update(&mut settings,"ocr_engine",json!("tesseract")).unwrap();
+        assert_eq!(settings.ocr_engine,"tesseract");
+    }
+
+    #[test]
     fn defaults_are_dark_theme() {
         let s = Settings::default();
         assert!(matches!(s.theme, Theme::Dark));
         assert_eq!(s.hotkeys.capture_area, "CmdOrCtrl+Shift+1");
+    }
+
+    #[test]
+    fn acrylic_can_be_disabled_and_older_preferences_keep_the_default() {
+        let mut s=Settings::default();
+        let mut old=serde_json::to_value(&s).unwrap();
+        old.as_object_mut().unwrap().remove("glass");
+        assert!(serde_json::from_value::<Settings>(old).unwrap().glass);
+        apply_update(&mut s,"glass",json!(false)).unwrap();
+        assert!(!s.glass);
+        assert!(apply_update(&mut s,"glass",json!("yes")).is_err());
     }
 
     #[test]
@@ -485,6 +546,14 @@ mod tests {
     #[test]
     fn default_capture_delay_is_five() {
         assert_eq!(Settings::default().capture_delay_secs, 5);
+    }
+    #[test]
+    fn clean_capture_defaults_are_off_and_legacy_hotkeys_load(){
+        let mut s=Settings::default();assert!(!s.hide_desktop_icons);assert!(!s.quick_access_auto_close);assert!(s.hotkeys.open_latest.is_empty());
+        let mut old=serde_json::to_value(&s.hotkeys).unwrap();old.as_object_mut().unwrap().remove("open_latest");
+        s.hotkeys=serde_json::from_value(old).unwrap();assert!(s.hotkeys.open_latest.is_empty());assert_eq!(s.hotkeys.capture_area,"CmdOrCtrl+Shift+1");
+        for key in ["hide_desktop_icons","quick_access_auto_close"]{assert!(apply_update(&mut s,key,json!("yes")).is_err());apply_update(&mut s,key,json!(true)).unwrap();apply_update(&mut s,key,json!(false)).unwrap();}
+        assert!(!s.hide_desktop_icons);assert!(!s.quick_access_auto_close);
     }
 
     #[test]

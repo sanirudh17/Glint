@@ -22,16 +22,36 @@ export function cursorAt(path: CursorPoint[], t: number): CursorPoint | null {
   const f = b.t > a.t ? Math.max(0, Math.min(1, (t - a.t) / (b.t - a.t))) : 0;
   return { t, x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, movedAt: a.movedAt };
 }
+/** A zoom mark is activity even when the pointer has been stationary. */
+export function cursorForFrame(path:CursorPoint[],t:number,events:StudioEvents):CursorPoint|null {
+  const point=cursorAt(path,t),marker=[...events.events].reverse().find(e=>e.kind==='marker'&&e.t<=t&&t-e.t<1.1);
+  if(!marker)return point;
+  const g=events.geometry,inside=point&&point.x>=g.x&&point.x<g.x+g.width&&point.y>=g.y&&point.y<g.y+g.height;
+  return {t,x:inside?point.x:Math.max(g.x,Math.min(g.x+g.width-1,marker.x??g.x+g.width/2)),y:inside?point.y:Math.max(g.y,Math.min(g.y+g.height-1,marker.y??g.y+g.height/2)),movedAt:Math.max(point?.movedAt??0,marker.t)};
+}
 export function sourcePoint(x: number, y: number, events: StudioEvents, width: number, height: number) {
   const g = events.geometry;
   return { x: (x - g.x) * width / g.width, y: (y - g.y) * height / g.height };
 }
+export function followSourcePoint(path: CursorPoint[], t:number, events:StudioEvents, width:number, height:number) {
+  const positions = Array.from({length:5},(_,i)=>cursorAt(path,Math.max(0,t-i*.035))).filter(p=>p!==null);
+  if(!positions.length)return null;
+  const latest=sourcePoint(positions[0].x,positions[0].y,events,width,height);
+  return {...sourcePoint(positions.reduce((sum,p)=>sum+p.x,0)/positions.length,positions.reduce((sum,p)=>sum+p.y,0)/positions.length,events,width,height),latestX:latest.x,latestY:latest.y};
+}
+export function recordedCursor(config:CursorConfig,events:StudioEvents,time:number):CursorConfig {
+  if(config.recordedEffects===false)return config;
+  for(let i=events.events.length-1;i>=0;i--){const event=events.events[i];if(event.kind==='effects'&&event.t<=time)return {...config,clicks:config.clicks&&event.clicks!==false,keystrokes:config.keystrokes&&event.keystrokes!==false,spotlight:!!config.spotlight&&event.spotlight!==false};}
+  return config;
+}
 export function drawCursorLayer(ctx: CanvasRenderingContext2D, t: number, path: CursorPoint[], events: StudioEvents, config: CursorConfig, layout: Layout, width: number, height: number) {
+  config=recordedCursor(config,events,t);
   const l = layout;
   const inside = (p: { x: number; y: number }) => p.x >= l.cropX && p.x < l.cropX + l.contentW && p.y >= l.cropY && p.y < l.cropY + l.contentH;
   const xy = (x: number, y: number) => { const p = sourcePoint(x, y, events, width, height); return { ...p, outX: l.contentX + p.x - l.cropX, outY: l.contentY + p.y - l.cropY }; };
   ctx.save(); ctx.beginPath(); ctx.rect(l.contentX, l.contentY, l.contentW, l.contentH); ctx.clip();
-  const point = cursorAt(path, t);
+  const point = cursorForFrame(path, t,events);
+  if(point&&config.spotlight){const p=xy(point.x,point.y);if(inside(p)){ctx.save();ctx.fillStyle='rgba(255,235,160,.22)';ctx.beginPath();ctx.arc(p.outX,p.outY,48,0,Math.PI*2);ctx.fill();ctx.restore();}}
   if (point && config.visible && (!config.hideIdle || t - point.movedAt < config.idleSeconds)) {
     const p = xy(point.x, point.y);
     if (inside(p)) {

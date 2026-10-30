@@ -5,7 +5,7 @@ import presets from "../look/gradients.json";
  * react-konva linear-gradient props sized to a w×h rect.
  */
 export interface GradientStop { offset: number; color: string }
-export interface GradientPreset { id: string; label: string; stops: GradientStop[]; angleDeg: number }
+export interface GradientPreset { id: string; label: string; stops: GradientStop[]; angleDeg: number; category?: string }
 
 export const GRADIENTS: GradientPreset[] = presets;
 

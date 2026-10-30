@@ -17,9 +17,9 @@
   align-items: center;
   justify-content: center;
   gap: var(--s2);
-  border: 1px solid var(--border);
+  border: 1px solid var(--border-strong);
   border-radius: var(--r-btn);
-  background: transparent;
+  background: var(--bg-elev2);
   color: var(--text);
   font-family: inherit;
   font-weight: var(--fw-medium);
@@ -46,13 +46,13 @@
 .g-btn-sm {
   padding: var(--s1) var(--s3);
   font-size: var(--fz-sm);
-  height: 28px;
+  height: var(--control-h-sm);
 }
 
 .g-btn-md {
-  padding: var(--s2) var(--s4);
+  padding: 0 var(--s3);
   font-size: var(--fz-md);
-  height: 34px;
+  height: var(--control-h);
 }
 
 /* Variants */
@@ -84,7 +84,7 @@
 
 .g-btn-subtle {
   background: transparent;
-  border-color: var(--border);
+  border-color: var(--border-strong);
   color: var(--text-dim);
 }
 .g-btn-subtle:hover:not(:disabled) {
@@ -183,6 +183,11 @@
   background: var(--accent-fg);
 }
 
+/* The light-theme switch uses a white thumb, independently of button text contrast. */
+:root[data-theme="light"] .g-switch-root:has(input:checked) .g-switch-track::after {
+  background: #ffffff;
+}
+
 .g-switch-label {
   font-size: var(--fz-md);
   color: var(--text-dim);
@@ -196,7 +201,7 @@
 
 .g-number-input {
   display: flex; align-items: center; gap: 2px;
-  height: 36px; min-width: 0; width: 100%;
+  height: var(--control-h); min-width: 0; width: 100%;
   padding: 3px; background: var(--bg-elev2);
   border: 1px solid var(--border); border-radius: var(--r2);
 }
@@ -216,7 +221,7 @@
 .g-number-input button:disabled { opacity: .35; cursor: default; }
 .g-color-control {
   position: relative; display: flex; align-items: center; justify-content: flex-start;
-  gap: 10px; height: 36px; width: 100%; padding: 0 10px;
+  gap: 10px; height: var(--control-h); width: 100%; padding: 0 10px;
   border: 1px solid var(--border); border-radius: var(--r2);
   background: var(--bg-elev2); cursor: pointer;
 }
@@ -230,7 +235,7 @@
 .g-control-disclosure { width: 100%; }
 .g-control-disclosure > summary {
   list-style: none; display: flex; align-items: center; justify-content: space-between;
-  gap: var(--s2); min-height: 36px; font-size: var(--fz-md);
+  gap: var(--s2); min-height: var(--control-h); font-size: var(--fz-md);
   font-weight: var(--fw-medium); color: var(--text-dim); cursor: pointer;
 }
 .g-control-disclosure > summary::-webkit-details-marker { display: none; }
@@ -256,7 +261,7 @@
 .g-section-header {
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
+  gap: var(--s2);
   padding-bottom: var(--s4);
   border-bottom: 1px solid var(--border);
 }
@@ -284,18 +289,18 @@
 .g-field {
   display: flex;
   flex-direction: column;
-  gap: var(--s1);
+  gap: 8px;
 }
 
 .g-field-label {
-  font-size: var(--fz-sm);
+  font-size: var(--fz-md);
   font-weight: var(--fw-medium);
   color: var(--text-dim);
   line-height: var(--lh-tight);
 }
 
 .g-field-hint {
-  font-size: var(--fz-xs);
+  font-size: var(--fz-sm);
   color: var(--text-faint);
   line-height: var(--lh-base);
 }
@@ -310,7 +315,7 @@
 
 .g-select-trigger {
   width: 100%;
-  height: 36px;
+  height: var(--control-h);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -381,6 +386,8 @@
 }
 
 .g-select-dropdown {
+  backdrop-filter: var(--select-blur, none);
+  -webkit-backdrop-filter: var(--select-blur, none);
   position: absolute;
   top: calc(100% + 4px);
   left: 0;
@@ -389,7 +396,7 @@
   max-height: 240px;
   overflow-y: auto;
   overflow-x: hidden;
-  background: var(--bg-elev);
+  background: var(--select-menu-bg, var(--bg-elev));
   border: 1px solid var(--border);
   border-radius: var(--r2);
   box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35), 0 2px 8px rgba(0, 0, 0, 0.18);
@@ -400,13 +407,13 @@
 }
 
 :root[data-theme="light"] .g-select-dropdown {
-  background: var(--bg-elev);
+  background: var(--select-menu-bg, var(--bg-elev));
   border-color: var(--border);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.08), 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
 :root[data-theme="dark"] .g-select-dropdown {
-  background: var(--bg-elev);
+  background: var(--select-menu-bg, var(--bg-elev));
   border-color: var(--border-strong);
   box-shadow: 0 8px 28px rgba(0, 0, 0, 0.55), 0 2px 8px rgba(0, 0, 0, 0.35);
 }
@@ -470,10 +477,11 @@
 
 /* Disabled select — inert and visibly unavailable. */
 .g-select-wrap--disabled {
-  opacity: 0.4;
+  opacity: 1;
   pointer-events: none;
 }
 .g-select-wrap--disabled .g-select-trigger {
+  opacity: .6;
   cursor: not-allowed;
 }
 
@@ -515,7 +523,7 @@
 }
 
 .g-tooltip-root:hover .g-tooltip-bubble,
-.g-tooltip-root:focus-within .g-tooltip-bubble {
+.g-tooltip-root:has(:focus-visible) .g-tooltip-bubble {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
 }
@@ -529,7 +537,7 @@
 }
 
 .g-tooltip-root:hover .g-tooltip-bubble--right,
-.g-tooltip-root:focus-within .g-tooltip-bubble--right {
+.g-tooltip-root:has(:focus-visible) .g-tooltip-bubble--right {
   transform: translateY(-50%) translateX(0);
 }
 
@@ -607,3 +615,11 @@
     transform: translateY(0);
   }
 }
+
+/* Settings switches sit beside their label; help stays below the label. */
+.g-field:has(> .g-switch-root) { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px 16px; align-items: center; }
+.g-field:has(> .g-switch-root) > .g-field-label { grid-column: 1; grid-row: 1; }
+.g-field:has(> .g-switch-root) > .g-switch-root { grid-column: 2; grid-row: 1; }
+.g-field:has(> .g-switch-root) > .g-field-hint { grid-column: 1; grid-row: 2; max-width: 64ch; }
+.g-btn > svg, .editor-export-btn > svg { flex: none; }
+.g-select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

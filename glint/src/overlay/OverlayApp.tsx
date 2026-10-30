@@ -15,6 +15,8 @@
  * Tasks 9–12 will mount the interactive mode layer inside the marked comment.
  */
 import { useEffect, useState } from "react";
+import {invoke} from '@tauri-apps/api/core';
+import '../capture/scrolling.css';
 import { listen } from "@tauri-apps/api/event";
 import {
   getOverlayData,
@@ -51,6 +53,9 @@ function useMonitorId(): number {
 
 export function OverlayApp() {
   const monitorId = useMonitorId();
+  const [displays,setDisplays]=useState<{id:number;name:string}[]>([]);
+  useEffect(()=>{void invoke<{id:number;name:string}[]>('capture_displays').then(setDisplays).catch(()=>{});},[]);
+  useEffect(()=>{const key=(e:KeyboardEvent)=>{if(!e.ctrlKey&&!e.altKey&&!e.metaKey&&/^[1-9]$/.test(e.key)){const display=displays[Number(e.key)-1];if(display){e.preventDefault();void invoke('capture_choose_monitor',{id:display.id});}}};window.addEventListener('keydown',key);return()=>window.removeEventListener('keydown',key);},[displays]);
   // Two-leg load for instant invoke. `meta` is served in ~1ms and renders the
   // interactive chrome (selection layer, hints, loupe seed) over the live
   // desktop the moment the window shows; `frame` adds the frozen backdrop and
@@ -169,6 +174,7 @@ export function OverlayApp() {
           )}
         </div>
       )}
+      {chrome&&displays.length>1&&<nav className="ov-monitor-choice" aria-label="Choose capture monitor">{displays.slice(0,9).map((d,i)=><button key={d.id} title={d.name} onClick={()=>void invoke('capture_choose_monitor',{id:d.id})}>{i+1} · Display {i+1}</button>)}</nav>}
     </div>
   );
 }

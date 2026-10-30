@@ -16,6 +16,12 @@ pub fn copy_text(s: &str) -> Result<(), String> {
     cb.set_text(s.to_owned()).map_err(|e| e.to_string())
 }
 
+/// CF_HDROP on Windows: paste the actual GIF/video file, preserving animation.
+pub fn copy_file(path:&std::path::Path)->Result<(),String>{
+    if !path.is_file(){return Err("This file no longer exists".into())}
+    arboard::Clipboard::new().map_err(|e|e.to_string())?.set().file_list(&[path]).map_err(|e|e.to_string())
+}
+
 #[tauri::command]
 pub fn clipboard_copy_text(text: String) -> Result<(), String> {
     copy_text(&text)

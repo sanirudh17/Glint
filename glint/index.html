@@ -30,6 +30,8 @@
             hash.indexOf("#/rec-hud") === 0 ||
             hash.indexOf("#/rec-cam") === 0 ||
             hash.indexOf("#/rec-fx") === 0 ||
+            hash.indexOf("#/rec-ink") === 0 ||
+            hash.indexOf("#/rec-scroll") === 0 ||
             hash.indexOf("#/ocr") === 0;
           if (isTransient) {
             document.documentElement.style.background = "transparent";
@@ -70,7 +72,7 @@
             theme = window.matchMedia && window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
           }
           document.documentElement.setAttribute("data-theme", theme);
-          document.documentElement.style.setProperty("--bg", theme === "light" ? "#F6F7F9" : "#141518");
+          document.documentElement.style.setProperty("--bg", theme === "light" ? "#F6F7F9" : "#080808");
 
           if (storedAccent) {
             var key = storedAccent.toLowerCase();

@@ -48,6 +48,7 @@ export function ToolRail() {
 
   return (
     <div className="editor-rail" role="toolbar" aria-label="Annotation tools">
+      <div className="editor-rail-tools">
       {GROUPS.map((group, gi) => (
         <div className="editor-rail-group" key={gi} role="group">
           {group.map(({ id, icon: Icon, tip }) => (
@@ -64,6 +65,7 @@ export function ToolRail() {
           ))}
         </div>
       ))}
+      </div>
       <div className="editor-rail-sep" />
       <div className="editor-rail-bottom" role="group" aria-label="History actions">
         <button className="editor-tool" title="Undo (Ctrl+Z)" aria-label="Undo" onClick={() => undo()}>

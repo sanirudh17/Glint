@@ -7,6 +7,7 @@ import HomeView from "./views/HomeView";
 const OverlayApp = lazy(() => import("./overlay/OverlayApp").then((m) => ({ default: m.OverlayApp })));
 const HudApp = lazy(() => import("./hud/HudApp").then((m) => ({ default: m.HudApp })));
 const PinApp = lazy(() => import("./pin/PinApp").then((m) => ({ default: m.PinApp })));
+const RecordingInk=lazy(()=>import('./recorder/RecordingInk').then(m=>({default:m.RecordingInk})));
 const ControlBar = lazy(() => import("./recorder/ControlBar").then((m) => ({ default: m.ControlBar })));
 const Countdown = lazy(() => import("./recorder/Countdown").then((m) => ({ default: m.Countdown })));
 const RegionSelect = lazy(() => import("./recorder/RegionSelect").then((m) => ({ default: m.RegionSelect })));
@@ -21,6 +22,9 @@ import LibraryView from "./views/LibraryView";
 import SettingsView from "./views/SettingsView";
 
 const OcrPanel = lazy(() => import("./ocr/OcrPanel").then((m) => ({ default: m.OcrPanel })));
+const ScrollController=lazy(()=>import('./capture/ScrollController').then(m=>({default:m.ScrollController})));
+const VideoProjectView=lazy(()=>import('./recorder/VideoProjectView').then(m=>({default:m.VideoProjectView})));
+const SpeakerNotes=lazy(()=>import('./recorder/SpeakerNotes').then(m=>({default:m.SpeakerNotes})));
 
 /** Suspense wrapper for a lazily-loaded route element. Fallback is empty — the chunk loads
  *  from local disk in a blink, and a spinner would flash more than it helps. */
@@ -69,6 +73,8 @@ function AppShell() {
 }
 
 export const router = createHashRouter([
+  {path:'/rec-notes',element:lazyRoute(<SpeakerNotes/>)},
+  {path:'/rec-scroll',element:lazyRoute(<ScrollController/>)},
   {
     path: "/overlay",
     element: lazyRoute(<OverlayApp />),
@@ -81,6 +87,7 @@ export const router = createHashRouter([
     path: "/pin",
     element: lazyRoute(<PinApp />),
   },
+  {path:"/rec-ink",element:lazyRoute(<RecordingInk/>)},
   {
     path: "/rec-bar",
     element: lazyRoute(<ControlBar />),
@@ -143,6 +150,7 @@ export const router = createHashRouter([
       { path: "home", element: <HomeView /> },
       { path: "library", element: <LibraryView /> },
       { path: "settings", element: <SettingsView /> },
+      { path: "video-project", element: lazyRoute(<VideoProjectView />) },
     ],
   },
 ]);

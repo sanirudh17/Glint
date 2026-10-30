@@ -1,11 +1,21 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, forwardRef } from "react";
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, forwardRef } from "react";
 import { Stage, Layer, Group, Rect, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
 import { Minus, Plus, Maximize2 } from "lucide-react";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { newId, nextStepNumber, eraseAt, snapAngle, resolveSpotlightDim, type Annotation, type BoxAnno, type TextAnno } from "../../editor/model";
 import { computeLayout, resolveRadiusPx } from "../../editor/composition";
-import { getGradient, konvaGradient } from "../../editor/gradients";
+import {useGradientPlate} from '../../look/useGradientPlate';
+import {useRasterImage} from '../../look/useRasterImage';
+import {watermarkPlacement} from '../../look/sizing';
+import {useSourceImages} from '../../editor/useSourceImages';
+import type {ImageAnno} from '../../editor/model';
+import {getCurrentWebview} from '@tauri-apps/api/webview';
+import {invoke} from '@tauri-apps/api/core';
+import {addLayer} from './ImagesPanel';
+import {readImageFile} from '../../editor/imageLayers';
+import {useAppStore} from '../../store/useAppStore';
+import {opaqueRedactionColor,type PrivacySuggestion} from '../../editor/privacy';
 import { AnnotationNode } from "./AnnotationNode";
 import { SpotlightDimLayer } from "./SpotlightDimLayer";
 import { sampleColorAt } from "../../editor/eyedropper";
@@ -51,7 +61,7 @@ function bottomRoundedRectPath(ctx: Konva.Context, x: number, y: number, w: numb
   ctx.closePath();
 }
 
-export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, ref) {
+export const EditorStage = forwardRef<Konva.Stage,{suggestions?:PrivacySuggestion[]}>(function EditorStage({suggestions=[]}, ref) {
   const base = useEditorStore((s) => s.base);
   const annotations = useEditorStore((s) => s.annotations);
   const tool = useEditorStore((s) => s.tool);
@@ -59,6 +69,20 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const selectedId = useEditorStore((s) => s.selectedId);
   const crop = useEditorStore((s) => s.crop);
   const frame = useEditorStore((s) => s.frame);
+  const canvasSize=useEditorStore(s=>s.canvasSize);
+  const sourceW=canvasSize?.width??base?.width??1,sourceH=canvasSize?.height??base?.height??1;
+  const imageLayers=useMemo(()=>annotations.filter((a):a is ImageAnno=>a.type==='image'),[annotations]);
+  const privacyAccent=useAppStore(s=>s.settings?.accent);
+  const suggestionColor=useMemo(()=>getComputedStyle(document.documentElement).getPropertyValue('--accent').trim()||'#29aeb0',[privacyAccent]);
+  const sourceImages=useSourceImages(imageLayers);
+  const baseCanvas=useMemo(()=>{if(!base)return null;const c=document.createElement('canvas');c.width=sourceW;c.height=sourceH;c.getContext('2d')!.drawImage(base.image,0,0);return c;},[base,sourceW,sourceH]);
+  const sourceCanvas=useMemo(()=>{if(!baseCanvas)return null;const c=document.createElement('canvas');c.width=sourceW;c.height=sourceH;const ctx=c.getContext('2d')!;ctx.drawImage(baseCanvas,0,0);for(const layer of imageLayers){const image=sourceImages[layer.id];if(image)ctx.drawImage(image,layer.x,layer.y,layer.w,layer.h);}return c;},[baseCanvas,imageLayers,sourceImages,sourceW,sourceH]);
+  const protectedSource=useMemo(()=>{
+    if(!sourceCanvas)return null;const masks=annotations.filter((a):a is BoxAnno=>a.type==='redact'&&a.style.redactStyle!=='pixelate');if(!masks.length)return sourceCanvas;
+    const c=document.createElement('canvas');c.width=sourceW;c.height=sourceH;const ctx=c.getContext('2d')!;ctx.drawImage(sourceCanvas,0,0);
+    for(const a of masks){ctx.fillStyle=opaqueRedactionColor(a.style.color);ctx.fillRect(Math.min(a.x,a.x+a.w),Math.min(a.y,a.y+a.h),Math.abs(a.w),Math.abs(a.h));}return c;
+  },[sourceCanvas,annotations,sourceW,sourceH]);
+  const watermark=useRasterImage(frame.watermark?.dataUrl);
   const [backgroundImage, setBackgroundImage] = useState<HTMLImageElement | null>(null);
   useEffect(() => {
     setBackgroundImage(null);
@@ -83,6 +107,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const setPicking = useEditorStore((s) => s.setPicking);
   const setStyle = useEditorStore((s) => s.setStyle);
 
+  const [cropControlsHost, setCropControlsHost] = useState<HTMLDivElement | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const stageWrapRef = useRef<HTMLDivElement>(null);
   const trRef = useRef<Konva.Transformer>(null);
@@ -137,15 +162,30 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   // coordinate mapping. Computed before the early return so the hooks below —
   // which run unconditionally — can use it. With frame off + no crop the layout
   // is the identity (compositionW/H == image size, offsets 0).
-  const layout = base ? computeLayout(base.width, base.height, crop, frame) : null;
+  const layout = base ? computeLayout(sourceW, sourceH, crop, frame) : null;
   const compW = layout?.compositionW ?? 1;
   const compH = layout?.compositionH ?? 1;
+  const gradient=useGradientPlate(frame.enabled&&frame.background.type==='gradient'?frame.background:null,compW,compH);
+  const rendering=gradient.pending||imageLayers.some(layer=>!sourceImages[layer.id])||frame.enabled&&frame.background.type==='image'&&!!frame.background.dataUrl&&!backgroundImage||frame.enabled&&!!frame.watermark&&!watermark;
+  useLayoutEffect(()=>{useEditorStore.getState().setRenderingLook(rendering);},[rendering]);
+  useEffect(()=>()=>{useEditorStore.getState().setRenderingLook(false);},[]);
   // "fit" resolves against the current viewport (responsive); an absolute zoom is used
   // as-is. Everything downstream (drawing math, overlays, eraser cursor) uses `scale`,
   // so introducing user zoom is just a change to this one value.
   const fit = layout ? fitScale(box.w, box.h, compW, compH) : 1;
   const scale = zoom === "fit" ? fit : clampZoom(zoom);
   scaleRef.current = scale;
+  useEffect(()=>{
+    const promise=getCurrentWebview().onDragDropEvent(async event=>{
+      if(event.payload.type!=='drop')return;
+      const wrap=stageWrapRef.current;if(!wrap||!layout)return;
+      const rect=wrap.getBoundingClientRect(),x=event.payload.position.x/window.devicePixelRatio,y=event.payload.position.y/window.devicePixelRatio;
+      if(x<rect.left||y<rect.top||x>rect.right||y>rect.bottom)return;
+      const point={x:(x-rect.left)/scaleRef.current-layout.contentX+layout.cropX,y:(y-rect.top)/scaleRef.current-layout.contentY+layout.cropY};
+      for(const path of event.payload.paths)try{addLayer(await invoke('editor_read_layer',{path}),point);}catch(error){useAppStore.getState().pushToast(String(error));}
+    });
+    return()=>{promise.then(unlisten=>unlisten()).catch(()=>{});};
+  },[layout?.contentX,layout?.contentY,layout?.cropX,layout?.cropY,base]);
 
   // Measure the scroller's CONTENT box (client size minus its padding) so "fit"
   // resolves against the true visible area and never itself introduces a scrollbar.
@@ -362,10 +402,10 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   // plainly visible and the max is bold. (Tuned up after at-screen feedback that
   // the old fixed-px values were barely visible on large captures.)
   const shadowProps =
-    frame.enabled && frame.shadow > 0
+    frame.enabled && frame.shadow > 0 // taste-skill-ignore: user-selected screenshot framing effect
       ? (() => {
           const longEdge = Math.max(layout.contentW, layout.contentH);
-          const t = frame.shadow / 100; // 0..1
+          const t = frame.shadow / 100; // taste-skill-ignore: media shadow strength
           return {
             shadowColor: frame.shadowColor ?? "#000",
             shadowBlur: Math.round((0.02 + t * 0.1) * longEdge), // 2%..12% of long edge
@@ -453,7 +493,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
       const pt = imgPoint(stage);
       if (!pt) return;
       const { x, y } = pt;
-      const hex = sampleColorAt(base.image, base.width, base.height, Math.round(x), Math.round(y));
+      const hex = sampleColorAt(sourceCanvas??base.image, sourceW, sourceH, Math.round(x), Math.round(y));
       if (hex) setStyle({ color: hex });
       setPicking(false);
       return;
@@ -558,8 +598,8 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
     // it "stops at a distance above the border". Transformer skipping and
     // perfectDrawEnabled already prevent the thrash at the clip boundary.
     if (base) {
-      x = Math.max(0, Math.min(base.width, x));
-      y = Math.max(0, Math.min(base.height, y));
+      x = Math.max(0, Math.min(sourceW, x));
+      y = Math.max(0, Math.min(sourceH, y));
     }
     const a = useEditorStore.getState().annotations.find((n) => n.id === id);
     if (!a) return;
@@ -638,7 +678,10 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
   const zoomPct = Math.round(scale * 100);
 
   return (
-    <div className="editor-canvas">
+    <div className="editor-canvas" aria-busy={rendering}>
+      {tool === "crop" && <div className="editor-crop-dock" ref={setCropControlsHost} aria-label="Crop controls"/>}
+      {rendering&&<span className="editor-render-status" role="status">Rendering background…</span>}
+      {gradient.error&&<span className="editor-render-status" role="alert">{gradient.error}</span>}
       {/* The scroller: fits the stage to its content box, or pans it when zoomed in
           past the viewport. Ctrl+wheel zooms (native listener); a plain wheel pans. */}
       <div className="editor-scroll" ref={scrollRef}>
@@ -649,6 +692,8 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         ref={stageWrapRef}
         className={`editor-stage-wrap${showChecker ? " editor-stage-wrap--checker" : ""}`}
         style={{ width: stageW, height: stageH }}
+        onDragOver={e=>e.preventDefault()}
+        onDrop={async e=>{e.preventDefault();const rect=e.currentTarget.getBoundingClientRect(),point={x:(e.clientX-rect.left)/scale-layout.contentX+layout.cropX,y:(e.clientY-rect.top)/scale-layout.contentY+layout.cropY};for(const file of Array.from(e.dataTransfer.files))try{addLayer(await readImageFile(file),point);}catch(error){useAppStore.getState().pushToast(String(error));}}}
       >
       {/* Zoom is a CSS transform on this wrapper, NOT a Konva scale: the stage below is
           drawn once at natural resolution and this transform scales the finished canvas
@@ -672,24 +717,24 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
         {/* Background fill (gradient/solid). Transparent → no rect → alpha in export. */}
         {frame.enabled && frame.background.type !== "transparent" && (
           <Layer listening={false}>
-            <Rect
+            {frame.background.type === 'gradient' ? <KonvaImage image={gradient.canvas ?? undefined} width={compW} height={compH}/> : <Rect
               x={0}
               y={0}
               width={compW}
               height={compH}
               {...(frame.background.type === "solid"
                 ? { fill: frame.background.color }
-                : frame.background.type === "gradient" ? konvaGradient(getGradient(frame.background.gradientId), compW, compH) : { fillPatternImage: backgroundImage ?? undefined, fillPatternScale: backgroundImage ? { x: Math.max(compW / backgroundImage.width, compH / backgroundImage.height), y: Math.max(compW / backgroundImage.width, compH / backgroundImage.height) } : undefined })}
-            />
+                : { fillPatternImage: backgroundImage ?? undefined, fillPatternScale: backgroundImage ? { x: Math.max(compW / backgroundImage.width, compH / backgroundImage.height), y: Math.max(compW / backgroundImage.width, compH / backgroundImage.height) } : undefined })}
+            />}
           </Layer>
         )}
 
         {/* Screenshot card: a shadow-casting rounded rect spanning the chrome bar +
             image, the image clipped to the card (bottom-only corners when a chrome
             bar covers the top), then the chrome bar painted on top. Frame off →
-            chromeH 0, r 0, no shadow → plain image, byte-identical to before.
-            The shadow renders for every background type INCLUDING transparent — a
-            framed screenshot dropped onto a slide keeps its drop shadow against the
+            chromeH 0, r 0, no shadow → plain image, byte-identical to before. // taste-skill-ignore: retained screenshot media shadow
+            The shadow renders for every background type INCLUDING transparent — a // taste-skill-ignore: retained screenshot media shadow
+            framed screenshot dropped onto a slide keeps its drop shadow against the // taste-skill-ignore: retained media framing requirement
             alpha (matches CleanShot); only the background fill is omitted when transparent. */}
         <Layer listening={false}>
           {frame.enabled && (
@@ -713,7 +758,7 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
             }
           >
             <KonvaImage
-              image={base.image}
+              image={baseCanvas??base.image}
               x={layout.contentX}
               y={layout.contentY}
               width={layout.contentW}
@@ -752,14 +797,15 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
                 }
               : {})}
           >
+            {imageLayers.map(a=><AnnotationNode key={a.id} anno={a} layerImage={sourceImages[a.id]} draggable={tool==='select'} baseImage={protectedSource??base.image} baseWidth={sourceW} baseHeight={sourceH} onSelect={()=>tool==='select'&&select(a.id)} onDragStart={pushHistory} onChange={patch=>update(a.id,patch)}/>)}
             <SpotlightDimLayer
               regions={annotations.filter((a): a is BoxAnno => a.type === "spotlight")}
               dim={resolveSpotlightDim(annotations, selectedId)}
-              baseImage={base.image}
-              baseWidth={base.width}
-              baseHeight={base.height}
+              baseImage={protectedSource??base.image}
+              baseWidth={sourceW}
+              baseHeight={sourceH}
             />
-            {annotations.map((a) => (
+            {annotations.filter(a=>a.type!=='image').map((a) => (
               <AnnotationNode
                 key={a.id}
                 anno={a}
@@ -767,9 +813,9 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
                 // them can't reposition anything — keep them non-draggable rather
                 // than offer a dead gesture that just burns an undo step.
                 draggable={tool === "select" && a.type !== "pen" && a.type !== "highlight"}
-                baseImage={base.image}
-                baseWidth={base.width}
-                baseHeight={base.height}
+                baseImage={protectedSource??base.image}
+                baseWidth={sourceW}
+                baseHeight={sourceH}
                 hidden={a.id === editingId}
                 onSelect={() => tool === "select" && select(a.id)}
                 onDragStart={() => pushHistory()}
@@ -785,16 +831,19 @@ export const EditorStage = forwardRef<Konva.Stage>(function EditorStage(_props, 
             onTransformStart={() => pushHistory()}
           />
         </Layer>
+        {frame.enabled&&frame.watermark&&watermark&&<Layer listening={false}><KonvaImage image={watermark} {...(()=>{const b=watermarkPlacement(compW,compH,frame.watermark);return {x:b.x,y:b.y,width:b.w,height:b.h};})()} opacity={frame.watermark.opacity}/></Layer>}
+        {suggestions.length>0&&<Layer name="privacy-suggestions" listening={false} x={offX} y={offY}>{suggestions.map((s,i)=><Rect key={i} x={s.x} y={s.y} width={s.w} height={s.h} stroke={suggestionColor} strokeWidth={2} dash={[6,4]}/>)}</Layer>}
       </Stage>
       </div>
       </div>
 
         {tool === "crop" && (
           <CropOverlay
+            controlsHost={cropControlsHost}
             layout={layout}
             scale={scale}
-            imageW={base.width}
-            imageH={base.height}
+            imageW={sourceW}
+            imageH={sourceH}
             onConfirm={(c) => {
               pushHistory();
               setCrop(c);

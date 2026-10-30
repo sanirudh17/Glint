@@ -1,0 +1,6 @@
+import {expect,it} from 'vitest';
+import {annotationAt,moveAnnotation,validateAnnotations,type VideoAnnotation} from './videoAnnotations';
+const mark:VideoAnnotation={id:'one',kind:'arrow',start:1,end:3,points:[{x:.1,y:.2},{x:.8,y:.6}],color:'#ff6655',width:.006,size:.04,text:''};
+it('shows marks only during their source-time span, including after reordered playback',()=>{expect(annotationAt(mark,.9)).toBe(false);expect(annotationAt(mark,1)).toBe(true);expect(annotationAt(mark,2.99)).toBe(true);expect(annotationAt(mark,3)).toBe(false);});
+it('moves the whole mark without distorting or losing it outside the frame',()=>{const moved=moveAnnotation(mark,2,-2);expect(moved.points[0].x).toBeCloseTo(.3);expect(moved.points[1].x).toBe(1);expect(moved.points[1].y).toBeCloseTo(.4);expect(mark.points[0]).toEqual({x:.1,y:.2});});
+it('rejects malformed, excessive, out-of-range and future annotations',()=>{expect(validateAnnotations([mark],4)).toBe(true);for(const patch of [{end:8},{width:NaN},{points:[{x:2,y:0}]},{color:'red'},{kind:'unknown'},{text:'x'.repeat(501)}])expect(validateAnnotations([{...mark,...patch} as VideoAnnotation],4)).toBe(false);expect(validateAnnotations([mark,mark],4)).toBe(false);});
