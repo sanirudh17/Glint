@@ -3,7 +3,7 @@ import { Images, Search } from "lucide-react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { EmptyState, Select } from "../components/ui";
-import { listCaptures, type CaptureItem } from "../lib/captures";
+import { captureSnapshot, listCaptures, type CaptureItem } from "../lib/captures";
 import { CaptureCard } from "./library/CaptureCard";
 import { matchesCapture } from "./library/search";
 import {invoke} from '@tauri-apps/api/core';
@@ -18,7 +18,7 @@ const KIND_OPTIONS = [
 ];
 
 export default function LibraryView() {
-  const [captures, setCaptures] = useState<CaptureItem[]>([]);
+  const [captures, setCaptures] = useState<CaptureItem[]>(() => captureSnapshot());
   const [search, setSearch]     = useState("");
   const [kind, setKind]         = useState("all");
   const [textMatches,setTextMatches]=useState<Set<number>>(new Set());
@@ -27,7 +27,7 @@ export default function LibraryView() {
   const [indexRun,setIndexRun]=useState(0);
 
   const reload = useCallback(() => {
-    listCaptures().then(setCaptures).catch(() => setCaptures([]));
+    listCaptures().then(setCaptures).catch(() => { /* Keep the last successful snapshot. */ });
   }, []);
 
   useEffect(() => { reload(); }, [reload]);

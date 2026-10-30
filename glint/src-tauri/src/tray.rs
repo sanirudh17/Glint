@@ -36,8 +36,8 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
     // `app.trayIcon` — Tauri would build a second, menu-less icon from `icons/icon.png`
     // at startup and Windows would show two Glint entries in the notification area (both
     // vanishing together on quit, since they share this process). The config copy also
-    // looked wrong: Windows downscales the 512px master itself, where the embedded .ico
-    // used below carries hand-tuned 16/32px frames. Guarded by `config_declares_no_tray_icon`.
+    // looked wrong: use the same generated icon as the window and packaged executable.
+    // Guarded by `config_declares_no_tray_icon`.
     TrayIconBuilder::with_id("glint-tray")
         .icon(app.default_window_icon().unwrap().clone())
         .tooltip("Glint")

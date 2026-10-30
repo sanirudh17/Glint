@@ -1,0 +1,80 @@
+{
+  "version": "0.2.1",
+  "date": "2026-10-30",
+  "frontend": {
+    "passed": 289,
+    "files": 50,
+    "production_build": true
+  },
+  "native": {
+    "passed": 284,
+    "explicit_gates": 18
+  },
+  "clipboard": {
+    "real_native_format_roundtrip": true,
+    "temporary_external_lock_retry": true,
+    "superseded_write_regression": true,
+    "live_app_copy_windows_decode": [
+      1920,
+      1080
+    ],
+    "live_browser_paste": "image/png 1920x1080",
+    "browser_png_sha256": "0208d0910f0780190d704ffbd39921aa38ad224365fde7670d05acbfaca9bb68"
+  },
+  "ocr": {
+    "fixtures": 46,
+    "queries": 135,
+    "before_hits": 134,
+    "after_hits": 134,
+    "search_phrase_regressions": 0,
+    "throughput": {
+      "after_ms": 47957,
+      "before_ms": 69335,
+      "images": 70,
+      "workers": 2
+    }
+  },
+  "package_checks": 21,
+  "new_icon_frames_embedded": 6,
+  "models_bundled": false,
+  "npm_vulnerabilities": 0,
+  "manual": [
+    "Home dark restored size: ten cards",
+    "Home light maximized: five columns, two rows, Resume directly below",
+    "Dark hotkeys: centered keycaps",
+    "Capture and Auto-save settings placement",
+    "Light Capture scrollbar and material",
+    "Library with 70 owned entries",
+    "Live app Copy read by Windows and pasted into an actual browser"
+  ],
+  "limits": [
+    "The manual app was an isolated 0.2.1 review build with the same source and frontend, not a replacement of the running production installation.",
+    "Fresh end-to-end attachment submission in Codex, OpenCode and Antigravity was not completed. Native clipboard formats, durable files and browser paste were exercised.",
+    "The OCR popup-specific GUI action timed out in the desktop automation provider; shared scrollbar styling was observed in Settings.",
+    "OCR can miss small or blurred text. One prior half-scale search phrase remains missed.",
+    "Windows clipboard history has a 4 MB per-item limit.",
+    "Builds retain non-gating compiler warnings and the existing unsigned installer setup."
+  ],
+  "assets": [
+    {
+      "name": "Glint-OCR-Tesseract-5.4.0-x64.zip",
+      "bytes": 57993532,
+      "sha256": "2add1c85d0f1cf5bede1895ccd8531226cae76906d72e2542a22991dbeca3ab7"
+    },
+    {
+      "name": "Glint_0.2.1_x64-setup.exe",
+      "bytes": 62874138,
+      "sha256": "4eba4b491131bc7808cd27410a3319483978b592c883bdc0f57e8bdc667d264f"
+    },
+    {
+      "name": "Glint_0.2.1_x64.zip",
+      "bytes": 85847088,
+      "sha256": "5dee273b0f4a0493fa9af9fdaee426f3a7110e46477bd1c91d82de4f55bf63a7"
+    },
+    {
+      "name": "Glint_0.2.1_x64_en-US.msi",
+      "bytes": 86384640,
+      "sha256": "f893e1f406d923c182e54d1a5f0d4ee88d022c325842f6daddaf261d05e59d00"
+    }
+  ]
+}

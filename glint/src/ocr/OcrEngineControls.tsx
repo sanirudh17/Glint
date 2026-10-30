@@ -26,7 +26,7 @@ export function OcrEngineControls(){
   const target=choice;setBusy('install');setPercent(0);setStage('Downloading OCR engine');setError('');setNotice('');
   try{
    await invoke('ocr_engine_install',{engine:target});setReady(previous=>({...previous,[target]:true}));await setEngine(target);
-   setNotice('Installed. This engine is ready to use.');
+   setNotice('Installed. Ready to use.');
    void invoke('library_index_start').catch(()=>{});
   }catch(e){setError(String(e));}finally{setBusy(null);setStage('');}
  }
@@ -35,11 +35,11 @@ export function OcrEngineControls(){
   try{
    const result=await invoke<{pendingRestart:boolean}>('ocr_engine_remove',{engine:target});
    setReady(previous=>({...previous,[target]:false}));
-   setNotice(result.pendingRestart?'Model removed. Restart Glint to finish deleting the loaded runtime.':'Removed from disk. You can install it again whenever you need it.');
+   setNotice(result.pendingRestart?'Model removed. Restart Glint to finish deleting the loaded runtime.':'Removed from disk.');
   }catch(e){setError(String(e));}finally{setBusy(null);}
  }
  const installed=ready[choice],known=installed!==undefined;
- return <Field label="Text recognition engine" hint="No OCR engine is bundled. Install only the engines you want; recognition runs on this device. Small performed best in Glint’s screenshot tests. Review important identifiers.">
+ return <Field label="Text recognition engine">
   <div className="ocr-engine-row">
    <Select ariaLabel="Text recognition engine" value={choice} disabled={!!busy} options={OPTIONS} onChange={value=>{
     const next=value as Engine;setChoice(next);setError('');setNotice('');
@@ -49,9 +49,7 @@ export function OcrEngineControls(){
     {busy==='remove'?'Removing...':busy==='install'?'Installing...':!known?'Checking...':installed?'Remove from disk':'Install'}
    </Button>
   </div>
-  {known&&<span className="g-field-hint">{installed?'Installed on this device.':`${SIZES[choice]} MiB download, including the CPU runtime. Nothing downloads until you press Install.`}</span>}
-  {choice!==engine&&known&&!installed&&<span className="g-field-hint">Install to use this engine. Your current selection stays active until then.</span>}
-  {known&&!installed&&choice===engine&&<span className="g-field-hint">Install this engine to use Capture Text, sensitive-text review and screenshot text indexing.</span>}
+  {known && !notice && <span className="g-field-hint">{installed ? 'Installed. Recognition runs on this device.' : `${SIZES[choice]} MiB download. Install to use this engine.`}</span>}
   {busy==='install'&&<div className="ocr-engine-progress" role="status"><progress max={100} value={percent} aria-label={stage||'Downloading OCR engine'}/><span>{stage} ({Math.round(percent)}%)</span><Button size="sm" onClick={()=>void invoke('ocr_engine_cancel').catch(e=>setError(String(e)))}>Cancel</Button></div>}
   {notice&&<p role="status" className="g-field-hint">{notice}</p>}
   {error&&<p role="alert" className="look-error">{error}</p>}

@@ -236,7 +236,7 @@ const OCR_UPSCALE: f32 = 3.0;
 const OCR_MAX_DIM: u32 = 8000;
 
 /// Message shown when the Tesseract binary can't be located.
-const TESS_MISSING: &str = "Install Tesseract or another OCR engine in Settings > Auto-save > Text recognition engine.";
+const TESS_MISSING: &str = "Install Tesseract or another OCR engine in Settings > Capture > Text recognition engine.";
 
 /// Target dimensions to feed the OCR engine: enlarge by `OCR_UPSCALE` for accuracy,
 /// but never exceed `max_dim` on the longest side (downscaling a source that already

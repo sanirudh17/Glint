@@ -33,6 +33,17 @@ Glint is **local-first by design**. There is no cloud storage, account requireme
 - [Privacy](#privacy)
 - [License](#license)
 
+## What is new in 0.2.1
+
+- New glass capture icon across the application, Windows shortcuts, installer and tray.
+- Ten recent captures in a compact Home layout, with Resume directly below.
+- Library metadata is warmed in the background and reused immediately when navigating.
+- OCR engine installation and screenshot text search live under Capture settings, with concise model details.
+- Bounded background text indexing, thin native WebView2 scrollbars and centered shortcut keycaps.
+- More compatible image handoff: PNG, Windows bitmap and a persistent PNG file attachment are copied together, with retry when the clipboard is temporarily busy.
+
+Windows clipboard history has a 4 MB limit per item; direct image copy preserves the full capture. Recognition is local, and OCR accuracy depends on the source image.
+
 ## Features
 
 ### Screenshots
@@ -71,7 +82,7 @@ Turn a raw screenshot into a polished share image. Wrap it in a **solid color, g
 
 ### Capture Text (OCR)
 
-Extract text using **Tesseract**, **PP-OCRv6 Small**, or **PP-OCRv6 Medium**. No OCR runtime or model is bundled. Open Settings > Auto-save, select an engine and press **Install**. **Remove from disk** deletes Glint's copy; a loaded runtime may finish cleanup after restart. Selecting an engine never starts a download.
+Extract text using **Tesseract**, **PP-OCRv6 Small**, or **PP-OCRv6 Medium**. No OCR runtime or model is bundled. Open Settings > Capture, select an engine and press **Install**. **Remove from disk** deletes Glint's copy; a loaded runtime may finish cleanup after restart. Selecting an engine never starts a download.
 
 ### Screen recording
 

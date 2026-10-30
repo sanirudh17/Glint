@@ -54,9 +54,11 @@ export default function App() {
         pushToast(
           clipboard
             ? `Copied to clipboard · ${width}×${height}`
-            : `Saved · ${width}×${height} (clipboard unavailable)`,
+            : `Saved · ${width}×${height}`,
         );
       }),
+
+      listen("capture-copied", () => pushToast("Copied to clipboard")),
 
       // Generic backend toast (e.g. capture errors surfaced from tray-core).
       listen<string>("glint-toast", (e) => {

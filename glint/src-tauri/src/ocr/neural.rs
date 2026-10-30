@@ -66,6 +66,7 @@ static TEST_MODEL_ROOT: OnceLock<PathBuf> = OnceLock::new();
 static ENABLED: AtomicBool = AtomicBool::new(false);
 static MEDIUM_SELECTED: AtomicBool = AtomicBool::new(false);
 static ENGINE: Mutex<Option<(&'static str, OAROCR)>> = Mutex::new(None);
+static SEARCH_ENGINES: [Mutex<Option<(&'static str, OAROCR)>>; 2] = [Mutex::new(None), Mutex::new(None)];
 static INSTALLING: AtomicBool = AtomicBool::new(false);
 pub(super) static CANCEL: AtomicBool = AtomicBool::new(false);
 static DOWNLOADED: AtomicU64 = AtomicU64::new(0);
@@ -93,6 +94,7 @@ pub fn set_engine(engine: &str) {
     MEDIUM_SELECTED.store(engine == MEDIUM.id, Ordering::Relaxed);
     ENABLED.store(engine != "tesseract", Ordering::Relaxed);
     if engine == "tesseract" {
+        for slot in &SEARCH_ENGINES { if let Ok(mut cache)=slot.try_lock() {*cache=None;} }
         if let Ok(mut cache) = ENGINE.try_lock() {
             *cache = None;
         }
@@ -230,6 +232,12 @@ pub async fn ocr_engine_remove(app:tauri::AppHandle,engine:String)->Result<super
         let _reset=Reset;
         let mut cache=ENGINE.lock().map_err(|_|"Restart Glint to reset the OCR engine")?;
         if cache.as_ref().is_some_and(|(id,_)|*id==engine) {*cache=None;}
+        let mut search_caches=Vec::new();
+        for slot in &SEARCH_ENGINES {
+            let mut cache=slot.lock().map_err(|_|"Restart Glint to reset the OCR engine")?;
+            if cache.as_ref().is_some_and(|(id,_)|*id==engine) {*cache=None;}
+            search_caches.push(cache);
+        }
         let _tess=super::managed::TESS_USE.write().map_err(|_|"Restart Glint to reset OCR")?;
         let result=super::managed::remove_owned(super::managed::root()?,&engine)?;
         let _=app.emit("ocr-engine-changed",());
@@ -348,20 +356,7 @@ pub fn recognize_if_enabled(
     }
     Some(recognize(rgba, w, h, cancel))
 }
-fn recognize(rgba: &[u8], w: u32, h: u32, cancel: &AtomicBool) -> Result<Vec<Word>, String> {
-    let model = active_model();
-    if !model_installed(model) {
-        return Err(
-            "Install the selected OCR engine in Settings > Auto-save > Text recognition engine.".into(),
-        );
-    }
-    if w == 0
-        || h == 0
-        || w as u64 * h as u64 > 40_000_000
-        || rgba.len() != w as usize * h as usize * 4
-    {
-        return Err("Choose a smaller screenshot for OCR".into());
-    }
+fn lock_engine<'a>(cache: &'a Mutex<Option<(&'static str, OAROCR)>>, model: &'static Model, cancel: &AtomicBool, word_boxes: bool) -> Result<std::sync::MutexGuard<'a, Option<(&'static str, OAROCR)>>, String> {
     let start = std::time::Instant::now();
     let mut guard = loop {
         if cancel.load(Ordering::Relaxed) {
@@ -370,7 +365,7 @@ fn recognize(rgba: &[u8], w: u32, h: u32, cancel: &AtomicBool) -> Result<Vec<Wor
         if start.elapsed() > Duration::from_secs(45) {
             return Err("OCR is busy. Try again after the current scan.".into());
         }
-        match ENGINE.try_lock() {
+        match cache.try_lock() {
             Ok(g) => break g,
             Err(std::sync::TryLockError::WouldBlock) => {
                 std::thread::sleep(Duration::from_millis(20))
@@ -384,7 +379,7 @@ fn recognize(rgba: &[u8], w: u32, h: u32, cancel: &AtomicBool) -> Result<Vec<Wor
             .map_err(|e| e.to_string())?
             .commit();
         let config = TextDetectionConfig {
-            limit_side_len: Some(4096),
+            limit_side_len: Some(if word_boxes {4096} else {1536}),
             limit_type: Some(LimitType::Max),
             max_side_len: Some(4096),
             box_threshold: 0.5,
@@ -404,11 +399,29 @@ fn recognize(rgba: &[u8], w: u32, h: u32, cancel: &AtomicBool) -> Result<Vec<Wor
                     .with_inter_threads(1),
             )
             .text_detection_config(config)
-            .return_word_box(true)
+            .return_word_box(word_boxes)
             .build()
             .map_err(|e| e.to_string())?,
         ));
     }
+    Ok(guard)
+}
+
+fn recognize(rgba: &[u8], w: u32, h: u32, cancel: &AtomicBool) -> Result<Vec<Word>, String> {
+    let model = active_model();
+    if !model_installed(model) {
+        return Err(
+            "Install the selected OCR engine in Settings > Capture > Text recognition engine.".into(),
+        );
+    }
+    if w == 0
+        || h == 0
+        || w as u64 * h as u64 > 40_000_000
+        || rgba.len() != w as usize * h as usize * 4
+    {
+        return Err("Choose a smaller screenshot for OCR".into());
+    }
+    let mut guard = lock_engine(&ENGINE, model, cancel, true)?;
     let mut words = vec![];
     // Preserve small text on full-window and scrolling captures. Resizing a tall
     // screenshot to one detector input makes its glyphs too small to detect.
@@ -501,6 +514,53 @@ fn recognize(rgba: &[u8], w: u32, h: u32, cancel: &AtomicBool) -> Result<Vec<Wor
     Ok(words)
 }
 
+/// Search needs text, not per-character alignment. Keep native-resolution crops
+/// for recognition and bound the detector input; privacy retains its detailed path.
+/// A separate session avoids rebuilding the interactive privacy OCR session.
+pub fn recognize_search_text(rgba: &[u8], w: u32, h: u32, cancel: &AtomicBool) -> Result<String, String> {
+    recognize_search_text_slot(rgba,w,h,cancel,0)
+}
+pub fn recognize_search_text_slot(rgba: &[u8], w: u32, h: u32, cancel: &AtomicBool, slot: usize) -> Result<String, String> {
+    if !ENABLED.load(Ordering::Relaxed) {
+        return super::words::recognize_tesseract(rgba, w, h, cancel).map(|words|super::words::text(&words));
+    }
+    let model=active_model();
+    if !model_installed(model) { return Err("Install the selected OCR engine in Settings > Capture.".into()); }
+    if w==0 || h==0 || w as u64*h as u64>40_000_000 || rgba.len()!=w as usize*h as usize*4 {return Err("Choose a smaller screenshot for OCR".into());}
+    let Some((left,origin_y,width,height))=search_bounds(rgba,w,h) else {return Ok(String::new());};
+    let guard=lock_engine(&SEARCH_ENGINES[slot.min(1)],model,cancel,false)?;
+    let mut lines=Vec::new();
+    for (top,bottom) in strips(height) {
+        if cancel.load(Ordering::Relaxed) {return Err("Cancelled".into());}
+        let image=image::RgbImage::from_fn(width,bottom-top,|x,y|{
+            let p=&rgba[(((y+top+origin_y)*w+x+left)*4) as usize..];
+            image::Rgb(std::array::from_fn(|c|((p[c] as u32*p[3] as u32+255*(255-p[3] as u32))/255) as u8))
+        });
+        let results=guard.as_ref().unwrap().1.predict(vec![image]).map_err(|e|e.to_string())?;
+        for result in results { for region in result.text_regions {
+            let center=(region.bounding_box.y_min()+region.bounding_box.y_max())/2.;
+            if (top>0&&center<64.) || (bottom<height&&center>=(bottom-top-64) as f32) || region.confidence.unwrap_or(0.)<0.5 {continue;}
+            if let Some(text)=region.text {if !text.trim().is_empty(){lines.push(text);}}
+        }}
+    }
+    if cancel.load(Ordering::Relaxed) || !ENABLED.load(Ordering::Relaxed) || active_model().id!=model.id {return Err("Cancelled".into());}
+    Ok(lines.join("\n"))
+}
+
+/// Remove only exactly uniform background margins, retaining 32px of context.
+/// Detection never needs to process a full desktop of blank pixels. Compare the
+/// composited colors, so fully transparent pixels cannot invent visible content.
+fn search_bounds(rgba:&[u8],w:u32,h:u32)->Option<(u32,u32,u32,u32)> {
+    fn rgb(p:&[u8])->[u8;3] {std::array::from_fn(|c|((p[c] as u32*p[3] as u32+255*(255-p[3] as u32))/255) as u8)}
+    let background=rgb(rgba); let (mut left,mut top,mut right,mut bottom)=(w,h,0,0);
+    for y in 0..h {for x in 0..w {
+        if rgb(&rgba[((y*w+x)*4) as usize..])!=background {left=left.min(x);top=top.min(y);right=right.max(x+1);bottom=bottom.max(y+1);}
+    }}
+    if right==0 {return None;}
+    left=left.saturating_sub(32);top=top.saturating_sub(32);right=right.saturating_add(32).min(w);bottom=bottom.saturating_add(32).min(h);
+    Some((left,top,right-left,bottom-top))
+}
+
 fn strips(height: u32) -> Vec<(u32, u32)> {
     let mut out = vec![];
     let mut top = 0;
@@ -518,6 +578,16 @@ fn strips(height: u32) -> Vec<(u32, u32)> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn search_bounds_preserve_context_and_visible_alpha() {
+        let mut image=image::RgbaImage::from_pixel(200,160,image::Rgba([255,255,255,255]));
+        assert_eq!(search_bounds(&image,200,160),None);
+        image.put_pixel(80,70,image::Rgba([0,0,0,255]));
+        assert_eq!(search_bounds(&image,200,160),Some((48,38,65,65)));
+        image.put_pixel(0,159,image::Rgba([254,255,255,255]));
+        assert_eq!(search_bounds(&image,200,160),Some((0,38,113,122)));
+        let clear=vec![0;200*160*4];assert_eq!(search_bounds(&clear,200,160),None);
+    }
     #[test]
     fn strips_cover_tall_captures_with_context() {
         for height in [1, 1024, 1025, 2000, 12000] {
@@ -681,6 +751,73 @@ mod tests {
             serde_json::to_vec_pretty(&reports).unwrap(),
         )
         .unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires local models and owned screenshot fixtures; real seventy-image throughput"]
+    fn native_seventy_image_index_throughput() {
+        let fixtures=PathBuf::from(std::env::var("GLINT_OCR_FIXTURES").unwrap());
+        TEST_MODEL_ROOT.get_or_init(||PathBuf::from(std::env::var("GLINT_OCR_MODELS").unwrap()));
+        MEDIUM_SELECTED.store(false,Ordering::Relaxed);ENABLED.store(true,Ordering::Relaxed);
+        let cases:serde_json::Value=serde_json::from_slice(&std::fs::read(fixtures.join("search-fixtures.json")).unwrap()).unwrap();
+        let cases=cases.as_array().unwrap(); let cancel=AtomicBool::new(false);
+        let start=std::time::Instant::now();
+        for index in 0..70 {
+            let image=image::open(fixtures.join(cases[index%cases.len()]["file"].as_str().unwrap())).unwrap().to_rgba8();
+            recognize(&image,image.width(),image.height(),&cancel).unwrap();
+        }
+        let before_ms=start.elapsed().as_millis();
+        let next=std::sync::atomic::AtomicUsize::new(0);let completed=std::sync::atomic::AtomicUsize::new(0);
+        let start=std::time::Instant::now();
+        std::thread::scope(|scope| {for slot in 0..2 {
+            let next=&next;let completed=&completed;let cancel=&cancel;let fixtures=&fixtures;
+            scope.spawn(move||loop {
+                let index=next.fetch_add(1,Ordering::Relaxed); if index>=70 {break;}
+                let image=image::open(fixtures.join(cases[index%cases.len()]["file"].as_str().unwrap())).unwrap().to_rgba8();
+                recognize_search_text_slot(&image,image.width(),image.height(),cancel,slot).unwrap();
+                completed.fetch_add(1,Ordering::Relaxed);
+            });
+        }});
+        let after_ms=start.elapsed().as_millis();assert_eq!(completed.load(Ordering::Relaxed),70);
+        let report=serde_json::json!({"images":70,"before_ms":before_ms,"after_ms":after_ms,"workers":2});
+        println!("{report}");
+        std::fs::write(std::env::var("GLINT_INDEX_THROUGHPUT_REPORT").unwrap(),serde_json::to_vec_pretty(&report).unwrap()).unwrap();
+    }
+
+    #[test]
+    #[ignore = "requires owned LibrarySearch fixtures and local models; compare real index paths"]
+    fn native_text_only_search_benchmark() {
+        let fixtures=PathBuf::from(std::env::var("GLINT_OCR_FIXTURES").unwrap());
+        TEST_MODEL_ROOT.get_or_init(||PathBuf::from(std::env::var("GLINT_OCR_MODELS").unwrap()));
+        MEDIUM_SELECTED.store(false,Ordering::Relaxed);ENABLED.store(true,Ordering::Relaxed);
+        let cases:serde_json::Value=serde_json::from_slice(&std::fs::read(fixtures.join("search-fixtures.json")).unwrap()).unwrap();
+        let cancel=AtomicBool::new(false); let mut reports=vec![];
+        let conn=rusqlite::Connection::open_in_memory().unwrap();
+        conn.execute_batch("CREATE TABLE captures(id INTEGER PRIMARY KEY,created_at INTEGER,deleted_at INTEGER,title TEXT,title_origin TEXT);").unwrap();
+        crate::db::text_index::ensure(&conn).unwrap();
+        for (index,case) in cases.as_array().unwrap().iter().enumerate() {
+            let id=index as i64+1;let file=case["file"].as_str().unwrap();
+            conn.execute("INSERT INTO captures(id,created_at) VALUES(?1,?1)",[id]).unwrap();
+            let image=image::open(fixtures.join(file)).unwrap().to_rgba8();
+            let start=std::time::Instant::now();
+            let original=super::super::words::text(&recognize(&image,image.width(),image.height(),&cancel).unwrap());
+            let original_ms=start.elapsed().as_millis();
+            let start=std::time::Instant::now();
+            let text=recognize_search_text(&image,image.width(),image.height(),&cancel).unwrap();
+            let search_ms=start.elapsed().as_millis();
+            crate::db::text_index::put(&conn,id,&original,"old",false).unwrap();
+            let old_hits:Vec<_>=case["queries"].as_array().unwrap().iter().map(|q|crate::db::text_index::search(&conn,q.as_str().unwrap()).unwrap().contains(&id)).collect();
+            crate::db::text_index::put(&conn,id,&text,"new",false).unwrap();
+            let queries:Vec<_>=case["queries"].as_array().unwrap().iter().zip(old_hits).map(|(q,old)|{
+                let found=crate::db::text_index::search(&conn,q.as_str().unwrap()).unwrap().contains(&id);
+                assert!(!old||found,"lost search phrase in {file}: {q}");
+                serde_json::json!({"query":q,"old_found":old,"found":found})
+            }).collect();
+            println!("index {file}: {original_ms}ms -> {search_ms}ms");
+            reports.push(serde_json::json!({"file":file,"original_ms":original_ms,"search_ms":search_ms,"queries":queries}));
+        }
+        let dest=PathBuf::from(std::env::var("GLINT_INDEX_BENCH_REPORT").unwrap());
+        std::fs::write(dest,serde_json::to_vec_pretty(&reports).unwrap()).unwrap();
     }
 
     #[test]

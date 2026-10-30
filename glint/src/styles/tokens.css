@@ -125,7 +125,7 @@
   --accent-fg:  #ffffff;
 
   /* Scrollbar */
-  --scrollbar-thumb: #383838;
+  --scrollbar-thumb: #707070;
   --scrollbar-track: transparent;
 }
 
@@ -146,6 +146,6 @@
 
   --accent-fg:  #ffffff;
 
-  --scrollbar-thumb: #C7CBD4;
+  --scrollbar-thumb: #8A8A8A;
   --scrollbar-track: transparent;
 }
