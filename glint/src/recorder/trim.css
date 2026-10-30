@@ -260,7 +260,7 @@
 .studio-crop > summary, .studio-camera > summary { color: var(--text); font-size: var(--fz-lg); font-weight: 700; letter-spacing: var(--ls-ui); }
 .studio-crop-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px 12px; }
 .studio-crop-field { display: flex; flex-direction: column; gap: 8px; min-width: 0; }
-.studio-crop .g-control-disclosure-body > .g-btn { align-self: flex-start; padding-left: 0; }
+.studio-crop .g-control-disclosure-body > .g-btn { align-self: flex-start; padding-inline: var(--s3); margin-top: var(--s1); }
 .studio-panel-footer { display:flex; flex-direction:column; gap:12px; padding-top:12px; padding-bottom:4px; }
 .studio-panel-footer > .look-hint { margin:0; line-height:1.6; }
 .studio-panel-footer > .g-btn { width: 100%; }

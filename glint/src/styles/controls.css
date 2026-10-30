@@ -11,6 +11,8 @@
 }
 :root[data-theme] :is(.g-btn-subtle,.g-btn-ghost,.g-icon-btn,.g-select-trigger,.g-number-input,.editor-export-btn,.editor-toggle,.editor-width,.trim-btn,.trim-iconbtn,.settings-hotkey-btn,.home-resume-chip,.frame-text-btn) {
   background:var(--control-bg);
+  backdrop-filter:var(--control-blur,none);
+  -webkit-backdrop-filter:var(--control-blur,none);
   border:1px solid var(--control-edge);
   border-radius:var(--r-btn);
   box-shadow:none;
@@ -20,6 +22,15 @@
   background:var(--control-hover);
   border-color:var(--control-edge);
   color:var(--text);
+}
+/* Material belongs to the primitive, including Settings and portalled inspectors. */
+:root[data-theme] .g-select-trigger {
+  background:var(--select-bg,var(--control-bg));
+  backdrop-filter:var(--select-blur,none);
+  -webkit-backdrop-filter:var(--select-blur,none);
+}
+:root[data-glass="true"][data-theme] .g-select-trigger:hover:not(:disabled) {
+  background:color-mix(in srgb,var(--select-bg) 75%,var(--control-hover));
 }
 :root[data-theme] :is(.g-btn-primary,.editor-export-btn--primary,.trim-btn--primary) {
   background:linear-gradient(rgb(255 255 255 / 8%),transparent),var(--accent);
