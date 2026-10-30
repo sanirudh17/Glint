@@ -153,3 +153,8 @@ Settings and inspector choice menus now use the same floating portal by default.
 Native material no longer reads the asynchronously saved theme preference during an optimistic theme switch. Each request carries both resolved light/dark appearance and whether the selected preference is System; caching includes that preference. System retains native OS tracking rather than being locked to an explicit light/dark mode. A regression test covers switching System-dark to explicit Dark without changing the resolved color.
 
 Validation: 286 frontend tests, 275 native tests (8 optional integrations ignored), and the production frontend build passed. The native review build also completed. The user's supplied screenshots confirmed the intermediate theme fix rendered both light and dark acrylic; final backdrop strength remains a visual review item. No changes merged into main.
+
+
+## Slightly clearer dark glass
+
+At the user's request after approving the Seek-based finish, dark canvas and rail tint opacity is reduced from 80% to 72%. This increases backdrop transmission from 20% to 28% without changing the light palette, menu legibility, native material or System tracking. CSS-only adjustment; production TypeScript/build validation passed.

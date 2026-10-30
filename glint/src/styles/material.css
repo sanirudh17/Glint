@@ -1,13 +1,13 @@
 /* Native desktop blur supplies the material. CSS only supplies neutral tint and
    control highlights; no desktop screenshot, texture, or simulated reflection. */
 :root[data-glass="true"][data-theme="dark"] {
-  --window-canvas: rgb(0 0 0 / 80%);
+  --window-canvas: rgb(0 0 0 / 72%);
   --border: rgb(255 255 255 / 12%);
   --border-strong: rgb(255 255 255 / 18%);
   --control-bg: rgb(255 255 255 / 7%);
   --control-edge: rgb(255 255 255 / 13%);
   --control-hover: rgb(255 255 255 / 11%);
-  --bg-frame: rgb(0 0 0 / 80%);
+  --bg-frame: rgb(0 0 0 / 72%);
   --glass-card: rgb(24 24 24 / 72%);
   --glass-menu: rgb(18 18 18 / 84%);
   --select-bg: rgb(255 255 255 / 5%);
