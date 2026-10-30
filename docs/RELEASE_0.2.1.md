@@ -31,3 +31,5 @@ This release improves capture sharing, Library responsiveness, screenshot text i
 Windows x64 setup, MSI and a ZIP with recording sidecars are provided. No OCR or caption engines are bundled. Optional Tesseract uses the same pinned, separate runtime package as 0.2.0; Small and Medium models remain on-demand downloads. Installers retain the existing unsigned distribution setup.
 
 Validation results and coverage limits are recorded in the [release validation report](https://github.com/sanirudh17/Glint/blob/v0.2.1/docs/RELEASE_0.2.1_VALIDATION.md).
+
+All five public downloads were verified against local sizes and SHA-256 checksums. See the [published asset verification](https://github.com/sanirudh17/Glint/blob/main/validation/release-0.2.1-public.json).

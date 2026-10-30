@@ -16,7 +16,7 @@ Windows x64, 30 October 2026. Testing used generated, owned images and an isolat
 | Packages | NSIS and MSI build. The verifier passes 21 checks over versions, production identity, package contents and checksums. Installers contain Glint and the two recording sidecars, with no OCR or caption engine. |
 | Dependencies | npm audit reports zero vulnerabilities. Builds complete with non-gating compiler warnings. |
 
-Artifact sizes and SHA-256 values are recorded in `validation/release-0.2.1.json` and SHA256SUMS.txt. Public byte verification is recorded after publication.
+Artifact sizes and SHA-256 values are recorded in `validation/release-0.2.1.json` and SHA256SUMS.txt. All five assets were downloaded through public URLs and matched local sizes and SHA-256 checksums. GitHub latest resolves to v0.2.1, with the expected updater setup URL. See `validation/release-0.2.1-public.json`.
 
 ## Coverage limits
 
