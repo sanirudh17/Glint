@@ -27,7 +27,7 @@ The Tesseract ZIP is a separate optional download asset, not an application inst
 
 The executable ProductVersion is 0.2.0. Application data keeps the production identifier com.glint.app. Testing uses owned media and separate validation profiles; no user capture was added to the repository or release assets.
 
-Checksums and sizes are recorded in `validation/release-0.2.0.json` and the release's SHA256SUMS.txt. Public download verification is performed after publication and recorded separately.
+Checksums and sizes are recorded in `validation/release-0.2.0.json` and the release's SHA256SUMS.txt. After publication, all five release assets were downloaded through their public URLs and matched against local byte counts and SHA-256 checksums. GitHub latest resolves to v0.2.0, and its setup URL matches the updater contract. Results are recorded in `validation/release-0.2.0-public.json`.
 
 ## Manual scope and limits
 

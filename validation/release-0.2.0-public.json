@@ -1,0 +1,39 @@
+{
+  "version": "0.2.0",
+  "verified_at": "2026-10-30T09:11:02.988722+00:00",
+  "release_url": "https://github.com/sanirudh17/Glint/releases/tag/v0.2.0",
+  "latest_release": true,
+  "updater_setup_url": "https://github.com/sanirudh17/Glint/releases/download/v0.2.0/Glint_0.2.0_x64-setup.exe",
+  "assets": [
+    {
+      "name": "Glint-OCR-Tesseract-5.4.0-x64.zip",
+      "bytes": 57993532,
+      "sha256": "2add1c85d0f1cf5bede1895ccd8531226cae76906d72e2542a22991dbeca3ab7",
+      "url": "https://github.com/sanirudh17/Glint/releases/download/v0.2.0/Glint-OCR-Tesseract-5.4.0-x64.zip"
+    },
+    {
+      "name": "Glint_0.2.0_x64-setup.exe",
+      "bytes": 62854252,
+      "sha256": "f50e41f993ebf37f80bfdc0d3d0c15e9878aeb3fe13ceb6fe45a67a4be0008ac",
+      "url": "https://github.com/sanirudh17/Glint/releases/download/v0.2.0/Glint_0.2.0_x64-setup.exe"
+    },
+    {
+      "name": "Glint_0.2.0_x64.zip",
+      "bytes": 86211658,
+      "sha256": "c441370cbde8a60e3612741833c9bf1ea65c5d2bf393255a71557f23215b3e93",
+      "url": "https://github.com/sanirudh17/Glint/releases/download/v0.2.0/Glint_0.2.0_x64.zip"
+    },
+    {
+      "name": "Glint_0.2.0_x64_en-US.msi",
+      "bytes": 86380544,
+      "sha256": "af5d9140850da638cca8930ec8f5c7ac611ad1538e34620d5f57c75481703037",
+      "url": "https://github.com/sanirudh17/Glint/releases/download/v0.2.0/Glint_0.2.0_x64_en-US.msi"
+    },
+    {
+      "name": "SHA256SUMS.txt",
+      "bytes": 374,
+      "sha256": "ba04e146cff1f56f2acfb1a81289b102e852750b4ebc2daab41715490725ec31",
+      "url": "https://github.com/sanirudh17/Glint/releases/download/v0.2.0/SHA256SUMS.txt"
+    }
+  ]
+}
