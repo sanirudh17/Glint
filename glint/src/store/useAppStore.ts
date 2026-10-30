@@ -461,6 +461,7 @@ export function applyTheme(theme: Theme): void {
         ? "dark"
         : "light"
       : theme;
+  document.documentElement.dataset.appearance = theme;
   document.documentElement.dataset.theme = resolved;
   document.documentElement.style.setProperty(
     "--bg",

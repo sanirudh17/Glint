@@ -1,18 +1,18 @@
 /* Native desktop blur supplies the material. CSS only supplies neutral tint and
    control highlights; no desktop screenshot, texture, or simulated reflection. */
 :root[data-glass="true"][data-theme="dark"] {
-  --window-canvas: rgb(8 8 8 / 56%);
+  --window-canvas: rgb(0 0 0 / 80%);
   --border: rgb(255 255 255 / 12%);
   --border-strong: rgb(255 255 255 / 18%);
   --control-bg: rgb(255 255 255 / 7%);
   --control-edge: rgb(255 255 255 / 13%);
   --control-hover: rgb(255 255 255 / 11%);
-  --bg-frame: rgb(8 8 8 / 65%);
+  --bg-frame: rgb(0 0 0 / 80%);
   --glass-card: rgb(24 24 24 / 72%);
-  --glass-menu: rgb(18 18 18 / 32%);
+  --glass-menu: rgb(18 18 18 / 84%);
   --select-bg: rgb(255 255 255 / 5%);
   --select-menu-bg: var(--glass-menu);
-  --select-blur: blur(12px) saturate(1.1);
+  --select-blur: blur(20px) saturate(1.1);
   --control-blur: blur(16px);
   --glass-utility: rgb(255 255 255 / 4%);
   --bg-elev: rgb(20 20 20 / 94%);
@@ -33,10 +33,10 @@
   --control-hover: rgb(255 255 255 / 62%);
   --bg-frame: rgb(255 255 255 / 42%);
   --glass-card: rgb(255 255 255 / 70%);
-  --glass-menu: rgb(255 255 255 / 34%);
+  --glass-menu: rgb(255 255 255 / 82%);
   --select-bg: rgb(255 255 255 / 18%);
   --select-menu-bg: var(--glass-menu);
-  --select-blur: blur(12px) saturate(1.1);
+  --select-blur: blur(20px) saturate(1.1);
   --control-blur: blur(16px);
   --glass-utility: rgb(255 255 255 / 18%);
   --bg-elev: rgb(255 255 255 / 96%);

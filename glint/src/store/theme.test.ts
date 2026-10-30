@@ -55,6 +55,7 @@ describe("applyTheme", () => {
     })));
 
     applyTheme("system");
+    expect(fakeDocument.documentElement.dataset.appearance).toBe("system");
     expect(fakeDocument.documentElement.dataset.theme).toBe("dark");
     expect(fakeDocument.documentElement.style.getPropertyValue("--bg")).toBe("#080808");
     expect(fakeLocalStorage.getItem(THEME_STORAGE_KEY)).toBe("system");

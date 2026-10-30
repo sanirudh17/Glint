@@ -1,16 +1,17 @@
 //! Compositor-owned desktop acrylic, matching Seek's material. Capture overlays
 //! deliberately never receive a window-wide backdrop or a changed affinity.
-use tauri::{Manager,WebviewWindow};
+use tauri::WebviewWindow;
 
 #[tauri::command]
-pub fn window_material(window: WebviewWindow, glass: bool, dark: bool) -> bool {
+pub fn window_material(window: WebviewWindow, glass: bool, dark: bool, system: Option<bool>) -> bool {
     if !matches!(window.label(), "main" | "editor" | "rec-trim" | "rec-notes") {
         return false;
     }
-    // Keep Tao/WebView2's preferred theme aligned too. A DWM attribute alone
-    // leaves activation/theme-change handling free to restore the OS light theme.
-    let system=window.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().theme==crate::settings::Theme::System;
-    let _=window.set_theme(if system {None} else {Some(if dark {tauri::Theme::Dark} else {tauri::Theme::Light})});
+    // Use the frontend's resolved appearance, not the saved preference: theme
+    // changes are optimistic and the Rust settings copy may still be the old one.
+    // Preserve native System tracking; the preference travels with this request
+    // so it cannot race the optimistic frontend and persisted settings.
+    let _=window.set_theme(if system.unwrap_or(false) {None} else {Some(if dark {tauri::Theme::Dark} else {tauri::Theme::Light})});
     // Cover the native surface BEFORE tearing down acrylic, too. Frontend paint
     // and native composition do not necessarily complete in the same frame.
     if !glass {

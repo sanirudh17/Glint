@@ -2,11 +2,12 @@ import { invoke } from '@tauri-apps/api/core';
 
 let revision = 0;
 let settled: Promise<void> = Promise.resolve();
-let requested: {glass:boolean;dark:boolean}|null=null;
+let requested: {glass:boolean;dark:boolean;system:boolean}|null=null;
 export function applyMaterial(glass: boolean): Promise<void> {
   const dark=document.documentElement.dataset.theme!=='light';
-  if(requested?.glass===glass&&requested.dark===dark)return settled;
-  requested={glass,dark};
+  const system=document.documentElement.dataset.appearance==='system';
+  if(requested?.glass===glass&&requested.dark===dark&&requested.system===system)return settled;
+  requested={glass,dark,system};
   settled = updateMaterial(glass);
   return settled;
 }
@@ -27,7 +28,7 @@ async function updateMaterial(glass: boolean): Promise<void> {
     if (current !== revision) return;
   }
   try {
-    const applied = await invoke<boolean>('window_material', { glass, dark });
+    const applied = await invoke<boolean>('window_material', { glass, dark, system: document.documentElement.dataset.appearance === 'system' });
     if (current === revision) document.documentElement.dataset.glass = String(applied);
   } catch {
     if (current === revision) { document.documentElement.dataset.glass = 'false'; requested=null; }

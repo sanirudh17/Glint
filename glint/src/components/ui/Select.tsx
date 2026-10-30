@@ -17,7 +17,7 @@ export interface SelectProps {
   /** When true, the control is inert and styled as unavailable. */
   disabled?: boolean;
   className?: string;
-  /** Float outside a scrolling inspector, keeping the app's themed menu styling. */
+  /** Use a common floating layer so every menu samples the same backdrop. */
   portal?: boolean;
 }
 
@@ -28,7 +28,7 @@ export function Select({
   ariaLabel,
   disabled = false,
   className = "",
-  portal = false,
+  portal = true,
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [placement, setPlacement] = useState<"bottom" | "top">("bottom");

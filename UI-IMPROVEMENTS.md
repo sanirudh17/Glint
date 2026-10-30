@@ -142,3 +142,14 @@ The user rejected the new rounded surfaces around expandable Studio sections. Th
 The user clarified that the Library issue is the empty right margin, not card width. Library horizontal padding is reduced from 32px (24px at narrower sizes) to a consistent 16px on both sides. The grid explicitly fills its content width and its minimum column width can shrink to the available width, preserving the existing card sizes and compact footers. Home is unchanged.
 
 This follow-up changes CSS only. Production TypeScript/build validation passed; the immediately preceding functional suite had 285 passing tests. Visual effect strength remains subject to the user's review on their desktop. Changes remain on ui-improvements.
+
+
+## Seek comparison: dark acrylic and unified choice menus
+
+Reviewed the current Seek sources directly: `app/src/appearance.rs` paints the glass canvas with 80% black in dark mode and transparent inner chrome; `app/src/instance.rs` uses compositor-owned Windows system acrylic. Glint retains its WebView-specific native setup and now uses the same single 80% black tint for the dark canvas and sibling rails. This reveals more backdrop than the intermediate 86/88% review tint, while keeping a stronger neutral dark base than the earlier 56% tint that could wash out against pale content. The user-approved light canvas remains unchanged.
+
+Settings and inspector choice menus now use the same floating portal by default. Both consume shared frosted menu tokens (82% white in light, 84% near-black in dark, 20px blur), replacing the overly transparent intermediate 34/32% fills. Expandable trim sections remain unboxed.
+
+Native material no longer reads the asynchronously saved theme preference during an optimistic theme switch. Each request carries both resolved light/dark appearance and whether the selected preference is System; caching includes that preference. System retains native OS tracking rather than being locked to an explicit light/dark mode. A regression test covers switching System-dark to explicit Dark without changing the resolved color.
+
+Validation: 286 frontend tests, 275 native tests (8 optional integrations ignored), and the production frontend build passed. The native review build also completed. The user's supplied screenshots confirmed the intermediate theme fix rendered both light and dark acrylic; final backdrop strength remains a visual review item. No changes merged into main.
