@@ -12,8 +12,10 @@
   display: flex;
   flex-direction: column;
   gap: var(--s5);
-  padding: 40px 32px 24px;
+  padding: 40px 16px 24px;
   height: 100%;
+  width: 100%;
+  min-width: 0;
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -158,7 +160,9 @@
   display: grid;
   /* A comfortable minimum so thumbnails stay large and legible no matter how many
      items pile up; the parent `.library-view` provides the vertical scroll. */
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+  grid-template-columns: repeat(auto-fill, minmax(min(100%, 300px), 1fr));
+  width: 100%;
+  min-width: 0;
   gap: var(--s4);
   align-content: start;
 }
@@ -341,7 +345,3 @@
   pointer-events: none;
 }
 .cap-btn:hover .cap-tip { opacity: 1; }
-
-
-
-@media (max-width: 800px) { .library-view { padding: 40px 24px 24px; } }

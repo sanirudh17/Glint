@@ -133,3 +133,12 @@ Home and Library now use the same compact two-line footer for all captures. Name
 The user clarified that dropdown means both choice menus and expandable inspector sections. Acrylic now gives each Studio disclosure one translucent frosted surface, with an inset summary and a subtle divider while open. Its body stays clear rather than layering another fill. Shared choice menus use lighter dark/light tints and stronger frosting; solid mode is unchanged.
 
 Validation: all 285 frontend tests and the TypeScript/production build passed. Both theme branches were checked in source. The isolated app was restarted after its main window became unavailable; a new Glint window was enumerated but disappeared before capture, leaving only the single-instance helper window. No completed visual confirmation in either theme is claimed. Work remains on ui-improvements, with main unchanged.
+
+
+## Restore unboxed trim sections and reduce Library edge space
+
+The user rejected the new rounded surfaces around expandable Studio sections. Those disclosure-only backgrounds, blur, padding and dividers are removed, restoring the previous quiet inspector. Choice menus, including cursor menus, retain their shared light/dark material with lower tint opacity and a 12px blur so underlying interface detail is less obscured. No simulated desktop imagery is used.
+
+The user clarified that the Library issue is the empty right margin, not card width. Library horizontal padding is reduced from 32px (24px at narrower sizes) to a consistent 16px on both sides. The grid explicitly fills its content width and its minimum column width can shrink to the available width, preserving the existing card sizes and compact footers. Home is unchanged.
+
+This follow-up changes CSS only. Production TypeScript/build validation passed; the immediately preceding functional suite had 285 passing tests. Visual effect strength remains subject to the user's review on their desktop. Changes remain on ui-improvements.
