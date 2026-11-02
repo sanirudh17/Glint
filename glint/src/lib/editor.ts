@@ -12,6 +12,7 @@ const RECENT_CAP = 8;
 
 export interface EditorSource {
   imageDataUrl: string;
+  presentationId: number;
   width: number;
   height: number;
   origin: string;
@@ -22,6 +23,7 @@ export interface EditorSource {
 
 interface RawEditorSource {
   image_data_url: string;
+  presentation_id: number;
   width: number;
   height: number;
   origin: string;
@@ -40,6 +42,7 @@ export async function getEditorSource(): Promise<EditorSource> {
   const d = await invoke<RawEditorSource>("editor_source");
   return {
     imageDataUrl: d.image_data_url,
+    presentationId: d.presentation_id,
     width: d.width,
     height: d.height,
     origin: d.origin,

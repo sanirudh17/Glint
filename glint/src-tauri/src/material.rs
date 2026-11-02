@@ -14,7 +14,11 @@ pub fn window_material(window: WebviewWindow, glass: bool, dark: bool, system: O
     let _=window.set_theme(if system.unwrap_or(false) {None} else {Some(if dark {tauri::Theme::Dark} else {tauri::Theme::Light})});
     // Cover the native surface BEFORE tearing down acrylic, too. Frontend paint
     // and native composition do not necessarily complete in the same frame.
-    if !glass {
+    if glass {
+        // Prepare both native and WebView surfaces before attaching acrylic,
+        // matching Monocode; the first-frame gate keeps this transition hidden.
+        let _=window.set_background_color(Some(tauri::window::Color(0,0,0,0)));
+    } else {
         let _=window.set_background_color(Some(if dark {tauri::window::Color(8,8,8,255)} else {tauri::window::Color(246,247,249,255)}));
     }
     let applied = apply(&window, glass, dark);

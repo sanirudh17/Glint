@@ -33,7 +33,17 @@ Glint is **local-first by design**. There is no cloud storage, account requireme
 - [Privacy](#privacy)
 - [License](#license)
 
-## What is new in 0.2.1
+## What is new in 0.2.2
+
+- Main and editor windows wait for their prepared content, theme and material before appearing.
+- Native resize handling protects against white background clears and keeps acrylic active in maximized windows.
+- Home retains compact thumbnails, with moderate section spacing and a separate maximized layout.
+- Project resume rejects stale image loads and outdated presentation requests.
+- The existing glass palette, optional OCR downloads and capture-sharing formats are preserved.
+
+Windows acrylic can resample the backdrop when window bounds change; that small background adjustment is expected.
+
+## Previous release: 0.2.1
 
 - New glass capture icon across the application, Windows shortcuts, installer and tray.
 - Ten recent captures in a compact Home layout, with Resume directly below.

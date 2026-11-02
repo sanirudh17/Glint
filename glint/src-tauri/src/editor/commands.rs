@@ -8,6 +8,7 @@ use crate::editor::document;
 #[derive(Serialize)]
 pub struct EditorSourceDto {
     pub image_data_url: String,
+    pub presentation_id: u64,
     pub width: u32,
     pub height: u32,
     pub origin: String,
@@ -22,31 +23,27 @@ pub struct EditorSourceDto {
 /// The editor lives in its OWN decorated window (label "editor"), not the main
 /// window. Building a webview must happen OFF the main thread (a synchronous build on
 /// the main thread deadlocks the event loop), so we spawn: build/raise the editor
-/// window, then minimize main, then `emit_to("editor", "editor-open")`. A freshly
+/// window, then `emit_to("editor", "editor-open")`. Main stays visible until
+/// the prepared editor frame is presented. A freshly
 /// built editor window fetches its source on mount, so that emit is a harmless no-op
 /// for it and a genuine reload trigger for an already-open one (reopen with a new
 /// image). EditorState is already set by the caller before this runs, so the mount
 /// fetch always sees the new source.
 pub(crate) fn open_editor_window(app: &AppHandle) {
     use crate::editor::window::{ensure_editor_window, EDITOR_LABEL};
+    let request=crate::editor::window::begin_present();
     let app = app.clone();
-    std::thread::spawn(move || match ensure_editor_window(&app) {
+    std::thread::spawn(move || {
+        if request!=crate::editor::window::presentation_id(){return;}
+        match ensure_editor_window(&app) {
         Ok(()) => {
-            // Minimize (not hide) the main window so it stays in the taskbar and the
-            // user can un-minimize it whenever they like (best-of-both-worlds).
-            // show() first so a main window that was hidden (e.g. after a capture)
-            // becomes taskbar-visible before it's minimized.
-            if let Some(main) = app.get_webview_window("main") {
-                let _ = main.show();
-                let _ = main.minimize();
-            }
             let _ = app.emit_to(EDITOR_LABEL, "editor-open", ());
         }
         Err(e) => {
             log::error!("open_editor_window: build failed: {e}");
             let _ = app.emit("glint-toast", "Couldn't open the editor");
         }
-    });
+    }});
 }
 
 /// Set the editor source to a PNG and open/raise the editor window. Shared by the
@@ -143,6 +140,7 @@ pub fn editor_source(ed: State<EditorState>) -> Result<EditorSourceDto, String> 
     let b64 = base64::engine::general_purpose::STANDARD.encode(&s.png);
     Ok(EditorSourceDto {
         image_data_url: format!("data:image/png;base64,{b64}"),
+        presentation_id: crate::editor::window::presentation_id(),
         width: s.width,
         height: s.height,
         origin: s.origin.clone(),

@@ -77,7 +77,7 @@ fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    std::env::set_var("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "0");
+    std::env::set_var("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "00000000");
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // A second launch (e.g. "Open in Glint" while Glint is already running)
@@ -210,21 +210,14 @@ pub fn run() {
                 .background_color(bg_color);
 
                 if let Ok(win) = builder.build() {
-                    // Kill OS open/show transition so the main window snaps in instantly on cold start.
+                    // Persistent app windows retain native maximize/restore animations.
+                    crate::window::protect_desktop_surface(&win);
                     crate::window::disable_transitions(&win);
                 }
 
-                // Safety valve: ensure the main window is shown even if webview script fails.
-                let h = app.handle().clone();
-                std::thread::spawn(move || {
-                    std::thread::sleep(std::time::Duration::from_millis(1500));
-                    if let Some(win) = h.get_webview_window("main") {
-                        if !win.is_visible().unwrap_or(true) {
-                            let _ = win.show();
-                            let _ = win.set_focus();
-                        }
-                    }
-                });
+                // The frontend presents only after settings, material, fonts and
+                // its first frame are ready. No timer may expose an unpainted page.
+
             }
 
             // Self-heal the Explorer "Open in Glint" verb: if enabled (default true)
@@ -333,6 +326,8 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             material::window_material,
+            window::window_toggle_maximize,
+            window::main_present,
             clipboard::clipboard_copy_text,
             attachments::drag_prepare,
             settings_get_all,

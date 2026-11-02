@@ -146,7 +146,7 @@ export default function HomeView() {
       </section>
 
       {/* ── Recent ──────────────────────────────────────────── */}
-      <section className="home-section" aria-labelledby="rc-label">
+      <section className="home-section home-section--recent" aria-labelledby="rc-label">
         <div className="home-rowhead">
           <span className="label home-eyebrow" id="rc-label">Recent</span>
           {recent.length > 0 && (
@@ -168,7 +168,7 @@ export default function HomeView() {
 
       {/* ── Resume (conditional) ────────────────────────────── */}
       {resumable.length > 0 && (
-        <section className="home-section" aria-labelledby="rs-label">
+        <section className="home-section home-section--resume" aria-labelledby="rs-label">
           <span className="label home-eyebrow" id="rs-label">Resume</span>
           <div className="home-resume" role="list">
             {resumable.map((p) => (

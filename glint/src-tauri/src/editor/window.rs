@@ -13,8 +13,24 @@
 use tauri::{AppHandle, Manager, WebviewUrl, WebviewWindowBuilder, Wry};
 
 pub const EDITOR_LABEL: &str = "editor";
-static PRESENT_PENDING:std::sync::atomic::AtomicBool=std::sync::atomic::AtomicBool::new(false);
-pub fn cancel_present(){PRESENT_PENDING.store(false,std::sync::atomic::Ordering::SeqCst);}
+use std::sync::Mutex;
+#[derive(Default)]
+struct PresentationState { serial:u64, pending:Option<u64> }
+struct Presentation(Mutex<PresentationState>);
+impl Presentation {
+    const fn new()->Self {Self(Mutex::new(PresentationState{serial:0,pending:None}))}
+    fn begin(&self)->u64 {let mut state=self.0.lock().unwrap();state.serial+=1;let id=state.serial;state.pending=Some(id);id}
+    fn current(&self)->u64 {self.0.lock().unwrap().serial}
+    fn claim(&self,id:u64)->bool {
+        let mut state=self.0.lock().unwrap();
+        if state.pending!=Some(id){return false;}state.pending=None;true
+    }
+    fn cancel(&self){self.0.lock().unwrap().pending=None;}
+}
+static PRESENTATION:Presentation=Presentation::new();
+pub fn begin_present()->u64{PRESENTATION.begin()}
+pub fn presentation_id()->u64{PRESENTATION.current()}
+pub fn cancel_present(){PRESENTATION.cancel();}
 
 fn builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
     let (theme,accent)={
@@ -33,9 +49,7 @@ fn builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
         .title("Glint")
         .theme(if system {None} else {Some(if light {tauri::Theme::Light} else {tauri::Theme::Dark})})
         .transparent(true)
-        // Avoid the legacy Windows redirection surface flashing white before
-        // WebView2 composition is attached (also on reused transparent windows).
-        .no_redirection_bitmap(true)
+        // Retain the composition surface for native resize animation and acrylic.
         .decorations(false)
         .shadow(true)
         .inner_size(1180.0, 780.0)
@@ -61,6 +75,7 @@ pub fn prewarm(app: &AppHandle) {
             return;
         }
     };
+    crate::window::protect_desktop_surface(&win);
     crate::window::disable_transitions(&win);
 }
 
@@ -68,7 +83,6 @@ pub fn prewarm(app: &AppHandle) {
 /// open (or pre-warmed hidden), raise it (the caller then emits `editor-open` so
 /// its EditorView reloads the new source); otherwise build it on demand.
 pub fn ensure_editor_window(app: &AppHandle) -> tauri::Result<()> {
-    PRESENT_PENDING.store(true,std::sync::atomic::Ordering::SeqCst);
     if let Some(win) = app.get_webview_window(EDITOR_LABEL) {
         // Reused webviews can still hold the previous canvas or material. Reload
         // while hidden; editor_present reveals the new completed frame.
@@ -76,17 +90,40 @@ pub fn ensure_editor_window(app: &AppHandle) -> tauri::Result<()> {
         return Ok(());
     }
     let win = builder(app).visible(false).build()?;
+    crate::window::protect_desktop_surface(&win);
     crate::window::disable_transitions(&win);
     Ok(())
 }
 
 /// Called by this editor only after image, theme, material and paint are ready.
 #[tauri::command]
-pub fn editor_present(window:tauri::WebviewWindow)->Result<(),String>{
+pub fn editor_present(window:tauri::WebviewWindow,presentation_id:u64)->Result<(),String>{
     if window.label()!=EDITOR_LABEL{return Err("Only the editor can present this window".into());}
-    if !PRESENT_PENDING.swap(false,std::sync::atomic::Ordering::SeqCst){return Ok(());}
+    if !PRESENTATION.claim(presentation_id){return Ok(());}
     let _=window.unminimize();
     window.show().map_err(|e|e.to_string())?;
     let _=window.set_focus();
+    // Keep Home visible while the new project/image is decoding. Only minimize
+    // behind the completed editor; never show a hidden main just to minimize it.
+    if let Some(main)=window.app_handle().get_webview_window("main") {
+        if main.is_visible().unwrap_or(false) && !main.is_minimized().unwrap_or(false) {
+            let _=main.minimize();
+        }
+    }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Presentation;
+    #[test]
+    fn old_frame_cannot_claim_a_new_open_or_consume_its_pending_state(){
+        let state=Presentation::new();let old=state.begin();let current=state.begin();
+        assert!(!state.claim(old));assert!(state.claim(current));assert!(!state.claim(current));
+    }
+    #[test]
+    fn cancelled_or_unrequested_frames_never_present(){
+        let state=Presentation::new();assert!(!state.claim(0));let id=state.begin();state.cancel();
+        assert!(!state.claim(id));let next=state.begin();assert!(state.claim(next));
+    }
 }

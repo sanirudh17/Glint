@@ -6,13 +6,29 @@
 .home-view {
   display: flex;
   flex-direction: column;
-  gap: var(--s5);
+  gap: 28px;
   padding: 40px 32px 32px;
   min-height: 100%;
   box-sizing: border-box;
 }
+.home-section { display: flex; flex-direction: column; gap: var(--s4); flex: 0 0 auto; }
+/* Spare height belongs between sections, never inside a capture card. */
+.home-recent-grid .cap-meta { flex: 0 0 auto; }
 
-.home-section { display: flex; flex-direction: column; gap: var(--s4); }
+/* Full screen balances spare room around the compact Recent block. */
+:root[data-maximized="true"] .home-view {
+  display: grid;
+  grid-template-rows: auto minmax(min-content, 1fr) auto;
+  height: 100%;
+  gap: 36px;
+  padding-top: 48px;
+  padding-bottom: 40px;
+}
+:root[data-maximized="true"] .home-view:not(:has(.home-section--resume)) {
+  grid-template-rows: auto minmax(min-content, 1fr);
+}
+:root[data-maximized="true"] .home-section--recent { justify-content: center; }
+:root[data-maximized="true"] .home-recent-grid { row-gap: 24px; }
 
 /* Eyebrow — mono uppercase label (see .label in global.css). No hairline rule. */
 .home-eyebrow { display: block; }

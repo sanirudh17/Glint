@@ -1,7 +1,10 @@
+import { applyMaterial } from "./lib/material";
+import { presentEditorFrame } from "./editor/firstFrame";
+import { useAppStore } from "./store/useAppStore";
+import { invoke } from "@tauri-apps/api/core";
 import { listCaptures } from "./lib/captures";
 import { useEffect, lazy, Suspense, type ReactNode } from "react";
 import { createHashRouter, Outlet } from "react-router-dom";
-import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Titlebar } from "./components/Titlebar";
 import { NavRail } from "./components/NavRail";
 import HomeView from "./views/HomeView";
@@ -40,24 +43,16 @@ const lazyRoute = (el: ReactNode) => <Suspense fallback={null}>{el}</Suspense>;
  */
 function AppShell() {
   useEffect(() => { void listCaptures().catch(() => {}); }, []);
-  // Reveal the main window only once AppShell and HomeView have committed to the DOM.
-  // Double-rAF guarantees the browser has painted the dashboard components with zero flash.
+  const settings=useAppStore(state=>state.settings);
   useEffect(() => {
-    try {
-      const win = getCurrentWindow();
-      if (win.label === "main") {
-        const r = requestAnimationFrame(() => {
-          requestAnimationFrame(() => {
-            void win.show();
-            void win.setFocus();
-          });
-        });
-        return () => cancelAnimationFrame(r);
-      }
-    } catch {
-      /* ignore */
-    }
-  }, []);
+    if (!settings) return;
+    let cancelled=false;
+    void applyMaterial(settings.glass??true)
+      .then(()=>presentEditorFrame(()=>invoke('main_present'),()=>cancelled))
+      .catch(()=>{});
+    return()=>{cancelled=true;};
+  }, [settings?.theme,settings?.glass,!!settings]);
+
 
   return (
     <div className="g-shell">

@@ -160,14 +160,18 @@ export default function EditorView() {
   // Load (or reload) the editor source from EditorState. Used on mount AND when
   // a `.glint` is opened while the editor is already mounted (editor-open fires
   // but the route doesn't remount). loadDoc hydrates base + doc atomically.
+  const loadRevision = useRef(0);
+  const [presentationId,setPresentationId] = useState<number|null>(null);
   const loadFromSource = useCallback(() => {
+    const revision=++loadRevision.current;
+    setPresentationId(null);
     let alive = true;
     setSourceError(null);
     getEditorSource()
       .then((src) => {
         const img = new Image();
         img.onload = () => {
-          if (!alive) return;
+          if (!alive || revision!==loadRevision.current) return;
           const project = src.projectPath
             ? { path: src.projectPath, name: src.projectPath.split(/[\\/]/).pop() ?? src.projectPath }
             : null;
@@ -176,12 +180,13 @@ export default function EditorView() {
             (src.doc as SerializedDoc | null) ?? null,
             project,
           );
+          setPresentationId(src.presentationId);
         };
-        img.onerror=()=>{if(alive)setSourceError("Couldn't load this image. Close the editor and open it again.");};
+        img.onerror=()=>{if(alive && revision===loadRevision.current){setPresentationId(src.presentationId);setSourceError("Couldn't load this image. Close the editor and open it again.");}};
         img.src = src.imageDataUrl;
       })
       .catch(() => {
-        if(alive)setSourceError("Couldn't open this image. Close the editor and open it again.");
+        if(alive && revision===loadRevision.current)setSourceError("Couldn't open this image. Close the editor and open it again.");
       });
     return () => {
       alive = false;
@@ -199,11 +204,11 @@ export default function EditorView() {
   // The native window is hidden on both cold and reused opens. Reveal only the
   // decoded image (or an actionable error), with the hydrated theme/material.
   useEffect(() => {
-    if ((!base&&!sourceError)||!theme||renderingLook) return;
+    if ((!base&&!sourceError)||!theme||renderingLook||presentationId===null) return;
     let cancelled=false;
-    void presentEditorFrame(()=>invoke('editor_present'),()=>cancelled).catch(()=>{});
+    void presentEditorFrame(()=>invoke('editor_present',{presentationId}),()=>cancelled).catch(()=>{});
     return ()=>{cancelled=true;};
-  }, [base,sourceError,theme,renderingLook]);
+  }, [base,sourceError,theme,renderingLook,presentationId]);
 
   // Reopen path: project_open / editor_open emits editor-open after setting EditorState; if we
   // are already on /editor the route won't remount, so reload here.
@@ -225,6 +230,8 @@ export default function EditorView() {
   // lingers in the webview canvas buffer while idle.
   useEffect(() => {
     const un = listen("editor-close", () => {
+      ++loadRevision.current;
+      setPresentationId(null);
       reset();
     });
     return () => {
