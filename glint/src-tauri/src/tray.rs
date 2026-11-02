@@ -1,8 +1,12 @@
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem, Submenu};
-use tauri::tray::{MouseButton, TrayIconBuilder, TrayIconEvent};
+use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter};
 
 use crate::window;
+
+fn reopens_window(button: MouseButton, state: MouseButtonState) -> bool {
+    button == MouseButton::Left && state == MouseButtonState::Up
+}
 
 pub fn build(app: &AppHandle) -> tauri::Result<()> {
     let open = MenuItem::with_id(app, "open", "Open Glint", true, None::<&str>)?;
@@ -48,9 +52,9 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
         // one-click path to restore a closed window.
         .show_menu_on_left_click(false)
         .on_menu_event(|app, event| match event.id.as_ref() {
-            "open" => window::focus_main(app),
+            "open" => window::reopen_from_tray(app),
             "settings" => {
-                window::focus_main(app);
+                window::reopen_from_tray(app);
                 let _ = app.emit("navigate", "/settings");
             }
             "quit" => app.exit(0),
@@ -86,8 +90,10 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
             }
         })
         .on_tray_icon_event(|tray, event| {
-            if let TrayIconEvent::Click { button: MouseButton::Left, .. } = event {
-                window::focus_main(tray.app_handle());
+            if let TrayIconEvent::Click { button, button_state, .. } = event {
+                if reopens_window(button, button_state) {
+                    window::reopen_from_tray(tray.app_handle());
+                }
             }
         })
         .build(app)?;
@@ -96,6 +102,14 @@ pub fn build(app: &AppHandle) -> tauri::Result<()> {
 
 #[cfg(test)]
 mod tests {
+    #[test]
+    fn one_pointer_gesture_requests_one_reopen() {
+        use super::*;
+        let gesture = [MouseButtonState::Down, MouseButtonState::Up];
+        assert_eq!(gesture.iter().filter(|&&state| reopens_window(MouseButton::Left, state)).count(), 1);
+        assert!(!gesture.iter().any(|&state| reopens_window(MouseButton::Right, state)));
+    }
+
     /// Regression guard: two tray icons appeared in the notification area because
     /// `tauri.conf.json` declared `app.trayIcon` *and* `build()` above created one.
     /// The programmatic tray is the real one (it owns the menu and click handlers),

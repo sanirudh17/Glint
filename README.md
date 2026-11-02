@@ -33,7 +33,14 @@ Glint is **local-first by design**. There is no cloud storage, account requireme
 - [Privacy](#privacy)
 - [License](#license)
 
-## What is new in 0.2.2
+## What is new in 0.2.3
+
+- Tray clicks restore Glint once, after the mouse gesture finishes.
+- Open Glint and Settings from the tray defer restoration until the menu callback completes.
+- Hidden minimized windows synchronize visibility before restoring, avoiding an intermediate restore/hide sequence.
+- The existing glass palette and maximize/restore behavior are preserved.
+
+## Previous release: 0.2.2
 
 - Main and editor windows wait for their prepared content, theme and material before appearing.
 - Native resize handling protects against white background clears and keeps acrylic active in maximized windows.

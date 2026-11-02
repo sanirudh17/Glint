@@ -1,6 +1,28 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Manager};
 static MAIN_READY: AtomicBool = AtomicBool::new(false);
+static TRAY_REOPEN_QUEUED: AtomicBool = AtomicBool::new(false);
+
+/// Run after the tray/menu callback releases mouse capture and foreground state.
+/// One pending task also coalesces repeated tray notifications during restore.
+pub fn reopen_from_tray(app: &AppHandle) {
+    if TRAY_REOPEN_QUEUED.swap(true, Ordering::SeqCst) {
+        return;
+    }
+    let app = app.clone();
+    tauri::async_runtime::spawn(async move {
+        let owner = app.clone();
+        if app
+            .run_on_main_thread(move || {
+                focus_main(&owner);
+                TRAY_REOPEN_QUEUED.store(false, Ordering::SeqCst);
+            })
+            .is_err()
+        {
+            TRAY_REOPEN_QUEUED.store(false, Ordering::SeqCst);
+        }
+    });
+}
 
 #[tauri::command]
 pub fn main_present(window: tauri::WebviewWindow) -> Result<(), String> {
@@ -28,13 +50,20 @@ pub fn focus_main(app: &AppHandle) {
     }
 
     if let Some(win) = app.get_webview_window("main") {
+        let minimized = win.is_minimized().unwrap_or(false);
+        if win.is_visible().unwrap_or(false) && !minimized {
+            // Already painted: focus it without another native show/material transition.
+            let _ = win.set_focus();
+            return;
+        }
         disable_transitions(&win);
-        // Restore the retained surface before exposing a hidden window. Showing
-        // a still-minimized WebView first can expose an unpainted resize surface.
-        if win.is_minimized().unwrap_or(false) {
+        // Synchronize Tao's visible flag before restoring. Restoring a hidden
+        // minimized window first invokes SW_RESTORE followed by SW_HIDE in Tao,
+        // exposing an intermediate surface and then hiding it again.
+        let _ = win.show();
+        if minimized {
             let _ = win.unminimize();
         }
-        let _ = win.show();
         let _ = win.set_focus();
     }
 }
