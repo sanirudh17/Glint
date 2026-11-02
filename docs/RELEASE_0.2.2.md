@@ -31,3 +31,5 @@ Windows x64 setup, MSI and a ZIP with recording sidecars are provided. No OCR or
 Windows acrylic may resample and shift the blurred backdrop as window bounds change. This accepted compositor behavior is preserved rather than replaced with a simulated background.
 
 Validation results and coverage limits are recorded in the [release validation report](https://github.com/sanirudh17/Glint/blob/v0.2.2/docs/RELEASE_0.2.2_VALIDATION.md).
+
+All five public downloads were verified against the local files byte for byte and by SHA-256. See the [published asset verification](https://github.com/sanirudh17/Glint/blob/main/validation/release-0.2.2-public.json).

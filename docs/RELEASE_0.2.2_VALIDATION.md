@@ -15,6 +15,8 @@ Windows x64, 2 November 2026. Live review used generated captures, an owned proj
 
 Local artifact sizes and SHA-256 values are recorded in `validation/release-0.2.2.json` and the distributed `SHA256SUMS.txt`.
 
+All five assets were downloaded through their public release URLs and matched the local files byte for byte, in size and SHA-256. GitHub latest resolves to v0.2.2 with the expected updater setup URL. See `validation/release-0.2.2-public.json`.
+
 ## Coverage limits
 
 The final preview was reviewed in the running development app using the same source as this patch. This was not an installation over the active production profile. There was no new frame-by-frame capture benchmark or exhaustive pass through every recorder, hardware, clipboard consumer or Windows configuration. The automated project-resume visual check was interrupted when the target window became unavailable; presentation regression tests pass, and this report does not claim a completed fresh visual resume test.
