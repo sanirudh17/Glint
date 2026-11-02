@@ -11,3 +11,5 @@ This patch fixes the tray restore sequence behind the reported white flash when 
 Windows x64 setup, MSI and an application ZIP with recording sidecars are provided. OCR and caption engines remain separate optional downloads. Installers retain the existing unsigned distribution setup.
 
 This focused patch uses targeted tray regression tests and package checks. It does not claim a new exhaustive visual or hardware review. Windows acrylic can still resample its blurred backdrop when window bounds change.
+
+See the [targeted release checks](https://github.com/sanirudh17/Glint/blob/v0.2.3/docs/RELEASE_0.2.3_VALIDATION.md).

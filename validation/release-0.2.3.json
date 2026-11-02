@@ -1,0 +1,67 @@
+{
+  "passed": true,
+  "version": "0.2.3",
+  "checks": [
+    "Version manifests and locks agree",
+    "Production application identifier",
+    "No OCR or caption resources configured",
+    "Recording sidecars configured",
+    "Built glint.exe",
+    "Built Glint_0.2.3_x64-setup.exe",
+    "Built Glint_0.2.3_x64_en-US.msi",
+    "Executable product version matches",
+    "Executable product name matches",
+    "Setup contains application",
+    "Setup contains ffmpeg.exe",
+    "Setup contains ffprobe.exe",
+    "Setup contains no OCR/caption runtime or weights",
+    "MSI contains only the app and recording sidecars",
+    "ZIP distribution contains application and recording sidecars",
+    "ZIP distribution contains no OCR/caption files",
+    "Checksum matches Glint-OCR-Tesseract-5.4.0-x64.zip",
+    "Checksum matches Glint_0.2.3_x64-setup.exe",
+    "Checksum matches Glint_0.2.3_x64.zip",
+    "Checksum matches Glint_0.2.3_x64_en-US.msi",
+    "Optional Tesseract asset matches application pin"
+  ],
+  "pe": {
+    "ProductVersion": "0.2.3",
+    "FileVersion": "0.2.3",
+    "ProductName": "Glint"
+  },
+  "assets": [
+    {
+      "name": "glint.exe",
+      "bytes": 35267072,
+      "sha256": "38a95e2a2f1c9874116ce9185609be2746df0f7db8ff08e7a46769943d2e6400"
+    },
+    {
+      "name": "Glint_0.2.3_x64-setup.exe",
+      "bytes": 62885206,
+      "sha256": "362675a9d25e17571f028c29126eb728fa48cbdbe070d2a679027f1b2136e83c"
+    },
+    {
+      "name": "Glint_0.2.3_x64_en-US.msi",
+      "bytes": 86392832,
+      "sha256": "f8699457066b14b2baa5fa415144aebea240f9161fbff5d13298c3b9d9782796"
+    }
+  ],
+  "installerFiles": [
+    "glint\\src-tauri\\target\\release\\bundle\\nsis\\Glint_0.2.3_x64-setup.exe",
+    "$PLUGINSDIR\\System.dll",
+    "$PLUGINSDIR\\modern-wizard.bmp",
+    "$PLUGINSDIR\\nsDialogs.dll",
+    "$PLUGINSDIR\\nsis_tauri_utils.dll",
+    "$PLUGINSDIR\\StartMenu.dll",
+    "$PLUGINSDIR\\NSISdl.dll",
+    "glint.exe",
+    "ffmpeg.exe",
+    "ffprobe.exe",
+    "uninstall.exe"
+  ],
+  "msiFiles": [
+    "glint.exe",
+    "ffmpeg.exe",
+    "ffprobe.exe"
+  ]
+}
