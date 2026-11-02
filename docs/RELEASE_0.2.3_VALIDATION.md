@@ -10,4 +10,6 @@ Windows x64, 2 November 2026. This patch is limited to tray restoration and vers
 
 Artifact sizes and SHA-256 values are recorded in `validation/release-0.2.3.json` and the distributed `SHA256SUMS.txt`.
 
+All five public downloads match the local assets byte for byte and by SHA-256. GitHub latest resolves to v0.2.3. See `validation/release-0.2.3-public.json`.
+
 Windows acrylic can still resample its blurred backdrop when window bounds change. Installers retain the existing unsigned distribution setup; OCR and caption engines remain optional downloads.
