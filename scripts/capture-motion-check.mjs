@@ -16,11 +16,12 @@ try{
   const read=()=>{const style=getComputedStyle(slide);return {x:new DOMMatrix(style.transform).m41,opacity:Number(style.opacity),duration:style.transitionDuration,width:slide.getBoundingClientRect().width};};
   const before=read();card.classList.replace('active','leaving');
   await new Promise(resolve=>setTimeout(resolve,100));const during=read();
-  await new Promise(resolve=>setTimeout(resolve,300));const after=read();return {before,during,after};
+  await new Promise(resolve=>setTimeout(resolve,700));const after=read();return {before,during,after};
  });
  await writeFile('work.local/card-motion-samples.json',JSON.stringify(samples,null,2));console.log(samples);
  assert.ok(samples.during.x< -3 && samples.during.x> -samples.during.width,'Card must visibly travel before leaving the viewport');
  assert.ok(samples.during.opacity>=0.95,'Card fades away before its slide can be seen');
+ assert.equal(samples.before.duration,'0.7s','Approved exit lasts 700 ms');
  assert.ok(samples.after.x<= -samples.after.width,'Card must slide fully out before removal');
  await page.emulateMedia({reducedMotion:'reduce'});
  const reducedDuration=await page.locator('.tray-expiry-slide').evaluate(el=>parseFloat(getComputedStyle(el).transitionDuration));
