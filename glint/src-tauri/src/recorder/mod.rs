@@ -769,6 +769,9 @@ pub async fn recorder_start(
         e.to_string()
     })?;
     let studio_mode=studio::recording_mode(studio_mode);
+    // GDI's cursor-free input keeps the desktop pointer out of Studio's source
+    // pixels. Hardware encoding remains available; Studio draws its own cursor.
+    let engine = if studio_mode { ffmpeg::CaptureEngine::Gdigrab } else { engine };
     let geometry=if studio_mode {Some(studio::geometry(&app,target)?)} else {None};
     if studio_mode && matches!(target,RecordTarget::Fullscreen) {
         let g=geometry.as_ref().unwrap(); target=RecordTarget::Region{x:g.x,y:g.y,w:ffmpeg::even(g.width),h:ffmpeg::even(g.height)};

@@ -1,5 +1,7 @@
-import { useRef, useState } from "react";
-import { ExternalLink, FolderOpen, Copy, Pencil, Pin, Trash2, Play, Scissors, ScanText, Tag, Image as ImageIcon, Video, type LucideIcon } from "lucide-react";
+import { useCallback, useRef, useState } from "react";
+import { ExternalLink, FolderOpen, Copy, Pencil, PenLine, Pin, Trash2, Play, Scissors, ScanText, Tag, Image as ImageIcon, Video } from "lucide-react";
+import { CaptureMenu, type CaptureAction } from "./CaptureMenu";
+import { emit } from "@tauri-apps/api/event";
 import type { CaptureItem } from "../../lib/captures";
 import { openCapture, revealCapture, copyCapture, copyCapturePath, deleteCapture, renameCapture, dragOut } from "../../lib/captures";
 import { openTrim } from "../../lib/trim";
@@ -24,8 +26,6 @@ export function CaptureCard({
 }: {
   item: CaptureItem;
   onChanged: () => void;
-  /** "home" = compact pill trio (Copy · Annotate · Pin); "library" =
-   * bottom-aligned pill with the full grouped action set. Same pill language. */
   variant?: "home" | "library";
 }) {
   const pushToast = useAppStore((s) => s.pushToast);
@@ -36,6 +36,9 @@ export function CaptureCard({
   const [draft, setDraft] = useState("");
   // Set on Escape so the blur that follows cancels instead of committing.
   const cancelRef = useRef(false);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [menu, setMenu] = useState<{x:number;y:number}|null>(null);
+  const closeMenu = useCallback(() => { setMenu(null); }, []);
 
   // Surface command failures (e.g. the file was deleted in Explorer) instead of
   // failing silently — the Rust side returns a human-readable message.
@@ -66,35 +69,27 @@ export function CaptureCard({
       await act(async () => { await renameCapture(item.id, next); onChanged(); });
     }
   };
-  interface CardAct {
-    label: string;
-    icon: LucideIcon;
-    danger?: boolean;
-    run: () => void;
-  }
   const doCopyPath = () => act(async () => { await copyCapturePath(item.id); pushToast("Path copied"); });
-  const doDelete = () => act(async () => { await deleteCapture(item.id); onChanged(); });
+  const doDelete = () => act(async () => { await deleteCapture(item.id); await emit("capture-saved"); onChanged(); });
 
-  // Library pill: the full set, divider-grouped.
-  const shotGroups: CardAct[][] = [
+  const shotGroups: CaptureAction[][] = [
     [
-      { label: "Copy", icon: Copy, run: () => act(() => copyCapture(item.id)) },
-      { label: "Reveal in Explorer", icon: FolderOpen, run: () => act(() => revealCapture(item.id)) },
-    ],
-    [
-      { label: "Annotate", icon: Pencil, run: () => act(() => openEditorCapture(item.id)) },
-      { label: "Extract text", icon: ScanText, run: () => act(() => extractCapture(item.id)) },
-    ],
-    [
-      { label: "Open", icon: ExternalLink, run: () => act(() => openCapture(item.id)) },
+      { label: "Open in editor", icon: Pencil, run: () => act(() => openEditorCapture(item.id)) },
+      { label: "Annotate", icon: PenLine, run: () => act(() => openEditorCapture(item.id)) },
+      { label: "Copy image", icon: Copy, run: () => act(() => copyCapture(item.id)) },
       { label: "Pin to screen", icon: Pin, run: () => act(() => pinCreateFromCapture(item.id)) },
     ],
-    [{ label: "Rename", icon: Tag, run: startRename }],
+    [
+      { label: "Rename", icon: Tag, run: startRename },
+      { label: "Show in folder", icon: FolderOpen, run: () => act(() => revealCapture(item.id)) },
+      { label: "Extract text", icon: ScanText, run: () => act(() => extractCapture(item.id)) },
+      { label: "Open in default app", icon: ExternalLink, run: () => act(() => openCapture(item.id)) },
+    ],
     [{ label: "Delete", icon: Trash2, danger: true, run: doDelete }],
   ];
-  const recGroups: CardAct[][] = [
+  const recGroups: CaptureAction[][] = [
     [
-      { label: "Open", icon: ExternalLink, run: () => act(() => openCapture(item.id)) },
+      { label: "Open in default app", icon: ExternalLink, run: () => act(() => openCapture(item.id)) },
       { label: "Reveal in Explorer", icon: FolderOpen, run: () => act(() => revealCapture(item.id)) },
     ],
     [
@@ -104,8 +99,7 @@ export function CaptureCard({
     [{ label: "Copy file", icon: Copy, run: () => act(() => copyCapture(item.id)) },{ label: "Copy file path", icon: Copy, run: doCopyPath }],
     [{ label: "Delete", icon: Trash2, danger: true, run: doDelete }],
   ];
-  // Home overlay: compact primary trio (the full set lives in Library).
-  const gifGroups:CardAct[][]=[[
+  const gifGroups:CaptureAction[][]=[[
     {label:'Open GIF',icon:ExternalLink,run:()=>act(()=>openCapture(item.id))},
     {label:'Copy GIF file',icon:Copy,run:()=>act(()=>copyCapture(item.id))},
     {label:'Reveal in Explorer',icon:FolderOpen,run:()=>act(()=>revealCapture(item.id))},
@@ -113,41 +107,26 @@ export function CaptureCard({
     {label:'Copy file path',icon:Copy,run:doCopyPath},
     {label:'Delete',icon:Trash2,danger:true,run:doDelete},
   ]];
-  const homeActs: CardAct[] = isGif?gifGroups[0].slice(0,3):isRecording
-    ? [
-        { label: "Copy file path", icon: Copy, run: doCopyPath },
-        { label: "Trim", icon: Scissors, run: () => act(() => openTrim(item.id, item.path)) },
-        { label: "Open video", icon: ExternalLink, run: () => act(() => openCapture(item.id)) },
-      ]
-    : [
-        { label: "Copy", icon: Copy, run: () => act(() => copyCapture(item.id)) },
-        { label: "Annotate", icon: Pencil, run: () => act(() => openEditorCapture(item.id)) },
-        { label: "Pin to screen", icon: Pin, run: () => act(() => pinCreateFromCapture(item.id)) },
-      ];
-
-  const renderBtn = (a: CardAct) => {
-    const Icon = a.icon;
-    return (
-      <button
-        key={a.label}
-        type="button"
-        className={`cap-btn${a.danger ? " cap-btn--danger" : ""}`}
-        aria-label={a.label}
-        onPointerDown={(e) => e.stopPropagation()}
-        onClick={a.run}
-      >
-        <Icon size={16} strokeWidth={1.5} />
-        <span className="cap-tip" aria-hidden="true">{a.label}</span>
-      </button>
-    );
-  };
 
   return (
+    <>
     <div
+      ref={cardRef}
       className="cap-card"
+      data-variant={variant}
+      tabIndex={0}
+      aria-label={item.title ?? `${isRecording ? "Recording" : "Screenshot"}, ${item.width} by ${item.height}`}
+      aria-haspopup="menu"
+      onContextMenu={event => { event.preventDefault(); if (!renaming) setMenu({x:event.clientX,y:event.clientY}); }}
+      onKeyDown={event => {
+        if (renaming) return;
+        if (event.key === "ContextMenu" || event.key === "F10" && event.shiftKey) {
+          event.preventDefault(); const rect=event.currentTarget.getBoundingClientRect(); setMenu({x:rect.left+12,y:rect.top+30});
+        }
+      }}
       role="listitem"
-      onPointerDown={() => dragOut(item.path)}
-      title="Drag to share"
+      onPointerDown={event => { if (event.button === 0 && !renaming) void dragOut(item.path); }}
+      title="Right-click for actions. Drag to share."
     >
       <div className="cap-thumb">
         {item.thumb_url ? (
@@ -160,21 +139,7 @@ export function CaptureCard({
             <Play size={24} strokeWidth={1.5} />
           </div>
         )}
-        {variant === "home" ? (
-          <div className="cap-actions" onPointerDown={(e) => e.stopPropagation()}>
-            <span className="cap-group" role="group">
-              {homeActs.map(renderBtn)}
-            </span>
-          </div>
-        ) : (
-          <div className="cap-actions" onPointerDown={(e) => e.stopPropagation()}>
-            {(isGif?gifGroups:isRecording ? recGroups : shotGroups).map((group, gi) => (
-              <span className="cap-group" key={gi} role="group">
-                {group.map(renderBtn)}
-              </span>
-            ))}
-          </div>
-        )}
+
       </div>
 
       <div className="cap-meta">
@@ -208,5 +173,8 @@ export function CaptureCard({
         </div>
       </div>
     </div>
+    {menu && <CaptureMenu {...menu} title={item.title ?? `${item.width} x ${item.height}`}
+      groups={isGif ? gifGroups : isRecording ? recGroups : shotGroups} onClose={closeMenu} />}
+    </>
   );
 }

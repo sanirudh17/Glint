@@ -164,6 +164,7 @@ impl SceneProject {
         super::studio::Events {
             version: 1,
             geometry: super::studio::Geometry {
+                cursor_clean: false,
                 x: 0,
                 y: 0,
                 width,

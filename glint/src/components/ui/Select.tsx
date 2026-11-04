@@ -1,6 +1,7 @@
-import { useState, useRef, useEffect, useLayoutEffect, useId } from "react";
+import { useState, useRef, useEffect, useLayoutEffect, useId, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
+import { cssTimeMs } from "../../lib/cssTime";
 import "./ui.css";
 
 export interface SelectOption {
@@ -31,6 +32,15 @@ export function Select({
   portal = true,
 }: SelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [closing, setClosing] = useState(false);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const closeMenu = useCallback(() => {
+    setClosing(true);
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    const duration=matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : cssTimeMs(getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur"), 150);
+    closeTimer.current=setTimeout(()=>{setIsOpen(false);setClosing(false);},duration);
+  }, []);
+  useEffect(()=>()=>{if(closeTimer.current)clearTimeout(closeTimer.current);},[]);
   const [placement, setPlacement] = useState<"bottom" | "top">("bottom");
   const [highlightedIndex, setHighlightedIndex] = useState<number>(-1);
   const [menuPosition, setMenuPosition] = useState<React.CSSProperties>({});
@@ -47,12 +57,12 @@ export function Select({
 
     const handlePointerDown = (e: MouseEvent | TouchEvent) => {
       if (wrapRef.current && !wrapRef.current.contains(e.target as Node) && !listRef.current?.contains(e.target as Node)) {
-        setIsOpen(false);
+        closeMenu();
       }
     };
 
     const handleWindowBlur = () => {
-      setIsOpen(false);
+      closeMenu();
     };
 
     document.addEventListener("mousedown", handlePointerDown);
@@ -97,6 +107,8 @@ export function Select({
   }, [isOpen, highlightedIndex]);
 
   const handleOpen = () => {
+    if(closeTimer.current)clearTimeout(closeTimer.current);
+    setClosing(false);
     if (disabled) return;
 
     // Detect if trigger is near viewport bottom and flip open upwards if needed
@@ -117,8 +129,8 @@ export function Select({
 
   const handleToggle = () => {
     if (disabled) return;
-    if (isOpen) {
-      setIsOpen(false);
+    if (isOpen && !closing) {
+      closeMenu();
     } else {
       handleOpen();
     }
@@ -126,7 +138,7 @@ export function Select({
 
   const handleSelect = (val: string) => {
     onChange(val);
-    setIsOpen(false);
+    closeMenu();
     triggerRef.current?.focus();
   };
 
@@ -144,11 +156,11 @@ export function Select({
     switch (e.key) {
       case "Escape":
         e.preventDefault();
-        setIsOpen(false);
+        closeMenu();
         triggerRef.current?.focus();
         break;
       case "Tab":
-        setIsOpen(false);
+        closeMenu();
         break;
       case "ArrowDown": {
         e.preventDefault();
@@ -173,7 +185,7 @@ export function Select({
 
   const menu = isOpen && (
     <div ref={listRef} id={listId}
-      className={`g-select-dropdown ${!portal && placement === "top" ? "g-select-dropdown--top" : ""}`}
+      className={`g-select-dropdown t-dropdown ${closing ? "is-closing" : "is-open"} ${!portal && placement === "top" ? "g-select-dropdown--top" : ""}`}
       style={portal ? menuPosition : undefined} role="listbox" aria-label={ariaLabel}
       data-editor-control>
       {options.map((opt, index) => {

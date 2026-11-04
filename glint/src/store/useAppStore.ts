@@ -27,6 +27,7 @@ export interface Settings {
   auto_name_captures: boolean;
   ocr_engine: "tesseract"|"ppocrv6-small"|"ppocrv6-medium";
   open_in_editor: boolean;
+  screenshot_retention_days?: 0 | 1 | 7 | 30;
   explorer_menu_enabled: boolean;
   record_system_audio: boolean;
   record_microphone: boolean;
@@ -69,6 +70,7 @@ interface AppState {
   setOcrEngine:(engine:"tesseract"|"ppocrv6-small"|"ppocrv6-medium")=>Promise<void>;
   setAutoNameCaptures:(on:boolean)=>Promise<void>;
   setOpenInEditor: (on: boolean) => Promise<void>;
+  setScreenshotRetention: (days: 0 | 1 | 7 | 30) => Promise<void>;
   setExplorerMenu: (on: boolean) => Promise<void>;
   setRecordSystemAudio: (on: boolean) => Promise<void>;
   setRecordMicrophone: (on: boolean) => Promise<void>;
@@ -254,6 +256,7 @@ export const useAppStore = create<AppState>((set, get) => {
   setAutoCopy: (on: boolean) => commit("auto_copy", on, "Auto-copy"),
 
   setOpenInEditor: (on: boolean) => commit("open_in_editor", on, "Open in editor"),
+  setScreenshotRetention: (days) => commit("screenshot_retention_days", days, "Screenshot auto-delete"),
 
   setExplorerMenu: async (on: boolean) => {
     const prev = settings();

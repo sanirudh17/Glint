@@ -8,6 +8,8 @@ import {emit} from '@tauri-apps/api/event';
 import { startDrag } from "@crabnebula/tauri-plugin-drag";
 import {useAppStore} from '../store/useAppStore';
 
+export interface CaptureDragEvent { path: string; dragging: boolean; }
+
 export type TrayItem = {
   id: number;
   /** Absolute path to the capture file (drag / copy-path / reveal source). */
@@ -40,10 +42,19 @@ void invoke<string>("drag_blank_icon").then((p) => { blankDragIcon = p; }).catch
 
 /** Drag the real file out into any app (blank drag icon → just the cursor). */
 export async function dragOut(path: string): Promise<void> {
+  let finished = false;
+  const finish = () => {
+    if (finished) return;
+    finished = true;
+    void emit('capture-dragging', {path, dragging:false} satisfies CaptureDragEvent).catch(()=>{});
+  };
   try {
-    const attachment=await invoke<string>('drag_prepare',{path});
-    await emit('capture-dragging',true);
-    await startDrag({ item: [attachment], icon: blankDragIcon ?? attachment, mode: "copy" });
-  } catch(error) {useAppStore.getState().pushToast(`Couldn't attach the image: ${String(error)}`);}
-  finally{void emit('capture-dragging',false).catch(()=>{});}
+    const attachment = await invoke<string>('drag_prepare', {path});
+    await emit('capture-dragging', {path, dragging:true} satisfies CaptureDragEvent);
+    await startDrag({item:[attachment], icon:blankDragIcon ?? attachment, mode:"copy"}, finish);
+  } catch(error) {
+    useAppStore.getState().pushToast(`Couldn't attach the image: ${String(error)}`);
+  } finally {
+    finish();
+  }
 }

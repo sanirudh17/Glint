@@ -163,6 +163,7 @@ pub fn run() {
             }
             crate::ocr::neural::initialize(app.path().app_local_data_dir()?,&app.state::<SettingsState>().0.lock().unwrap().ocr_engine);
             app.manage(Db(std::sync::Mutex::new(conn)));
+            crate::capture::retention::start(app.handle());
 
             // Register global shortcuts AFTER hydration so persisted custom hotkeys win —
             // registering earlier would arm the built-in defaults and ignore the user's keys.

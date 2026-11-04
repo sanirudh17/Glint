@@ -546,8 +546,8 @@ export function TrimView() {
         {id:'notes',label:'Open speaker notes',run:()=>void invoke('studio_speaker_notes').catch(e=>setExportMessage(String(e)))},
         {id:'close',label:'Close editor',run:requestClose,disabled:exporting!==null},
       ]}/>
-      {!studio && <div className="trim-window-toolbar" data-tauri-drag-region>
-        <span className="trim-window-context">Trim recording</span>
+      {<div className="trim-window-toolbar" data-tauri-drag-region>
+        <span className="trim-window-context">{studio ? "Studio" : "Trim recording"}</span>
         <WindowControls onClose={requestClose} />
       </div>}
       <div className="trim-preview-row">

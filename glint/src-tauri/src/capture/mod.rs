@@ -1,6 +1,7 @@
 pub mod commands;
 pub mod cursor;
 pub mod frozen;
+mod files;
 pub mod geometry;
 pub mod thumb;
 pub mod tray;
@@ -9,6 +10,7 @@ pub mod scroll_stitch;
 pub mod scrolling;
 pub mod scroll_input;
 pub mod desktop_icons;
+pub mod retention;
 
 use crate::overlay;
 use frozen::CapturedImage;

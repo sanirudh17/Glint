@@ -5,6 +5,8 @@ use std::{fs::File, io::{BufWriter, Write}, path::{Path, PathBuf}, sync::{Arc, M
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Geometry {
+    #[serde(default)]
+    pub cursor_clean: bool,
     pub x: i32, pub y: i32, pub width: u32, pub height: u32,
     pub monitor_x: i32, pub monitor_y: i32, pub monitor_width: u32, pub monitor_height: u32,
     pub dpi_scale: f64,
@@ -26,7 +28,13 @@ struct Clock { base: f64, paused_at:f64, accepting: bool, anchor: Option<(Instan
 pub struct EventClock(Arc<Mutex<Clock>>);
 impl EventClock {
     pub fn arm(&self) {self.0.lock().unwrap().accepting=true;}
-    pub fn sync(&self, pts: f64) { let mut c=self.0.lock().unwrap(); if !c.accepting {return;} c.anchor=Some((Instant::now(), pts.max(0.0))); }
+    pub fn sync(&self, pts: f64) {
+        let mut c=self.0.lock().unwrap();
+        if !c.accepting || c.anchor.is_some() || !pts.is_finite() { return; }
+        // Encoder progress arrives in bursts. Re-anchoring each burst rewinds
+        // input timestamps and mixes different pointer positions at one video time.
+        c.anchor=Some((Instant::now(), pts.max(0.0)));
+    }
     pub fn current(&self)->f64 { self.stamp().unwrap_or_else(||{let c=self.0.lock().unwrap();c.paused_at.max(c.base)}) }
     pub fn stamp(&self) -> Option<f64> { let c=self.0.lock().unwrap(); c.anchor.map(|(start, pts)| c.base+pts+start.elapsed().as_secs_f64()) }
     pub fn pause(&self) { let mut c=self.0.lock().unwrap();if let Some((start,pts))=c.anchor {c.paused_at=c.base+pts+start.elapsed().as_secs_f64();}c.accepting=false;c.anchor=None; }
@@ -82,7 +90,7 @@ pub fn geometry(app:&tauri::AppHandle,target:super::RecordTarget) -> Result<Geom
     let monitor=app.primary_monitor().map_err(|e|e.to_string())?.ok_or("No monitor available")?;
     let pos=monitor.position(); let size=monitor.size();
     let (x,y,width,height)=match target {super::RecordTarget::Region{x,y,w,h}=>(x,y,w,h),super::RecordTarget::Fullscreen=>(pos.x,pos.y,size.width,size.height)};
-    Ok(Geometry {x,y,width,height,monitor_x:pos.x,monitor_y:pos.y,monitor_width:size.width,monitor_height:size.height,dpi_scale:monitor.scale_factor()})
+    Ok(Geometry {cursor_clean:true,x,y,width,height,monitor_x:pos.x,monitor_y:pos.y,monitor_width:size.width,monitor_height:size.height,dpi_scale:monitor.scale_factor()})
 }
 pub fn folder_for(dir:&Path,name:&str)->PathBuf {
     let stem=Path::new(name).file_stem().unwrap().to_string_lossy();
@@ -143,7 +151,7 @@ fn prepare_import(path:&Path,duration:f64,width:u32,height:u32)->Result<(),Strin
     if folder.exists()&&!import_matches(&folder,path) {return Err("An unrelated Studio folder already exists beside this video".into());}
     std::fs::create_dir_all(&folder).map_err(|e|e.to_string())?;
     std::fs::write(folder.join("origin.json"),serde_json::to_vec(&source).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
-    let geometry=Geometry{x:0,y:0,width,height,monitor_x:0,monitor_y:0,monitor_width:width,monitor_height:height,dpi_scale:1.};
+    let geometry=Geometry{cursor_clean:false,x:0,y:0,width,height,monitor_x:0,monitor_y:0,monitor_width:width,monitor_height:height,dpi_scale:1.};
     let events=Events{version:1,geometry,events:vec![]};
     std::fs::write(folder.join("events.json"),serde_json::to_vec(&events).map_err(|e|e.to_string())?).map_err(|e|e.to_string())?;
     let mut project=initial_project(duration);
@@ -179,6 +187,14 @@ pub fn studio_save(path:String,project:serde_json::Value)->Result<(),String> {
 mod tests {
     use super::*;
     #[test] fn pause_excludes_wall_time() {let c=EventClock::default();assert!(c.stamp().is_none());c.arm();c.sync(1.0);assert!(c.stamp().unwrap()>=1.0);c.pause();assert!(c.stamp().is_none());c.finish_span(2.25);c.arm();c.sync(0.5);assert!((c.stamp().unwrap()-2.75).abs()<0.01);}
+    #[test] fn encoder_progress_cannot_rewind_or_jump_cursor_time() {
+        let clock=EventClock::default();clock.arm();clock.sync(5.);
+        let before=clock.stamp().unwrap();clock.sync(4.9);
+        assert!(clock.stamp().unwrap()>=before);
+        clock.sync(9.);assert!(clock.stamp().unwrap()<6.);
+        clock.pause();clock.finish_span(8.);clock.arm();clock.sync(0.);
+        assert!((clock.stamp().unwrap()-8.).abs()<0.05);
+    }
     #[test] fn projects_start_versioned_and_styled() {let p=initial_project(60.0);assert_eq!(p["version"],1);assert_eq!(p["look"]["enabled"],true);assert_eq!(p["clips"][0]["end"],60.0);}
     #[test] fn importing_a_video_preserves_source_and_reopens_edits() {
         let root=std::env::temp_dir().join(format!("glint-import-{}",std::time::SystemTime::now().duration_since(std::time::UNIX_EPOCH).unwrap().as_nanos()));
