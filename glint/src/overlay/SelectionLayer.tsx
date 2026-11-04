@@ -4,7 +4,7 @@
  * Interaction model:
  *   • Pointer-down on empty area  → start a fresh selection drag
  *   • Pointer-move during drag    → update rect via normalizeRect
- *   • Pointer-up                  → keep rect editable (no auto-commit)
+ *   • Pointer-up after drawing    → capture the selected area immediately
  *   • Pointer-down on handle      → resize from that edge/corner
  *   • Pointer-down inside rect    → move the whole selection
  *   • Double-click inside / Enter → commit via commitCapture (if w,h > 1)
@@ -180,9 +180,9 @@ export function SelectionLayer({
 
   function onLayerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // Only handle direct clicks on the layer itself (not bubbled from handles/rect)
-    if (e.target !== layerRef.current) return;
+    if (e.button !== 0 || e.target !== layerRef.current) return;
     e.preventDefault();
-    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+    e.currentTarget.setPointerCapture(e.pointerId);
     drag.current = { kind: "draw", startX: e.clientX, startY: e.clientY };
     setInteracting(true);
     setRect({ x: e.clientX, y: e.clientY, w: 0, h: 0 });
@@ -239,14 +239,30 @@ export function SelectionLayer({
   }
 
   function onLayerPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return;
     e.preventDefault();
+    const finished = drag.current;
     drag.current = null;
     setInteracting(false);
+    if (finished?.kind === "draw") {
+      const selection = normalizeRect(finished.startX, finished.startY, e.clientX, e.clientY);
+      setRect(selection);
+      if (selection.w > 1 && selection.h > 1) {
+        void commitCapture(selection, monitorId);
+      }
+    }
+  }
+
+  function onLayerPointerCancel() {
+    drag.current = null;
+    setInteracting(false);
+    setRect(null);
   }
 
   // ── Selection rect: start move ───────────────────────────────────────────────
 
   function onRectPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     if (!rect) return;
@@ -259,6 +275,7 @@ export function SelectionLayer({
   // ── Handle: start resize ─────────────────────────────────────────────────────
 
   function onHandlePointerDown(e: React.PointerEvent<HTMLDivElement>, handle: HandleDef) {
+    if (e.button !== 0) return;
     e.preventDefault();
     e.stopPropagation();
     if (!rect) return;
@@ -303,6 +320,7 @@ export function SelectionLayer({
       onPointerDown={onLayerPointerDown}
       onPointerMove={onLayerPointerMove}
       onPointerUp={onLayerPointerUp}
+      onPointerCancel={onLayerPointerCancel}
       tabIndex={-1}
     >
       {/* ── Task 10: Crosshair guides (visible before/without an active selection) */}
@@ -395,7 +413,7 @@ function SelectionBox({
           {/* Confirm hint — shown only once the selection is large enough */}
           {showHint && (
             <div className="sl-confirm-hint">
-              ↵ Enter
+              Release to capture
             </div>
           )}
         </div>

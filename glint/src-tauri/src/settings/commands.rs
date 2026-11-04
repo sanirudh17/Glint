@@ -1,6 +1,6 @@
 use std::sync::Mutex;
 use serde::Serialize;
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Emitter, Manager, State};
 
 use super::hotkeys::{self, HotkeyError, HOTKEY_ACTIONS};
 use super::locations::{save_dir, SaveKind};
@@ -30,6 +30,7 @@ pub async fn settings_get_all(app: AppHandle) -> Settings {
 
 #[tauri::command]
 pub fn settings_set(
+    app: AppHandle,
     state: State<SettingsState>,
     key: String,
     value: serde_json::Value,
@@ -37,6 +38,7 @@ pub fn settings_set(
     let mut s = state.0.lock().unwrap();
     if key=="ocr_engine"&&matches!(value.as_str(),Some("ppocrv6-small"|"ppocrv6-medium"))&&!crate::ocr::neural::installed(value.as_str().unwrap()){return Err("Download the high-accuracy OCR engine first.".into());}
     apply_update(&mut s, &key, value)?;
+    if key == "quick_access_auto_close" { let _ = app.emit("capture-settings-changed", s.quick_access_auto_close); }
     if key=="ocr_engine"{crate::ocr::neural::set_engine(&s.ocr_engine);}
     Ok(s.clone())
 }

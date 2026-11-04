@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../../store/useAppStore";
 import type { Toast as ToastItem } from "../../store/useAppStore";
 import "./ui.css";
@@ -12,19 +12,24 @@ const DISMISS_DELAY = 2400; // ms — matches --dur-slow cadence × 10
  */
 function ToastRow({ toast }: { toast: ToastItem }) {
   const dismissToast = useAppStore((s) => s.dismissToast);
+  const [closing,setClosing]=useState(false);
+  const closeTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     timerRef.current = setTimeout(() => {
-      dismissToast(toast.id);
+      setClosing(true);
+      const duration=matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--toast-close")) || 250;
+      closeTimer.current=setTimeout(()=>dismissToast(toast.id),duration);
     }, DISMISS_DELAY);
 
     return () => {
       if (timerRef.current !== null) clearTimeout(timerRef.current);
+      if (closeTimer.current !== null) clearTimeout(closeTimer.current);
     };
   }, [toast.id, dismissToast]);
 
-  return <div className="g-toast">{toast.text}</div>;
+  return <div className={`g-toast t-toast${closing ? "" : " is-open"}`}>{toast.text}</div>;
 }
 
 /**

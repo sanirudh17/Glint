@@ -38,7 +38,7 @@ export interface InputEvent {
 }
 export interface StudioEvents {
   version: number;
-  geometry: { x: number; y: number; width: number; height: number; monitorX: number; monitorY: number; monitorWidth: number; monitorHeight: number; dpiScale: number };
+  geometry: { cursorClean?: boolean; x: number; y: number; width: number; height: number; monitorX: number; monitorY: number; monitorWidth: number; monitorHeight: number; dpiScale: number };
   events: InputEvent[];
 }
 export interface StudioData { project: StudioProject; events: StudioEvents }

@@ -64,7 +64,7 @@ export function TrayCard({ item, onChanged }: { item: TrayItem; onChanged: () =>
     <div className="hud-card">
       <div
         className="hud-drag"
-        onPointerDown={() => dragOut(item.path)}
+        onPointerDown={event => { if (event.button === 0) void dragOut(item.path); }}
         role="img"
         aria-label="Captured image — drag to share"
         title="Drag to share"

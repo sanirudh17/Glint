@@ -41,6 +41,11 @@ export default function App() {
     // EVERY window (main, HUD, overlay, editor) — e.g. glint-toast must reach the
     // HUD's ToastHost for the copy-path hotkey.
     const subs = [
+      listen<boolean>("capture-settings-changed", (event) => {
+        useAppStore.setState(state => state.settings ? {
+          settings: { ...state.settings, quick_access_auto_close: event.payload },
+        } : {});
+      }),
       // Global shortcut events for the non-capture actions (record/settings).
       // Capture hotkeys go straight to capture::begin in Rust and do NOT emit
       // shortcut-fired, so they never reach this toast.

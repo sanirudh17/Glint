@@ -64,6 +64,8 @@ pub struct Settings {
     #[serde(default="default_ocr_engine")]
     pub ocr_engine: String,
     pub open_in_editor: bool,
+    #[serde(default)]
+    pub screenshot_retention_days: u32,
     pub explorer_menu_enabled: bool,
     pub record_system_audio: bool,
     pub record_microphone: bool,
@@ -134,6 +136,7 @@ impl Default for Settings {
             auto_name_captures: false,
             ocr_engine: default_ocr_engine(),
             open_in_editor: false,
+            screenshot_retention_days: 0,
             explorer_menu_enabled: true,
             record_system_audio: true,
             record_microphone: false,
@@ -186,6 +189,11 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         "auto_name_captures"=>{let _=value.as_bool().ok_or("auto_name_captures must be boolean")?;s.auto_name_captures=false;}
         "open_in_editor" => {
             s.open_in_editor = value.as_bool().ok_or("open_in_editor must be boolean")?;
+        }
+        "screenshot_retention_days" => {
+            let days = value.as_u64().ok_or("Choose a screenshot retention period")?;
+            if !matches!(days, 0 | 1 | 7 | 30) { return Err("Choose Never, 1 day, 7 days or 30 days".into()); }
+            s.screenshot_retention_days = days as u32;
         }
         "explorer_menu_enabled" => {
             s.explorer_menu_enabled =
@@ -389,6 +397,14 @@ mod tests {
     fn apply_update_rejects_non_bool_autosave() {
         let mut s = Settings::default();
         assert!(apply_update(&mut s, "auto_save", json!("yes")).is_err());
+    }
+
+    #[test]
+    fn screenshot_retention_defaults_off_and_validates_periods() {
+        let mut s=Settings::default();assert_eq!(s.screenshot_retention_days,0);
+        for days in [1,7,30,0] { apply_update(&mut s,"screenshot_retention_days",json!(days)).unwrap();assert_eq!(s.screenshot_retention_days,days); }
+        for bad in [json!(-1),json!(2),json!("7"),json!(true)] { assert!(apply_update(&mut s,"screenshot_retention_days",bad).is_err()); }
+        assert_eq!(s.screenshot_retention_days,0);
     }
 
     #[test]

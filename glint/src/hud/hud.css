@@ -284,3 +284,11 @@
   backdrop-filter: blur(6px);
 }
 .tray-clear:hover { background: rgba(30, 30, 34, 0.92); }
+
+.tray-expiry { margin-top:0; display:grid; grid-template-rows:1fr; transition:grid-template-rows var(--duration-medium) var(--ease-smooth-out),margin-top var(--duration-medium) var(--ease-smooth-out); }
+.tray-expiry-inner { min-height:0; }
+.tray-expiry-slide { opacity:1; transform:translateX(0); transition:transform var(--duration-medium) var(--ease-smooth-out),opacity var(--duration-medium) var(--ease-smooth-out); }
+.tray-expiry.leaving .tray-expiry-slide,.tray-expiry.collapsing .tray-expiry-slide { transform:translateX(-115%); opacity:0; pointer-events:none; }
+.tray-expiry.collapsing { grid-template-rows:0fr; margin-top:-10px; }
+.tray-expiry.collapsing .tray-expiry-inner { overflow:hidden; }
+@media(prefers-reduced-motion:reduce) { .tray-expiry,.tray-expiry-slide { transition:none; } }

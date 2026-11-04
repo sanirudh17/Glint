@@ -71,6 +71,15 @@ beforeEach(() => {
 });
 
 describe("settings optimistic write-through", () => {
+  it("persists screenshot retention separately from capture-card expiry", async () => {
+    const expiry=useAppStore.getState().settings?.quick_access_auto_close;
+    await useAppStore.getState().setScreenshotRetention(7);
+    expect(useAppStore.getState().settings?.screenshot_retention_days).toBe(7);
+    expect(persistSettingMock).toHaveBeenCalledWith("screenshot_retention_days",7);
+    expect(useAppStore.getState().settings?.quick_access_auto_close).toBe(expiry);
+    await useAppStore.getState().setScreenshotRetention(0);
+    expect(persistSettingMock).toHaveBeenCalledWith("screenshot_retention_days",0);
+  });
   it("applies a toggle instantly and keeps it after backend success", async () => {
     const p = useAppStore.getState().setAutoSave(false);
     // Optimistic: visible before the invoke round-trip resolves.

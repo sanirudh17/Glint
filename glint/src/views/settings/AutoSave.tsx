@@ -5,7 +5,6 @@ export function AutoSave() {
   const settings = useAppStore((s) => s.settings);
   const setAutoSave = useAppStore((s) => s.setAutoSave);
   const setAutoCopy = useAppStore((s) => s.setAutoCopy);
-  const setOpenInEditor = useAppStore((s) => s.setOpenInEditor);
 
   return (
     <Section
@@ -24,14 +23,6 @@ export function AutoSave() {
           onChange={(v) => setAutoCopy(v)}
         />
       </Field>
-      <Field label="Open in editor after capture" hint="Open each capture in the editor instead of the HUD.">
-        <Switch
-          checked={settings?.open_in_editor ?? false}
-          onChange={(v) => setOpenInEditor(v)}
-        />
-      </Field>
-
-
     </Section>
   );
 }

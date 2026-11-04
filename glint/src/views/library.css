@@ -275,73 +275,11 @@
   outline: none;
 }
 
-/* ── Grid hover overlay: bottom-aligned translucent pill ────────────────────
- * Shared by Library (full divider-free grouped set) and Home (compact trio).
- * Dark solid pill with a hairline border — deliberately NO backdrop-filter:
- * WebView2 composites backdrop blur a frame late at reduced resolution, which
- * read as a "blurry then sharp" glitch on first hover. Instant show/hide
- * (hover-gated visibility, zero transitions). */
-.cap-actions {
-  position: absolute;
-  left: 50%;
-  bottom: 8px;
-  transform: translateX(-50%);
-  z-index: 3;
-  display: inline-flex;
-  align-items: center;
-  width: max-content;
-  max-width: calc(100% - 16px);
-  padding: 3px 6px;
-  border-radius: 10px;
-  background: rgba(12, 12, 12, 0.88);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  box-shadow: 0 5px 16px rgba(0, 0, 0, 0.24);
-  opacity: 0;
-  pointer-events: none;
-}
-.cap-card:hover .cap-actions { opacity: 1; pointer-events: auto; }
-
-.cap-group {
-  display: flex;
-  align-items: center;
-  gap: 2px;
-}
-.cap-group + .cap-group {
-  margin-left: 2px;
-}
-
-.cap-btn {
-  position: relative;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-  border: none;
-  background: transparent;
-  color: rgba(255, 255, 255, 0.8);
-  cursor: pointer;
-}
-.cap-btn:hover { background: rgba(255, 255, 255, 0.12); color: #fff; }
-.cap-btn--danger:hover { background: var(--danger-subtle); color: var(--danger); }
-
-/* Instant tooltip chip above the button — zero delay, zero animation. */
-.cap-tip {
-  position: absolute;
-  bottom: calc(100% + 8px);
-  left: 50%;
-  transform: translateX(-50%);
-  padding: 3px 8px;
-  border-radius: 6px;
-  background: rgba(10, 11, 15, 0.94);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.92);
-  font-size: 11px;
-  font-weight: var(--fw-medium);
-  line-height: 1.4;
-  white-space: nowrap;
-  opacity: 0;
-  pointer-events: none;
-}
-.cap-btn:hover .cap-tip { opacity: 1; }
+/* Shared by Library and Home recent captures. */
+.capture-menu { position:fixed; z-index:1000; width:216px; max-width:calc(100vw - 16px); max-height:calc(100dvh - 16px); overflow-y:auto; padding:5px; background:var(--select-menu-bg,var(--bg-elev)); backdrop-filter:var(--select-blur,none); -webkit-backdrop-filter:var(--select-blur,none); border:1px solid var(--border-strong); border-radius:9px; box-shadow:0 12px 32px #0005; color:var(--text); }
+.capture-menu-title { padding:8px 9px; color:var(--text-faint); font-size:var(--fz-xs); overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.capture-menu-group + .capture-menu-group { border-top:1px solid var(--border); margin-top:4px; padding-top:4px; }
+.capture-menu button { width:100%; display:flex; align-items:center; gap:10px; text-align:left; padding:8px 9px; border:0; border-radius:5px; background:transparent; color:var(--text); font:inherit; font-size:var(--fz-sm); cursor:pointer; }
+.capture-menu button:hover,.capture-menu button:focus-visible { background:var(--bg-elev3); outline:none; }
+.capture-menu button.is-danger { color:var(--danger); }
+.cap-card:focus-visible { outline:2px solid var(--accent); outline-offset:3px; }

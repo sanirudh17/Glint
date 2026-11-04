@@ -359,13 +359,7 @@ pub(super) fn finish_commit(
         (dest, true)
     } else {
         let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-        let dest = dir.join(format!("glint-{ts}.png"));
-        std::fs::write(&dest, &png).map_err(|e| e.to_string())?;
+        let dest = super::files::write_unsaved(&dir, &png, open_in_editor).map_err(|e| e.to_string())?;
         (dest, false)
     };
     let path_str = path.to_string_lossy().to_string();
@@ -403,12 +397,14 @@ pub(super) fn finish_commit(
             rgba: cropped.clone(),
         });
 
-    // Also push into the accumulating tray. Use the full-resolution capture PNG for
+    // Only captures presented in Quick Access belong in its stack. Editor-only
+    // captures must not reappear later as old, previously hidden cards.
+    // Use the full-resolution capture PNG for
     // the card preview (already encoded above) so it stays crisp when the card scales
     // it — a downscaled thumb blurs under the card's object-fit: cover. Full pixels
     // are re-read from disk when an action needs them. Evicting the oldest past the
     // cap deletes its temp file (never a saved Library file).
-    {
+    if !open_in_editor {
         // Card preview uses the full-resolution capture PNG (already encoded above) — it
         // stays crisp under the card's object-fit: cover. NOTE: do NOT resize here to
         // shrink the base64 — resizing a full-screen frame on this critical path (before
@@ -688,9 +684,8 @@ pub fn tray_auto_close(app:AppHandle,latest_id:u64)->Result<bool,String>{
     if !app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().quick_access_auto_close{return Ok(false);}
     let current=app.state::<TrayState>().0.lock().unwrap().list().last().map(|i|i.id);
     if current!=Some(latest_id){return Ok(false);}
-    // Close only the webview, keeping tray items and files. Rebuilding on the next
-    // capture avoids the known WebView2 repaint failure from repeated hide/show.
-    crate::hud::teardown(&app);
+    // Legacy callers also dismiss the stack so expired cards cannot return.
+    tray_clear(app.clone(), app.state::<TrayState>())?;
     Ok(true)
 }
 

@@ -1,5 +1,4 @@
 import {VideoAnnotationEditor} from "./VideoAnnotationEditor";
-import { WindowControls } from "../components/Titlebar";
 import { useState } from "react";
 import { Check, Copy, FolderOpen, Save } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
@@ -15,7 +14,7 @@ import {DEFAULT_MOTION} from './studioMotion';
 import type {FocusPoint} from './studioFocus';
 import {StudioPolishControls} from './StudioPolishControls';
 
-export function StudioPanel({ onClose, project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave, time, duration, selectedZoom, onSelectZoom, onPickZoom, events, selectedMask, onSelectMask, drawingMask, onDrawMask, onSeek,focusAim,pickingFocus }: {
+export function StudioPanel({ project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave, time, duration, selectedZoom, onSelectZoom, onPickZoom, events, selectedMask, onSelectMask, drawingMask, onDrawMask, onSeek,focusAim,pickingFocus }: {
   onClose: () => void;
   project: StudioProject; path: string; width: number; height: number; saveStatus: string;
   exportMessage: string | null; exporting: boolean; cam: CamPlacement | null;
@@ -33,10 +32,10 @@ export function StudioPanel({ onClose, project, path, width, height, saveStatus,
   const crop = project.crop ?? { x: 0, y: 0, w: width, h: height };
   const [manualSave,setManualSave]=useState<'idle'|'saving'|'saved'>('idle');
   const saved = saveStatus === "Saved";
-  const [tab,setTab]=useState<'look'|'edit'|'polish'>(project.zoomSegments.length||project.annotations?.length?'edit':'look');
+  const [tab,setTab]=useState<'look'|'edit'|'cursor'|'polish'>(project.zoomSegments.length||project.annotations?.length?'edit':'look');
   return <aside className="studio-panel" aria-label="Studio settings">
     <header className="studio-panel-header">
-      <div className="studio-heading-row" data-tauri-drag-region><h1>Studio</h1><WindowControls onClose={onClose}/></div>
+      <div className="studio-heading-row"><h1>Studio</h1></div>
       <p className="studio-project-name" title={path}>{name}</p>
       {project.importedVideo&&<p className="look-hint">Edits save separately. Your original video is kept.</p>}
       <div className={`studio-save-status${saved ? " is-saved" : ""}`} role="status">
@@ -47,7 +46,7 @@ export function StudioPanel({ onClose, project, path, width, height, saveStatus,
     {exportMessage && (exportMessage.startsWith("Exported: ")
       ? <ExportResult path={exportMessage.slice(10)} />
       : <p className="studio-export-error" role="alert">{exportMessage}</p>)}
-    <nav className="studio-panel-tabs" aria-label="Studio panels">{(['look','edit','polish'] as const).map(value=><button type="button" key={value} aria-pressed={tab===value} onClick={()=>setTab(value)}>{value==='edit'?'Edit & draw':value[0].toUpperCase()+value.slice(1)}</button>)}</nav>
+    <nav className="studio-panel-tabs" aria-label="Studio panels">{(['look','edit','cursor','polish'] as const).map(value=><button type="button" key={value} aria-pressed={tab===value} onClick={()=>setTab(value)}>{value==='edit'?'Edit & draw':value[0].toUpperCase()+value.slice(1)}</button>)}</nav>
     <fieldset className="studio-panel-controls" disabled={exporting}>
       <div hidden={tab!=='look'}>
       <LookControls video look={project.look} dimensions={{width:crop.w,height:crop.h}} onChange={(patch) => onChange({ look: { ...project.look, ...patch } })} />
@@ -57,8 +56,6 @@ export function StudioPanel({ onClose, project, path, width, height, saveStatus,
 
       <StudioMaskControls masks={project.masks} selected={selectedMask} time={time} duration={duration} width={width} height={height} drawing={drawingMask} onDraw={onDrawMask} onChange={masks=>onChange({masks})} onSelect={onSelectMask} onSeek={onSeek}/>
       {project.masks.length>0&&!project.importedVideo&&<div className="look-row"><span className="look-label">Delete source after export</span><Switch ariaLabel="Delete unmasked source after export" checked={project.deleteSourceAfterExport??false} onChange={deleteSourceAfterExport=>onChange({deleteSourceAfterExport})}/></div>}
-      {hasCursor?<CursorControls cursor={project.cursor} onChange={(patch) => {onChange({ cursor: { ...project.cursor, ...patch } });if(patch.clickSize!==undefined){const clicks=events.events.filter(e=>e.kind==='click');const nearest=clicks.reduce<typeof clicks[number]|undefined>((best,e)=>!best||Math.abs(e.t-time)<Math.abs(best.t-time)?e:best,undefined);if(nearest)onSeek(Math.min(duration,nearest.t+.12));}}} />
-        :<ControlDisclosure title="Cursor & effects"><p className="look-hint">This video has no recorded cursor data. Record in Studio mode to edit the cursor, smoothing and click effects.</p></ControlDisclosure>}
       <ControlDisclosure title="Motion blur" className="studio-effects-controls">
         <div className="look-row"><span className="look-label">Motion blur</span><Switch ariaLabel="Enable motion blur" checked={project.motionBlur?.enabled??false} onChange={enabled=>onChange({motionBlur:{...(project.motionBlur??DEFAULT_MOTION),enabled}})}/></div>
         {project.motionBlur?.enabled&&<LookSlider label="Amount" ariaLabel="Motion blur amount" value={project.motionBlur.intensity*100} unit="%" onChange={value=>onChange({motionBlur:{...project.motionBlur!,intensity:value/100}})}/>}
@@ -84,7 +81,9 @@ export function StudioPanel({ onClose, project, path, width, height, saveStatus,
         {(["x", "y", "diameter"] as const).map((key) => <LookSlider key={key} label={{ x: "Horizontal", y: "Vertical", diameter: "Size" }[key]}
           ariaLabel={`Camera ${key}`} value={cam[key] * 100} unit="%" onChange={(value) => onCamChange(clampPlacement({ ...cam, [key]: value / 100 }))} />)}
       </ControlDisclosure>}
-      </div><div hidden={tab!=='polish'}><StudioPolishControls project={project} events={events} path={path} duration={duration} onChange={onChange}/></div>
+      </div><div hidden={tab!=='cursor'}>{hasCursor && !events.geometry.cursorClean && <p className="look-hint">This older recording may contain its own pointer. Turn off Show cursor if you see two. New Studio recordings keep the cursor separate.</p>}      {hasCursor?<CursorControls cursor={project.cursor} onChange={(patch) => {onChange({ cursor: { ...project.cursor, ...patch } });if(patch.clickSize!==undefined){const clicks=events.events.filter(e=>e.kind==='click');const nearest=clicks.reduce<typeof clicks[number]|undefined>((best,e)=>!best||Math.abs(e.t-time)<Math.abs(best.t-time)?e:best,undefined);if(nearest)onSeek(Math.min(duration,nearest.t+.12));}}} />
+        :<ControlDisclosure title="Cursor & effects"><p className="look-hint">This video has no recorded cursor data. Record in Studio mode to edit the cursor, smoothing and click effects.</p></ControlDisclosure>}
+</div><div hidden={tab!=='polish'}><StudioPolishControls project={project} events={events} path={path} duration={duration} onChange={onChange}/></div>
       <div className="studio-panel-footer"><Button icon={manualSave==='saved'?Check:Save} disabled={manualSave==='saving'} onClick={()=>{setManualSave('saving');void onSave().then(ok=>{setManualSave(ok?'saved':'idle');if(ok)window.setTimeout(()=>setManualSave('idle'),2200);});}}>{manualSave==='saving'?'Saving...':manualSave==='saved'?'Project saved':'Save project'}</Button><p className="look-hint">Edits are saved beside this recording. The source video is kept.</p></div>
     </fieldset>
   </aside>;

@@ -5,26 +5,13 @@
  */
 import { useCallback, useEffect, useRef, useState } from "react";
 import { emit, listen } from "@tauri-apps/api/event";
-import {invoke} from '@tauri-apps/api/core';
 import { trayList, trayClear, trayResize, type TrayItem } from "../lib/hudIpc";
-import { TrayCard } from "./TrayCard";
+import { ExpiringTrayCard } from "./ExpiringTrayCard";
 import "./hud.css";
 
 export function HudApp() {
   const [items, setItems] = useState<TrayItem[]>([]);
   const stackRef = useRef<HTMLDivElement>(null);
-  const hover=useRef(false),dragging=useRef(false),lastInteraction=useRef(Date.now());
-  const latest=items[items.length-1]?.id;
-  useEffect(()=>{
-    lastInteraction.current=Date.now();let alive=true,closed=false,pending=false;
-    const un=listen<boolean>('capture-dragging',e=>{dragging.current=e.payload;lastInteraction.current=Date.now();});
-    const timer=setInterval(()=>{
-      if(!alive||closed||pending||latest===undefined||hover.current||dragging.current||Date.now()-lastInteraction.current<8000)return;
-      pending=true;void invoke<boolean>('tray_auto_close',{latestId:latest}).then(value=>{closed=value;}).catch(()=>{}).finally(()=>{pending=false;});
-    },500);
-    return()=>{alive=false;clearInterval(timer);void un.then(f=>f());};
-  },[latest]);
-
   const refetch = useCallback(() => {
     // Retry once on failure — under load the IPC channel can be momentarily
     // saturated and the first tray_list may fail or return empty.
@@ -125,7 +112,7 @@ export function HudApp() {
   }, [items]);
 
   return (
-    <div className="tray-root" ref={stackRef} onPointerEnter={()=>{hover.current=true;}} onPointerLeave={()=>{hover.current=false;lastInteraction.current=Date.now();}} onPointerDown={()=>{lastInteraction.current=Date.now();}} onKeyDown={()=>{lastInteraction.current=Date.now();}}>
+    <div className="tray-root" ref={stackRef}>
       {items.length >= 2 && (
         <button type="button" className="tray-clear" onClick={() => void trayClear()}>
           Clear all
@@ -133,7 +120,7 @@ export function HudApp() {
       )}
       <div className="tray-stack">
         {items.map((it) => (
-          <TrayCard key={it.id} item={it} onChanged={refetch} />
+          <ExpiringTrayCard key={it.id} item={it} onChanged={refetch} />
         ))}
       </div>
     </div>
