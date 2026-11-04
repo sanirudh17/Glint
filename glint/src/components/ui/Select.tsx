@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect, useLayoutEffect, useId, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { ChevronDown, Check } from "lucide-react";
+import { cssTimeMs } from "../../lib/cssTime";
 import "./ui.css";
 
 export interface SelectOption {
@@ -36,7 +37,7 @@ export function Select({
   const closeMenu = useCallback(() => {
     setClosing(true);
     if (closeTimer.current) clearTimeout(closeTimer.current);
-    const duration=matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur")) || 150;
+    const duration=matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : cssTimeMs(getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur"), 150);
     closeTimer.current=setTimeout(()=>{setIsOpen(false);setClosing(false);},duration);
   }, []);
   useEffect(()=>()=>{if(closeTimer.current)clearTimeout(closeTimer.current);},[]);

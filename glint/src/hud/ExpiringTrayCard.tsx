@@ -4,6 +4,7 @@ import { trayDismiss, type TrayItem, type CaptureDragEvent } from "../lib/hudIpc
 import { useAppStore } from "../store/useAppStore";
 import { TrayCard } from "./TrayCard";
 import { advanceExpiry, CARD_IDLE_MS } from "./expiry";
+import { cssTimeMs } from "../lib/cssTime";
 
 export function ExpiringTrayCard({ item, onChanged }: { item: TrayItem; onChanged: () => void }) {
   const storedEnabled = useAppStore(state => state.settings?.quick_access_auto_close ?? false);
@@ -39,7 +40,7 @@ export function ExpiringTrayCard({ item, onChanged }: { item: TrayItem; onChange
   useEffect(() => {
     if (phase === "active") return;
     const duration = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0
-      : parseFloat(getComputedStyle(document.documentElement).getPropertyValue(phase === "leaving" ? "--capture-exit-duration" : "--duration-medium")) || (phase === "leaving" ? 700 : 350);
+      : cssTimeMs(getComputedStyle(document.documentElement).getPropertyValue(phase === "leaving" ? "--capture-exit-duration" : "--duration-medium"), phase === "leaving" ? 700 : 350);
     const timer = window.setTimeout(() => {
       if (phase === "leaving") setPhase("collapsing");
       else void trayDismiss(item.id).then(onChanged).catch(() => { remaining.current=CARD_IDLE_MS; setPhase("active"); });

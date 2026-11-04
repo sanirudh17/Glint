@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useAppStore } from "../../store/useAppStore";
 import type { Toast as ToastItem } from "../../store/useAppStore";
+import { cssTimeMs } from "../../lib/cssTime";
 import "./ui.css";
 
 const DISMISS_DELAY = 2400; // ms — matches --dur-slow cadence × 10
@@ -19,7 +20,7 @@ function ToastRow({ toast }: { toast: ToastItem }) {
   useEffect(() => {
     timerRef.current = setTimeout(() => {
       setClosing(true);
-      const duration=matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--toast-close")) || 250;
+      const duration=matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : cssTimeMs(getComputedStyle(document.documentElement).getPropertyValue("--toast-close"), 250);
       closeTimer.current=setTimeout(()=>dismissToast(toast.id),duration);
     }, DISMISS_DELAY);
 

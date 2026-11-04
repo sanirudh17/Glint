@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 import { createPortal } from "react-dom";
 import type { LucideIcon } from "lucide-react";
+import { cssTimeMs } from "../../lib/cssTime";
 
 export interface CaptureAction {
   label: string;
@@ -20,7 +21,7 @@ export function CaptureMenu({ x, y, title, groups, onClose }: {
   useEffect(() => {
     if (!closing) return;
     const duration = matchMedia("(prefers-reduced-motion: reduce)").matches ? 0
-      : parseFloat(getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur")) || 150;
+      : cssTimeMs(getComputedStyle(document.documentElement).getPropertyValue("--dropdown-close-dur"), 150);
     const timer = setTimeout(() => {
       onClose();
       if (restoreFocus.current && opener.current instanceof HTMLElement) opener.current.focus({preventScroll:true});
