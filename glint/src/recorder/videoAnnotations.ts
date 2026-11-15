@@ -14,6 +14,31 @@ export function validateAnnotations(items: VideoAnnotation[], duration: number):
     && a.points.every(p=>[p.x,p.y].every(v=>Number.isFinite(v)&&v>=0&&v<=1)));
 }
 export function annotationAt(a:VideoAnnotation,time:number) { return a.start <= time && time < a.end; }
+export function annotationBounds(a:VideoAnnotation,width:number,height:number,measureText?:(text:string,size:number)=>number) {
+  const xs=a.points.map(p=>p.x*width),ys=a.points.map(p=>p.y*height);
+  let left=Math.min(...xs),right=Math.max(...xs),top=Math.min(...ys),bottom=Math.max(...ys);
+  if(a.kind==='text'){
+    const lines=a.text.split('\n'),size=a.size*height;
+    left=xs[0];top=ys[0];right=left+Math.max(size,...lines.map(line=>measureText?.(line,size)??line.length*size*.6));
+    bottom=top+size*(1+(lines.length-1)*1.3);
+  }
+  return {left,right,top,bottom};
+}
+export function resizeAnnotationText(a:VideoAnnotation,origin:{x:number;y:number},point:{x:number;y:number},aspect:number):VideoAnnotation {
+  const anchor=a.points[0],dx=(origin.x-anchor.x)*aspect,dy=origin.y-anchor.y;
+  const scale=Math.max(.01,((point.x-anchor.x)*aspect*dx+(point.y-anchor.y)*dy)/Math.max(.000001,dx*dx+dy*dy));
+  return {...a,raster:undefined,size:Math.max(.01,Math.min(.2,a.size*scale))};
+}
+/** Pick the topmost visible mark using preview pixels, with a small grab margin. */
+export function pickAnnotation(items:VideoAnnotation[],time:number,point:{x:number;y:number},width:number,height:number,measureText?:(text:string,size:number)=>number):VideoAnnotation|undefined {
+  if(width<=0||height<=0)return;
+  for(let i=items.length-1;i>=0;i--){
+    const a=items[i];if(!annotationAt(a,time)||!a.points.length)continue;
+    const {left,right,top,bottom}=annotationBounds(a,width,height,measureText);
+    const margin=Math.max(6,a.width*Math.min(width,height)/2);
+    if(point.x*width>=left-margin&&point.x*width<=right+margin&&point.y*height>=top-margin&&point.y*height<=bottom+margin)return a;
+  }
+}
 export function moveAnnotation(a:VideoAnnotation,dx:number,dy:number):VideoAnnotation {
   dx=Math.max(-Math.min(...a.points.map(p=>p.x)),Math.min(dx,1-Math.max(...a.points.map(p=>p.x))));
   dy=Math.max(-Math.min(...a.points.map(p=>p.y)),Math.min(dy,1-Math.max(...a.points.map(p=>p.y))));

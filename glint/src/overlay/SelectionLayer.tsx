@@ -393,7 +393,7 @@ function SelectionBox({
 
       {/* ── Selection rect — the "hole" ───────────────────────────────────── */}
       <div
-        className="sl-rect"
+        className={`sl-rect${captureOnRelease?' sl-rect--release':''}`}
         style={{ left: x, top: y, width: w, height: h }}
         onPointerDown={onRectPointerDown}
         onDoubleClick={onDoubleClick}
@@ -414,7 +414,7 @@ function SelectionBox({
         </div>
 
         {/* ── 8 resize handles ───────────────────────────────────────────── */}
-        {HANDLES.map((handle) => (
+        {!captureOnRelease&&HANDLES.map((handle) => (
           <div
             key={handle.id}
             className={`sl-handle sl-handle--${handle.shape} sl-handle--${handle.id}`}

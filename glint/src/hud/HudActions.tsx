@@ -9,7 +9,7 @@
  */
 import {
   Copy,
-  Link2,
+  FileSymlink,
   Save,
   FolderOpen,
   Pencil,
@@ -45,7 +45,7 @@ export function HudActions({
   const groups: ButtonDef[][] = [
     [
       { id: "copy",      icon: Copy,  tip: "Copy image" },
-      { id: "copy-path", icon: Link2, tip: "Copy path" },
+      { id: "copy-path", icon: FileSymlink, tip: "Copy path" },
     ],
     [
       saved

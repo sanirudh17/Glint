@@ -1,6 +1,6 @@
 import {VideoAnnotationEditor} from "./VideoAnnotationEditor";
 import { useState } from "react";
-import { Check, Copy, FolderOpen, Save } from "lucide-react";
+import { Check, FileSymlink, Files, FolderOpen, Save } from "lucide-react";
 import { invoke } from "@tauri-apps/api/core";
 import { Button, ControlDisclosure, NumberInput,Switch,Select } from "../components/ui";
 import { LookControls, LookSlider } from "../look/LookControls";
@@ -52,7 +52,7 @@ export function StudioPanel({ onCrop, project, path, width, height, saveStatus, 
       <div hidden={tab!=='look'}>
       <LookControls video look={project.look} dimensions={{width:crop.w,height:crop.h}} onChange={(patch) => onChange({ look: { ...project.look, ...patch } })} />
       </div><div hidden={tab!=='edit'} className="studio-edit-controls">
-      <VideoAnnotationEditor onSeek={onSeek} items={project.annotations??[]} time={time} duration={duration} disabled={exporting||tab!=='edit'} onPause={()=>onSeek(time)} onChange={annotations=>onChange({annotations})}/>
+      <VideoAnnotationEditor onSeek={onSeek} items={project.annotations??[]} time={time} duration={duration} disabled={exporting||tab!=='edit'} suspended={drawingMask||pickingFocus||selectedMask!==null} onPause={()=>{onSelectMask(null);if(drawingMask)onDrawMask();if(pickingFocus)onPickZoom();onSeek(time);}} onChange={annotations=>onChange({annotations})}/>
       <StudioZoomControls segments={project.zoomSegments} selected={selectedZoom} time={time} duration={duration} events={events} width={width} height={height} smoothing={project.cursor.smoothing} aim={focusAim} picking={pickingFocus} onChange={zoomSegments=>onChange({zoomSegments})} onSelect={onSelectZoom} onPick={onPickZoom}/>
 
       <StudioMaskControls masks={project.masks} selected={selectedMask} time={time} duration={duration} width={width} height={height} drawing={drawingMask} onDraw={onDrawMask} onChange={masks=>onChange({masks})} onSelect={onSelectMask} onSeek={onSeek}/>
@@ -101,8 +101,8 @@ function ExportResult({ path }: { path: string }) {
     <p className="studio-export-folder" title={folder}>{folder}</p>
     <div className="studio-export-actions">
       <Button size="sm" variant="ghost" icon={FolderOpen} onClick={() => void invoke("reveal_path", { path }).catch((e) => setError(String(e)))}>Show in folder</Button>
-      <Button size="sm" variant="ghost" icon={Copy} onClick={() => void invoke("clipboard_copy_text", { text: path }).then(() => { setCopied(true); setError(null); }).catch((e) => setError(String(e)))}>{copied ? "Copied" : "Copy path"}</Button>
-      <Button size="sm" variant="ghost" icon={Copy} onClick={()=>void invoke('studio_copy_video',{path}).then(()=>setError(null)).catch(e=>setError(String(e)))}>Copy video file</Button>
+      <Button size="sm" variant="ghost" icon={FileSymlink} onClick={() => void invoke("clipboard_copy_text", { text: path }).then(() => { setCopied(true); setError(null); }).catch((e) => setError(String(e)))}>{copied ? "Copied" : "Copy path"}</Button>
+      <Button size="sm" variant="ghost" icon={Files} onClick={()=>void invoke('studio_copy_video',{path}).then(()=>setError(null)).catch(e=>setError(String(e)))}>Copy video file</Button>
     </div>
     {error && <p className="studio-export-error" role="alert">{error}</p>}
   </section>;

@@ -121,6 +121,8 @@ body {
 }
 
 /* Inner layout container — for Task 10 (crosshair, dimensions badge) */
+.sl-rect--release { outline-style: dashed; cursor: crosshair; }
+
 .sl-rect-inner {
   position: absolute;
   inset: 0;

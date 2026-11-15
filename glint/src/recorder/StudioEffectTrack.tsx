@@ -1,5 +1,6 @@
 import { useRef } from "react";
 import { clamp } from "./studioEffects";
+import {effectTrackLanes} from './effectTrackLayout';
 export interface TimedEffect {id:string;start:number;end:number}
 export function StudioEffectTrack({ label, segments, duration, zoom, viewStart, selected, disabled, onSelect, onRange, onDelete }: {
   label:string;segments:TimedEffect[];duration:number;zoom:number;viewStart:number;selected:string|null;disabled:boolean;
@@ -8,12 +9,13 @@ export function StudioEffectTrack({ label, segments, duration, zoom, viewStart, 
   const track = useRef<HTMLDivElement>(null);
   const drag = useRef<{segment:TimedEffect;edge:string;pointer:number;x:number;secondsPerPixel:number}|null>(null);
   const minimumSpan=Math.min(.1,duration/2);
+  const layout=effectTrackLanes(segments);
   return <div className="studio-effect-track-row" data-editor-control>
     <span className="studio-effect-track-label">{label}</span>
-    <div ref={track} className="studio-effect-track" aria-label={`${label} timeline`}>
-      <div className="studio-effect-track-content" style={{width:`${zoom*100}%`,transform:`translateX(-${viewStart/Math.max(.001,duration)*100}%)`}}>
+    <div ref={track} className="studio-effect-track" aria-label={`${label} timeline`} style={{height:Math.min(160,layout.count*28)}}>
+      <div className="studio-effect-track-content" style={{height:layout.count*28,width:`${zoom*100}%`,transform:`translateX(-${viewStart/Math.max(.001,duration)*100}%)`}}>
         {segments.map((s,i)=><div key={s.id} className={`studio-effect-segment${selected===s.id?' is-selected':''}`} role="group" aria-label={`${label} ${i+1}`}
-          style={{left:`${s.start/duration*100}%`,width:`${(s.end-s.start)/duration*100}%`}}
+          style={{top:(layout.lanes.get(s.id)??0)*28+2,bottom:'auto',height:24,left:`${s.start/duration*100}%`,width:`${(s.end-s.start)/duration*100}%`}}
           onPointerDown={e=>{
             if(disabled)return;e.preventDefault();onSelect(s.id);
             drag.current={segment:{...s},edge:(e.target as HTMLElement).dataset.edge??"move",pointer:e.pointerId,x:e.clientX,secondsPerPixel:duration/zoom/(track.current?.clientWidth??1)};

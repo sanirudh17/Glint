@@ -12,7 +12,7 @@ import { toPixels } from "./camOverlay";
 import { zoomAt } from "./studioEffects";
 import { applyPreviewMasks } from "./studioMasks";
 import {DEFAULT_MOTION,motionTimes} from './studioMotion';
-import {Crosshair} from 'lucide-react';
+import {Crosshair} from "lucide-react";
 import {previewFocus,type FocusPoint} from './studioFocus';
 import {getGradient} from '../editor/gradients';
 import {gradientStops} from '../look/gradientRender';
@@ -31,6 +31,7 @@ export function StudioPreview({ studio:inputStudio, video, camVideo, cam, width,
   const path = useMemo(() => smoothPath(studio.events.events, studio.project.cursor.smoothing), [studio.events, studio.project.cursor.smoothing]);
   const effectEvents = useMemo(() => ({ ...studio.events, events: studio.events.events.filter((e) => e.kind !== "cursor") }), [studio.events]);
   const ref = useRef<HTMLCanvasElement>(null);
+  const annotationHost=useRef<HTMLDivElement>(null);
   const [annotationBox,setAnnotationBox]=useState({left:20,top:20,width:0,height:0});
   useEffect(()=>{const parent=ref.current?.parentElement;if(!parent)return;const place=()=>{const l=studioLayout(width,height,studio.project.crop,studio.project.look,960);const fit=Math.max(0,Math.min((parent.clientWidth-40)/l.width,(parent.clientHeight-40)/l.height));setAnnotationBox({left:(parent.clientWidth-l.width*fit)/2,top:(parent.clientHeight-l.height*fit)/2,width:l.width*fit,height:l.height*fit});};const observer=new ResizeObserver(place);observer.observe(parent);place();return()=>observer.disconnect();},[width,height,studio.project.crop,studio.project.look]);
   const captionImages=useRef(new Map<string,HTMLImageElement>());
@@ -52,14 +53,17 @@ export function StudioPreview({ studio:inputStudio, video, camVideo, cam, width,
   useEffect(() => {
     let raf = 0;
     let lastPaintedTime=NaN;
+    let lastEditingId='';
     const maskedSource=document.createElement('canvas'),maskScratch=document.createElement('canvas'),stillBackground=document.createElement('canvas');
     let maskedTime=NaN,maskedCamTime=NaN;
     const tick = () => {
       const canvas = ref.current, player = video.current, v = still ?? player;
       const time=still?(previewTime??0):player?.currentTime??0;
-      if(time===lastPaintedTime && !player?.seeking){raf=requestAnimationFrame(tick);return;}
+      const editingId=annotationHost.current?.dataset.annotationEditing??'';
+      if(time===lastPaintedTime && editingId===lastEditingId && !player?.seeking){raf=requestAnimationFrame(tick);return;}
       if (canvas && v && (still?.complete || player && player.readyState >= 2 && !player.seeking)) {
         lastPaintedTime=time;
+        lastEditingId=editingId;
         const { look, crop } = studio.project;
         const { layout: l, scale, width: w, height: h } = studioLayout(width, height, crop, look, 960);
         if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }
@@ -141,7 +145,7 @@ export function StudioPreview({ studio:inputStudio, video, camVideo, cam, width,
         if (look.enabled && (look.border?.width ?? 0) > 0) {
           ctx.beginPath(); ctx.roundRect(l.contentX, top, l.contentW, cardH, radius); ctx.strokeStyle = look.border!.color; ctx.lineWidth = look.border!.width; ctx.setLineDash(look.border!.style === "dashed" ? [8, 6] : []); ctx.stroke(); ctx.setLineDash([]);
         }
-        for(const mark of studio.project.annotations??[])if(annotationAt(mark,time))paintAnnotation(ctx,mark,l.compositionW,l.compositionH);
+        for(const mark of studio.project.annotations??[])if(mark.id!==editingId&&annotationAt(mark,time))paintAnnotation(ctx,mark,l.compositionW,l.compositionH);
         if(look.enabled&&look.watermark&&watermark) {const b=watermarkPlacement(l.compositionW,l.compositionH,look.watermark);ctx.save();ctx.globalAlpha=look.watermark.opacity;ctx.drawImage(watermark,b.x,b.y,b.w,b.h);ctx.restore();}
         const caption=studio.project.captionsEnabled?studio.project.captions?.find(c=>c.start<=time&&time<c.end):null;
         if(caption){const key=caption.id+caption.text;let image=captionImages.current.get(key);if(!image){image=new Image();image.src=caption.raster??captionRaster(caption.text);captionImages.current.set(key,image);if(captionImages.current.size>4)captionImages.current.delete(captionImages.current.keys().next().value!);}if(image.complete&&image.naturalWidth){const margin=Math.min(Math.max(12,Math.min(l.compositionW,l.compositionH)*.025),l.compositionW/4,l.compositionH/4);const width=Math.min(l.compositionW-margin*2,l.compositionH*.18*1280/170),height=width*170/1280;ctx.drawImage(image,(l.compositionW-width)/2,l.compositionH-margin-height,width,height);}}
@@ -166,7 +170,7 @@ export function StudioPreview({ studio:inputStudio, video, camVideo, cam, width,
     const view=zoomAt(studio.project.zoomSegments,t,{x:l.cropX,y:l.cropY,w:l.contentW,h:l.contentH},width,height,followSourcePoint(path,t,studio.events,width,height));
     return previewFocus({x:clientX,y:clientY},rect,canvas,l,scale,view,{width,height});
   };
-  return <><div id={annotationHostId} data-video-annotation-host className="video-annotation-host" style={annotationBox}/><canvas ref={ref} className={`studio-preview${pickingFocus?' is-picking':''}`} aria-label="Studio video preview" tabIndex={pickingFocus?0:undefined} data-editor-control={pickingFocus?true:undefined}
+  return <><div ref={annotationHost} id={annotationHostId} data-video-annotation-host className="video-annotation-host" style={annotationBox}/><canvas ref={ref} className={`studio-preview${pickingFocus?' is-picking':''}`} aria-label="Studio video preview" tabIndex={pickingFocus?0:undefined} data-editor-control={pickingFocus?true:undefined}
     onPointerMove={e=>{if(!pickingFocus)return;const point=pointAt(e.clientX,e.clientY);onAim?.(point);const r=e.currentTarget.getBoundingClientRect();setMarker(point?{left:e.clientX-r.x,top:e.clientY-r.y,point}:null);}}
     onPointerLeave={()=>{if(pickingFocus){setMarker(null);onAim?.(null);}}}
     onClick={e=>{if(!pickingFocus)return;const point=pointAt(e.clientX,e.clientY);if(point)onFocus?.(point);}}

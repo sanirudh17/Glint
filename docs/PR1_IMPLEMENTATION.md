@@ -11,6 +11,11 @@ Branch: `pr1-implementation`. Based on main commit `68a8957`, which contains the
 - Existing Home/Library hover action menus remain. Keyboard focus also reveals their buttons. **No custom right-click menu.**
 - Cursor timestamps anchor once per recording span, preventing later encoder-progress reports from rewinding or jumping the input clock. Pause/resume and invalid timestamps are covered by tests. The capture backend remains unchanged.
 - Unsaved editor-only screenshots reuse a bounded latest-image cache and do not accumulate hidden HUD cards. Existing durable attachment snapshots remain unchanged.
+- Capture-on-release selections use a dashed outline without resize handles. Manual confirmation mode retains its handles.
+- Studio annotations can be picked and moved directly on the video. The original mark is hidden while its live draft moves; text has a corner resize grip. Drawing tools remain active until switched. Mask drawing and zoom targeting temporarily suspend annotation picking.
+- Overlapping Marks have separate timeline lanes and readable labels. A populated Annotations heading uses the same emphasis as the other editing sections.
+- One Lucide icon family across Home, Library, HUD, settings and both editors. Navigation and hover controls use larger glyphs; Rename, Copy file and Copy file path have distinct, consistent symbols. The Solar/Hugeicons experiment and its dependencies were removed after feedback.
+- Thin native WebView2 scrollbars use matching light/dark theme colors without overriding intentional hidden scrollbars.
 
 ## Deliberately excluded
 
@@ -24,6 +29,17 @@ Branch: `pr1-implementation`. Based on main commit `68a8957`, which contains the
 - Preview: 306 frontend tests; 291 native tests passed, with 19 optional tests ignored; frontend and native builds passed.
 - Isolated preview checks passed for hover actions, removal of the custom context menu, settings relocation, setting persistence through the UI, manual capture, release capture using final pointer coordinates, fresh preferences in reused overlays, maximized Studio, a fixed padded header, one window-control group, and retained crop/sizing controls. No JavaScript errors were observed in these checks.
 - This is targeted coverage, not a claim that every hardware-specific presentation or third-party drag destination has been verified. Baseline limitations remain in `STUDIO_RELIABILITY_REVIEW.md`.
+
+### Latest verification after feedback
+
+- 311 frontend tests and the production TypeScript/Vite build passed. The native suite passed 291 tests, with 19 optional tests ignored; six explicit media gates were also run successfully: reordered cut/audio preservation, audio cleanup/polish, annotation MP4, cursor-follow zoom MP4, GIF palette output, and mixed-scene crossfade/audio/video duration.
+- `scripts/pr1-final-review.mjs` passed with generated media in the isolated profile: real pointer selection/movement, old-position pixel removal during dragging, persistent pen/highlight tools, text corner resizing, annotation undo/redo, repeated Play after split/undo/redo, updated-sequence playback, corner cropping and eight handles, Apply/Cancel, custom dimension stepping, zoom, masks alongside annotations, cursor switches, light/dark scrollbars, silence analysis, speaker notes without the progress slider, Save project, and MP4 export with audio.
+- The resulting eight-second effects export retained audio. A decoded one-second retained window had an RMS ratio of 0.9992 relative to its source; the reordered-audio native gate separately verifies the expected tone content. This is fixture evidence, not a word-by-word audit of every user recording.
+- The capture check passed for both confirmation modes, fresh settings in warmed overlays, no handles and a dashed outline in release mode. The user's original preview preference is restored afterward.
+- Final screenshots checked the six separate Marks lanes and unified icons in both themes. Copy file, Copy path and Rename have different glyphs; Library/folder icons render as outlines.
+- The isolated preview has no caption transcription engine installed. Current live transcription was therefore not reverified; earlier baseline evidence and caption model/render tests do not substitute for that missing live check. Battery Saver/driver-specific presentation and third-party drag destinations retain the documented limitations.
+
+Evidence: `%LOCALAPPDATA%\GlintValidation\PR1FinalReview\results.json`, `marks-lanes-final.png`, `library-light.png`, `library-dark.png`; `%LOCALAPPDATA%\GlintValidation\PR1Implementation\checks.json`.
 
 ## Try it
 

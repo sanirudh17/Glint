@@ -279,15 +279,15 @@
 .studio-preview.is-picking { cursor: crosshair; }
 .studio-focus-target { position:absolute;transform:translate(-50%,-50%);display:grid;place-items:center;width:28px;height:28px;border-radius:50%;background:var(--bg-elev2);color:var(--accent);pointer-events:none; }
 .studio-preview-instruction { position:absolute;bottom:28px;left:50%;transform:translateX(-50%);padding:8px 12px;border-radius:var(--r2);background:var(--bg-elev2);color:var(--text);font-size:var(--fz-sm);pointer-events:none; }
-.studio-effects-controls > summary { color:var(--text);font-size:var(--fz-lg);font-weight:700; }
+.studio-effects-controls > summary, .studio-annotations.has-marks > summary { color:var(--text);font-size:var(--fz-lg);font-weight:700; }
 .studio-effect-actions { display:flex;align-items:center;gap:8px;flex-wrap:wrap; }
 .studio-effect-track-row { display:flex;align-items:center;gap:8px;padding:3px 20px;min-height:28px; }
 .studio-effect-track-label { flex:none;width:36px;color:var(--text-dim);font-size:var(--fz-xs); }
-.studio-effect-track { position:relative;flex:1;height:24px;overflow:hidden;background:var(--bg-elev2);border-radius:var(--r1); }
+.studio-effect-track { position:relative;flex:1;height:28px;overflow-x:hidden;overflow-y:auto;background:var(--bg-elev2);border-radius:var(--r1); }
 .studio-effect-track-content { height:100%;position:relative; }
 .studio-effect-segment { position:absolute;top:2px;bottom:2px;min-width:14px;display:flex;align-items:stretch;background:var(--accent-subtle);border:1px solid var(--border-strong);border-radius:3px;touch-action:none; }
 .studio-effect-segment.is-selected { border-color:var(--accent); }
-.studio-effect-name { flex:1;min-width:0;background:transparent;border:0;color:var(--text-dim);font:inherit;font-size:var(--fz-xs);cursor:grab;padding:0 2px;overflow:hidden; }
+.studio-effect-name { flex:1;min-width:0;background:transparent;border:0;color:var(--text);font:inherit;font-size:12px;font-weight:600;line-height:20px;cursor:grab;padding:0 2px;overflow:hidden; }
 .studio-effect-handle { flex:none;width:5px;border:0;background:transparent;padding:0;cursor:ew-resize; }
 .studio-effect-handle:hover { background:var(--accent); }
 .studio-effect-name:focus-visible, .studio-effect-handle:focus-visible { outline:1px solid var(--accent);outline-offset:1px; }
@@ -343,6 +343,7 @@
 .video-annotation-text textarea { min-height: 64px; padding: 8px; resize: vertical; color: var(--text); background: var(--bg-elev2); border: 1px solid var(--border-strong); border-radius: var(--r-btn); font: inherit; }
 
 .video-annotation-selection { position: absolute; pointer-events: none; border: 1px dashed var(--accent); min-width: 10px; min-height: 10px; box-sizing: border-box; }
+.video-annotation-resize { position:absolute;right:-5px;bottom:-5px;width:10px;height:10px;border:1px solid var(--text);border-radius:2px;background:var(--accent); }
 .video-annotation-tools ~ .studio-effect-track-row { padding: 6px 0; }
 
 .trim-root { position: relative; }
