@@ -161,7 +161,7 @@ export function CaptureCard({
         )}
         {isRecording && (
           <div className="cap-thumb-play">
-            <Play size={24} strokeWidth={1.5} />
+            <Play size={24} strokeWidth={1.5} stroke="#fff" />
           </div>
         )}
         {variant === "home" ? (
