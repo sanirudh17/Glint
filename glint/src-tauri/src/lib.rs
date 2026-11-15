@@ -207,6 +207,7 @@ pub fn run() {
                     tauri::WebviewUrl::default(),
                 )
                 .title("Glint")
+                .title(app.config().product_name.as_deref().unwrap_or("Glint"))
                 .theme(if theme_str=="system" {None} else {Some(if theme_str=="light" {tauri::Theme::Light} else {tauri::Theme::Dark})})
                 .inner_size(1100.0, 720.0)
                 .min_inner_size(880.0, 560.0)

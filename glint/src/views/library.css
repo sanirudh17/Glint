@@ -299,7 +299,7 @@
   opacity: 0;
   pointer-events: none;
 }
-.cap-card:hover .cap-actions { opacity: 1; pointer-events: auto; }
+.cap-card:hover .cap-actions,.cap-card:focus-within .cap-actions { opacity: 1; pointer-events: auto; }
 
 .cap-group {
   display: flex;
