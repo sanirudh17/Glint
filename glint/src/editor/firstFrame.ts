@@ -1,3 +1,4 @@
+import {finishDesktopPresentation} from '../lib/desktopPresentation';
 import { waitForMaterial } from '../lib/material';
 
 /** Keep the native editor hidden until the final material and canvas can paint.
@@ -8,5 +9,5 @@ export async function presentEditorFrame(present:()=>Promise<void>, cancelled:()
   await waitForMaterial();
   if(cancelled()) return;
   await new Promise<void>(resolve=>requestAnimationFrame(()=>requestAnimationFrame(()=>resolve())));
-  if(!cancelled()) await present();
+  if(!cancelled()){await present();await finishDesktopPresentation(cancelled);}
 }

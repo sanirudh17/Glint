@@ -13,6 +13,13 @@ export function autoBalance(width:number,height:number):Partial<LookConfig> {
   return {enabled:true,aspect:'auto',outputSize:undefined,padding:Math.round(40*Math.min(width,height)/Math.max(width,height))};
 }
 export function originalExportSizing():Partial<LookConfig> {return {aspect:'auto',outputSize:undefined};}
+/** Resize the output without introducing a new aspect and extra letterboxing. */
+export function resizeOutputSize(size:{width:number;height:number},axis:'width'|'height',value:number,ratio:number|null){
+ const clamp=(n:number,min=16,max=4096)=>Math.max(min,Math.min(max,Math.round(n)));
+ if(ratio===null)return {...size,[axis]:clamp(value)};
+ if(axis==='width'){const width=clamp(value,Math.max(16,Math.ceil(16*ratio)),Math.min(4096,Math.floor(4096*ratio)));return {width,height:clamp(width/ratio)};}
+ const height=clamp(value,Math.max(16,Math.ceil(16/ratio)),Math.min(4096,Math.floor(4096/ratio)));return {width:clamp(height*ratio),height};
+}
 export function exportDimensions(width:number,height:number,look:LookConfig) {
   const layout=computeLayout(width,height,null,look);
   return look.outputSize??{width:Math.round(layout.compositionW),height:Math.round(layout.compositionH)};

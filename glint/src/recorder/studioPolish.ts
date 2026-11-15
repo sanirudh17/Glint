@@ -43,3 +43,8 @@ export function captionRaster(text:string){
  ctx.fillStyle='rgba(0,0,0,.8)';ctx.beginPath();ctx.roundRect(32,12,1216,140,16);ctx.fill();ctx.fillStyle='#fff';ctx.textAlign='center';ctx.textBaseline='middle';lines.forEach((l,i)=>ctx.fillText(l,640,lines.length===1?82:56+i*52,1140));return c.toDataURL('image/png');
 }
 export async function prepareCaptions<T extends {captions?:Caption[]}>(project:T):Promise<T>{if(project.captions?.some(c=>!c.text.trim()))throw Error('Review empty caption lines before exporting.');await document.fonts.ready;return {...project,captions:project.captions?.map(c=>({...c,raster:captionRaster(c.text)}))};}
+
+/** Only accelerate input-idle/typing intervals where the audio is also quiet. */
+export function quietActivity(activity:{start:number;end:number}[],quiet:{start:number;end:number}[]) {
+ return activity.flatMap(a=>quiet.flatMap(q=>{const start=Math.max(a.start,q.start),end=Math.min(a.end,q.end);return end-start>=.1?[{start,end}]:[];}));
+}

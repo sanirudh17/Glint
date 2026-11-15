@@ -78,6 +78,15 @@ fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     std::env::set_var("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "00000000");
+    #[cfg(windows)] {
+        // Hidden prewarmed views must be able to paint their ready frame before
+        // showing. Use identical environment options for every shared controller.
+        let mut arguments=std::env::var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS").unwrap_or_default();
+        for flag in ["--disable-background-timer-throttling","--disable-renderer-backgrounding","--disable-backgrounding-occluded-windows"] {
+            if !arguments.split_whitespace().any(|value|value==flag){if !arguments.is_empty(){arguments.push(' ');}arguments.push_str(flag);}
+        }
+        std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",arguments);
+    }
     tauri::Builder::default()
         .plugin(tauri_plugin_single_instance::init(|app, argv, _cwd| {
             // A second launch (e.g. "Open in Glint" while Glint is already running)
@@ -198,6 +207,7 @@ pub fn run() {
                     tauri::WebviewUrl::default(),
                 )
                 .title("Glint")
+                .theme(if theme_str=="system" {None} else {Some(if theme_str=="light" {tauri::Theme::Light} else {tauri::Theme::Dark})})
                 .inner_size(1100.0, 720.0)
                 .min_inner_size(880.0, 560.0)
                 .decorations(false)
@@ -326,8 +336,12 @@ pub fn run() {
         })
         .invoke_handler(tauri::generate_handler![
             material::window_material,
+            material::window_material_presented,
+            material::window_material_prepare,
+            material::window_power_saver,
             window::window_toggle_maximize,
             window::main_present,
+            window::speaker_notes_present,
             clipboard::clipboard_copy_text,
             attachments::drag_prepare,
             settings_get_all,

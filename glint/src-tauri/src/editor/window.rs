@@ -27,6 +27,7 @@ impl Presentation {
     }
     fn cancel(&self){self.0.lock().unwrap().pending=None;}
 }
+static BUILD_LOCK:Mutex<()>=Mutex::new(());
 static PRESENTATION:Presentation=Presentation::new();
 pub fn begin_present()->u64{PRESENTATION.begin()}
 pub fn presentation_id()->u64{PRESENTATION.current()}
@@ -65,6 +66,7 @@ fn builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
 /// Build the editor window once, hidden, so the first "Annotate" click doesn't pay
 /// the WebView2 cold-start. Idempotent. Safe from a spawned thread (window-build rule).
 pub fn prewarm(app: &AppHandle) {
+    let _building=BUILD_LOCK.lock().unwrap();
     if app.get_webview_window(EDITOR_LABEL).is_some() {
         return;
     }
@@ -83,6 +85,7 @@ pub fn prewarm(app: &AppHandle) {
 /// open (or pre-warmed hidden), raise it (the caller then emits `editor-open` so
 /// its EditorView reloads the new source); otherwise build it on demand.
 pub fn ensure_editor_window(app: &AppHandle) -> tauri::Result<()> {
+    let _building=BUILD_LOCK.lock().unwrap();
     if let Some(win) = app.get_webview_window(EDITOR_LABEL) {
         // Reused webviews can still hold the previous canvas or material. Reload
         // while hidden; editor_present reveals the new completed frame.
@@ -100,16 +103,12 @@ pub fn ensure_editor_window(app: &AppHandle) -> tauri::Result<()> {
 pub fn editor_present(window:tauri::WebviewWindow,presentation_id:u64)->Result<(),String>{
     if window.label()!=EDITOR_LABEL{return Err("Only the editor can present this window".into());}
     if !PRESENTATION.claim(presentation_id){return Ok(());}
-    let _=window.unminimize();
+    crate::material::prepare_reveal(&window);
     window.show().map_err(|e|e.to_string())?;
-    let _=window.set_focus();
-    // Keep Home visible while the new project/image is decoding. Only minimize
-    // behind the completed editor; never show a hidden main just to minimize it.
-    if let Some(main)=window.app_handle().get_webview_window("main") {
-        if main.is_visible().unwrap_or(false) && !main.is_minimized().unwrap_or(false) {
-            let _=main.minimize();
-        }
-    }
+    if window.is_minimized().unwrap_or(false){let _=window.unminimize();}
+    crate::material::request_paint(&window);
+    // Focus and minimize Home only after the native paint gate reveals the
+    // editor. Focusing a cloaked window can send it behind the previous app.
     Ok(())
 }
 

@@ -345,3 +345,6 @@
   pointer-events: none;
 }
 .cap-btn:hover .cap-tip { opacity: 1; }
+
+.cap-card { user-select:none; }
+.cap-rename-input { user-select:text; }

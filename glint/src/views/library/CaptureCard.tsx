@@ -146,12 +146,16 @@ export function CaptureCard({
     <div
       className="cap-card"
       role="listitem"
-      onPointerDown={() => dragOut(item.path)}
+      onPointerDown={(event) => {
+        if(event.button!==0 || renaming)return;
+        event.preventDefault();
+        void dragOut(item.path);
+      }}
       title="Drag to share"
     >
       <div className="cap-thumb">
         {item.thumb_url ? (
-          <img src={item.thumb_url} alt="" draggable={false} />
+          <img src={item.thumb_url} alt="" draggable={false} loading="lazy" decoding="async" />
         ) : (
           <div className="cap-thumb--empty" />
         )}

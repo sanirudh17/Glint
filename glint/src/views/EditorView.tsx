@@ -206,6 +206,7 @@ export default function EditorView() {
   useEffect(() => {
     if ((!base&&!sourceError)||!theme||renderingLook||presentationId===null) return;
     let cancelled=false;
+    stageRef.current?.draw();
     void presentEditorFrame(()=>invoke('editor_present',{presentationId}),()=>cancelled).catch(()=>{});
     return ()=>{cancelled=true;};
   }, [base,sourceError,theme,renderingLook,presentationId]);

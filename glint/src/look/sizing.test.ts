@@ -1,8 +1,18 @@
 import {describe,it,expect} from 'vitest';
-import {autoBalance,OUTPUT_SIZES,watermarkPlacement,originalExportSizing,exportDimensions} from './sizing';
+import {autoBalance,OUTPUT_SIZES,watermarkPlacement,originalExportSizing,exportDimensions,resizeOutputSize} from './sizing';
 import {computeLayout} from '../editor/composition';
 import {DEFAULT_LOOK} from './model';
 describe('screenshot sizing',()=>{
+  it('resizes either dimension in both directions while keeping video proportions',()=>{
+    expect(resizeOutputSize({width:320,height:200},'width',640,1.6)).toEqual({width:640,height:400});
+    expect(resizeOutputSize({width:640,height:400},'width',160,1.6)).toEqual({width:160,height:100});
+    expect(resizeOutputSize({width:320,height:200},'height',400,1.6)).toEqual({width:640,height:400});
+    expect(resizeOutputSize({width:320,height:200},'width',640,null)).toEqual({width:640,height:200});
+  });
+  it('keeps both dimensions within encoder limits for very wide and tall videos',()=>{
+    expect(resizeOutputSize({width:16,height:4096},'width',4096,16/4096)).toEqual({width:16,height:4096});
+    expect(resizeOutputSize({width:4096,height:16},'height',4096,4096/16)).toEqual({width:4096,height:16});
+  });
   it('shows actual framed dimensions and restores unconstrained resolution',()=>{
     const look={...DEFAULT_LOOK,enabled:true};expect(exportDimensions(800,400,look)).toEqual({width:960,height:560});
     expect(exportDimensions(800,400,{...look,outputSize:{width:1234,height:789}})).toEqual({width:1234,height:789});

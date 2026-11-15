@@ -1,6 +1,7 @@
 import {beforeEach,expect,it,vi} from 'vitest';
 const material=vi.hoisted(()=>vi.fn());
 vi.mock('../lib/material',()=>({waitForMaterial:material}));
+vi.mock('../lib/desktopPresentation',()=>({finishDesktopPresentation:()=>Promise.resolve()}));
 import {presentEditorFrame} from './firstFrame';
 let frames:FrameRequestCallback[];
 beforeEach(()=>{

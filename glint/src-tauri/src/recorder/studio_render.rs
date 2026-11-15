@@ -1216,6 +1216,37 @@ pub fn export(
         Err(e) => Err(e),
     }
 }
+// Exact cuts without decorative composition stay entirely inside FFmpeg.
+fn native_cut_only(spec:&ExportSpec)->bool {
+ let p=spec.project;
+ spec.width<=1920 && spec.height<=1920 && !p.look.enabled && p.look.output_size.is_none() && p.crop.is_none() && spec.cam.is_none()
+ && p.zoom_segments.is_empty() && p.masks.is_empty() && p.annotations.is_empty()
+ && (!p.captions_enabled||p.captions.is_empty())
+ && !p.motion_blur.as_ref().is_some_and(|m|m.enabled&&m.intensity>0.)
+ && p.content_motion.as_deref().is_none_or(|v|v=="none")
+ && !p.audio_cleanup.denoise && !p.audio_cleanup.level && !p.audio_cleanup.click_sounds
+ && (!p.cursor.visible&&!p.cursor.clicks&&!p.cursor.keystrokes&&!p.cursor.spotlight
+     || !spec.events.events.iter().any(|e|matches!(e.data["kind"].as_str(),Some("cursor"|"click"|"key"))))
+ && trim::is_video_path(spec.source)
+}
+fn encode_native_cut(spec:&ExportSpec,segments:&[KeepSegment],cancel:Arc<AtomicBool>,progress:&(impl Fn(f64)+Sync),encoder:VideoEncoder)->Result<(),String>{
+ use std::io::{BufRead,BufReader};
+ let mut args=trim::build_trim_args(spec.source,&spec.output.to_string_lossy(),segments,spec.audio,spec.project.fade_in,spec.project.fade_out,None,None);
+ let graph=args.iter().position(|v|v=="-filter_complex").unwrap()+1;
+ args[graph]=args[graph].replace("[0:v]trim=","[0:v]tpad=stop_mode=clone:stop_duration=1,trim=");
+ let start=args.iter().position(|v|v=="-c:v").unwrap();let end=args.iter().position(|v|v=="-pix_fmt").unwrap();
+ args.splice(start..end,ffmpeg::encoder_args(encoder,"high"));
+ args.splice(0..0,["-filter_complex_threads".into(),"2".into(),"-threads".into(),"2".into()]);
+ let output=args.pop().unwrap();args.extend(["-r".into(),spec.fps.clamp(1.,120.).to_string(),output]);
+ let mut child=command(spec.binary).args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e|e.to_string())?;
+ let stdout=child.stdout.take().unwrap();let errors=stderr(&mut child);let mut children=Children::new();let process=children.push(child);children.watch(cancel.clone());
+ let duration=trim::output_duration(segments);
+ for line in BufReader::new(stdout).lines(){let line=line.map_err(|e|e.to_string())?;if let Some(t)=line.strip_prefix("out_time_us=").and_then(|s|s.parse::<f64>().ok()){progress((t/1e6/duration*100.).clamp(0.,99.));}}
+ let success=wait(&process)?;let errors=errors.join().unwrap_or_default();
+ if cancel.load(Ordering::Relaxed){return Err("Export cancelled".into());}
+ if !success{return Err(format!("Video export failed: {errors}"));}
+ progress(100.);Ok(())
+}
 fn encode(
     spec: &ExportSpec,
     cancel: Arc<AtomicBool>,
@@ -1223,6 +1254,7 @@ fn encode(
     encoder: VideoEncoder,
 ) -> Result<(), String> {
     let segments = spec.project.segments(spec.duration)?;
+    if native_cut_only(spec){return encode_native_cut(spec,&segments,cancel,progress,encoder);}
     let camera_only=spec.cam.is_some()&&spec.project.cam.as_ref().is_some_and(|c|c["layout"]=="camera-only"&&c["visible"]==true);
     let mut camera_project=spec.project.clone();
     if camera_only{let output=layout(spec.width,spec.height,spec.project.crop,&spec.project.look)?;camera_project.crop=None;camera_project.look.output_size=Some(OutputSize{width:output.width,height:output.height});camera_project.zoom_segments.clear();camera_project.masks.clear();camera_project.cursor.visible=false;camera_project.cursor.clicks=false;camera_project.cursor.keystrokes=false;}
@@ -1912,6 +1944,26 @@ mod tests {
                 Ok(())=>{},Err(error)=>{eprintln!("Reported recording on {chosen:?}: {error}");if chosen==VideoEncoder::Libx264{panic!("{error}");}encode(&spec,Arc::new(AtomicBool::new(false)),&|_|{},VideoEncoder::Libx264).unwrap();}
             }
         }
+    }
+
+    #[test]
+    #[ignore = "requires bundled FFmpeg; verifies reordered audio content through native cut export"]
+    fn native_cuts_preserve_reordered_audio_tones() {
+        let binary=std::path::PathBuf::from(std::env::var("GLINT_TEST_FFMPEG").unwrap());
+        let root=std::path::PathBuf::from(std::env::var("GLINT_VIDEO_FIXTURES").unwrap());std::fs::create_dir_all(&root).unwrap();
+        let source=root.join("cut-tones-source.mp4");
+        let result=command(&binary).args(["-y","-v","error","-f","lavfi","-i","testsrc2=s=320x200:r=15:d=3","-f","lavfi","-i","aevalsrc='if(lt(t,1),0.25*sin(2*PI*440*t),0.25*sin(2*PI*880*t))':s=48000:d=3","-c:v","libx264","-preset","ultrafast","-c:a","aac"]).arg(&source).output().unwrap();assert!(result.status.success(),"{}",String::from_utf8_lossy(&result.stderr));
+        let (mut project,events)=background_fixture();project.look.enabled=false;project.look.output_size=None;project.crop=None;
+        project.cursor.visible=false;project.cursor.clicks=false;project.cursor.keystrokes=false;project.cursor.spotlight=false;
+        project.clips=vec![Clip{start:2.,end:3.,speed:1.,kept:true,order:0.},Clip{start:0.,end:1.,speed:1.,kept:true,order:1.}];
+        let output=root.join("cut-tones-export.mp4");let source_name=source.to_string_lossy();
+        let spec=ExportSpec{binary:&binary,source:&source_name,output:&output,project:&project,events:&events,width:320,height:200,fps:15.,duration:3.,audio:true,cam:None,cam_overlay:None};
+        assert!(native_cut_only(&spec));encode(&spec,Arc::new(AtomicBool::new(false)),&|_|{},VideoEncoder::Libx264).unwrap();
+        let result=command(&binary).args(["-v","error","-i"]).arg(&output).args(["-vn","-ac","1","-ar","8000","-f","f32le","-"]).output().unwrap();assert!(result.status.success());
+        let audio:Vec<f32>=result.stdout.chunks_exact(4).map(|b|f32::from_le_bytes(b.try_into().unwrap())).collect();assert!(audio.len()>=15_800);
+        let energy=|slice:&[f32],hz:f64|{let (mut re,mut im)=(0.,0.);for (i,v) in slice.iter().enumerate(){let t=std::f64::consts::TAU*hz*i as f64/8000.;re+=*v as f64*t.cos();im+=*v as f64*t.sin();}re*re+im*im};
+        assert!(energy(&audio[1600..6400],880.)>10.*energy(&audio[1600..6400],440.));
+        assert!(energy(&audio[9600..14400],440.)>10.*energy(&audio[9600..14400],880.));
     }
 
 }

@@ -331,12 +331,14 @@ pub fn close_cam_bubble(app: &AppHandle) {
 }
 
 pub const TRIM_LABEL: &str = "rec-trim";
+static TRIM_BUILD_LOCK:std::sync::Mutex<()>=std::sync::Mutex::new(());
 
 /// Shared builder so the trim window can be built visible (on demand) or hidden
 /// (startup prewarm) with identical chrome.
 fn trim_builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
     WebviewWindowBuilder::new(app, TRIM_LABEL, WebviewUrl::App("index.html#/rec-trim".into()))
         .title("Glint Studio")
+        .focused(false)
         .transparent(true)
         .decorations(false)
         .shadow(true)
@@ -357,25 +359,28 @@ fn trim_builder(app: &AppHandle) -> WebviewWindowBuilder<'_, Wry, AppHandle> {
 /// callers retarget via RecorderTrimState + `rec-trim-reload`, so reopening is
 /// INSTANT (no cold webview build).
 pub fn build_trim_window(app: &AppHandle) -> tauri::Result<()> {
+    let _building=TRIM_BUILD_LOCK.lock().unwrap();
     if app.get_webview_window(TRIM_LABEL).is_some() {
-        show_trim_window(app);
+        // Existing content is retargeted before the frontend acknowledges readiness.
         return Ok(());
     }
-    let win = trim_builder(app).visible(true).build()?;
+    let win = trim_builder(app).visible(false).build()?;
     // Kill OS open transition so the window snaps in instantly.
     crate::window::disable_transitions(&win);
-    let _ = win.set_focus();
+    crate::window::protect_desktop_surface(&win);
     Ok(())
 }
 
 /// Build the trim window once, hidden, so the first "Trim" click doesn't pay the
 /// WebView2 cold-start. Idempotent. Safe from a spawned thread (window-build rule).
 pub fn prewarm_trim_window(app: &AppHandle) {
+    let _building=TRIM_BUILD_LOCK.lock().unwrap();
     if app.get_webview_window(TRIM_LABEL).is_some() {
         return;
     }
     match trim_builder(app).visible(false).build() {
         Ok(w) => {
+            crate::window::protect_desktop_surface(&w);
             crate::window::disable_transitions(&w);
         }
         Err(e) => log::warn!("trim prewarm failed (will build on demand): {e}"),
@@ -385,8 +390,13 @@ pub fn prewarm_trim_window(app: &AppHandle) {
 /// Show + focus the (possibly hidden/pre-warmed) trim window.
 pub fn show_trim_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window(TRIM_LABEL) {
-        let _ = w.unminimize();
+        crate::material::prepare_reveal(&w);
+        // Hidden prewarming can discard the builder's initial maximize request.
+        // Size Studio behind the paint gate before exposing its large workspace.
+        let _ = w.maximize();
         let _ = w.show();
+        if w.is_minimized().unwrap_or(false){let _ = w.unminimize();}
+        crate::material::request_paint(&w);
         let _ = w.set_focus();
     }
 }

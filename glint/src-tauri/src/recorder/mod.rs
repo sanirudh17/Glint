@@ -1338,6 +1338,7 @@ pub fn recorder_mark_zoom(app:tauri::AppHandle)->Result<(),String> {
 }
 #[tauri::command]
 pub fn recorder_trim_ready(app:tauri::AppHandle,path:Option<String>)->Result<(),String> {
+    if app.state::<RecorderTrimState>().0.lock().unwrap().is_none(){return Err("No recording is being opened".into());}
     if let Some(path)=path {let current=app.state::<RecorderTrimState>().0.lock().unwrap().as_ref().map(|t|t.path.clone());if current.as_deref()!=Some(path.as_str()){return Err("The recording changed while opening".into());}}
     windows::show_trim_window(&app);Ok(())
 }

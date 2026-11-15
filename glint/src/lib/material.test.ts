@@ -1,9 +1,10 @@
 import {beforeEach,expect,it,vi} from 'vitest';
 const invoke=vi.hoisted(()=>vi.fn());
-vi.mock('@tauri-apps/api/core',()=>({invoke}));
+const power=vi.hoisted(()=>({on:false}));
+vi.mock('@tauri-apps/api/core',()=>({invoke:(command:string,...args:unknown[])=>command==='window_power_saver'?Promise.resolve(power.on):invoke(command,...args)}));
 let applyMaterial:typeof import('./material').applyMaterial;
 const root:{dataset:Record<string,string>}={dataset:{theme:'dark',glass:'false'}};
-beforeEach(async()=>{vi.resetModules();({applyMaterial}=await import('./material'));vi.stubGlobal('document',{documentElement:root});vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>{callback(0);return 1;});root.dataset={theme:'dark',glass:'false'};invoke.mockReset();});
+beforeEach(async()=>{power.on=false;vi.resetModules();({applyMaterial}=await import('./material'));vi.stubGlobal('document',{documentElement:root});vi.stubGlobal('requestAnimationFrame',(callback:FrameRequestCallback)=>{callback(0);return 1;});root.dataset={theme:'dark',glass:'false'};invoke.mockReset();});
 it('uses native acceptance rather than pretending that CSS can blur the desktop',async()=>{
   invoke.mockResolvedValueOnce(true);await applyMaterial(true);
   expect(invoke).toHaveBeenCalledWith('window_material',{glass:true,dark:true,system:false});
@@ -46,4 +47,13 @@ it('updates native System tracking even when the resolved color stays dark',asyn
   await applyMaterial(true);
   expect(invoke).toHaveBeenCalledTimes(2);
   expect(invoke).toHaveBeenLastCalledWith('window_material',{glass:true,dark:true,system:false});
+});
+
+it('does not reset the backdrop on focus unless power-saving policy changes',async()=>{
+ invoke.mockResolvedValue(true);await applyMaterial(true);
+ const {refreshPowerMaterial}=await import('./material');await refreshPowerMaterial(true);
+ expect(invoke).toHaveBeenCalledTimes(1);
+ power.on=true;await refreshPowerMaterial(true);expect(invoke).toHaveBeenCalledTimes(2);
+ await refreshPowerMaterial(true);expect(invoke).toHaveBeenCalledTimes(2);
+ power.on=false;await refreshPowerMaterial(true);expect(invoke).toHaveBeenCalledTimes(3);
 });

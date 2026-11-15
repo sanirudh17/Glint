@@ -15,7 +15,8 @@ import {DEFAULT_MOTION} from './studioMotion';
 import type {FocusPoint} from './studioFocus';
 import {StudioPolishControls} from './StudioPolishControls';
 
-export function StudioPanel({ onClose, project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave, time, duration, selectedZoom, onSelectZoom, onPickZoom, events, selectedMask, onSelectMask, drawingMask, onDrawMask, onSeek,focusAim,pickingFocus }: {
+export function StudioPanel({ onCrop, onClose, project, path, width, height, saveStatus, exportMessage, exporting, cam, onCamChange, onChange, onSave, time, duration, selectedZoom, onSelectZoom, onPickZoom, events, selectedMask, onSelectMask, drawingMask, onDrawMask, onSeek,focusAim,pickingFocus }: {
+  onCrop:()=>void;
   onClose: () => void;
   project: StudioProject; path: string; width: number; height: number; saveStatus: string;
   exportMessage: string | null; exporting: boolean; cam: CamPlacement | null;
@@ -64,7 +65,7 @@ export function StudioPanel({ onClose, project, path, width, height, saveStatus,
         {project.motionBlur?.enabled&&<LookSlider label="Amount" ariaLabel="Motion blur amount" value={project.motionBlur.intensity*100} unit="%" onChange={value=>onChange({motionBlur:{...project.motionBlur!,intensity:value/100}})}/>}
         <p className="look-hint">Light blur on fast zoom, pan and cursor movement. More blur adds rendering work.</p>
       </ControlDisclosure>
-      <ControlDisclosure title="Crop source video" className="studio-crop">
+      <ControlDisclosure title="Crop source video" className="studio-crop"><Button onClick={onCrop}>Draw crop on video</Button>
         <p className="look-hint">Source: {width} × {height} px. Crop stays inside the source. Press Enter or leave a field to apply.</p>
         <div className="studio-crop-grid">
           {(["x", "y", "w", "h"] as const).map((key) => {

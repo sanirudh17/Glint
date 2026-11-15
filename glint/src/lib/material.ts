@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core';
 
+let lastPowerSaver:boolean|null=null;
 let revision = 0;
 let settled: Promise<void> = Promise.resolve();
 let requested: {glass:boolean;dark:boolean;system:boolean}|null=null;
@@ -28,9 +29,17 @@ async function updateMaterial(glass: boolean): Promise<void> {
     if (current !== revision) return;
   }
   try {
+    lastPowerSaver=await invoke<boolean>('window_power_saver').catch(()=>false);
     const applied = await invoke<boolean>('window_material', { glass, dark, system: document.documentElement.dataset.appearance === 'system' });
     if (current === revision) document.documentElement.dataset.glass = String(applied);
   } catch {
     if (current === revision) { document.documentElement.dataset.glass = 'false'; requested=null; }
   }
+}
+
+/** Focus alone must not recreate acrylic. Refresh only if power policy changed. */
+export async function refreshPowerMaterial(glass:boolean):Promise<void>{
+ const power=await invoke<boolean>('window_power_saver').catch(()=>false);
+ if(lastPowerSaver===power)return;
+ lastPowerSaver=power;requested=null;await applyMaterial(glass);
 }

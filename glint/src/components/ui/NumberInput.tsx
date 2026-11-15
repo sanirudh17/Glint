@@ -3,9 +3,9 @@ import { Minus, Plus } from "lucide-react";
 import "./ui.css";
 
 /** Numeric editing and stepping without the operating system's spinner chrome. */
-export function NumberInput({ value, onChange, min = 0, max, step = 1, unit, ariaLabel, disabled = false }: {
+export function NumberInput({ value, onChange, min = 0, max, step = 1, unit, ariaLabel, disabled = false, live = false }: {
   value: number; onChange: (value: number) => void; min?: number; max: number;
-  step?: number; unit?: string; ariaLabel: string; disabled?: boolean;
+  step?: number; unit?: string; ariaLabel: string; disabled?: boolean; live?: boolean;
 }) {
   const id = useId();
   const [draft, setDraft] = useState(String(value));
@@ -28,6 +28,8 @@ export function NumberInput({ value, onChange, min = 0, max, step = 1, unit, ari
       onChange={(e) => {
         const next = e.target.value; if (!/^-?\d*(?:\.\d*)?$/.test(next)) return;
         setDraft(next);
+        const number=next.trim()?Number(next):NaN;
+        if(live&&Number.isFinite(number)&&number>=min&&number<=max)onChange(clamp(number));
       }}
       onKeyDown={(e) => {
         if (e.key === "ArrowUp" || e.key === "ArrowDown") { e.preventDefault(); bump((e.key === "ArrowUp" ? 1 : -1) * (e.shiftKey ? 10 : 1)); }

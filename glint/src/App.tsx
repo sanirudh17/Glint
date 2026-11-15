@@ -1,4 +1,6 @@
-import { applyMaterial } from "./lib/material";
+import {finishDesktopPresentation} from './lib/desktopPresentation';
+import {getCurrentWindow} from "@tauri-apps/api/window";
+import { applyMaterial,refreshPowerMaterial } from "./lib/material";
 import { useEffect } from "react";
 import { RouterProvider } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
@@ -22,6 +24,8 @@ type CaptureComplete = {
 };
 
 export default function App() {
+  useEffect(()=>{if(!('__TAURI_INTERNALS__' in window))return;const un=listen('desktop-present',()=>{void finishDesktopPresentation();});return()=>{void un.then(f=>f());};},[]);
+  useEffect(()=>{if(!('__TAURI_INTERNALS__' in window))return;const un=getCurrentWindow().onFocusChanged(e=>{if(e.payload)void refreshPowerMaterial(useAppStore.getState().settings?.glass??true).then(()=>finishDesktopPresentation());});return()=>{void un.then(f=>f());};},[]);
   const glass = useAppStore(s=>s.settings?.glass);
   const theme = useAppStore(s=>s.settings?.theme);
   useEffect(()=>{ if(theme) void applyMaterial(glass ?? true); },[glass,theme]);

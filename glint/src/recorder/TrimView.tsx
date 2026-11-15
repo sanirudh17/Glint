@@ -1,3 +1,5 @@
+import {VideoCropTool} from './VideoCropTool';
+import {presentEditorFrame} from '../editor/firstFrame';
 import {prepareAnnotations} from "./videoAnnotations";
 import { WindowControls } from "../components/Titlebar";
 import { StudioPanel } from "./StudioPanel";
@@ -109,6 +111,7 @@ export function TrimView() {
   // applied when the previous seek finishes. This keeps a fast drag responsive instead
   // of flooding the decoder with seeks it silently drops.
   const draggingRef = useRef(false);
+  const [cropping,setCropping]=useState(false);
   const seekingRef = useRef(false);
   const pendingRef = useRef<number | null>(null);
 
@@ -178,6 +181,7 @@ export function TrimView() {
   const loadTarget = useCallback(() => {
     void flushSave();
     const generation = ++loadGeneration.current;
+    setCropping(false);seekingRef.current=false;pendingRef.current=null;
     setStudio(null); setExportMessage(null);
     setSelectedZoom(null);setPickingFocus(false);
     setSelectedMask(null);setDrawingMask(false);
@@ -285,6 +289,7 @@ export function TrimView() {
     const v = videoRef.current; if (!v) return;
     const clamped = Math.max(0, Math.min(t, duration || t));
     if (seekingRef.current) { pendingRef.current = clamped; return; }
+    if (Math.abs(v.currentTime-clamped)<0.001) { pendingRef.current=null; return; }
     seekingRef.current = true;
     try { v.currentTime = clamped; } catch { seekingRef.current = false; }
     const cv = camVideoRef.current; if (cv) { try { cv.currentTime = clamped; } catch { /* ignore */ } }
@@ -323,11 +328,13 @@ export function TrimView() {
     applyVideoSeek(clamped);
   }, [duration, applyVideoSeek]);
 
+  const stopForTimingChange=useCallback(()=>{videoRef.current?.pause();setPlaying(false);segCursorRef.current=0;pendingRef.current=null;},[]);
   const commit = useCallback((next: EditState, action='Change timing') => {
+    stopForTimingChange();clipsRef.current=next.clips;
     setUndoStack((s) => [...s.slice(-29), {...edit,action}]);
     setRedoStack([]);
     setEdit(next);
-  }, [edit]);
+  }, [edit,stopForTimingChange]);
   const doSplit = useCallback(() => {
     const next = splitClips(clips, playhead);
     commit({ ...edit, clips: next },'Split clip');
@@ -336,10 +343,19 @@ export function TrimView() {
     const c = next.find((cc) => playhead >= cc.start - EPS && playhead < cc.end - EPS);
     if (c) setSelectedId(c.id);
   }, [commit, edit, clips, playhead]);
-  const doDelete = useCallback(() => {
+  const deletePending=useRef(false);
+  const doDelete = useCallback(async () => {
     if (!selected || !selected.kept || keptCount(clips) <= 1) return; // can't delete a gap or the last block
-    commit({ ...edit, clips: setKept(clips, selected.id, false) },'Remove clip');
-  }, [commit, edit, clips, selected]);
+    if(deletePending.current)return;
+    deletePending.current=true;
+    try {
+      const generation=loadGeneration.current;
+      const bins=waveform?.slice(Math.floor(selected.start/duration*waveform.length),Math.ceil(selected.end/duration*waveform.length));
+      if(probe?.has_audio&&(!bins||bins.some(v=>v>.015))&&!await confirm('This clip contains recorded audio. Removing it also removes its sound. Remove this clip?',{title:'Remove video and audio?',kind:'warning',okLabel:'Remove clip',cancelLabel:'Keep clip'}))return;
+      if(generation!==loadGeneration.current||clipsRef.current!==clips)return;
+      commit({ ...edit, clips: setKept(clips, selected.id, false) },'Remove clip');
+    } finally {deletePending.current=false;}
+  }, [commit, edit, clips, selected,waveform,duration,probe?.has_audio]);
   const doReorder = useCallback((from: number, to: number) => {
     const next = reorderKept(clips, from, to);
     if (next !== clips) commit({ ...edit, clips: next },'Reorder clips');
@@ -366,13 +382,15 @@ export function TrimView() {
     commit({ ...edit, [which]: next },which==='fadeIn'?'Change fade in':'Change fade out');
   };
   const undo = useCallback(() => {
+    stopForTimingChange();
     const last=undoStack[undoStack.length-1];if(!last)return;const {action,...previous}=last;
     setRedoStack(r=>[...r,{...edit,action}]);setEdit(previous);setUndoStack(s=>s.slice(0,-1));useAppStore.getState().pushToast(`Undid: ${action??'Change timing'}`);
-  }, [edit,undoStack]);
+  }, [edit,undoStack,stopForTimingChange]);
   const redo = useCallback(() => {
+    stopForTimingChange();
     const last=redoStack[redoStack.length-1];if(!last)return;const {action,...next}=last;
     setUndoStack(u=>[...u,{...edit,action}]);setEdit(next);setRedoStack(r=>r.slice(0,-1));useAppStore.getState().pushToast(`Redid: ${action??'Change timing'}`);
-  }, [edit,redoStack]);
+  }, [edit,redoStack,stopForTimingChange]);
 
   // Playback engine: a rAF loop (~60 Hz) walks the KEPT segments in PLAY order. Within a
   // segment the <video> plays naturally; at a segment boundary it seeks to the next segment's
@@ -384,7 +402,7 @@ export function TrimView() {
     let raf = 0;
     const tick = () => {
       const v = videoRef.current;
-      if (v && !draggingRef.current) {
+      if (v && !draggingRef.current && !v.seeking) {
         const segs = keptSegments(clipsRef.current); // play order
         if (segs.length === 0) { v.pause(); setPlaying(false); return; }
         let idx = segCursorRef.current;
@@ -518,12 +536,13 @@ export function TrimView() {
       .catch(() => setExporting(null)); // a toast already surfaced; window stays open
   };
 
+  const materialTheme=useAppStore(state=>state.settings?.theme);
   const workspaceReady=!!probe&&!!studio&&mediaReady;
   useEffect(()=>{
-    if(!workspaceReady&&!err)return;
-    let second=0;const first=requestAnimationFrame(()=>{second=requestAnimationFrame(()=>{void invoke('recorder_trim_ready',{path:target?.path??null}).catch(()=>{});});});
-    return()=>{cancelAnimationFrame(first);cancelAnimationFrame(second);};
-  },[workspaceReady,err,target?.path]);
+    if(!materialTheme||(!workspaceReady&&!err))return;
+    let cancelled=false;void presentEditorFrame(()=>invoke('recorder_trim_ready',{path:target?.path??null}),()=>cancelled).catch(()=>{});
+    return()=>{cancelled=true;};
+  },[workspaceReady,err,target?.path,materialTheme]);
   if (err) return <div className="trim-root"><div className="trim-window-toolbar" data-tauri-drag-region><span>Studio</span><WindowControls onClose={requestClose}/></div><div className="trim-error" role="alert">{err}</div></div>;
 
   // Contents stay mounted (the <video> must be in the DOM to load/decode) but
@@ -552,6 +571,7 @@ export function TrimView() {
       </div>}
       <div className="trim-preview-row">
       <div className={`trim-stage${studio ? " studio-stage" : ""}`}>
+        {cropping&&probe&&<VideoCropTool video={videoRef} width={probe.width} height={probe.height} initialCrop={studio?.project.crop??undefined} onCancel={()=>setCropping(false)} onApply={crop=>{setStudio(data=>data&&({...data,project:{...data.project,crop}}));setCropping(false);}}/>}
         {studio && probe && <StudioPreview studio={studio} video={videoRef} camVideo={camVideoRef} cam={cam} width={probe.width} height={probe.height} pickingFocus={pickingFocus}
           onAim={setFocusAim} onFocus={focus=>{
             const t=videoRef.current?.currentTime??playhead;
@@ -570,11 +590,11 @@ export function TrimView() {
             src={src}
             preload="auto"
             onLoadedData={() => setMediaReady(true)}
-            onLoadedMetadata={() => setMediaReady(true)}
             onCanPlay={() => setMediaReady(true)}
             onSeeked={onSeeked}
             onPlay={() => setPlaying(true)}
-            onPause={() => setPlaying(false)}
+            onPause={() => {if(!videoRef.current?.ended)setPlaying(false);}}
+            onEnded={()=>{const v=videoRef.current;if(!v)return;const segs=keptSegments(clipsRef.current),next=segCursorRef.current+1;if(next<segs.length){segCursorRef.current=next;v.currentTime=segs[next].start;v.playbackRate=segs[next].speed;void v.play().catch(()=>setPlaying(false));}else setPlaying(false);}}
           />
         )}
         {cam && camSrc && probe && (
@@ -589,7 +609,7 @@ export function TrimView() {
       </div>
 
       {studio && probe && target && <StudioPanel key={target.path} onClose={requestClose} project={{...studio.project,...edit}} path={target.path} width={probe.width} height={probe.height}
-        time={playhead} duration={duration} events={studio.events} selectedZoom={selectedZoom} onSelectZoom={setSelectedZoom} focusAim={focusAim} pickingFocus={pickingFocus} onPickZoom={()=>{videoRef.current?.pause();setPlaying(false);setSelectedMask(null);setDrawingMask(false);setFocusAim(null);setPickingFocus(value=>!value);}}
+        onCrop={()=>{videoRef.current?.pause();setPlaying(false);setPickingFocus(false);setDrawingMask(false);setCropping(true);}} time={playhead} duration={duration} events={studio.events} selectedZoom={selectedZoom} onSelectZoom={setSelectedZoom} focusAim={focusAim} pickingFocus={pickingFocus} onPickZoom={()=>{videoRef.current?.pause();setPlaying(false);setSelectedMask(null);setDrawingMask(false);setFocusAim(null);setPickingFocus(value=>!value);}}
         selectedMask={selectedMask} onSelectMask={setSelectedMask} drawingMask={drawingMask} onDrawMask={()=>{videoRef.current?.pause();setPickingFocus(false);setSelectedMask(null);setDrawingMask(value=>!value);}} onSeek={time=>{scrub(time,'start');scrub(time,'end');}}
         saveStatus={saveStatus} exportMessage={exportMessage} exporting={exporting !== null} cam={cam} onCamChange={setCam}
         onChange={(patch,action) => {if(patch.clips)commit({...edit,clips:patch.clips},action);if(patch.zoomSegments){setPickingFocus(false);setFocusAim(null);}setStudio((data) => data && ({ ...data, project: { ...data.project, ...patch } }));}}

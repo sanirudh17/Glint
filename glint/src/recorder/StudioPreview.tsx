@@ -51,12 +51,15 @@ export function StudioPreview({ studio:inputStudio, video, camVideo, cam, width,
   }, [background]);
   useEffect(() => {
     let raf = 0;
+    let lastPaintedTime=NaN;
     const maskedSource=document.createElement('canvas'),maskScratch=document.createElement('canvas'),stillBackground=document.createElement('canvas');
     let maskedTime=NaN,maskedCamTime=NaN;
     const tick = () => {
       const canvas = ref.current, player = video.current, v = still ?? player;
       const time=still?(previewTime??0):player?.currentTime??0;
+      if(time===lastPaintedTime && !player?.seeking){raf=requestAnimationFrame(tick);return;}
       if (canvas && v && (still?.complete || player && player.readyState >= 2 && !player.seeking)) {
+        lastPaintedTime=time;
         const { look, crop } = studio.project;
         const { layout: l, scale, width: w, height: h } = studioLayout(width, height, crop, look, 960);
         if (canvas.width !== w || canvas.height !== h) { canvas.width = w; canvas.height = h; }

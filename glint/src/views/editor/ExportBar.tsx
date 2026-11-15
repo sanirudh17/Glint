@@ -88,7 +88,7 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
         // so this fires on pointer-down (like the HUD/Library drag). onClick
         // fires on release, when there's no held button to attach a drag to —
         // which is why this used to do nothing.
-        onPointerDown={onDrag}
+        onPointerDown={event=>{if(event.button!==0)return;event.preventDefault();void onDrag();}}
         title="Press and drag onto any app"
       >
         <Share2 size={16} strokeWidth={1.5} /> Drag

@@ -39,11 +39,13 @@ let blankDragIcon: string | null = null;
 void invoke<string>("drag_blank_icon").then((p) => { blankDragIcon = p; }).catch(() => {});
 
 /** Drag the real file out into any app (blank drag icon → just the cursor). */
+let dragging=false;
 export async function dragOut(path: string): Promise<void> {
+  if(dragging)return;dragging=true;
   try {
     const attachment=await invoke<string>('drag_prepare',{path});
     await emit('capture-dragging',true);
-    await startDrag({ item: [attachment], icon: blankDragIcon ?? attachment, mode: "copy" });
+    await new Promise<void>((resolve,reject)=>{void startDrag({ item: [attachment], icon: blankDragIcon ?? attachment, mode: "copy" },()=>resolve()).catch(reject);});
   } catch(error) {useAppStore.getState().pushToast(`Couldn't attach the image: ${String(error)}`);}
-  finally{void emit('capture-dragging',false).catch(()=>{});}
+  finally{dragging=false;void emit('capture-dragging',false).catch(()=>{});}
 }

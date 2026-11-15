@@ -1,5 +1,5 @@
 import {expect,it} from 'vitest';
-import {activitySpans,editSpans,entrancePose,ENTRANCES} from './studioPolish';
+import {activitySpans,quietActivity,editSpans,entrancePose,ENTRANCES} from './studioPolish';
 import {ZOOM_EASES,easeValue} from './studioEffects';
 it('all easing presets are bounded, monotone, and meet both endpoints',()=>{for(const {value} of ZOOM_EASES){expect(easeValue(0,value)).toBe(0);expect(easeValue(1,value)).toBe(1);let prev=0;for(let i=0;i<=100;i++){const v=easeValue(i/100,value);expect(v).toBeGreaterThanOrEqual(prev);expect(v).toBeLessThanOrEqual(1);prev=v;}}});
 it('entrances end at the same untransformed frame and none is backwards compatible',()=>{for(const {value} of ENTRANCES)expect(entrancePose(value,1)).toEqual({opacity:1,x:0,y:0,scale:1});expect(entrancePose(undefined,0).opacity).toBe(1);expect(entrancePose('fade',0).opacity).toBe(0);});
@@ -7,3 +7,11 @@ it('removing a caption span preserves reordered source time and audio speeds',()
 it('does not infer idle spans without captured activity and groups real typing only',()=>{expect(activitySpans([{kind:'key',t:1},{kind:'key',t:5}],8,'typing')).toEqual([]);expect(activitySpans(Array.from({length:8},(_,i)=>({kind:'key' as const,t:1+i*.2,down:true})),5,'typing')).toHaveLength(1);});
 it('preserves short retained spans and close reorder ranks when cutting',()=>{const clips=[{id:1,start:0,end:1,kept:true,speed:1,order:1.00001},{id:2,start:1,end:2,kept:true,speed:2,order:1}];expect(editSpans(clips,[],'remove')).toBe(clips);const next=editSpans(clips,[{start:.01,end:.99}],'remove').filter(c=>c.kept).sort((a,b)=>a.order-b.order);expect(next.map(c=>c.start)).toEqual([1,0,.99]);expect(next.reduce((sum,c)=>sum+c.end-c.start,0)).toBeCloseTo(1.02);});
 it('treats repeated stationary cursor samples as idle rather than movement',()=>{expect(activitySpans(Array.from({length:10},(_,t)=>({kind:'cursor' as const,t,x:20,y:40})),10,'idle')).toEqual([{start:.75,end:9.25}]);expect(activitySpans([],10,'idle')).toEqual([]);});
+
+it('automatic speed changes leave narration between quiet intervals untouched',()=>{
+ const spans=quietActivity([{start:0,end:20}],[{start:2,end:4},{start:12,end:15}]);
+ const changed=editSpans([{id:1,start:0,end:20,kept:true,speed:1,order:0}],spans,'speed');
+ expect(changed.filter(c=>c.speed===2).map(c=>[c.start,c.end])).toEqual([[2,4],[12,15]]);
+ expect(changed.find(c=>c.start===4&&c.end===12)?.speed).toBe(1);
+ expect(quietActivity([{start:0,end:20}],[])).toEqual([]);
+});

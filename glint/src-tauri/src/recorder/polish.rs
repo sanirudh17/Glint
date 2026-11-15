@@ -49,11 +49,14 @@ pub async fn studio_analyze_silence(app:tauri::AppHandle,path:String)->Result<Ve
  if probe.duration_secs>1800.{return Err("Audio analysis supports recordings up to 30 minutes.".into());}
  let job=Job::begin()?;let binary=ffmpeg(&app)?;
  tauri::async_runtime::spawn_blocking(move||{let _job=&job;let workspace=crate::recorder::scene_commands::Workspace::temporary()?;let pcm=workspace.0.join("audio.pcm");notify(&app,"Reading audio",0.);
- run({let mut c=command(&binary);c.args(["-y","-v","error","-i",&path,"-vn","-ac","1","-ar","8000","-t","1800","-f","s16le"]).arg(&pcm);c},&job.0,std::time::Duration::from_secs(180))?;
- let mut bytes=Vec::new();std::fs::File::open(pcm).map_err(|e|e.to_string())?.take(28_800_001).read_to_end(&mut bytes).map_err(|e|e.to_string())?;if bytes.len()>28_800_000{return Err("Audio analysis supports recordings up to 30 minutes.".into());}
- let samples:Vec<_>=bytes.chunks_exact(2).map(|v|i16::from_le_bytes([v[0],v[1]])).collect();let out=silence_spans(&samples,8000,0.01,1.0);notify(&app,"Audio analyzed",100.);Ok(out)
+ run({let mut c=command(&binary);c.args(["-y","-v","error","-i",&path,"-vn","-ac","2","-ar","8000","-t","1800","-f","s16le"]).arg(&pcm);c},&job.0,std::time::Duration::from_secs(180))?;
+ let mut bytes=Vec::new();std::fs::File::open(pcm).map_err(|e|e.to_string())?.take(57_600_001).read_to_end(&mut bytes).map_err(|e|e.to_string())?;if bytes.len()>57_600_000{return Err("Audio analysis supports recordings up to 30 minutes.".into());}
+ let samples=strongest_channel_pcm(&bytes);let out=silence_spans(&samples,8000,0.001,1.5);notify(&app,"Audio analyzed",100.);Ok(out)
  }).await.map_err(|e|e.to_string())?
 }
 #[tauri::command]
 pub fn studio_copy_video(path:String)->Result<(),String>{let path=Path::new(&path);if !path.is_file()||!path.extension().is_some_and(|e|e.eq_ignore_ascii_case("mp4")||e.eq_ignore_ascii_case("gif")){return Err("Choose an existing MP4 or GIF.".into());}crate::clipboard::copy_file(path)}
 #[cfg(test)]mod tests{use super::*;#[test]fn silence_keeps_breathing_room_and_short_pauses(){let mut audio=vec![8000;8000];audio.extend(vec![0;16000]);audio.extend(vec![8000;8000]);let spans=silence_spans(&audio,8000,0.01,1.);assert_eq!(spans.len(),1);assert!((spans[0].start-1.15).abs()<0.001);assert!((spans[0].end-2.85).abs()<0.001);}#[test]fn invalid_caption_never_reaches_export(){let c=Caption{id:"1".into(),start:1.,end:0.5,text:"Hello".into(),raster:None};assert!(validate_captions(&[c],5.).is_err());}}
+
+fn strongest_channel_pcm(bytes:&[u8])->Vec<i16>{bytes.chunks_exact(4).map(|v|{let a=i16::from_le_bytes([v[0],v[1]]);let b=i16::from_le_bytes([v[2],v[3]]);if i32::from(a).abs()>=i32::from(b).abs(){a}else{b}}).collect()}
+#[cfg(test)]mod speech_safety_tests{use super::*;#[test]fn opposing_stereo_and_quiet_voice_are_not_classified_as_silent(){let bytes:Vec<u8>=(0..16000).flat_map(|_|[100i16.to_le_bytes(),(-100i16).to_le_bytes()].concat()).collect();let samples=strongest_channel_pcm(&bytes);assert!(silence_spans(&samples,8000,0.001,1.5).is_empty());}}

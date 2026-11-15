@@ -1,11 +1,11 @@
-import { useState } from "react";
+import { useRef,useState } from "react";
 import { ImagePlus } from "lucide-react";
 import { Select, ColorControl, ControlDisclosure,Switch } from "../components/ui";
 import { GRADIENTS, type GradientStop } from "../editor/gradients";
 import { GradientControls } from "./GradientControls";
 import { cloneLook, type AspectId, type LookConfig } from "./model";
 import { savePreset, useLookPresets } from "./presets";
-import { OUTPUT_SIZES,autoBalance,watermarkImage,exportDimensions,originalExportSizing } from './sizing';
+import { OUTPUT_SIZES,autoBalance,watermarkImage,exportDimensions,originalExportSizing,resizeOutputSize } from './sizing';
 import { NumberInput } from '../components/ui';
 
 export function LookControls({ look, onChange, checkpoint = () => {}, video = false, onSample, dimensions, fixedOutput=false }: {
@@ -14,14 +14,18 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
   dimensions?:{width:number;height:number}; fixedOutput?:boolean;
 }) {
   const presets = useLookPresets();
+  const [customSize,setCustomSize]=useState(false);
+  const outputRatio=useRef<number|null>(null);
   const [name, setName] = useState("");
   const [presetId, setPresetId] = useState("");
   const [error, setError] = useState<string | null>(null);
-  const change = (patch: Partial<LookConfig>) => { checkpoint(); setPresetId(""); onChange(patch); };
+  const change = (patch: Partial<LookConfig>) => { if('outputSize' in patch&&patch.outputSize===undefined){setCustomSize(false);outputRatio.current=null;}checkpoint(); setPresetId(""); onChange({...(video?{enabled:true}:{}),...patch}); };
   const bg = look.background;
   const aspects: AspectId[] = ["auto", "1:1", "16:9", "4:3", "9:16", "4:5", "3:2", "1.91:1"];
   const wm=look.watermark;
   const output=exportDimensions(dimensions?.width??1920,dimensions?.height??1080,look);
+  const ratio=outputRatio.current??output.width/output.height;
+  const resizeOutput=(axis:'width'|'height',value:number)=>{outputRatio.current=ratio;change({outputSize:resizeOutputSize(output,axis,value,ratio)});};
   const setWatermark=(text:string,color=wm?.color??'#ffffff')=>change({watermark:text?{text,color,size:wm?.size??100,opacity:wm?.opacity??.75,position:wm?.position??'bottom-right',...watermarkImage(text,color)}:undefined});
   return <section className="look-controls" aria-label="Look" data-editor-control>
     <h3 className="studio-section-title">Look</h3>
@@ -48,7 +52,7 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
         }} />
     </div></div>
     {bg.type === "solid" && <div className="look-row"><span className="look-label">Color</span><div className="look-control"><ColorControl ariaLabel="Background color" value={bg.color} onChange={(color) => change({ background: { type: "solid", color } })} /></div></div>}
-    {bg.type === "gradient" && <GradientControls background={bg} checkpoint={checkpoint} onSample={onSample} onChange={background=>{setPresetId('');onChange({background});}}/>}
+    {bg.type === "gradient" && <GradientControls background={bg} checkpoint={checkpoint} onSample={onSample} onChange={background=>{setPresetId('');onChange({...(video?{enabled:true}:{}),background});}}/>}
     {video&&bg.type==='gradient'&&<ControlDisclosure title="Background motion"><div className="look-row"><span className="look-label">Slow gradient drift</span><Switch ariaLabel="Animate gradient" checked={!!bg.animationSeconds} onChange={enabled=>change({background:{...bg,animationSeconds:enabled?30:undefined}})}/></div>{!!bg.animationSeconds&&<div className="look-row"><span className="look-label">Cycle</span><NumberInput ariaLabel="Gradient animation cycle" min={12} max={120} unit="s" value={bg.animationSeconds} onChange={animationSeconds=>change({background:{...bg,animationSeconds}})}/></div>}</ControlDisclosure>}
     {bg.type === "image" && <label className="look-image-picker"><ImagePlus size={16} strokeWidth={1.6} />{bg.dataUrl ? "Replace background image" : "Choose background image"}
       <input aria-label="Background image" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => {
@@ -70,14 +74,15 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
       }} />
     </label>}
     {(["padding", "radius", "shadow"] as const).map((key) => <LookSlider key={key} label={key[0].toUpperCase() + key.slice(1)} // taste-skill-ignore: media shadow strength control
-      ariaLabel={key} value={look[key]} unit="%" checkpoint={checkpoint} onChange={(value) => { setPresetId(""); onChange({ [key]: value }); }} />)}
+      ariaLabel={key} value={look[key]} unit="%" checkpoint={checkpoint} onChange={(value) => { setPresetId(""); onChange({ ...(video?{enabled:true}:{}),[key]: value }); }} />)}
     <button type="button" className="g-btn g-btn-subtle g-btn-sm" title="Use equal margins around the screenshot; clear fixed output size" onClick={()=>change(autoBalance(dimensions?.width??1,dimensions?.height??1))}>Auto Balance</button>
     {!fixedOutput&&<><div className="look-row"><span className="look-label">Aspect</span><div className="look-control"><Select portal ariaLabel="Export aspect" value={look.aspect}
       options={aspects.map((aspect) => ({ value: aspect, label: aspect === "auto" ? "Original" : aspect }))}
       onChange={(aspect) => change({ aspect: aspect as AspectId,outputSize:undefined })} /></div></div>
-    <div className="look-preset-field"><span className="look-label">Output size</span><div><Select portal ariaLabel="Output size preset" value={look.outputSize?OUTPUT_SIZES.find(s=>s.width===look.outputSize?.width&&s.height===look.outputSize?.height)?.id??'custom':''}
-      options={[{value:'',label:'Original resolution'},...OUTPUT_SIZES.map(s=>({value:s.id,label:s.label})),...(look.outputSize?[{value:'custom',label:'Custom size'}]:[])]}
-      onChange={id=>{const size=OUTPUT_SIZES.find(s=>s.id===id);change({enabled:true,...(size?{outputSize:{width:size.width,height:size.height}}:originalExportSizing())});}}/></div></div>
+    <div className="look-preset-field"><span className="look-label">Output size</span><div><Select portal ariaLabel="Output size preset" value={customSize?'custom':look.outputSize?OUTPUT_SIZES.find(s=>s.width===look.outputSize?.width&&s.height===look.outputSize?.height)?.id??'custom':''}
+      options={[{value:'',label:video?'Original video (no border)':'Original resolution'},...OUTPUT_SIZES.map(s=>({value:s.id,label:s.label})),{value:'custom',label:'Custom size'}]}
+      onChange={id=>{outputRatio.current=null;setCustomSize(id==='custom');if(id==='custom'){change({enabled:true,outputSize:{width:output.width,height:output.height}});return;}const size=OUTPUT_SIZES.find(s=>s.id===id);change(size?{enabled:true,outputSize:{width:size.width,height:size.height}}:{...originalExportSizing(),...(video?{enabled:false,padding:0,radius:0,shadow:0}:{})});}}/></div></div>
+    {video&&look.outputSize&&<div className="look-output-dimensions"><label><span>Width</span><NumberInput live ariaLabel="Export width" min={Math.max(16,Math.ceil(16*ratio))} max={Math.min(4096,Math.floor(4096*ratio))} value={look.outputSize.width} onChange={width=>resizeOutput('width',width)}/></label><label><span>Height</span><NumberInput live ariaLabel="Export height" min={Math.max(16,Math.ceil(16/ratio))} max={Math.min(4096,Math.floor(4096/ratio))} value={look.outputSize.height} onChange={height=>resizeOutput('height',height)}/></label></div>}
     {look.outputSize&&<p className="look-hint">{look.outputSize.width} × {look.outputSize.height} px</p>}
     </>}
     <ControlDisclosure title="Advanced look">

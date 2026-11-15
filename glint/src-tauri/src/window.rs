@@ -1,6 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use tauri::{AppHandle, Manager};
 static MAIN_READY: AtomicBool = AtomicBool::new(false);
+static EDITORS_PREWARMED: AtomicBool = AtomicBool::new(false);
 static TRAY_REOPEN_QUEUED: AtomicBool = AtomicBool::new(false);
 
 /// Run after the tray/menu callback releases mouse capture and foreground state.
@@ -43,6 +44,13 @@ pub fn main_present(window: tauri::WebviewWindow) -> Result<(), String> {
     Ok(())
 }
 
+/// Hidden WebViews must not compete with Home's first compositor submission.
+pub fn prewarm_editors_after_present(app:&AppHandle){
+    if EDITORS_PREWARMED.swap(true,Ordering::SeqCst){return;}
+    let app=app.clone();
+    std::thread::spawn(move||{crate::editor::window::prewarm(&app);crate::recorder::windows::prewarm_trim_window(&app);});
+}
+
 /// Show, unminimize and focus the main window, creating focus from any context.
 pub fn focus_main(app: &AppHandle) {
     if !MAIN_READY.load(Ordering::SeqCst) {
@@ -56,6 +64,7 @@ pub fn focus_main(app: &AppHandle) {
             let _ = win.set_focus();
             return;
         }
+        crate::material::prepare_reveal(&win);
         disable_transitions(&win);
         // Synchronize Tao's visible flag before restoring. Restoring a hidden
         // minimized window first invokes SW_RESTORE followed by SW_HIDE in Tao,
@@ -64,6 +73,7 @@ pub fn focus_main(app: &AppHandle) {
         if minimized {
             let _ = win.unminimize();
         }
+        crate::material::request_paint(&win);
         let _ = win.set_focus();
     }
 }
@@ -254,4 +264,12 @@ pub fn window_toggle_maximize(window: tauri::WebviewWindow) -> Result<(), String
         window.maximize()
     }
     .map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+pub fn speaker_notes_present(window: tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() != "rec-notes" { return Err("Only speaker notes can present this window".into()); }
+    crate::material::prepare_reveal(&window);
+    window.show().map_err(|e|e.to_string())?;
+    window.set_focus().map_err(|e|e.to_string())
 }
