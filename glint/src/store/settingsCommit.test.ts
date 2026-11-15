@@ -71,6 +71,15 @@ beforeEach(() => {
 });
 
 describe("settings optimistic write-through", () => {
+  it("updates capture-on-release immediately and rolls back on backend rejection",async()=>{
+    useAppStore.setState({settings:seed({capture_on_release:false})});
+    await useAppStore.getState().setCaptureOnRelease(true);
+    expect(saveSettingMock).toHaveBeenCalledWith('capture_on_release',true);
+    expect(useAppStore.getState().settings?.capture_on_release).toBe(true);
+    saveSettingMock.mockRejectedValueOnce(new Error('rejected'));
+    await useAppStore.getState().setCaptureOnRelease(false);
+    expect(useAppStore.getState().settings?.capture_on_release).toBe(true);
+  });
   it("applies a toggle instantly and keeps it after backend success", async () => {
     const p = useAppStore.getState().setAutoSave(false);
     // Optimistic: visible before the invoke round-trip resolves.

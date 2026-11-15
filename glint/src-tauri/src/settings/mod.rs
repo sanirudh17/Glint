@@ -64,6 +64,8 @@ pub struct Settings {
     #[serde(default="default_ocr_engine")]
     pub ocr_engine: String,
     pub open_in_editor: bool,
+    #[serde(default)]
+    pub capture_on_release: bool,
     pub explorer_menu_enabled: bool,
     pub record_system_audio: bool,
     pub record_microphone: bool,
@@ -134,6 +136,7 @@ impl Default for Settings {
             auto_name_captures: false,
             ocr_engine: default_ocr_engine(),
             open_in_editor: false,
+            capture_on_release: false,
             explorer_menu_enabled: true,
             record_system_audio: true,
             record_microphone: false,
@@ -184,6 +187,9 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         "index_screenshot_text"=>{s.index_screenshot_text=value.as_bool().ok_or("index_screenshot_text must be boolean")?;}
         "ocr_engine"=>{let engine=value.as_str().ok_or("OCR engine must be text")?;if !matches!(engine,"tesseract"|"ppocrv6-small"|"ppocrv6-medium"){return Err("Unknown OCR engine".into());}s.ocr_engine=engine.into();}
         "auto_name_captures"=>{let _=value.as_bool().ok_or("auto_name_captures must be boolean")?;s.auto_name_captures=false;}
+        "capture_on_release" => {
+            s.capture_on_release=value.as_bool().ok_or("capture_on_release must be boolean")?;
+        }
         "open_in_editor" => {
             s.open_in_editor = value.as_bool().ok_or("open_in_editor must be boolean")?;
         }
@@ -397,6 +403,16 @@ mod tests {
         assert!(!s.open_in_editor);
         apply_update(&mut s, "open_in_editor", json!(true)).unwrap();
         assert!(s.open_in_editor);
+    }
+
+    #[test]
+    fn capture_on_release_is_opt_in_and_survives_settings_roundtrip(){
+        let mut s=Settings::default();assert!(!s.capture_on_release);
+        let mut old=serde_json::to_value(&s).unwrap();old.as_object_mut().unwrap().remove("capture_on_release");
+        assert!(!serde_json::from_value::<Settings>(old).unwrap().capture_on_release);
+        apply_update(&mut s,"capture_on_release",json!(true)).unwrap();
+        assert!(serde_json::from_str::<Settings>(&serde_json::to_string(&s).unwrap()).unwrap().capture_on_release);
+        assert!(apply_update(&mut s,"capture_on_release",json!("true")).is_err());
     }
 
     #[test]

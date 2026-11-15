@@ -26,7 +26,7 @@ struct Clock { base: f64, paused_at:f64, accepting: bool, anchor: Option<(Instan
 pub struct EventClock(Arc<Mutex<Clock>>);
 impl EventClock {
     pub fn arm(&self) {self.0.lock().unwrap().accepting=true;}
-    pub fn sync(&self, pts: f64) { let mut c=self.0.lock().unwrap(); if !c.accepting {return;} c.anchor=Some((Instant::now(), pts.max(0.0))); }
+    pub fn sync(&self, pts: f64) { let mut c=self.0.lock().unwrap(); if !c.accepting || c.anchor.is_some() || !pts.is_finite() {return;} c.anchor=Some((Instant::now(), pts.max(0.0))); }
     pub fn current(&self)->f64 { self.stamp().unwrap_or_else(||{let c=self.0.lock().unwrap();c.paused_at.max(c.base)}) }
     pub fn stamp(&self) -> Option<f64> { let c=self.0.lock().unwrap(); c.anchor.map(|(start, pts)| c.base+pts+start.elapsed().as_secs_f64()) }
     pub fn pause(&self) { let mut c=self.0.lock().unwrap();if let Some((start,pts))=c.anchor {c.paused_at=c.base+pts+start.elapsed().as_secs_f64();}c.accepting=false;c.anchor=None; }
@@ -178,6 +178,14 @@ pub fn studio_save(path:String,project:serde_json::Value)->Result<(),String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+    #[test]
+    fn later_encoder_reports_cannot_rewind_or_jump_cursor_time(){
+        let clock=EventClock::default();clock.arm();clock.sync(f64::NAN);assert!(clock.stamp().is_none());clock.sync(5.);
+        let before=clock.stamp().unwrap();clock.sync(4.9);assert!(clock.stamp().unwrap()>=before);
+        clock.sync(9.);assert!(clock.stamp().unwrap()<6.);
+        clock.pause();assert!(clock.stamp().is_none());clock.sync(80.);assert!(clock.stamp().is_none());
+        clock.finish_span(8.);clock.arm();clock.sync(0.);assert!((clock.stamp().unwrap()-8.).abs()<0.05);
+    }
     #[test] fn pause_excludes_wall_time() {let c=EventClock::default();assert!(c.stamp().is_none());c.arm();c.sync(1.0);assert!(c.stamp().unwrap()>=1.0);c.pause();assert!(c.stamp().is_none());c.finish_span(2.25);c.arm();c.sync(0.5);assert!((c.stamp().unwrap()-2.75).abs()<0.01);}
     #[test] fn projects_start_versioned_and_styled() {let p=initial_project(60.0);assert_eq!(p["version"],1);assert_eq!(p["look"]["enabled"],true);assert_eq!(p["clips"][0]["end"],60.0);}
     #[test] fn importing_a_video_preserves_source_and_reopens_edits() {

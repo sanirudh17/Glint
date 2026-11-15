@@ -32,6 +32,7 @@ export type OverlayMeta = {
   height: number;
   scale: number;
   mode: CaptureMode;
+  captureOnRelease?: boolean;
   /** Window rects in logical/CSS px. */
   windows: WindowRect[];
   /**
@@ -57,6 +58,7 @@ interface RawOverlayMeta {
   height: number;
   scale: number;
   mode: CaptureMode;
+  capture_on_release?: boolean;
   windows: WindowRect[];
   cursor_x: number | null;
   cursor_y: number | null;
@@ -69,6 +71,7 @@ function mapMeta(d: RawOverlayMeta): OverlayMeta {
     height: d.height,
     scale: d.scale,
     mode: d.mode,
+    captureOnRelease:d.capture_on_release??false,
     windows: d.windows,
     cursorX: d.cursor_x,
     cursorY: d.cursor_y,

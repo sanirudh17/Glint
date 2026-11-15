@@ -24,6 +24,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { normalizeRect, type Rect } from "./modes";
+import {selectionOnRelease} from "./captureRelease";
 import { commitCapture } from "../lib/captureIpc";
 import { Crosshair } from "./Crosshair";
 import { DimensionsBadge } from "./DimensionsBadge";
@@ -70,6 +71,7 @@ type DragMode =
 
 export function SelectionLayer({
   monitorId,
+  captureOnRelease=false,
   scale,
   imageDataUrl,
   loupePatch,
@@ -77,6 +79,7 @@ export function SelectionLayer({
   cursorY,
 }: {
   monitorId: number;
+  captureOnRelease?:boolean;
   scale: number;
   /** Null until the frozen-frame leg lands — chrome renders first, loupe after. */
   imageDataUrl: string | null;
@@ -180,7 +183,7 @@ export function SelectionLayer({
 
   function onLayerPointerDown(e: React.PointerEvent<HTMLDivElement>) {
     // Only handle direct clicks on the layer itself (not bubbled from handles/rect)
-    if (e.target !== layerRef.current) return;
+    if (e.button!==0 || e.target !== layerRef.current) return;
     e.preventDefault();
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     drag.current = { kind: "draw", startX: e.clientX, startY: e.clientY };
@@ -239,14 +242,19 @@ export function SelectionLayer({
   }
 
   function onLayerPointerUp(e: React.PointerEvent<HTMLDivElement>) {
+    if(e.button!==0)return;
     e.preventDefault();
+    const selection=selectionOnRelease(drag.current,{x:e.clientX,y:e.clientY},captureOnRelease,e.button);
     drag.current = null;
     setInteracting(false);
+    if(selection){setRect(selection);void commitCapture(selection,monitorId);}
   }
+  function onLayerPointerCancel(){drag.current=null;setInteracting(false);setRect(null);}
 
   // ── Selection rect: start move ───────────────────────────────────────────────
 
   function onRectPointerDown(e: React.PointerEvent<HTMLDivElement>) {
+    if(e.button!==0)return;
     e.preventDefault();
     e.stopPropagation();
     if (!rect) return;
@@ -259,6 +267,7 @@ export function SelectionLayer({
   // ── Handle: start resize ─────────────────────────────────────────────────────
 
   function onHandlePointerDown(e: React.PointerEvent<HTMLDivElement>, handle: HandleDef) {
+    if(e.button!==0)return;
     e.preventDefault();
     e.stopPropagation();
     if (!rect) return;
@@ -303,6 +312,7 @@ export function SelectionLayer({
       onPointerDown={onLayerPointerDown}
       onPointerMove={onLayerPointerMove}
       onPointerUp={onLayerPointerUp}
+      onPointerCancel={onLayerPointerCancel}
       tabIndex={-1}
     >
       {/* ── Task 10: Crosshair guides (visible before/without an active selection) */}
@@ -315,6 +325,7 @@ export function SelectionLayer({
           onHandlePointerDown={onHandlePointerDown}
           onDoubleClick={onRectDoubleClick}
           showHint={rect.w > 40 && rect.h > 40}
+          captureOnRelease={captureOnRelease}
         />
       )}
 
@@ -350,6 +361,7 @@ interface SelectionBoxProps {
   onHandlePointerDown: (e: React.PointerEvent<HTMLDivElement>, h: HandleDef) => void;
   onDoubleClick: (e: React.MouseEvent) => void;
   showHint: boolean;
+  captureOnRelease:boolean;
 }
 
 function SelectionBox({
@@ -358,6 +370,7 @@ function SelectionBox({
   onHandlePointerDown,
   onDoubleClick,
   showHint,
+  captureOnRelease,
 }: SelectionBoxProps) {
   const { x, y, w, h } = rect;
 
@@ -395,7 +408,7 @@ function SelectionBox({
           {/* Confirm hint — shown only once the selection is large enough */}
           {showHint && (
             <div className="sl-confirm-hint">
-              ↵ Enter
+              {captureOnRelease?'Release to capture':'Enter to capture'}
             </div>
           )}
         </div>

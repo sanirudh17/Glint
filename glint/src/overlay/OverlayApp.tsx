@@ -149,6 +149,7 @@ export function OverlayApp() {
         <div className="ov-mode-layer ov-active">
           {chrome.mode === "area" && (
             <SelectionLayer
+              captureOnRelease={chrome.captureOnRelease??false}
               monitorId={monitorId}
               scale={chrome.scale}
               imageDataUrl={frame?.imageDataUrl ?? null}

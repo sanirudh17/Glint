@@ -31,6 +31,7 @@ pub struct OverlayMeta {
     pub height: u32,
     pub scale: f64,
     pub mode: String,
+    pub capture_on_release: bool,
     pub windows: Vec<WindowRectDto>,
     /// Cursor position in the overlay's logical/CSS px space at the moment the
     /// overlay loads, or None if the OS position couldn't be read. The webview
@@ -76,6 +77,7 @@ pub fn capture_overlay_meta(
         height,
         scale,
         mode: mode_str,
+        capture_on_release:app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().capture_on_release,
         windows,
         cursor_x,
         cursor_y,
@@ -135,6 +137,7 @@ pub struct OverlayData {
     pub height: u32,
     pub scale: f64,
     pub mode: String,
+    pub capture_on_release: bool,
     pub image_data_url: String,
     pub windows: Vec<WindowRectDto>,
     /// Cursor position in the overlay's logical/CSS px space at the moment the
@@ -223,6 +226,7 @@ pub async fn capture_overlay_data(
         height,
         scale,
         mode: mode_str,
+        capture_on_release:app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().capture_on_release,
         image_data_url,
         windows,
         cursor_x,
@@ -359,13 +363,7 @@ pub(super) fn finish_commit(
         (dest, true)
     } else {
         let dir = app.path().app_local_data_dir().map_err(|e| e.to_string())?.join("tmp");
-        std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-        let ts = std::time::SystemTime::now()
-            .duration_since(std::time::UNIX_EPOCH)
-            .unwrap()
-            .as_millis();
-        let dest = dir.join(format!("glint-{ts}.png"));
-        std::fs::write(&dest, &png).map_err(|e| e.to_string())?;
+        let dest=super::files::write_unsaved(&dir,&png,open_in_editor).map_err(|e|e.to_string())?;
         (dest, false)
     };
     let path_str = path.to_string_lossy().to_string();
@@ -403,12 +401,12 @@ pub(super) fn finish_commit(
             rgba: cropped.clone(),
         });
 
-    // Also push into the accumulating tray. Use the full-resolution capture PNG for
+    // Only Quick Access captures enter its visible stack. Use the full-resolution capture PNG for
     // the card preview (already encoded above) so it stays crisp when the card scales
     // it — a downscaled thumb blurs under the card's object-fit: cover. Full pixels
     // are re-read from disk when an action needs them. Evicting the oldest past the
     // cap deletes its temp file (never a saved Library file).
-    {
+    if !open_in_editor {
         // Card preview uses the full-resolution capture PNG (already encoded above) — it
         // stays crisp under the card's object-fit: cover. NOTE: do NOT resize here to
         // shrink the base64 — resizing a full-screen frame on this critical path (before

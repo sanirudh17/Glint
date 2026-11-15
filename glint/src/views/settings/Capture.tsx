@@ -27,6 +27,8 @@ export function Capture() {
   const setJpegQuality = useAppStore((s) => s.setJpegQuality);
   const setIncludeCursor = useAppStore((s) => s.setIncludeCursor);
   const setCaptureDelay = useAppStore((s) => s.setCaptureDelay);
+  const setOpenInEditor=useAppStore(s=>s.setOpenInEditor);
+  const setCaptureOnRelease=useAppStore(s=>s.setCaptureOnRelease);
   const setHideDesktopIcons=useAppStore(s=>s.setHideDesktopIcons);
   const setQuickAccessAutoClose=useAppStore(s=>s.setQuickAccessAutoClose);
   const pushToast=useAppStore(s=>s.pushToast);
@@ -35,7 +37,7 @@ export function Capture() {
   return (
     <Section
       title="Capture"
-      description="Format and quality settings for screenshots."
+      description="Screenshot format, quality, and capture behavior."
     >
       <Field label="Image format" hint="File format for saved screenshots.">
         <Select
@@ -64,6 +66,12 @@ export function Capture() {
           options={DELAY_OPTIONS}
           onChange={(v) => void setCaptureDelay(Number(v) as 3 | 5 | 10)}
         />
+      </Field>
+      <Field label="Capture on mouse release" hint="Capture as soon as you finish drawing an area. Turn off to adjust the selection before pressing Enter.">
+        <Switch ariaLabel="Capture on mouse release" checked={settings?.capture_on_release??false} onChange={on=>void setCaptureOnRelease(on)}/>
+      </Field>
+      <Field label="Open in editor after capture" hint="Open screenshots in the editor automatically. Turn off to show Quick Access instead.">
+        <Switch ariaLabel="Open in editor after capture" checked={settings?.open_in_editor??false} onChange={on=>void setOpenInEditor(on)}/>
       </Field>
       <Field label="Hide desktop icons" hint="Hide icons while grabbing a screenshot or scrolling strip, then restore their previous visibility.">
         <Switch ariaLabel="Hide desktop icons" checked={settings?.hide_desktop_icons??false} onChange={on=>void setHideDesktopIcons(on)}/>

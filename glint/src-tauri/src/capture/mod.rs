@@ -1,4 +1,5 @@
 pub mod commands;
+mod files;
 pub mod cursor;
 pub mod frozen;
 pub mod geometry;
