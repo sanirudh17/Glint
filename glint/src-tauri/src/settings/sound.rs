@@ -1,5 +1,7 @@
-//! A short camera-shutter click, synthesized as an in-memory PCM WAV (no shipped asset) and
-//! played asynchronously via Win32 PlaySound. Fully local.
+//! Capture shutter sounds, played asynchronously via Win32 PlaySound. Fully local.
+//!
+//! Four are T3 Code's snapshot/notification sounds (MIT, see sounds/LICENSE-T3-Code.txt),
+//! embedded as PCM WAVs; "classic" is Glint's original, synthesized in memory.
 
 use std::sync::OnceLock;
 
@@ -57,11 +59,115 @@ fn encode_wav_mono(samples: &[i16], sample_rate: u32) -> Vec<u8> {
     v
 }
 
-/// Play the shutter click asynchronously. The WAV bytes live in a process-lifetime static so
-/// they stay valid during SND_ASYNC | SND_MEMORY playback.
-pub fn play_shutter() {
-    static SHUTTER: OnceLock<Vec<u8>> = OnceLock::new();
-    let wav = SHUTTER.get_or_init(shutter_wav);
+/// Selectable shutter sounds, in menu order: (id, label).
+pub const SHUTTER_SOUNDS: [(&str, &str); 5] = [
+    ("click", "Click"),
+    ("soft-pop", "Soft pop"),
+    ("chime", "Chime"),
+    ("ping", "Ping"),
+    ("classic", "Classic"),
+];
+
+pub fn is_shutter_sound(id: &str) -> bool {
+    SHUTTER_SOUNDS.iter().any(|(known, _)| *known == id)
+}
+
+/// The WAV bytes for a sound id (unknown ids fall back to the default click). Every
+/// clip opens with ~70 ms of silence so Windows' cold-endpoint fade-in never eats it.
+fn shutter_bytes(id: &str) -> &'static [u8] {
+    static CLASSIC: OnceLock<Vec<u8>> = OnceLock::new();
+    match id {
+        "soft-pop" => include_bytes!("sounds/soft-pop.wav"),
+        "chime" => include_bytes!("sounds/chime.wav"),
+        "ping" => include_bytes!("sounds/ping.wav"),
+        "classic" => CLASSIC.get_or_init(shutter_wav),
+        _ => include_bytes!("sounds/click.wav"),
+    }
+}
+
+/// Preview a shutter sound from Settings (async: never holds the UI thread).
+#[tauri::command(async)]
+pub fn sound_preview(id: String) -> Result<(), String> {
+    if !is_shutter_sound(&id) {
+        return Err("Unknown shutter sound".into());
+    }
+    play_shutter(&id);
+    Ok(())
+}
+
+/// Open the output device ahead of a likely sound (Settings opened, capture started).
+#[tauri::command(async)]
+pub fn sound_warm() {
+    warm();
+}
+
+enum Command {
+    Warm,
+    Play(&'static [u8]),
+}
+
+/// One audio thread owns a persistent output stream. Win32 PlaySound reopened the
+/// device on every call — up to a second of latency on some drivers (Bluetooth
+/// especially). The stream opens on warm-up or first play and closes after
+/// `IDLE` without sounds, so Glint never holds the device open indefinitely.
+fn audio() -> &'static std::sync::mpsc::Sender<Command> {
+    const IDLE: std::time::Duration = std::time::Duration::from_secs(15);
+    static SENDER: OnceLock<std::sync::mpsc::Sender<Command>> = OnceLock::new();
+    SENDER.get_or_init(|| {
+        let (tx, rx) = std::sync::mpsc::channel::<Command>();
+        let _ = std::thread::Builder::new().name("glint-audio".into()).spawn(move || {
+            let mut output: Option<(rodio::OutputStream, rodio::OutputStreamHandle)> = None;
+            loop {
+                let command = if output.is_some() {
+                    match rx.recv_timeout(IDLE) {
+                        Ok(command) => command,
+                        Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
+                            output = None; // release the device while idle
+                            continue;
+                        }
+                        Err(_) => return,
+                    }
+                } else {
+                    match rx.recv() {
+                        Ok(command) => command,
+                        Err(_) => return,
+                    }
+                };
+                if output.is_none() {
+                    output = rodio::OutputStream::try_default().ok();
+                }
+                if let (Command::Play(bytes), Some((_, handle))) = (command, output.as_ref()) {
+                    play_on(handle, bytes);
+                }
+            }
+        });
+        tx
+    })
+}
+
+fn play_on(handle: &rodio::OutputStreamHandle, bytes: &'static [u8]) {
+    use rodio::Source;
+    match rodio::Decoder::new_wav(std::io::Cursor::new(bytes)) {
+        // The clips open with ~70 ms of silence meant for PlaySound's cold device;
+        // the stream here is already open, so start at the sound itself.
+        Ok(source) => {
+            let _ = handle.play_raw(source.skip_duration(std::time::Duration::from_millis(60)).convert_samples());
+        }
+        Err(error) => log::warn!("shutter sound could not be decoded: {error}"),
+    }
+}
+
+pub fn warm() {
+    let _ = audio().send(Command::Warm);
+}
+
+/// Play a shutter sound on the persistent stream; falls back to PlaySound if the
+/// audio thread is unavailable.
+pub fn play_shutter(id: &str) {
+    let wav = shutter_bytes(id);
+    if audio().send(Command::Play(wav)).is_ok() {
+        return;
+    }
     #[cfg(windows)]
     unsafe {
         use windows::core::PCWSTR;
@@ -73,6 +179,17 @@ pub fn play_shutter() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn every_selectable_sound_is_a_pcm_wav() {
+        for (id, _) in SHUTTER_SOUNDS {
+            let wav = shutter_bytes(id);
+            assert_eq!(&wav[0..4], b"RIFF", "{id}");
+            assert_eq!(&wav[8..12], b"WAVE", "{id}");
+            assert!(wav.len() > 1_000, "{id}");
+        }
+        assert!(!is_shutter_sound("nope"));
+    }
 
     #[test]
     fn shutter_wav_has_valid_riff_header() {

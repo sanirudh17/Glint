@@ -1,5 +1,5 @@
 import { useCallback, useEffect } from "react";
-import { FolderOpen, Save } from "lucide-react";
+import { FolderOpen, Save } from "../../icons";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { useAppStore } from "../../store/useAppStore";
 import {
@@ -56,10 +56,10 @@ export function ProjectBar() {
   return (
     <div className="editor-projectbar" role="toolbar" aria-label="Project">
       <button className="editor-export-btn" onClick={doOpen} title="Open a .glint project">
-        <FolderOpen size={16} strokeWidth={1.5} /> Open
+        <FolderOpen size={16} strokeWidth={1.5} /><span>Open</span>
       </button>
       <button className="editor-export-btn" onClick={() => doSave()} title="Save project (Ctrl+S)">
-        <Save size={16} strokeWidth={1.5} /> Save
+        <Save size={16} strokeWidth={1.5} /><span>Save</span>
       </button>
     </div>
   );

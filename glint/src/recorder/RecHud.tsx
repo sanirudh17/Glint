@@ -12,7 +12,7 @@
  */
 import { useEffect, useState } from "react";
 import { invoke } from "@tauri-apps/api/core";
-import { ExternalLink, FolderOpen, FileSymlink, X, Play, Scissors, type LucideIcon } from "lucide-react";
+import { ExternalLink, FolderOpen, Link2, X, Play, Scissors, type LucideIcon } from "../icons";
 import { dragOut } from "../lib/hudIpc";
 import { openTrim } from "../lib/trim";
 import "../hud/hud.css";
@@ -40,7 +40,7 @@ export function RecHud() {
       { tip: "Open", icon: ExternalLink, run: () => act("capture_open") },
       { tip: "Reveal in Explorer", icon: FolderOpen, run: () => act("capture_reveal") },
     ],
-    [{ tip: "Copy file path", icon: FileSymlink, run: () => act("capture_copy_path") }],
+    [{ tip: "Copy file path", icon: Link2, run: () => act("capture_copy_path") }],
   ];
 
   return (

@@ -6,7 +6,7 @@ import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow, LogicalSize, PhysicalPosition } from "@tauri-apps/api/window";
 import { emit, listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { Maximize2, X } from "lucide-react";
+import { Maximize2, X } from "../icons";
 import "./reccam.css";
 
 const SIZES = [120, 170, 230]; // S / M / L diameter (logical px); index 1 = default

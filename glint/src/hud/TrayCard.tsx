@@ -5,7 +5,7 @@
  * target this card's id.
  */
 import { useCallback, useRef, useState } from "react";
-import { X } from "lucide-react";
+import { X } from "../icons";
 import { HudActions, type HudAction } from "./HudActions";
 import {
   type TrayItem,

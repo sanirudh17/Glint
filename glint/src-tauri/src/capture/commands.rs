@@ -369,8 +369,13 @@ pub(super) fn finish_commit(
     let path_str = path.to_string_lossy().to_string();
 
     // Shutter click (opt-in). Non-fatal, async — never blocks the HUD.
-    if app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().sound_effects {
-        crate::settings::sound::play_shutter();
+    let shutter = {
+        let settings = app.state::<crate::settings::commands::SettingsState>();
+        let settings = settings.0.lock().unwrap();
+        settings.sound_effects.then(|| settings.shutter_sound.clone())
+    };
+    if let Some(sound) = shutter {
+        crate::settings::sound::play_shutter(&sound);
     }
 
     // Do not delay the HUD, but report the actual result and serialize newer copies.

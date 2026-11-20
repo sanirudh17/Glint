@@ -1,4 +1,4 @@
-import { Copy, Plus, Scissors, Trash2 } from 'lucide-react';
+import { Copy, Plus, Scissors, Trash2 } from "../icons";
 import {Button,ColorControl,ControlDisclosure,NumberInput,Select,Switch} from '../components/ui';
 import {LookSlider} from '../look/LookControls';
 import {effectId} from './studioEffects';
@@ -11,7 +11,6 @@ export function StudioMaskControls({masks,selected,time,duration,width,height,dr
   const span=Math.min(.1,duration/2);
   const change=(patch:Partial<MaskSegment>)=>onChange(masks.map(m=>m.id===selected?{...m,...patch}:m));
   return <ControlDisclosure title="Masks & focus" className="studio-effects-controls">
-    <p className="look-hint">Cover sensitive content with a margin. Masks follow source pixels through zoom and crop.</p>
     <div className="studio-effect-actions">
       <Button size="sm" variant="subtle" icon={Plus} disabled={masks.length>=512} onClick={onDraw}>{drawing?'Cancel drawing':'Draw mask'}</Button>
       {active&&<Button size="sm" variant="ghost" icon={Trash2} onClick={()=>{onChange(masks.filter(m=>m.id!==active.id));onSelect(null);}}>Delete</Button>}
@@ -20,7 +19,6 @@ export function StudioMaskControls({masks,selected,time,duration,width,height,dr
     {active&&rect&&<>
       <div className="look-row"><span className="look-label">Type</span><div className="look-control"><Select portal ariaLabel="Mask type" value={active.type} options={[{value:'blur',label:'Blur'},{value:'pixelate',label:'Pixelate'},{value:'solid',label:'Solid'},{value:'highlight',label:'Highlight'}]} onChange={type=>change({type:type as MaskSegment['type']})}/></div></div>
       {active.type==='highlight'?<>
-        <p className="look-hint">Highlight guides attention. Use Blur, Pixelate or Solid to redact content.</p>
         <LookSlider label="Dim outside" ariaLabel="Highlight dim" value={(active.opacity??.55)*100} max={90} unit="%" onChange={value=>change({opacity:value/100})}/>
         <div className="look-row"><span className="look-label">Blur outside</span><Switch ariaLabel="Blur outside focus" checked={active.blurOutside??false} onChange={blurOutside=>change({blurOutside})}/></div>
         {active.blurOutside&&<LookSlider label="Blur strength" ariaLabel="Focus blur strength" value={active.strength} min={8} max={80} step={2} unit="px" onChange={strength=>change({strength})}/>}

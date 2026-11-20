@@ -1,5 +1,5 @@
 import { useRef,useState } from "react";
-import { ImagePlus } from "lucide-react";
+import { ImagePlus } from "../icons";
 import { Select, ColorControl, ControlDisclosure,Switch } from "../components/ui";
 import { GRADIENTS, type GradientStop } from "../editor/gradients";
 import { GradientControls } from "./GradientControls";
@@ -21,6 +21,8 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
   const [error, setError] = useState<string | null>(null);
   const change = (patch: Partial<LookConfig>) => { if('outputSize' in patch&&patch.outputSize===undefined){setCustomSize(false);outputRatio.current=null;}checkpoint(); setPresetId(""); onChange({...(video?{enabled:true}:{}),...patch}); };
   const bg = look.background;
+  // A video at its original size with no padding has nowhere to show a background.
+  const bgShown = !video || (look.enabled && (look.padding > 0 || look.aspect !== "auto" || !!look.outputSize));
   const aspects: AspectId[] = ["auto", "1:1", "16:9", "4:3", "9:16", "4:5", "3:2", "1.91:1"];
   const wm=look.watermark;
   const output=exportDimensions(dimensions?.width??1920,dimensions?.height??1080,look);
@@ -42,7 +44,7 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
       </div>
     </div>
     <div className="look-row"><span className="look-label">Background</span><div className="look-control">
-      <Select portal ariaLabel="Background type" value={bg.type}
+      <Select portal ariaLabel="Background type" value={bg.type} disabled={!bgShown}
         options={[{ value: "solid", label: "Solid" }, { value: "gradient", label: "Gradient" }, { value: "image", label: "Image" }, { value: "transparent", label: "Transparent" }]}
         onChange={(type) => {
           if (type === "solid") change({ background: { type, color: "#20242c" } });
@@ -51,10 +53,11 @@ export function LookControls({ look, onChange, checkpoint = () => {}, video = fa
           if (type === "image") change({ background: { type, dataUrl: "" } });
         }} />
     </div></div>
-    {bg.type === "solid" && <div className="look-row"><span className="look-label">Color</span><div className="look-control"><ColorControl ariaLabel="Background color" value={bg.color} onChange={(color) => change({ background: { type: "solid", color } })} /></div></div>}
-    {bg.type === "gradient" && <GradientControls background={bg} checkpoint={checkpoint} onSample={onSample} onChange={background=>{setPresetId('');onChange({...(video?{enabled:true}:{}),background});}}/>}
-    {video&&bg.type==='gradient'&&<ControlDisclosure title="Background motion"><div className="look-row"><span className="look-label">Slow gradient drift</span><Switch ariaLabel="Animate gradient" checked={!!bg.animationSeconds} onChange={enabled=>change({background:{...bg,animationSeconds:enabled?30:undefined}})}/></div>{!!bg.animationSeconds&&<div className="look-row"><span className="look-label">Cycle</span><NumberInput ariaLabel="Gradient animation cycle" min={12} max={120} unit="s" value={bg.animationSeconds} onChange={animationSeconds=>change({background:{...bg,animationSeconds}})}/></div>}</ControlDisclosure>}
-    {bg.type === "image" && <label className="look-image-picker"><ImagePlus size={16} strokeWidth={1.6} />{bg.dataUrl ? "Replace background image" : "Choose background image"}
+    {!bgShown&&<p className="look-hint">Add padding or pick an output size to show a background.</p>}
+    {bgShown&&bg.type === "solid" && <div className="look-row"><span className="look-label">Color</span><div className="look-control"><ColorControl ariaLabel="Background color" value={bg.color} onChange={(color) => change({ background: { type: "solid", color } })} /></div></div>}
+    {bgShown&&bg.type === "gradient" && <GradientControls background={bg} checkpoint={checkpoint} onSample={onSample} onChange={background=>{setPresetId('');onChange({...(video?{enabled:true}:{}),background});}}/>}
+    {bgShown&&video&&bg.type==='gradient'&&<ControlDisclosure title="Background motion"><div className="look-row"><span className="look-label">Slow gradient drift</span><Switch ariaLabel="Animate gradient" checked={!!bg.animationSeconds} onChange={enabled=>change({background:{...bg,animationSeconds:enabled?30:undefined}})}/></div>{!!bg.animationSeconds&&<div className="look-row"><span className="look-label">Cycle</span><NumberInput ariaLabel="Gradient animation cycle" min={12} max={120} unit="s" value={bg.animationSeconds} onChange={animationSeconds=>change({background:{...bg,animationSeconds}})}/></div>}</ControlDisclosure>}
+    {bgShown&&bg.type === "image" && <label className="look-image-picker"><ImagePlus size={16} strokeWidth={1.6} />{bg.dataUrl ? "Replace background image" : "Choose background image"}
       <input aria-label="Background image" type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => {
         const file = e.target.files?.[0]; if (!file) return;
         if (file.size > 15 * 1024 * 1024) { setError("Choose an image smaller than 15 MB."); return; }

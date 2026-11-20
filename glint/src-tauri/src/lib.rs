@@ -19,7 +19,7 @@ mod tray;
 mod updater;
 mod window;
 mod material;
-use tauri::{Emitter, Manager};
+use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use capture::commands::{
     capture_cancel, capture_commit, capture_copy, capture_copy_path, capture_delete, capture_open,
@@ -75,6 +75,45 @@ fn capture_start(app: tauri::AppHandle, mode: String) -> Result<(), String> {
     Ok(())
 }
 
+/// Chromium's native overlay scrollbars: a thin bar floating over the content
+/// (no track, no arrow buttons, no layout gutter) that fades to a hairline when
+/// idle. (WebView2 ignores Edge's msOverlayScrollbarWinStyle for web content —
+/// verified: that still reserved a 15px gutter.) Merged into any existing
+/// `--enable-features=` switch, because Chromium honours only one of them.
+#[cfg_attr(not(windows), allow(dead_code))]
+fn with_native_scrollbars(arguments: &str) -> String {
+    const FEATURES: [&str; 1] = ["OverlayScrollbar"];
+    let mut found = false;
+    let mut parts: Vec<String> = arguments.split_whitespace().map(|part| {
+        match part.strip_prefix("--enable-features=") {
+            Some(list) => {
+                found = true;
+                let mut names: Vec<&str> = list.split(',').filter(|n| !n.is_empty()).collect();
+                for feature in FEATURES { if !names.contains(&feature) { names.push(feature); } }
+                format!("--enable-features={}", names.join(","))
+            }
+            None => part.to_string(),
+        }
+    }).collect();
+    if !found { parts.push(format!("--enable-features={}", FEATURES.join(","))); }
+    parts.join(" ")
+}
+
+#[cfg(test)]
+mod native_scrollbar_tests {
+    use super::with_native_scrollbars;
+    #[test]
+    fn adds_switch_when_missing() {
+        assert_eq!(with_native_scrollbars("--a"), "--a --enable-features=OverlayScrollbar");
+    }
+    #[test]
+    fn merges_into_existing_switch_once() {
+        let once = with_native_scrollbars("--enable-features=Foo --b");
+        assert_eq!(once, "--enable-features=Foo,OverlayScrollbar --b");
+        assert_eq!(with_native_scrollbars(&once), once);
+    }
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     std::env::set_var("WEBVIEW2_DEFAULT_BACKGROUND_COLOR", "00000000");
@@ -85,6 +124,7 @@ pub fn run() {
         for flag in ["--disable-background-timer-throttling","--disable-renderer-backgrounding","--disable-backgrounding-occluded-windows"] {
             if !arguments.split_whitespace().any(|value|value==flag){if !arguments.is_empty(){arguments.push(' ');}arguments.push_str(flag);}
         }
+        arguments=with_native_scrollbars(&arguments);
         std::env::set_var("WEBVIEW2_ADDITIONAL_BROWSER_ARGUMENTS",arguments);
     }
     tauri::Builder::default()
@@ -305,9 +345,10 @@ pub fn run() {
                     // Keep the editor webview ALIVE: hide instead of destroy.
                     // Notify frontend so it clears any displayed image from memory.
                     api.prevent_close();
-                    let _ = window.hide();
                     crate::editor::window::cancel_present();
-                    let _ = window.emit("editor-close", ());
+                    if let Some(win) = window.app_handle().get_webview_window(&label) {
+                        crate::material::retire(&win, "editor-close");
+                    }
                 } else if label == crate::recorder::windows::TRIM_LABEL {
                     if window.state::<crate::recorder::studio_export::ExportState>().0.lock().unwrap().is_some() {
                         api.prevent_close(); return;
@@ -315,8 +356,9 @@ pub fn run() {
                     // Keep the trim webview ALIVE: hide instead of destroy.
                     // Notify frontend so it resets the video player.
                     api.prevent_close();
-                    let _ = window.hide();
-                    let _ = window.emit("rec-trim-close", ());
+                    if let Some(win) = window.app_handle().get_webview_window(&label) {
+                        crate::material::retire(&win, "rec-trim-close");
+                    }
                 } else if label == crate::ocr::window::OCR_LABEL {
                     // Keep the OCR webview ALIVE: hide instead of destroy.
                     api.prevent_close();
@@ -347,6 +389,11 @@ pub fn run() {
             attachments::drag_prepare,
             settings_get_all,
             settings_set,
+            settings::sound::sound_preview,
+            settings::sound::sound_warm,
+            ocr::window::ocr_present,
+            ocr::window::ocr_save_text,
+            material::window_retire_done,
             settings_set_hotkey,
             settings_reset_hotkeys,
             hotkeys_suspend,

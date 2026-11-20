@@ -1,4 +1,5 @@
 import {VideoCropTool} from './VideoCropTool';
+import {retireAfterPaint} from '../lib/desktopPresentation';
 import {presentEditorFrame} from '../editor/firstFrame';
 import {prepareAnnotations} from "./videoAnnotations";
 import { WindowControls } from "../components/Titlebar";
@@ -23,7 +24,7 @@ import { useCallback, useEffect, useRef, useState } from "react";
 import { convertFileSrc,invoke } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { Scissors, Trash2, Undo2, Redo2, Play, Pause, SkipBack, ZoomIn, ZoomOut, X, RotateCcw } from "lucide-react";
+import { Scissors, Trash2, Undo2, Redo2, Play, Pause, SkipBack, ZoomIn, ZoomOut, X, RotateCcw } from "../icons";
 import { trimTarget, trimProbe, trimExport, trimWaveform, type ProbeResult } from "../lib/trim";
 import { initClips, splitClips, setKept, setSpeed, keepRanges, keptCount, keptSegments, reorderKept, segmentIndexAtSource, outputDuration, type Clip } from "./trimModel";
 import { TrimTimeline } from "./TrimTimeline";
@@ -264,6 +265,7 @@ export function TrimView() {
       setCamSrc(null);
       setMediaReady(false);
       setEdit({ clips: [], fadeIn: 0, fadeOut: 0 });
+      retireAfterPaint();
     });
     return () => { un.then((f) => f()).catch(() => {}); };
   }, []);
@@ -666,9 +668,9 @@ export function TrimView() {
       <div className="trim-actions">
         <span className="trim-out">Output: {fmt(outDur)} / {fmt(duration)}{estimated&&<span className="trim-export-estimate" title="Approximate MP4 size; actual size depends on the content."> · ≈ {(estimated.low/1048576).toFixed(1)}–{(estimated.high/1048576).toFixed(1)} MiB</span>}</span>
         <div className="trim-zoomctl" role="group" aria-label="Timeline zoom">
-          <button className="trim-zoombtn" onClick={zoomOut} disabled={zoom <= 1} title="Zoom out (−)"><ZoomOut size={13} /></button>
+          <button className="trim-zoombtn" onClick={zoomOut} disabled={zoom <= 1} title="Zoom out (−)"><ZoomOut size={16} strokeWidth={1.5} /></button>
           <span className="trim-zoomval">{zoom}×</span>
-          <button className="trim-zoombtn" onClick={zoomIn} disabled={zoom >= 8} title="Zoom in (+)"><ZoomIn size={13} /></button>
+          <button className="trim-zoombtn" onClick={zoomIn} disabled={zoom >= 8} title="Zoom in (+)"><ZoomIn size={16} strokeWidth={1.5} /></button>
         </div>
         {probe?.has_cam && cam && (
           <div className="trim-camctl" role="group" aria-label="Webcam overlay">

@@ -1,5 +1,5 @@
 import {useEffect,useRef,type ReactNode} from "react";
-import { ChevronDown } from "lucide-react";
+import { ChevronDown } from "../../icons";
 import "./ui.css";
 
 export function ControlDisclosure({ title, children, className = "",openByDefault=false }: { title: string; children: ReactNode; className?: string;openByDefault?:boolean }) {

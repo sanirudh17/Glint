@@ -17,7 +17,8 @@ pub struct IndexState {
     pub cancel: Arc<AtomicBool>,
     pub progress: Mutex<Progress>,
 }
-#[tauri::command]
+// Off the UI thread: Library polls this while the window is painting.
+#[tauri::command(async)]
 pub fn library_index_status(app: tauri::AppHandle) -> Progress {
     app.state::<IndexState>().progress.lock().unwrap().clone()
 }
@@ -56,7 +57,9 @@ pub fn library_index_clear(app: tauri::AppHandle) -> Result<(), String> {
         .map_err(|_| "Couldn't clear screenshot text")?;
     Ok(())
 }
-#[tauri::command]
+// Off the UI thread: the install check stats files, which stalled every window
+// (and thumbnail loading) for tens of ms on each Library visit.
+#[tauri::command(async)]
 pub fn library_index_start(app: tauri::AppHandle) {
     if !app
         .state::<crate::settings::commands::SettingsState>()

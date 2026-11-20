@@ -72,12 +72,6 @@
 .rec-sel-handle--s  { bottom: 0; left: 50%; transform: translate(-50%, 50%); }
 .rec-sel-handle--se { bottom: 0; right: 0; transform: translate(50%, 50%); }
 
-.rec-sel-confirm-hint {
-  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
-  background: rgba(12,12,12,0.66); color: #fff; padding: 4px 10px; border-radius: 6px;
-  font-size: 12px; pointer-events: none; white-space: nowrap;
-}
-
 .rec-sel-badge {
   z-index: 4; padding: 3px 8px; border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
   background: rgba(12,12,12,0.72); color: #fff; border-radius: 5px;
@@ -86,32 +80,35 @@
 }
 .rec-sel-badge-sep { opacity: 0.6; margin: 0 3px; }
 
+/* Region selector toolbar: one dark bar — input toggles, a divider, the action.
+   Toggles share one shape; state is colour only, so nothing shifts as they flip. */
 .rec-sel-toolbar {
-  position: fixed; top: 24px; left: 50%; transform: translateX(-50%);
-  display: flex; align-items: center; gap: 12px; z-index: 5; pointer-events: none;
+  position: fixed; top: 20px; left: 50%; transform: translateX(-50%); z-index: 5;
+  display: flex; align-items: center; gap: 6px;
+  width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box; flex-wrap: wrap; justify-content: center;
+  padding: 6px; border: 1px solid rgba(255,255,255,.12); border-radius: 12px;
+  background: rgba(14,14,14,.96); color: #fff;
+  box-shadow: 0 12px 32px rgba(0,0,0,.35);
+  pointer-events: none;
 }
-.rec-sel-hint { background: rgba(0,0,0,0.6); color: #fff; padding: 6px 12px; border-radius: 8px; font-size: 13px; white-space: nowrap; flex: none; }
-/* One icon set: 1.5px stroke on the selector chips + full-screen button. */
-.rec-sel-chip svg, .rec-sel-fullbtn svg { stroke-width: 1.5; }
-.rec-sel-fullbtn {
+.rec-sel-chipgroup { display: inline-flex; align-items: center; gap: 2px; flex-wrap: wrap; }
+.rec-sel-chip, .rec-sel-secondary, .rec-sel-fullbtn {
   pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  height: 34px; padding: 0 18px; box-sizing: border-box; white-space: nowrap;
-  background: var(--accent); color: var(--accent-fg); border: none; border-radius: var(--r-btn);
-  font-size: 13px; font-weight: 600; cursor: pointer;
+  height: 32px; padding: 0 12px; box-sizing: border-box; white-space: nowrap;
+  border: 0; border-radius: 8px; font: inherit; font-size: 12.5px; font-weight: 500; cursor: pointer;
+  transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
+.rec-sel-chip svg, .rec-sel-secondary svg, .rec-sel-fullbtn svg { flex: none; }
+.rec-sel-chip { background: transparent; color: rgba(255,255,255,.45); }
+.rec-sel-chip:hover { background: rgba(255,255,255,.06); color: rgba(255,255,255,.75); }
+.rec-sel-chip[aria-pressed="true"] { background: rgba(255,255,255,.10); color: #fff; }
+.rec-sel-chip[aria-pressed="true"]:hover { background: rgba(255,255,255,.14); }
+.rec-sel-sep { width: 1px; height: 20px; margin: 0 4px; background: rgba(255,255,255,.12); }
+.rec-sel-secondary { background: transparent; color: rgba(255,255,255,.75); }
+.rec-sel-secondary:hover { background: rgba(255,255,255,.08); color: #fff; }
+.rec-sel-fullbtn { padding: 0 14px; background: var(--accent); color: var(--accent-fg); font-weight: 600; }
 .rec-sel-fullbtn:hover { background: var(--accent-hover); }
-.rec-sel-chipgroup { pointer-events: none; display: inline-flex; align-items: center; gap: 8px; }
-/* Fixed width + height so every chip is identical and NOTHING resizes as the cursor
-   chip cycles through its states (Normal → Large → XL → Hidden). */
-.rec-sel-chip {
-  pointer-events: auto; display: inline-flex; align-items: center; justify-content: center; gap: 6px;
-  width: 140px; height: 34px; padding: 0 12px; box-sizing: border-box; white-space: nowrap;
-  background: rgba(20,20,20,0.72); color: #fff; border: 1px solid rgba(255,255,255,0.16);
-  border-radius: var(--r-btn); font-size: 12px; font-weight: 500;
-  cursor: pointer;
-}
-.rec-sel-chip:hover { background: rgba(44,44,44,0.82); }
-.rec-sel-chip--off { color: rgba(255,255,255,0.5); border-color: rgba(255,255,255,0.08); background: rgba(20,20,20,0.5); }
+.rec-sel-kbd { margin-left: 2px; padding: 0 5px; border-radius: 4px; background: rgba(0,0,0,.16); font: inherit; font-size: 11px; line-height: 18px; }
 
 /* ── Post-recording HUD (#/rec-hud) ─────────────────────────────────────────
    Reuses the screenshot HUD's card/toolbar styles (hud.css); only the centered
@@ -128,16 +125,12 @@
 .rec-bar { gap: 8px; padding: 6px 10px; background: rgba(13,13,13,.96); border-color: rgba(255,255,255,.16); }
 .rec-pause, .rec-atog, .rec-stop { width: 28px; height: 28px; border-radius: 7px; flex: none; }
 .rec-pause, .rec-atog { background: rgba(255,255,255,.08); }
-.rec-atog--off { background: transparent; color: rgba(255,255,255,.55); }
+.rec-atog--off { background: transparent; color: rgba(255,255,255,.72); }
+.rec-atog--off:hover { color: #fff; }
+.rec-sep { width: 1px; height: 16px; margin: 0 2px; background: rgba(255,255,255,.12); flex: none; }
 .rec-stop { background: rgba(255,80,80,.16); color: #ff6b6b; }
 .rec-stop:hover { background: rgba(255,80,80,.26); }
 .rec-bar button:focus-visible, .rec-sel-toolbar button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
-.rec-sel-toolbar { width: max-content; max-width: calc(100vw - 32px); box-sizing: border-box; flex-wrap: wrap; justify-content: center; gap: 8px; padding: 8px; background: rgba(13,13,13,.96); border: 1px solid rgba(255,255,255,.16); border-radius: 10px; }
-.rec-sel-hint { background: transparent; font-size: 12px; padding: 6px 8px; white-space: normal; }
-.rec-sel-chipgroup { flex-wrap: wrap; justify-content: center; gap: 6px; }
-.rec-sel-chip { width: auto; min-width: 108px; height: 32px; background: rgba(255,255,255,.08); border-color: rgba(255,255,255,.12); }
-.rec-sel-chip--off { background: transparent; color: rgba(255,255,255,.58); }
-.rec-sel-fullbtn { height: 32px; padding-inline: 12px; }
 
 .rec-marker { width: auto; gap: 5px; padding-inline: 8px; font: inherit; font-size: 12px; }
 
@@ -151,12 +144,6 @@
 .rec-ink-tools select,.rec-ink-text { height:28px; padding:0 6px; border:1px solid rgba(255,255,255,.16); border-radius:5px; background:#191919; color:#eee; font:inherit; font-size:11px; }
 .rec-ink-text { width:110px; }
 .rec-ink-tools :focus-visible { outline:2px solid var(--accent); outline-offset:2px; }
-.rec-sel-toolbar { top:20px; display:grid; grid-template-columns:auto auto; gap:8px 12px; padding:10px 12px; }
-.rec-sel-hint { grid-column:1/-1; padding:0 2px 3px; color:rgba(255,255,255,.8); font-size:11px; text-align:left; }
-.rec-sel-chipgroup { justify-content:flex-start; }
-.rec-sel-chip { min-width:88px; border-color:transparent; }
-.rec-sel-fullbtn { margin-left:4px; }
-@media(max-width:620px){.rec-sel-toolbar{grid-template-columns:1fr;}.rec-sel-hint{grid-column:1;}.rec-sel-fullbtn{margin-left:0;}}
 
 .rec-ink-colors { display:flex; align-items:center; gap:5px; padding:0 6px; border-inline:1px solid rgba(255,255,255,.12); }
 .rec-ink-tools .rec-ink-swatch { width:17px; height:17px; border-radius:50%; border:1px solid rgba(255,255,255,.25); }

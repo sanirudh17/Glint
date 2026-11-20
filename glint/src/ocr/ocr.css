@@ -1,18 +1,17 @@
-/* ── OCR review panel (#/ocr window) ─────────────────────────────────────────
- * Clean single-surface focus window. No nested windows or cards inside cards.
- * Fills edge-to-edge within the OS window. */
+/* ── Text window (#/ocr) ────────────────────────────────────────────────────
+ * One surface, like a note: a quiet title bar, the text itself, two actions.
+ * The text sits directly on the surface — no inner box. */
 
 .ocr-root {
   display: flex;
   flex-direction: column;
-  height: 100vh;
   width: 100vw;
+  height: 100vh;
   box-sizing: border-box;
-  padding: 10px 14px 12px;
+  padding: 8px 12px 12px 16px;
   background: var(--bg-elev);
   border: 1px solid var(--border);
   border-radius: var(--r2);
-  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   color: var(--text);
   font-family: var(--font-ui, sans-serif);
   user-select: none;
@@ -20,102 +19,53 @@
   overflow: hidden;
 }
 
-/* Header */
 .ocr-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex: none;
   height: 28px;
-  margin-bottom: 8px;
-  flex-shrink: 0;
   cursor: grab;
 }
-
-.ocr-header-right {
+.ocr-title {
   display: inline-flex;
   align-items: center;
   gap: 8px;
+  font-size: var(--fz-sm);
+  font-weight: var(--fw-medium);
+  color: var(--text-dim);
 }
+.ocr-title > svg { color: var(--text-faint); }
 
 .ocr-close-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 24px;
-  height: 24px;
+  width: 28px;
+  height: 28px;
+  border: 0;
   border-radius: var(--r1);
-  border: none;
   background: transparent;
   color: var(--text-faint);
   cursor: pointer;
   transition: background var(--dur) var(--ease), color var(--dur) var(--ease);
 }
-
-.ocr-close-btn:hover {
-  background: var(--bg-elev2);
-  color: var(--text);
-}
-
-.ocr-close-btn:active {
-  background: var(--bg-elev3);
-}
-
-.ocr-meta {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  font-size: var(--fz-xs);
-  color: var(--text-faint);
-}
-
-.ocr-icon {
-  color: var(--accent);
-  flex-shrink: 0;
-}
-
-.ocr-label {
-  font-weight: var(--fw-medium);
-  color: var(--text-dim);
-  letter-spacing: var(--ls-ui);
-}
-
-.ocr-counts {
-  font-family: var(--font-mono, monospace);
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-  opacity: 0.85;
-}
-
-.ocr-copied-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  font-size: 11px;
-  font-weight: var(--fw-medium);
-  color: #3dd68c;
-}
-
-/* Body / Text area */
-.ocr-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  margin-bottom: 12px;
-}
+.ocr-close-btn:hover { background: var(--bg-elev2); color: var(--text); }
 
 .ocr-text {
   flex: 1;
+  min-height: 0;
   width: 100%;
-  height: 100%;
-  box-sizing: border-box;
+  margin: 6px 0 10px;
   padding: 10px 12px;
+  box-sizing: border-box;
   border: 1px solid var(--border);
   border-radius: var(--r2);
-  background: var(--bg-elev);
+  background: var(--bg-elev2);
   color: var(--text);
-  font-family: var(--font-mono, monospace);
-  font-size: 12.5px;
-  line-height: 1.55;
+  font-family: var(--font-ui, sans-serif);
+  font-size: var(--fz-md);
+  line-height: 1.6;
   resize: none;
   outline: none;
   user-select: text;
@@ -123,97 +73,46 @@
   cursor: text;
 }
 
-.ocr-text:focus {
-  border-color: var(--accent);
-}
-
 .ocr-empty {
   flex: 1;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  border: 1px dashed var(--border);
-  border-radius: var(--r2);
   color: var(--text-faint);
   font-size: var(--fz-sm);
-  margin-bottom: 12px;
 }
 
-/* Footer: exactly two uniform buttons */
 .ocr-footer {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  flex-shrink: 0;
+  gap: 8px;
+  flex: none;
+  padding-right: 4px;
 }
-
-.ocr-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-
-/* Condensed compact button dimensions: hugs text piece snugly */
 .ocr-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: auto;
-  min-width: 0;
-  height: 28px;
-  padding: 0 10px;
-  box-sizing: border-box;
-  border-radius: var(--r-btn);
+  gap: 6px;
+  height: 30px;
+  padding: 0 14px;
   border: 1px solid var(--border);
-  background: var(--bg-elev);
+  border-radius: var(--r-btn);
+  background: transparent;
   color: var(--text);
-  font-family: var(--font-ui, sans-serif);
-  font-size: 12px;
+  font: inherit;
+  font-size: var(--fz-sm);
   font-weight: var(--fw-medium);
-  letter-spacing: var(--ls-ui);
-  line-height: 1;
-  cursor: pointer;
   white-space: nowrap;
+  cursor: pointer;
   transition: background var(--dur) var(--ease), border-color var(--dur) var(--ease);
 }
-
-.ocr-btn:hover:not(:disabled) {
-  background: var(--bg-elev2);
-  border-color: var(--border-strong);
-}
-
-.ocr-btn:active:not(:disabled) {
-  background: var(--bg-elev3);
-}
-
-.ocr-btn:disabled {
-  opacity: 0.45;
-  cursor: not-allowed;
-}
-
-.ocr-btn--primary {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: var(--accent-fg);
-}
-
-.ocr-btn--primary:hover:not(:disabled) {
-  background: var(--accent-hover);
-  border-color: var(--accent-hover);
-}
-
-/* Match the compact shared controls while leaving extracted text room to breathe. */
-.ocr-root { padding: 12px 16px 14px; }
-.ocr-header { min-height: 32px; height: auto; gap: 12px; margin-bottom: 12px; }
-.ocr-label { font-size: 13px; }
-.ocr-counts { font-size: 12px; }
-.ocr-close-btn { width: 28px; height: 28px; }
-.ocr-btn { height: 32px; padding-inline: 12px; border-color: var(--border-strong); background: var(--bg-elev2); }
-.ocr-btn--primary { background: var(--accent); border-color: transparent; }
-.ocr-header-right, .ocr-meta { min-width: 0; flex-wrap: wrap; }
-.ocr-footer, .ocr-actions { flex-wrap: wrap; gap: 8px; }
-.ocr-text:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
-
-.ocr-copied-badge { color: var(--text); font-size: 12px; }
+.ocr-btn:hover:not(:disabled) { background: var(--bg-elev2); border-color: var(--border-strong); }
+.ocr-btn:disabled { opacity: 0.45; cursor: not-allowed; }
+.ocr-btn--primary { min-width: 84px; background: var(--accent); border-color: transparent; color: var(--accent-fg); }
+.ocr-btn--primary:hover:not(:disabled) { background: var(--accent-hover); border-color: transparent; }
+.ocr-btn:focus-visible, .ocr-close-btn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.ocr-text:focus-visible { border-color: var(--accent); }
+.ocr-error { margin-right: auto; color: var(--danger); font-size: var(--fz-xs); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

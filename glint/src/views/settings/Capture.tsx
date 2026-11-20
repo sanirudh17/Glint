@@ -1,6 +1,5 @@
 import { OcrEngineControls } from "../../ocr/OcrEngineControls";
-import { Section, Field, Select, Switch,Button } from "../../components/ui";
-import {invoke} from '@tauri-apps/api/core';
+import { Section, SettingsGroup, Field, Select, Switch } from "../../components/ui";
 import { useAppStore } from "../../store/useAppStore";
 
 const FORMAT_OPTIONS = [
@@ -31,61 +30,66 @@ export function Capture() {
   const setCaptureOnRelease=useAppStore(s=>s.setCaptureOnRelease);
   const setHideDesktopIcons=useAppStore(s=>s.setHideDesktopIcons);
   const setQuickAccessAutoClose=useAppStore(s=>s.setQuickAccessAutoClose);
-  const pushToast=useAppStore(s=>s.pushToast);
   const setIndexScreenshotText = useAppStore(s => s.setIndexScreenshotText);
   const isJpeg = (settings?.image_format ?? "png") === "jpeg";
   return (
-    <Section
-      title="Capture"
-      description="Screenshot format, quality, and capture behavior."
-    >
-      <Field label="Image format" hint="File format for saved screenshots.">
-        <Select
-          value={settings?.image_format ?? "png"}
-          options={FORMAT_OPTIONS}
-          onChange={(v) => void setImageFormat(v as "png" | "jpeg" | "webp")}
-        />
-      </Field>
-      <Field label="JPEG quality" hint={isJpeg ? "Compression level when saving as JPEG." : "Available when Image format is set to JPEG."}>
-        <Select
-          value={settings?.jpeg_quality ?? "high"}
-          options={QUALITY_OPTIONS}
-          onChange={(v) => void setJpegQuality(v as "high" | "medium" | "low")}
-          disabled={!isJpeg}
-        />
-      </Field>
-      <Field label="Include cursor" hint="Bake the mouse pointer into screenshots.">
-        <Switch
-          checked={settings?.include_cursor ?? false}
-          onChange={(v) => void setIncludeCursor(v)}
-        />
-      </Field>
-      <Field label="Capture delay" hint="Countdown length for the delayed-capture hotkeys (set them under Hotkeys).">
-        <Select
-          value={String(settings?.capture_delay_secs ?? 5)}
-          options={DELAY_OPTIONS}
-          onChange={(v) => void setCaptureDelay(Number(v) as 3 | 5 | 10)}
-        />
-      </Field>
-      <Field label="Capture on mouse release" hint="Capture as soon as you finish drawing an area. Turn off to adjust the selection before pressing Enter.">
-        <Switch ariaLabel="Capture on mouse release" checked={settings?.capture_on_release??false} onChange={on=>void setCaptureOnRelease(on)}/>
-      </Field>
-      <Field label="Open in editor after capture" hint="Open screenshots in the editor automatically. Turn off to show Quick Access instead.">
-        <Switch ariaLabel="Open in editor after capture" checked={settings?.open_in_editor??false} onChange={on=>void setOpenInEditor(on)}/>
-      </Field>
-      <Field label="Hide desktop icons" hint="Hide icons while grabbing a screenshot or scrolling strip, then restore their previous visibility.">
-        <Switch ariaLabel="Hide desktop icons" checked={settings?.hide_desktop_icons??false} onChange={on=>void setHideDesktopIcons(on)}/>
-      </Field>
-      <Field label="Auto-close Quick Access" hint="Hide the capture tray after 8 idle seconds. Hovering or dragging pauses the timer; captures are kept.">
-        <Switch ariaLabel="Auto-close Quick Access" checked={settings?.quick_access_auto_close??false} onChange={on=>void setQuickAccessAutoClose(on)}/>
-      </Field>
-      <Field label="Recording notifications" hint="Turn on Do not disturb in Windows before recording. Windows does not provide an unrestricted automatic switch for Glint.">
-        <Button size="md" variant="subtle" onClick={()=>void invoke('settings_open_notifications').catch(e=>pushToast(String(e)))}>Notification settings</Button>
-      </Field>
-      <OcrEngineControls />
-      <Field label="Search screenshot text" hint="Search readable text in saved screenshots, on this device. Turning this off clears the text index.">
-        <Switch ariaLabel="Search screenshot text" checked={settings?.index_screenshot_text ?? true} onChange={v => void setIndexScreenshotText(v)} />
-      </Field>
+    <Section title="Capture">
+      <SettingsGroup title="Screenshots">
+        <Field label="Format">
+          <Select
+            value={settings?.image_format ?? "png"}
+            options={FORMAT_OPTIONS}
+            onChange={(v) => void setImageFormat(v as "png" | "jpeg" | "webp")}
+          />
+        </Field>
+        {isJpeg && (
+          <Field label="JPEG quality">
+            <Select
+              value={settings?.jpeg_quality ?? "high"}
+              options={QUALITY_OPTIONS}
+              onChange={(v) => void setJpegQuality(v as "high" | "medium" | "low")}
+            />
+          </Field>
+        )}
+        <Field label="Include cursor">
+          <Switch
+            checked={settings?.include_cursor ?? false}
+            onChange={(v) => void setIncludeCursor(v)}
+          />
+        </Field>
+      </SettingsGroup>
+
+      <SettingsGroup title="Capturing">
+        <Field label="Capture on mouse release">
+          <Switch ariaLabel="Capture on mouse release" checked={settings?.capture_on_release??false} onChange={on=>void setCaptureOnRelease(on)}/>
+        </Field>
+        <Field label="Delayed capture countdown">
+          <Select
+            value={String(settings?.capture_delay_secs ?? 5)}
+            options={DELAY_OPTIONS}
+            onChange={(v) => void setCaptureDelay(Number(v) as 3 | 5 | 10)}
+          />
+        </Field>
+        <Field label="Hide desktop icons while capturing">
+          <Switch ariaLabel="Hide desktop icons" checked={settings?.hide_desktop_icons??false} onChange={on=>void setHideDesktopIcons(on)}/>
+        </Field>
+      </SettingsGroup>
+
+      <SettingsGroup title="After capture">
+        <Field label="Open in editor after capture">
+          <Switch ariaLabel="Open in editor after capture" checked={settings?.open_in_editor??false} onChange={on=>void setOpenInEditor(on)}/>
+        </Field>
+        <Field label="Close Quick Access when idle">
+          <Switch ariaLabel="Auto-close Quick Access" checked={settings?.quick_access_auto_close??false} onChange={on=>void setQuickAccessAutoClose(on)}/>
+        </Field>
+      </SettingsGroup>
+
+      <SettingsGroup title="Text">
+        <OcrEngineControls />
+        <Field label="Search text in screenshots">
+          <Switch ariaLabel="Search screenshot text" checked={settings?.index_screenshot_text ?? true} onChange={v => void setIndexScreenshotText(v)} />
+        </Field>
+      </SettingsGroup>
     </Section>
   );
 }

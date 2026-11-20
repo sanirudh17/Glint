@@ -48,7 +48,7 @@ pub fn main_present(window: tauri::WebviewWindow) -> Result<(), String> {
 pub fn prewarm_editors_after_present(app:&AppHandle){
     if EDITORS_PREWARMED.swap(true,Ordering::SeqCst){return;}
     let app=app.clone();
-    std::thread::spawn(move||{crate::editor::window::prewarm(&app);crate::recorder::windows::prewarm_trim_window(&app);});
+    std::thread::spawn(move||{crate::editor::window::prewarm(&app);crate::recorder::windows::prewarm_trim_window(&app);crate::ocr::window::prewarm(&app);});
 }
 
 /// Show, unminimize and focus the main window, creating focus from any context.
@@ -156,6 +156,11 @@ pub fn exclude_from_capture(win: &tauri::WebviewWindow) {
 #[cfg(not(windows))]
 pub fn exclude_from_capture(_win: &tauri::WebviewWindow) {}
 
+/// Persistent windows whose taskbar restores go through the reveal gate, keyed by HWND.
+#[cfg(windows)]
+static GATED_WINDOWS: std::sync::LazyLock<std::sync::Mutex<std::collections::HashMap<isize, tauri::WebviewWindow>>> =
+    std::sync::LazyLock::new(Default::default);
+
 /// Keep the desktop material active while visible, using Typr's paint guard.
 /// Minimized/hidden windows deactivate normally so reopening samples a fresh scene.
 #[cfg(windows)]
@@ -214,8 +219,23 @@ pub fn protect_desktop_surface(window: &tauri::WebviewWindow) {
             unsafe {
                 set_native_transitions(hwnd, reopening);
             }
+            // A taskbar restore bypasses focus_main's reveal gate: Windows would show the
+            // stale frame and the inactive backdrop, then swap both in front of the user.
+            // Cloak first, restore, then let the page acknowledge a fresh, active frame.
+            let gated = reopening
+                .then(|| GATED_WINDOWS.lock().ok().and_then(|map| map.get(&(hwnd.0 as isize)).cloned()))
+                .flatten()
+                .filter(crate::material::gate_taskbar_restore);
+            if let Some(window) = gated {
+                let result = unsafe { DefSubclassProc(hwnd, message, wparam, lparam) };
+                crate::material::request_paint(&window);
+                return result;
+            }
         }
         if message == 0x0082 {
+            if let Ok(mut map) = GATED_WINDOWS.lock() {
+                map.remove(&(hwnd.0 as isize));
+            }
             unsafe {
                 let _ = RemoveWindowSubclass(hwnd, Some(procedure), id);
             }
@@ -239,6 +259,9 @@ pub fn protect_desktop_surface(window: &tauri::WebviewWindow) {
     let owned = window.clone();
     let _ = window.run_on_main_thread(move || {
         if let Ok(hwnd) = owned.hwnd() {
+            if let Ok(mut map) = GATED_WINDOWS.lock() {
+                map.insert(hwnd.0 as isize, owned.clone());
+            }
             if !unsafe { SetWindowSubclass(hwnd, Some(procedure), 0x474c494e, 1).as_bool() } {
                 log::warn!("Could not install desktop surface protection");
             }

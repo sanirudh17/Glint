@@ -12,7 +12,7 @@ import { toPixels } from "./camOverlay";
 import { zoomAt } from "./studioEffects";
 import { applyPreviewMasks } from "./studioMasks";
 import {DEFAULT_MOTION,motionTimes} from './studioMotion';
-import {Crosshair} from "lucide-react";
+import {Crosshair} from "../icons";
 import {previewFocus,type FocusPoint} from './studioFocus';
 import {getGradient} from '../editor/gradients';
 import {gradientStops} from '../look/gradientRender';

@@ -138,13 +138,13 @@ fn show_controller(
             .always_on_top(true)
             .skip_taskbar(true)
             .resizable(false)
-            .inner_size(420., 184.)
+            .inner_size(400., 116.)
             .visible(false)
             .focused(false)
             .build()
             .map_err(|e| e.to_string())?;
     win.set_position(tauri::PhysicalPosition::new(
-        session.origin_x + (session.image.width as i32 - (440. * scale) as i32).max(0),
+        session.origin_x + (session.image.width as i32 - (420. * scale) as i32).max(0),
         session.origin_y + (20. * scale) as i32,
     ))
     .map_err(|e| e.to_string())?;
@@ -369,6 +369,11 @@ pub fn start(app: &AppHandle, mut session: CaptureSession, rect: RectArg) -> Res
                     if waiting && last_wheel.elapsed().as_millis() > 900 {
                         no_movement += 1;
                         waiting = false;
+                        // The page ignored a posted wheel: retry with genuine input.
+                        if target.as_ref().is_ok_and(|t| t.use_real_input()) {
+                            log::info!("scrolling capture: posted wheel ignored; using real wheel input");
+                            no_movement = 0;
+                        }
                     }
                     s.message = notice.clone().unwrap_or_else(|| {
                         if auto {

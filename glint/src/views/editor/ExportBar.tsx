@@ -1,6 +1,6 @@
 import { type RefObject } from "react";
 import type Konva from "konva";
-import { Copy, Download, Share2, CheckCheck } from "lucide-react";
+import { Copy, Download, Share2, CheckCheck } from "../../icons";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { useAppStore } from "../../store/useAppStore";
 import { computeLayout, exportPixelRatio } from "../../editor/composition";
@@ -91,13 +91,13 @@ export function ExportBar({ stageRef }: { stageRef: RefObject<Konva.Stage | null
         onPointerDown={event=>{if(event.button!==0)return;event.preventDefault();void onDrag();}}
         title="Press and drag onto any app"
       >
-        <Share2 size={16} strokeWidth={1.5} /> Drag
+        <Share2 size={16} strokeWidth={1.5} /><span>Drag</span>
       </button>
       <button className="editor-export-btn" disabled={!base || rendering} onClick={onCopy} title="Copy the edited image">
-        <Copy size={16} strokeWidth={1.5} /> Copy
+        <Copy size={16} strokeWidth={1.5} /><span>Copy</span>
       </button>
       <button className="editor-export-btn" disabled={!base || rendering} onClick={onSave} title="Export a PNG to the Library">
-        <Download size={16} strokeWidth={1.5} /> Export
+        <Download size={16} strokeWidth={1.5} /><span>Export</span>
       </button>
       <button className="editor-export-btn editor-export-btn--primary editor-done-btn" disabled={!base || rendering} onClick={onDone} title="Finish — send to the corner HUD">
         <CheckCheck size={16} strokeWidth={1.5} aria-hidden="true" /><span>Done</span>

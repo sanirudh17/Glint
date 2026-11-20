@@ -18,7 +18,7 @@ import { LogicalSize, LogicalPosition } from "@tauri-apps/api/dpi";
 import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getPinData, pinClose, type PinData } from "../lib/pin";
-import { X } from "lucide-react";
+import { X } from "../icons";
 import "./pin.css";
 
 const MIN = 80; // min logical px (any edge)

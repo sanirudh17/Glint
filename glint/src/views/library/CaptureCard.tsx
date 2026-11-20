@@ -1,5 +1,5 @@
-import { useRef, useState } from "react";
-import { ExternalLink, FolderOpen, Copy, FileSymlink, Files, TextCursorInput, Pencil, Pin, Trash2, Play, Scissors, ScanText, Image as ImageIcon, Video, type LucideIcon } from "lucide-react";
+import { memo, useRef, useState } from "react";
+import { ExternalLink, FolderOpen, Copy, Link2, Tag, Pencil, Pin, Trash2, Play, Scissors, ScanText, Image as ImageIcon, Video, type LucideIcon } from "../../icons";
 import type { CaptureItem } from "../../lib/captures";
 import { openCapture, revealCapture, copyCapture, copyCapturePath, deleteCapture, renameCapture, dragOut } from "../../lib/captures";
 import { openTrim } from "../../lib/trim";
@@ -17,7 +17,7 @@ function when(unixSec: number): string {
   });
 }
 
-export function CaptureCard({
+export const CaptureCard = memo(function CaptureCard({
   item,
   onChanged,
   variant = "library",
@@ -89,7 +89,7 @@ export function CaptureCard({
       { label: "Open", icon: ExternalLink, run: () => act(() => openCapture(item.id)) },
       { label: "Pin to screen", icon: Pin, run: () => act(() => pinCreateFromCapture(item.id)) },
     ],
-    [{ label: "Rename", icon: TextCursorInput, run: startRename }],
+    [{ label: "Rename", icon: Tag, run: startRename }],
     [{ label: "Delete", icon: Trash2, danger: true, run: doDelete }],
   ];
   const recGroups: CardAct[][] = [
@@ -99,9 +99,9 @@ export function CaptureCard({
     ],
     [
       { label: "Trim", icon: Scissors, run: () => act(() => openTrim(item.id, item.path)) },
-      { label: "Rename", icon: TextCursorInput, run: startRename },
+      { label: "Rename", icon: Tag, run: startRename },
     ],
-    [{ label: "Copy file", icon: Files, run: () => act(() => copyCapture(item.id)) },{ label: "Copy file path", icon: FileSymlink, run: doCopyPath }],
+    [{ label: "Copy file", icon: Copy, run: () => act(() => copyCapture(item.id)) },{ label: "Copy file path", icon: Link2, run: doCopyPath }],
     [{ label: "Delete", icon: Trash2, danger: true, run: doDelete }],
   ];
   // Home overlay: compact primary trio (the full set lives in Library).
@@ -109,13 +109,13 @@ export function CaptureCard({
     {label:'Open GIF',icon:ExternalLink,run:()=>act(()=>openCapture(item.id))},
     {label:'Copy GIF file',icon:Copy,run:()=>act(()=>copyCapture(item.id))},
     {label:'Reveal in Explorer',icon:FolderOpen,run:()=>act(()=>revealCapture(item.id))},
-    {label:'Rename',icon:TextCursorInput,run:startRename},
-    {label:'Copy file path',icon:FileSymlink,run:doCopyPath},
+    {label:'Rename',icon:Tag,run:startRename},
+    {label:'Copy file path',icon:Link2,run:doCopyPath},
     {label:'Delete',icon:Trash2,danger:true,run:doDelete},
   ]];
   const homeActs: CardAct[] = isGif?gifGroups[0].slice(0,3):isRecording
     ? [
-        { label: "Copy file path", icon: FileSymlink, run: doCopyPath },
+        { label: "Copy file path", icon: Link2, run: doCopyPath },
         { label: "Trim", icon: Scissors, run: () => act(() => openTrim(item.id, item.path)) },
         { label: "Open video", icon: ExternalLink, run: () => act(() => openCapture(item.id)) },
       ]
@@ -136,7 +136,7 @@ export function CaptureCard({
         onPointerDown={(e) => e.stopPropagation()}
         onClick={a.run}
       >
-        <Icon size={18} strokeWidth={1.7} />
+        <Icon size={16} strokeWidth={1.5} />
         <span className="cap-tip" aria-hidden="true">{a.label}</span>
       </button>
     );
@@ -161,7 +161,7 @@ export function CaptureCard({
         )}
         {isRecording && (
           <div className="cap-thumb-play">
-            <Play size={24} strokeWidth={1.5} stroke="#fff" />
+            <Play size={24} strokeWidth={1.5} stroke="#fff" color="#fff" />
           </div>
         )}
         {variant === "home" ? (
@@ -213,4 +213,4 @@ export function CaptureCard({
       </div>
     </div>
   );
-}
+});

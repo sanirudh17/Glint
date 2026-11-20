@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { Section, Card } from "../../components/ui";
+import { Section } from "../../components/ui";
 import { useAppStore } from "../../store/useAppStore";
 import { keyEventToAccelerator, toChips } from "../../lib/hotkeys";
 import { suspendHotkeys, resumeHotkeys } from "../../lib/ipc";
@@ -75,7 +75,7 @@ export function Hotkeys() {
   }, []);
 
   // While a row is capturing, listen for the next key combo. Esc cancels; Backspace/Delete
-  // clears. Global shortcuts are suspended for the duration (see startCapture).
+  // clears (both also have buttons in the row, so neither needs explaining). Global shortcuts are suspended for the duration (see startCapture).
   useEffect(() => {
     if (!capturing) return;
     const onKey = (e: KeyboardEvent) => {
@@ -137,103 +137,87 @@ export function Hotkeys() {
   if (!settings) return null;
 
   return (
-    <Section
-      title="Keyboard shortcuts"
-      description="Global shortcuts that work anywhere in Windows."
-      className="settings-section--wide"
-    >
-      <Card>
-        <div className="settings-hotkey-help" role="note">
-          <strong>How to change a shortcut</strong>
-          <ol>
-            <li>Click <em>Change</em> on a shortcut, then press the key combination you want.</li>
-            <li>
-              Every shortcut needs <kbd className="settings-kbd">Ctrl</kbd>,{" "}
-              <kbd className="settings-kbd">Alt</kbd>, or <kbd className="settings-kbd">Win</kbd> plus one
-              more key (Shift is optional).
-            </li>
-            <li>
-              Press <kbd className="settings-kbd">Esc</kbd> to cancel, or{" "}
-              <kbd className="settings-kbd">Backspace</kbd> to clear a shortcut.
-            </li>
-          </ol>
-          <p>Changes apply instantly. If a shortcut is already used by another app, Glint keeps your previous one and tells you.</p>
-        </div>
+    <Section title="Keyboard shortcuts">
+      <p className="settings-hotkey-help" role="note">
+        Choose <strong>Change</strong>, then press a shortcut that uses <kbd className="settings-kbd">Ctrl</kbd>{" "}
+        <kbd className="settings-kbd">Alt</kbd> or <kbd className="settings-kbd">Win</kbd>. Shortcuts work anywhere in Windows;
+        if another app already uses one, Glint keeps your previous shortcut.
+      </p>
+      <ul className="settings-hotkeys-list" role="list">
+        {HOTKEY_ORDER.map((key) => {
+          const raw = settings.hotkeys[key] ?? "";
+          const isCapturing = capturing === key;
+          const err = errors[key];
+          const flashed = flash[key];
+          const isDefault = sameAccel(raw, DEFAULTS[key]);
+          return (
+            <li key={key} className={`settings-hotkey-row${isCapturing ? " is-capturing" : ""}`}>
+              <span className="settings-hotkey-label">{HOTKEY_LABELS[key] ?? key}</span>
 
-        <ul className="settings-hotkeys-list" role="list">
-          {HOTKEY_ORDER.map((key) => {
-            const raw = settings.hotkeys[key] ?? "";
-            const isCapturing = capturing === key;
-            const err = errors[key];
-            const flashed = flash[key];
-            const isDefault = sameAccel(raw, DEFAULTS[key]);
-            return (
-              <li key={key} className={`settings-hotkey-row${isCapturing ? " is-capturing" : ""}`}>
-                <span className="settings-hotkey-label">{HOTKEY_LABELS[key] ?? key}</span>
-
-                <span className="settings-hotkey-keys" aria-label={raw || "not set"}>
-                  {isCapturing ? (
-                    <span className="settings-hotkey-listening">
-                      Press keys… <em>Esc to cancel</em>
-                    </span>
-                  ) : raw === "" ? (
-                    <span className="settings-hotkey-empty">Not set</span>
-                  ) : (
-                    toChips(raw).map((chip, i) => (
-                      <kbd key={i} className="settings-kbd">
-                        {chip}
-                      </kbd>
-                    ))
-                  )}
-                </span>
-
-                <span className="settings-hotkey-actions">
-                  {flashed && <span className="settings-hotkey-flash">{flashed}</span>}
-                  {!isCapturing && (
-                    <button type="button" className="settings-hotkey-btn" onClick={() => void startCapture(key)}>
-                      Change
-                    </button>
-                  )}
-                  {!isCapturing && !isDefault && (
-                    <button
-                      type="button"
-                      className="settings-hotkey-btn settings-hotkey-btn--ghost"
-                      onClick={() => void commit(key, DEFAULTS[key])}
-                    >
-                      Reset
-                    </button>
-                  )}
-                  {isCapturing && (
-                    <button
-                      type="button"
-                      className="settings-hotkey-btn settings-hotkey-btn--ghost"
-                      onClick={() => void endCapture()}
-                    >
-                      Cancel
-                    </button>
-                  )}
-                </span>
-
-                {err && (
-                  <span className="settings-hotkey-error" role="alert">
-                    {err}
-                  </span>
+              <span className="settings-hotkey-keys" aria-label={raw || "not set"}>
+                {isCapturing ? (
+                  <span className="settings-hotkey-listening" role="status">Press a shortcut…</span>
+                ) : raw === "" ? (
+                  <span className="settings-hotkey-empty">None</span>
+                ) : (
+                  toChips(raw).map((chip, i) => (
+                    <kbd key={i} className="settings-kbd">
+                      {chip}
+                    </kbd>
+                  ))
                 )}
-              </li>
-            );
-          })}
-        </ul>
+              </span>
 
-        <div className="settings-hotkey-footer">
-          <button
-            type="button"
-            className="settings-hotkey-btn settings-hotkey-btn--ghost"
-            onClick={() => void resetHotkeys()}
-          >
-            Reset all to defaults
-          </button>
-        </div>
-      </Card>
+              <span className="settings-hotkey-actions">
+                {flashed && <span className="settings-hotkey-flash">{flashed}</span>}
+                {isCapturing ? (
+                  <>
+                    {raw !== "" && (
+                      <button type="button" className="settings-hotkey-btn settings-hotkey-btn--ghost" onClick={() => void commit(key, "")}>
+                        <span>Clear</span>
+                      </button>
+                    )}
+                    <button type="button" className="settings-hotkey-btn" onClick={() => void endCapture()}>
+                      <span>Cancel</span>
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    {!isDefault && (
+                      <button
+                        type="button"
+                        className="settings-hotkey-btn settings-hotkey-btn--ghost"
+                        onClick={() => void commit(key, DEFAULTS[key])}
+                      >
+                        <span>Reset</span>
+                      </button>
+                    )}
+                    <button type="button" className="settings-hotkey-btn" onClick={() => void startCapture(key)}>
+                      <span>Change</span>
+                    </button>
+                  </>
+                )}
+              </span>
+
+              {err && (
+                <span className="settings-hotkey-error" role="alert">
+                  {err}
+                </span>
+              )}
+            </li>
+          );
+        })}
+      </ul>
+
+      <div className="settings-hotkey-footer">
+        <button
+          type="button"
+          className="settings-hotkey-btn settings-hotkey-btn--ghost"
+          onClick={() => void resetHotkeys()}
+        >
+          <span>Reset all to defaults</span>
+        </button>
+      </div>
     </Section>
   );
 }

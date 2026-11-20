@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SlidersHorizontal, Crop, Video, Save, Keyboard, Palette, HardDrive, RefreshCw } from "lucide-react";
+import { SlidersHorizontal, Crop, Video, Save, Keyboard, Palette, HardDrive, RefreshCw } from "../icons";
 import { General }    from "./settings/General";
 import { Capture }    from "./settings/Capture";
 import { Recording }  from "./settings/Recording";

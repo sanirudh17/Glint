@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { NavLink, useNavigate } from "react-router-dom";
 import { listen } from "@tauri-apps/api/event";
-import { Home, Images, Settings, ChevronsLeft, ChevronsRight } from "lucide-react";
+import { Home, Images, Settings, ChevronsLeft, ChevronsRight } from "../icons";
 import { Tooltip } from "./ui";
 
 /** localStorage key for the rail's expanded/collapsed state (main window only). */
@@ -54,9 +54,9 @@ export function NavRail() {
       className={`g-nav-rail${expanded ? " g-nav-rail--expanded" : ""}`}
       aria-label="Main navigation"
     >
-      <NavItem to="/home" label="Home" icon={<Home size={18} strokeWidth={1.7} />} expanded={expanded} />
-      <NavItem to="/library" label="Library" icon={<Images size={18} strokeWidth={1.7} />} expanded={expanded} />
-      <NavItem to="/settings" label="Settings" icon={<Settings size={18} strokeWidth={1.7} />} expanded={expanded} />
+      <NavItem to="/home" label="Home" icon={<Home size={16} strokeWidth={1.5} />} expanded={expanded} />
+      <NavItem to="/library" label="Library" icon={<Images size={16} strokeWidth={1.5} />} expanded={expanded} />
+      <NavItem to="/settings" label="Settings" icon={<Settings size={16} strokeWidth={1.5} />} expanded={expanded} />
 
       <div className="g-nav-foot">
         <ToggleItem expanded={expanded} onClick={toggle} />
@@ -104,8 +104,8 @@ function ToggleItem({ expanded, onClick }: { expanded: boolean; onClick: () => v
     >
       <span className="g-nav-icon">
         {expanded
-          ? <ChevronsLeft size={18} strokeWidth={1.7} />
-          : <ChevronsRight size={18} strokeWidth={1.7} />}
+          ? <ChevronsLeft size={16} strokeWidth={1.5} />
+          : <ChevronsRight size={16} strokeWidth={1.5} />}
       </span>
       <span className="g-nav-label">{label}</span>
     </button>

@@ -132,27 +132,14 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   border-radius: var(--r1);
 }
 
-/* ─── Scrollbar (WebKit / Chromium — Tauri webview) ─────────────────── */
-/* Thin native WebView2 scrollbars also reach textarea shadow containers. */
-* { scrollbar-width: thin; scrollbar-color: var(--scrollbar-thumb) transparent; }
+/* ─── Scrollbar ─────────────────────────────────────────────────────── */
+/* Native overlay scrollbars (Chromium OverlayScrollbar, enabled at WebView2
+   launch — see lib.rs): float over content, no track/arrows, fade when idle.
+   Only the thumb colour is themed, so it blends with dark/light surfaces. */
 :root { color-scheme: dark; }
 :root[data-theme="light"] { color-scheme: light; }
+* { scrollbar-color: var(--scrollbar-thumb) transparent; }
 @media (forced-colors: active) { * { scrollbar-color: auto !important; } }
-
-::-webkit-scrollbar {
-  width: 5px;
-  height: 5px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
-::-webkit-scrollbar-thumb {
-  background: var(--scrollbar-thumb);
-  border-radius: 3px;
-}
-::-webkit-scrollbar-thumb:hover {
-  background: var(--text-dim);
-}
 
 /* ─── Reduced motion ─────────────────────────────────────────────────── */
 @media (prefers-reduced-motion: reduce) {

@@ -1,15 +1,15 @@
 import {DEFAULT_INK,type InkConfig} from './RecordingInk';
-import {Pencil,Highlighter,MoveUpRight,RectangleHorizontal,Circle,Type,Undo2,X} from 'lucide-react';
+import {Pencil,Highlighter,MoveUpRight,RectangleHorizontal,Circle,Type,Undo2,X} from "../icons";
 /** ControlBar.tsx — the floating REC indicator (route #/rec-bar). */
 import { useEffect, useRef, useState } from "react";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow, PhysicalSize, PhysicalPosition } from "@tauri-apps/api/window";
 import { recorderStop, recorderPause, recorderResume, recorderStatus, recorderSetMute, recorderSetWebcam, recorderSetFx } from "../lib/recorder";
-import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointerClick, Keyboard, Sun, ScanLine } from "lucide-react";
+import { Square, Pause, Play, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointerClick, Keyboard, Spotlight, ScanLine } from "../icons";
 import "./recorder.css";
 import {invoke} from '@tauri-apps/api/core';
 import {confirm} from '@tauri-apps/plugin-dialog';
-import {FileText,RotateCcw} from 'lucide-react';
+import {FileText,RotateCcw} from "../icons";
 
 export function mmss(total: number): string {
   const m = Math.floor(total / 60), s = total % 60;
@@ -184,8 +184,9 @@ export function ControlBar() {
       {(feedback||hint) && <div className="rec-tip" role="status">{feedback||hint}</div>}
       <span className={`rec-dot${paused ? " rec-dot--paused" : ""}`} aria-hidden />
       <span className="rec-time">{mmss(secs)}</span>
-      {studioMode&&<button className="rec-atog rec-marker" aria-label="Mark zoom" {...tip("Mark zoom for the editor (Ctrl+Alt+Z)")} onClick={()=>void invoke('recorder_mark_zoom').catch(error=>setFeedback(String(error)))}><ScanLine size={13}/><span>Zoom</span></button>}
-      {studioMode&&<button className={`rec-atog rec-marker${ink.tool?' is-active':''}`} aria-label="Draw live annotations" aria-pressed={!!ink.tool} {...tip("Draw editable annotations while recording")} onClick={()=>void changeInk({tool:ink.tool?null:'pen'})}><Pencil size={14}/><span>Draw</span></button>}
+      <span className="rec-sep" aria-hidden />
+      {studioMode&&<button className="rec-atog rec-marker" aria-label="Mark zoom" {...tip("Mark zoom for the editor (Ctrl+Alt+Z)")} onClick={()=>void invoke('recorder_mark_zoom').catch(error=>setFeedback(String(error)))}><ScanLine size={16} /><span>Zoom</span></button>}
+      {studioMode&&<button className={`rec-atog rec-marker${ink.tool?' is-active':''}`} aria-label="Draw live annotations" aria-pressed={!!ink.tool} {...tip("Draw editable annotations while recording")} onClick={()=>void changeInk({tool:ink.tool?null:'pen'})}><Pencil size={16}/><span>Draw</span></button>}
       {audio?.system && (
         <button
           className={`rec-atog${audio.sysMuted ? " rec-atog--off" : ""}`}
@@ -193,7 +194,7 @@ export function ControlBar() {
           {...tip(audio.sysMuted ? "Unmute system audio" : "Mute system audio")}
           aria-label="Toggle system audio"
         >
-          {audio.sysMuted ? <VolumeX size={13} /> : <Volume2 size={13} />}
+          {audio.sysMuted ? <VolumeX size={16} /> : <Volume2 size={16} />}
         </button>
       )}
       {audio?.mic && (
@@ -203,7 +204,7 @@ export function ControlBar() {
           {...tip(audio.micMuted ? "Unmute microphone" : "Mute microphone")}
           aria-label="Toggle microphone"
         >
-          {audio.micMuted ? <MicOff size={13} /> : <Mic size={13} />}
+          {audio.micMuted ? <MicOff size={16} /> : <Mic size={16} />}
         </button>
       )}
       <button
@@ -212,17 +213,18 @@ export function ControlBar() {
         {...tip(camOn ? "Turn off webcam" : "Turn on webcam")}
         aria-label="Toggle webcam"
       >
-        {camOn ? <Video size={13} /> : <VideoOff size={13} />}
+        {camOn ? <Video size={16} /> : <VideoOff size={16} />}
       </button>
       {fx && (
         <>
+          <span className="rec-sep" aria-hidden />
           <button
             className={`rec-atog${fx.clickViz ? "" : " rec-atog--off"}`}
             onClick={() => toggleFx("click_viz", !fx.clickViz)}
             {...tip(fx.clickViz ? "Hide click effects" : "Show click effects")}
             aria-label="Toggle click visualization"
           >
-            <MousePointerClick size={13} />
+            <MousePointerClick size={16} />
           </button>
           <button
             className={`rec-atog${fx.keystrokes ? "" : " rec-atog--off"}`}
@@ -230,7 +232,7 @@ export function ControlBar() {
             {...tip(fx.keystrokes ? "Hide keystrokes" : "Show keystrokes")}
             aria-label="Toggle keystroke overlay"
           >
-            <Keyboard size={13} />
+            <Keyboard size={16} />
           </button>
           <button
             className={`rec-atog${fx.spotlight ? "" : " rec-atog--off"}`}
@@ -238,10 +240,11 @@ export function ControlBar() {
             {...tip(fx.spotlight ? "Hide cursor spotlight" : "Show cursor spotlight")}
             aria-label="Toggle cursor spotlight"
           >
-            <Sun size={13} />
+            <Spotlight size={16} />
           </button>
         </>
       )}
+      <span className="rec-sep" aria-hidden />
       <button
         className="rec-pause"
         onClick={togglePause}
@@ -250,13 +253,13 @@ export function ControlBar() {
         aria-label={paused ? "Resume recording" : "Pause recording"}
       >
         {paused
-          ? <Play size={13} strokeWidth={2.5} fill="currentColor" />
-          : <Pause size={13} strokeWidth={2.5} fill="currentColor" />}
+          ? <Play size={12} strokeWidth={2.5} fill="currentColor" />
+          : <Pause size={12} strokeWidth={2.5} fill="currentColor" />}
       </button>
-      <button className="rec-atog" aria-label="Speaker notes" {...tip('Speaker notes (hidden from capture)')} onClick={()=>void invoke('studio_speaker_notes').catch(e=>setHint(String(e)))}><FileText size={13}/></button>
-      <button className="rec-atog" aria-label="Restart recording" disabled={busy} {...tip('Restart recording')} onClick={()=>void confirm('Discard this recording and start again in the same area?',{title:'Restart recording',kind:'warning'}).then(async ok=>{if(!ok)return;setBusy(true);try{await invoke('recorder_restart');}catch(e){setHint(String(e));setBusy(false);}})}><RotateCcw size={13}/></button>
+      <button className="rec-atog" aria-label="Speaker notes" {...tip('Speaker notes (hidden from capture)')} onClick={()=>void invoke('studio_speaker_notes').catch(e=>setHint(String(e)))}><FileText size={16} /></button>
+      <button className="rec-atog" aria-label="Restart recording" disabled={busy} {...tip('Restart recording')} onClick={()=>void confirm('Discard this recording and start again in the same area?',{title:'Restart recording',kind:'warning'}).then(async ok=>{if(!ok)return;setBusy(true);try{await invoke('recorder_restart');}catch(e){setHint(String(e));setBusy(false);}})}><RotateCcw size={16} /></button>
       <button className="rec-stop" onClick={() => recorderStop()} {...tip("Stop recording")} aria-label="Stop">
-        <Square size={13} strokeWidth={2.5} fill="currentColor" />
+        <Square size={12} strokeWidth={2.5} fill="currentColor" />
       </button>
     </div></div>
   );

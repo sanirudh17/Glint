@@ -6,7 +6,7 @@ import {useAppStore} from '../store/useAppStore';
 
 type Engine='tesseract'|'ppocrv6-small'|'ppocrv6-medium';
 const OPTIONS=[{value:'tesseract',label:'Tesseract (English)'},{value:'ppocrv6-small',label:'PP-OCRv6 Small (recommended)'},{value:'ppocrv6-medium',label:'PP-OCRv6 Medium'}];
-const SIZES:Record<Engine,string>={tesseract:'55.3','ppocrv6-small':'108.7','ppocrv6-medium':'211.3'};
+const SIZES:Record<Engine,string>={tesseract:'55.3','ppocrv6-small':'43.9','ppocrv6-medium':'146.4'};
 /** Explicit, reversible engine downloads. Selecting a missing model never downloads it. */
 export function OcrEngineControls(){
  const engine=useAppStore(s=>s.settings?.ocr_engine??'tesseract'),setEngine=useAppStore(s=>s.setOcrEngine);
@@ -49,7 +49,7 @@ export function OcrEngineControls(){
     {busy==='remove'?'Removing...':busy==='install'?'Installing...':!known?'Checking...':installed?'Remove from disk':'Install'}
    </Button>
   </div>
-  {known && !notice && <span className="g-field-hint">{installed ? 'Installed. Recognition runs on this device.' : `${SIZES[choice]} MiB download. Install to use this engine.`}</span>}
+  {known && !installed && !notice && <span className="g-field-hint">{SIZES[choice]} MiB download</span>}
   {busy==='install'&&<div className="ocr-engine-progress" role="status"><progress max={100} value={percent} aria-label={stage||'Downloading OCR engine'}/><span>{stage} ({Math.round(percent)}%)</span><Button size="sm" onClick={()=>void invoke('ocr_engine_cancel').catch(e=>setError(String(e)))}>Cancel</Button></div>}
   {notice&&<p role="status" className="g-field-hint">{notice}</p>}
   {error&&<p role="alert" className="look-error">{error}</p>}

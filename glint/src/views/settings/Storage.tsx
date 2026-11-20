@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { HardDrive, FolderOpen, RotateCcw } from "lucide-react";
+import { HardDrive, FolderOpen, RotateCcw } from "../../icons";
 import { open } from "@tauri-apps/plugin-dialog";
 import { Section, Field, Card, Button } from "../../components/ui";
 import { useAppStore } from "../../store/useAppStore";
@@ -38,7 +38,7 @@ export function Storage() {
   const custom = (settings?.save_dir ?? "") !== "";
 
   return (
-    <Section title="Storage" description="Where Glint stores your data on disk.">
+    <Section title="Storage">
       <Card>
         <div className="settings-storage-list">
           {([
@@ -58,7 +58,7 @@ export function Storage() {
         </div>
       </Card>
 
-      <Field label="Capture folder" hint="Where new screenshots and recordings are saved. Existing files aren't moved.">
+      <Field label="Capture folder" hint="New captures save here. Existing files aren't moved.">
         <div className="settings-folder-control">
           <code className="settings-folder-path">{paths?.screenshots ?? "…"}</code>
           <div className="settings-folder-actions">

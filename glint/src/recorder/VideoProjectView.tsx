@@ -5,7 +5,7 @@ import {convertFileSrc,invoke} from '@tauri-apps/api/core';
 import {listen} from '@tauri-apps/api/event';
 import {open,save,confirm} from '@tauri-apps/plugin-dialog';
 import {getCurrentWebview} from '@tauri-apps/api/webview';
-import {ArrowDown,ArrowUp,FolderOpen,ImagePlus,Play,Pause,Plus,Save,Trash2,Type,Undo2,Redo2} from 'lucide-react';
+import {ArrowDown,ArrowUp,FolderOpen,ImagePlus,Play,Pause,Plus,Save,Trash2,Type,Undo2,Redo2} from "../icons";
 import {Button,ColorControl,ControlDisclosure,NumberInput,Select} from '../components/ui';
 import {LookControls} from '../look/LookControls';
 import {hydrateLook} from '../look/model';

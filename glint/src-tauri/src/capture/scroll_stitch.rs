@@ -619,6 +619,30 @@ mod tests {
         }
         out
     }
+    /// A page with a large playing video (new noise every frame, moving with the
+    /// page) still settles, and a scroll step still aligns to the exact offset.
+    #[test]
+    fn playing_video_settles_and_stitches() {
+        let p = page(640, 3000);
+        let view = |top: u32, seed: u32| {
+            let mut out = image::imageops::crop_imm(&p, 0, top, 640, 480).to_image();
+            for y in 0..480u32 {
+                let page_y = top + y;
+                if !(260..620).contains(&page_y) {
+                    continue;
+                }
+                for x in 96..448u32 {
+                    let n = (x.wrapping_mul(2654435761) ^ page_y.wrapping_mul(40503) ^ seed.wrapping_mul(97531))
+                        .wrapping_mul(2246822519);
+                    out.put_pixel(x, y, Rgba([(n >> 8) as u8, (n >> 16) as u8, (n >> 24) as u8, 255]));
+                }
+            }
+            out
+        };
+        assert!(settled_frame(&view(100, 1), &view(100, 2)));
+        let mut stitch = Stitcher::new(view(100, 3)).unwrap();
+        assert_eq!(stitch.push_settled(view(220, 4), &view(220, 5)), Step::Appended(120));
+    }
     #[test]
     fn text_page_and_chat_stitch_exactly_with_sticky_bands() {
         let p = page(320, 3000);

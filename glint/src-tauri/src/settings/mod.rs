@@ -46,6 +46,9 @@ impl Default for Hotkeys {
 
 fn default_glass()->bool{true}
 fn default_ocr_engine()->String{"tesseract".into()}
+fn default_shutter_sound() -> String {
+    "click".into()
+}
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Settings {
     pub theme: Theme,
@@ -82,8 +85,11 @@ pub struct Settings {
     /// Custom folder for new captures (screenshots + recordings). Empty = platform defaults
     /// (`Pictures\Glint` / `Videos\Glint`).
     pub save_dir: String,
-    /// Play a shutter click on screenshot capture.
+    /// Play a shutter sound on screenshot capture.
     pub sound_effects: bool,
+    /// Which shutter sound: an id from `sound::SHUTTER_SOUNDS`.
+    #[serde(default = "default_shutter_sound")]
+    pub shutter_sound: String,
     /// Keep the main window's button in the Windows taskbar.
     pub show_in_taskbar: bool,
     /// Bake the mouse cursor into screenshots.
@@ -149,6 +155,7 @@ impl Default for Settings {
             record_cursor_size: "off".into(),
             save_dir: String::new(),
             sound_effects: false,
+            shutter_sound: default_shutter_sound(),
             show_in_taskbar: true,
             include_cursor: false,
             image_format: "png".into(),
@@ -233,6 +240,13 @@ pub fn apply_update(s: &mut Settings, key: &str, value: serde_json::Value) -> Re
         }
         "save_dir" => {
             s.save_dir = value.as_str().ok_or("save_dir must be string")?.to_string();
+        }
+        "shutter_sound" => {
+            let v = value.as_str().ok_or("shutter_sound must be string")?;
+            if !sound::is_shutter_sound(v) {
+                return Err("Unknown shutter sound".into());
+            }
+            s.shutter_sound = v.to_string();
         }
         "sound_effects" => {
             s.sound_effects = value.as_bool().ok_or("sound_effects must be boolean")?;

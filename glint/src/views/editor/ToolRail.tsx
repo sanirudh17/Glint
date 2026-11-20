@@ -1,7 +1,7 @@
 import {
   MousePointer2, ArrowUpRight, Minus, Square, Circle as CircleIcon,
   Type, Pen, Highlighter, Droplet, EyeOff, Focus, Hash, Eraser, Crop as CropIcon, Undo2, Redo2, Trash2, type LucideIcon,
-} from "lucide-react";
+} from "../../icons";
 import { useEditorStore } from "../../editor/useEditorStore";
 import type { ToolId } from "../../editor/model";
 

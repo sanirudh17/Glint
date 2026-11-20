@@ -246,6 +246,10 @@ pub fn begin_on(app:&AppHandle,mode:CaptureMode,restore_main:bool,intent:Capture
         Err(std::sync::TryLockError::Poisoned(inner)) => inner.into_inner(),
     };
     log::info!("capture begin: mode={}", mode.as_str());
+    // Open the audio device while the user selects, so the shutter fires instantly.
+    if app.state::<crate::settings::commands::SettingsState>().0.lock().unwrap().sound_effects {
+        crate::settings::sound::warm();
+    }
     // Guard against double-begin: tear down any existing overlay first. The tray
     // (Quick Access Overlay) is NOT torn down here — a new capture is appended to
     // it (see finish_commit), so an in-progress stack survives across captures.

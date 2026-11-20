@@ -1,5 +1,5 @@
 import {useState} from 'react';
-import {ImagePlus,ChevronUp,ChevronDown,Trash2} from 'lucide-react';
+import {ImagePlus,ChevronUp,ChevronDown,Trash2} from "../../icons";
 import {useEditorStore} from '../../editor/useEditorStore';
 import {NumberInput} from '../../components/ui';
 import {newImageLayer,sideBySide,readImageFile} from '../../editor/imageLayers';

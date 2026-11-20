@@ -7,7 +7,7 @@
  *  Recorder-owned. Uses pointer CAPTURE + geometry hit-testing (WebView2-safe: capture keeps
  *  the move/up stream as the cursor leaves the tile; geometry never "misses" a target). */
 import { Fragment, useRef, useState } from "react";
-import { GripVertical, ChevronRight } from "lucide-react";
+import { GripVertical, ChevronRight } from "../icons";
 import { keptClipsInOrder, type Clip } from "./trimModel";
 
 const secs = (start: number, end: number, speed: number) => `${((end - start) / speed).toFixed(1)}s`;

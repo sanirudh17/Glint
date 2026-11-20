@@ -7,17 +7,14 @@ export function AutoSave() {
   const setAutoCopy = useAppStore((s) => s.setAutoCopy);
 
   return (
-    <Section
-      title="Auto-save"
-      description="Automatically save captures to disk after taking them."
-    >
-      <Field label="Auto-save captures" hint="Save each capture to Pictures\Glint without prompting.">
+    <Section title="Auto-save">
+      <Field label="Save captures automatically">
         <Switch
           checked={settings?.auto_save ?? true}
           onChange={(v) => setAutoSave(v)}
         />
       </Field>
-      <Field label="Auto-copy to clipboard" hint="Copy the capture to the clipboard immediately after taking it.">
+      <Field label="Copy captures automatically">
         <Switch
           checked={settings?.auto_copy ?? true}
           onChange={(v) => setAutoCopy(v)}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from "react";
-import { Images, Search } from "lucide-react";
+import { Images, Search } from "../icons";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { EmptyState, Select } from "../components/ui";
@@ -16,6 +16,9 @@ const KIND_OPTIONS = [
   { value: "recording",  label: "Recordings" },
   { value: "gif", label: "GIFs" },
 ];
+
+const FIRST_PAINT = 18;
+const FILL_STEP = 36;
 
 export default function LibraryView() {
   const [captures, setCaptures] = useState<CaptureItem[]>(() => captureSnapshot());
@@ -40,9 +43,10 @@ export default function LibraryView() {
   useEffect(()=>{
     if(!textEnabled)return;let alive=true,timer:ReturnType<typeof setTimeout>;
     const poll=async()=>{try{const value=await invoke<typeof progress>('library_index_status');if(!alive)return;setProgress(value);if(value.running)timer=setTimeout(()=>void poll(),700);else reload();}catch{if(alive)setIndexError('Screenshot text could not be read. Try again.');}};
-    void invoke('library_index_start').then(()=>poll()).catch(()=>{if(alive)setIndexError('Screenshot text could not be read. Try again.');});
+    // Start the text indexer only after the grid has painted, so it never competes with the tab switch.
+    const kick=setTimeout(()=>{if(!alive)return;void invoke('library_index_start').then(()=>poll()).catch(()=>{if(alive)setIndexError('Screenshot text could not be read. Try again.');});},250);
     const un=listen('library-indexed',()=>{void poll();});
-    return()=>{alive=false;clearTimeout(timer);void un.then(f=>f());};
+    return()=>{alive=false;clearTimeout(timer);clearTimeout(kick);void un.then(f=>f());};
   },[textEnabled,indexRun,reload]);
   useEffect(()=>{
     let alive=true;setTextMatches(new Set());if(!search.trim()||!textEnabled)return;
@@ -66,6 +70,15 @@ export default function LibraryView() {
   });
 
   const isEmpty = visible.length === 0;
+
+  // Paint the first screenful on the tab switch, then fill in the rest over the next
+  // frames — a large library never blocks the switch on rendering every card at once.
+  const [shown, setShown] = useState(FIRST_PAINT);
+  useEffect(() => {
+    if (shown >= visible.length) return;
+    const frame = requestAnimationFrame(() => setShown((n) => n + FILL_STEP));
+    return () => cancelAnimationFrame(frame);
+  }, [shown, visible.length]);
 
   return (
     <div className="library-view">
@@ -112,7 +125,7 @@ export default function LibraryView() {
           </div>
         ) : (
           <div className="library-grid" role="list" aria-label="Captures">
-            {visible.map((c) => (
+            {visible.slice(0, shown).map((c) => (
               <CaptureCard key={c.id} item={c} onChanged={reload} />
             ))}
           </div>

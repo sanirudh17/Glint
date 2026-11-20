@@ -69,8 +69,17 @@ static ENGINE: Mutex<Option<(&'static str, OAROCR)>> = Mutex::new(None);
 static SEARCH_ENGINES: [Mutex<Option<(&'static str, OAROCR)>>; 2] = [Mutex::new(None), Mutex::new(None)];
 static INSTALLING: AtomicBool = AtomicBool::new(false);
 pub(super) static CANCEL: AtomicBool = AtomicBool::new(false);
+/// ONNX Runtime 1.31.0 for Windows x64, from Microsoft's PyPI wheel. The GitHub
+/// release host (github.com/microsoft/onnxruntime) began returning 404; PyPI files
+/// are immutable, carry a published SHA-256, and the wheel is 15 MB instead of the
+/// 83 MB release zip. Same version, so the `ort` API contract is unchanged.
+const RUNTIME_URL: &str = "https://files.pythonhosted.org/packages/be/ed/b12cea136ccd7b03d924f46b8393faf7ceac21115c0c50e729faa248cf23/onnxruntime-1.31.0-cp312-cp312-win_amd64.whl";
+const RUNTIME_BYTES: u64 = 14_888_841;
+const RUNTIME_SHA256: &str = "09d56445c1753e66e0912de69d3f0184016ad9a191dcd6925bf5dd570d2bfbe5";
+/// Folder inside the wheel that holds the runtime and its notices.
+const RUNTIME_PREFIX: &str = "onnxruntime";
 static DOWNLOADED: AtomicU64 = AtomicU64::new(0);
-static DOWNLOAD_BYTES: AtomicU64 = AtomicU64::new(114_002_186);
+static DOWNLOAD_BYTES: AtomicU64 = AtomicU64::new(46_003_678);
 fn model_for(id: &str) -> Option<&'static Model> {
     match id {
         "ppocrv6-small" => Some(&SMALL),
@@ -162,6 +171,8 @@ pub(super) fn download(
     let mut digest = Sha256::new();
     let mut count = 0;
     let mut buffer = [0; 65536];
+    // One progress event per MiB, not per 64 KiB chunk: every event wakes all windows.
+    let mut unreported = 0u64;
     loop {
         if CANCEL.load(Ordering::Relaxed) {
             return Err("Download cancelled".into());
@@ -176,13 +187,16 @@ pub(super) fn download(
         }
         output.write_all(&buffer[..n]).map_err(|e| e.to_string())?;
         digest.update(&buffer[..n]);
-        notify(
-            app,
-            "Downloading local OCR engine",
-            (DOWNLOADED.fetch_add(n as u64, Ordering::Relaxed) + n as u64) as f64
-                / DOWNLOAD_BYTES.load(Ordering::Relaxed) as f64
-                * 98.,
-        );
+        let done = DOWNLOADED.fetch_add(n as u64, Ordering::Relaxed) + n as u64;
+        unreported += n as u64;
+        if unreported >= 1 << 20 || count == size {
+            unreported = 0;
+            notify(
+                app,
+                "Downloading local OCR engine",
+                done as f64 / DOWNLOAD_BYTES.load(Ordering::Relaxed) as f64 * 98.,
+            );
+        }
     }
     if count != size || format!("{:x}", digest.finalize()) != hash {
         return Err("OCR download integrity check failed. Retry the download.".into());
@@ -202,7 +216,7 @@ pub async fn ocr_engine_install(
     CANCEL.store(false, Ordering::Relaxed);
     DOWNLOADED.store(0, Ordering::Relaxed);
     DOWNLOAD_BYTES.store(
-        model.map_or(super::managed::TESS_BYTES,|m|m.files.iter().map(|(_,size,_)|size).sum::<u64>()+82_887_349),
+        model.map_or(super::managed::TESS_BYTES,|m|m.files.iter().map(|(_,size,_)|size).sum::<u64>()+RUNTIME_BYTES),
         Ordering::Relaxed,
     );
     struct Reset;
@@ -259,17 +273,51 @@ fn install_files(app: &tauri::AppHandle, model: &Model) -> Result<(), String> {
     let stage = parent.join(format!(".ocr-install-{}-{nonce}", std::process::id()));
     std::fs::create_dir(&stage).map_err(|e| e.to_string())?;
     let result = (|| {
-        for (name, size, hash) in model.files {
-            download(
-                app,
-                &format!("https://www.modelscope.cn/models/greatv/oar-ocr/resolve/master/{name}"),
-                &stage.join(name),
-                size,
-                hash,
-            )?;
-        }
+        // Fetch every file at once: the model host is slow per connection, so
+        // parallel streams finish in roughly the time of the largest file.
         let archive = stage.join("runtime.zip");
-        download(app, "https://github.com/microsoft/onnxruntime/releases/download/v1.31.0/onnxruntime-win-x64-1.31.0.zip", &archive, 82_887_349, "3958d8a44984160692c1b4ffd0de3cb48f8c39f9d34bb31e433db06e30b82195")?;
+        let jobs: Vec<(String, PathBuf, u64, &str)> = model
+            .files
+            .iter()
+            .map(|(name, size, hash)| {
+                (
+                    format!("https://www.modelscope.cn/models/greatv/oar-ocr/resolve/master/{name}"),
+                    stage.join(name),
+                    *size,
+                    *hash,
+                )
+            })
+            .chain(std::iter::once((RUNTIME_URL.to_string(), archive.clone(), RUNTIME_BYTES, RUNTIME_SHA256)))
+            .collect();
+        std::thread::scope(|scope| {
+            let handles: Vec<_> = jobs
+                .iter()
+                .map(|(url, path, size, hash)| {
+                    scope.spawn(move || {
+                        let result = download(app, url, path, *size, hash);
+                        if result.is_err() {
+                            CANCEL.store(true, Ordering::Relaxed); // stop the siblings early
+                        }
+                        result
+                    })
+                })
+                .collect();
+            let mut first_error = None;
+            for handle in handles {
+                let result = handle.join().unwrap_or_else(|_| Err("OCR download failed".into()));
+                if let Err(error) = result {
+                    // Report the real failure, not a sibling's resulting "cancelled".
+                    let replace = match &first_error {
+                        None => true,
+                        Some(current) => current == "Download cancelled" && error != "Download cancelled",
+                    };
+                    if replace {
+                        first_error = Some(error);
+                    }
+                }
+            }
+            first_error.map_or(Ok(()), Err)
+        })?;
         notify(app, "Installing local OCR engine", 99.);
         let mut cmd = std::process::Command::new("tar.exe");
         #[cfg(windows)]
@@ -277,14 +325,14 @@ fn install_files(app: &tauri::AppHandle, model: &Model) -> Result<(), String> {
             use std::os::windows::process::CommandExt;
             cmd.creation_flags(0x08000000);
         }
-        let prefix = "onnxruntime-win-x64-1.31.0";
+        let prefix = RUNTIME_PREFIX;
         let status = cmd
             .arg("-xf")
             .arg(&archive)
             .arg("-C")
             .arg(&stage)
             .args([
-                format!("{prefix}/lib/onnxruntime.dll"),
+                format!("{prefix}/capi/onnxruntime.dll"),
                 format!("{prefix}/LICENSE"),
                 format!("{prefix}/ThirdPartyNotices.txt"),
             ])
@@ -297,7 +345,7 @@ fn install_files(app: &tauri::AppHandle, model: &Model) -> Result<(), String> {
             return Err("Download cancelled".into());
         }
         for (source, target) in [
-            ("lib/onnxruntime.dll", "onnxruntime.dll"),
+            ("capi/onnxruntime.dll", "onnxruntime.dll"),
             ("LICENSE", "ONNX-Runtime-LICENSE.txt"),
             (
                 "ThirdPartyNotices.txt",

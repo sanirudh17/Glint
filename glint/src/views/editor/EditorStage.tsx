@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, forwardRef } from "react";
 import { Stage, Layer, Group, Rect, Image as KonvaImage, Transformer } from "react-konva";
 import type Konva from "konva";
-import { Minus, Plus, Maximize2 } from "lucide-react";
+import { Minus, Plus, Maximize2 } from "../../icons";
 import { useEditorStore } from "../../editor/useEditorStore";
 import { newId, nextStepNumber, eraseAt, snapAngle, resolveSpotlightDim, type Annotation, type BoxAnno, type TextAnno } from "../../editor/model";
 import { computeLayout, resolveRadiusPx } from "../../editor/composition";

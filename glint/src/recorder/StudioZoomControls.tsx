@@ -1,4 +1,4 @@
-import { Crosshair, Plus, Scissors, Trash2, WandSparkles } from "lucide-react";
+import { Crosshair, Plus, Scissors, Trash2, WandSparkles } from "../icons";
 import { Button, ControlDisclosure, NumberInput, Select } from "../components/ui";
 import { LookSlider } from "../look/LookControls";
 import { clamp, newZoom, splitZoom, ZOOM_EASES, type ZoomSegment } from "./studioEffects";
@@ -26,7 +26,6 @@ export function StudioZoomControls({segments,selected,time,duration,onChange,onS
       <Button size="sm" variant="ghost" icon={WandSparkles} disabled={!hasClicks} title={hasClicks?undefined:'Requires clicks captured during a Studio recording'} onClick={()=>onChange(regenerateZooms(segments,events,duration))}>{segments.some(s=>s.origin==='auto')?'Regenerate':'Auto zoom'}</Button>
       {active&&<Button size="sm" variant="ghost" icon={Trash2} onClick={()=>{onChange(segments.filter(s=>s.id!==active.id));onSelect(null);}}>Delete</Button>}
     </div>
-    <p className="look-hint">{hasClicks?'Auto zoom groups nearby clicks. Manual and hand-edited zooms are kept.':'No recorded clicks are available. Use Add zoom to choose when and where to zoom.'}</p>
     {segments.length>0&&<Select portal ariaLabel="Selected zoom" value={selected??""} options={[{value:"",label:"Select a zoom"},...segments.map((s,i)=>({value:s.id,label:`Zoom ${i+1} · ${s.start.toFixed(1)}–${s.end.toFixed(1)} s`}))]} onChange={id=>onSelect(id||null)} />}
     {active?<>
       <div className="studio-crop-grid">
@@ -38,9 +37,9 @@ export function StudioZoomControls({segments,selected,time,duration,onChange,onS
       {active.mode==='fixed'&&<><LookSlider label="Horizontal" ariaLabel="Zoom horizontal focus" value={focus.x*100} unit="%" onChange={x=>changeFocus({...focus,x:clamp(x/100,0,1)})}/>
       <LookSlider label="Vertical" ariaLabel="Zoom vertical focus" value={focus.y*100} unit="%" onChange={y=>changeFocus({...focus,y:clamp(y/100,0,1)})}/></>}
       <Button size="sm" variant="ghost" icon={Crosshair} aria-pressed={picking} onClick={onPick}>{picking?'Cancel picking':'Pick focus in preview'}</Button>
-      {active.mode==='follow-cursor'&&<p className="look-hint">Stays zoomed from Start to End and pans with the recorded cursor. Pick a point to offset the framing; the cursor stays in view.</p>}
+      
       <div className="look-row"><span className="look-label">Easing</span><div className="look-control"><Select portal ariaLabel="Zoom easing" value={active.ease} options={ZOOM_EASES} onChange={ease=>{const seconds=ease==='snappy'?.3:ease==='slow'?.5:.4;change({ease:ease as ZoomSegment['ease'],easeIn:seconds,easeOut:seconds});}}/></div></div>
       <Button size="sm" variant="ghost" icon={Scissors} disabled={time<=active.start+.05||time>=active.end-.05} onClick={()=>onChange(segments.flatMap(s=>s.id===active.id?splitZoom(s,time):[s]))}>Split at playhead</Button>
-    </>:<p className="look-hint">Add a zoom at the playhead, then drag its timeline segment to move or trim it.</p>}
+    </>:<p className="look-hint">Add a zoom at the playhead.</p>}
   </ControlDisclosure>;
 }

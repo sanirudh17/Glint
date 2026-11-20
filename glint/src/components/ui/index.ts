@@ -1,7 +1,7 @@
 export { Button } from "./Button";
 export { IconButton } from "./IconButton";
 export { Switch } from "./Switch";
-export { Section } from "./Section";
+export { Section, SettingsGroup } from "./Section";
 export { Field } from "./Field";
 export { Select } from "./Select";
 export { Card } from "./Card";

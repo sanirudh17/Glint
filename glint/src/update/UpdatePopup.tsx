@@ -15,7 +15,7 @@
  * Only mounted in the main window (see UpdateGate).
  */
 import { useEffect, useState } from "react";
-import { ArrowUpCircle, X } from "lucide-react";
+import { ArrowUpCircle, X } from "../icons";
 import { Button } from "../components/ui";
 import { useUpdater } from "./useUpdater";
 import { shouldNotify } from "./version";

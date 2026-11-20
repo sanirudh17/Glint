@@ -1,19 +1,27 @@
-.scroll-controller {box-sizing:border-box;height:100vh;padding:14px 16px;background:var(--bg-elev);color:var(--text);border:1px solid var(--border);border-radius:12px;font-size:var(--fz-sm);display:flex;flex-direction:column;gap:10px;}
-.scroll-controller-head {display:flex;align-items:center;gap:8px;cursor:move;}
-.scroll-controller-head strong {font-weight:600;}
-.scroll-controller-size {margin-left:auto;color:var(--text-dim);font-size:var(--fz-xs);font-variant-numeric:tabular-nums;}
-.scroll-controller-message {margin:0;flex:1;line-height:1.45;color:var(--text-dim);}
-.scroll-controller-actions {display:flex;align-items:center;gap:8px;}
-.scroll-controller-actions>span {margin-right:auto;color:var(--text-dim);font-size:var(--fz-xs);}
+/* Scrolling capture — a compact floating panel: what it is, how big the result is
+   so far, and the three things you can do. */
+.scroll-controller {
+  box-sizing: border-box;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px 12px 12px 16px;
+  background: var(--bg-elev);
+  color: var(--text);
+  border: 1px solid var(--border);
+  border-radius: var(--r2);
+  font-size: var(--fz-sm);
+}
+.scroll-controller-head { display: flex; align-items: center; gap: 8px; min-width: 0; height: 24px; cursor: move; }
+.scroll-controller-head > svg { color: var(--text-faint); flex: none; }
+.scroll-controller-head strong { font-size: var(--fz-sm); font-weight: var(--fw-semi); white-space: nowrap; }
+.scroll-controller-size { margin-left: auto; padding-right: 4px; color: var(--text-dim); font-size: var(--fz-xs); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.scroll-controller-message { flex: 1; min-height: 18px; margin: 0 0 0 24px; color: var(--text-faint); font-size: var(--fz-xs); line-height: 18px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.scroll-controller-message.is-error { color: var(--danger); }
+.scroll-controller-actions { display: flex; align-items: center; gap: 6px; }
+.scroll-controller-actions > :first-child { margin-right: auto; }
+
 .ov-monitor-choice {position:absolute;z-index:30;top:14px;left:50%;transform:translateX(-50%);display:flex;align-items:center;gap:12px;padding:8px 12px;background:var(--bg-elev);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:var(--fz-sm);pointer-events:auto;}
 .ov-monitor-choice button {border:0;background:transparent;color:inherit;cursor:pointer;white-space:nowrap;}
 .ov-monitor-choice button:focus-visible {outline:2px solid var(--accent);outline-offset:3px;}
-
-.scroll-controller { padding: 16px; gap: 12px; border-radius: var(--r2); }
-.scroll-controller-head { gap: 10px; min-width: 0; flex-wrap: wrap; }
-.scroll-controller-head strong { font-size: 13px; }
-.scroll-controller-message { line-height: 1.6; overflow-wrap: anywhere; }
-.scroll-controller-actions { flex-wrap: wrap; gap: 8px; }
-.scroll-controller-actions > span { min-width: 0; font-variant-numeric: tabular-nums; }
-
-.scroll-controller-message { min-height: 0; overflow-y: auto; }

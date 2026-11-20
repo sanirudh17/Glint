@@ -20,11 +20,12 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { emit, listen } from "@tauri-apps/api/event";
-import { Monitor, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointer2, Move, Lock, Shapes } from "lucide-react";
+import { Monitor, Crop, Mic, MicOff, Volume2, VolumeX, Video, VideoOff, MousePointer2, Move, Circle, Square, SquareRoundCorner, RectangleHorizontal } from "../icons";
 
 type WebcamShape = "circle" | "rounded" | "square" | "rect";
 const SHAPE_ORDER: WebcamShape[] = ["circle", "rounded", "square", "rect"];
 const SHAPE_LABEL: Record<WebcamShape, string> = { circle: "Circle", rounded: "Rounded", square: "Square", rect: "Rect" };
+const SHAPE_ICON = { circle: Circle, rounded: SquareRoundCorner, square: Square, rect: RectangleHorizontal } as const;
 import { recorderStartRegion, recorderStartFullscreen } from "../lib/recorder";
 import { useAppStore, type Settings } from "../store/useAppStore";
 import "./recorder.css";
@@ -156,6 +157,7 @@ export function RegionSelect() {
   type CursorStyle = "normal" | "large" | "xl" | "hidden";
   const cursorStyle: CursorStyle = cursorHide ? "hidden" : cursorSize === "xl" ? "xl" : cursorSize === "large" ? "large" : "normal";
   const cursorLabel = { normal: "Cursor", large: "Cursor L", xl: "Cursor XL", hidden: "Cursor Hidden" }[cursorStyle];
+  const ShapeIcon = SHAPE_ICON[camShape];
   const cycleCursor = () => {
     const next: Record<CursorStyle, CursorStyle> = { normal: "large", large: "xl", xl: "hidden", hidden: "normal" };
     const n = next[cursorStyle];
@@ -256,7 +258,6 @@ export function RegionSelect() {
     drag.current = { kind: "resize", startX: e.clientX, startY: e.clientY, orig: rect, handle };
   }
 
-  const big = rect !== null && rect.w > 40 && rect.h > 40;
 
   return (
     <div
@@ -275,7 +276,6 @@ export function RegionSelect() {
           onPointerDown={onRectPointerDown}
           onDoubleClick={(e) => { e.stopPropagation(); confirmRegion(); }}
         >
-          {big && <div className="rec-sel-confirm-hint">↵ Enter</div>}
           {HANDLES.map((hd) => (
             <div
               key={hd.id}
@@ -289,34 +289,21 @@ export function RegionSelect() {
 
       {rect && rect.w > 1 && rect.h > 1 && <DimensionsBadge rect={rect} scale={env.scale} />}
 
-      {/* Toolbar: hint + capture-input chips + the full-screen affordance. Kept lean
-          on purpose — clicks/keys/spotlight are toggled live in the control pill, and
+      {/* Toolbar: capture-input toggles + the record action. No instructions: the
+          primary button names what Enter will do (full screen until an area is drawn,
+          then that area). Clicks/keys/spotlight are toggled live in the control pill;
           cursor style is the one visual choice that must be made before recording. */}
-      <div className="rec-sel-toolbar">
-        <span className="rec-sel-hint">
-          {rect ? "↵ Enter to record · drag handles to adjust · Esc to cancel"
-                : "Drag to select a region · Esc to cancel"}
-        </span>
-        <div className="rec-sel-chipgroup">
-          <button
-            className={`rec-sel-chip${sys ? "" : " rec-sel-chip--off"}`}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => setSys((v) => !v)}
-            title="System audio"
-          >
+      <div className="rec-sel-toolbar" onPointerDown={(e) => e.stopPropagation()}>
+        <div className="rec-sel-chipgroup" role="group" aria-label="Record with">
+          <button className="rec-sel-chip" aria-pressed={sys} onClick={() => setSys((v) => !v)} title="System audio">
             {sys ? <Volume2 size={14} /> : <VolumeX size={14} />} System
           </button>
-          <button
-            className={`rec-sel-chip${mic ? "" : " rec-sel-chip--off"}`}
-            onPointerDown={(e) => e.stopPropagation()}
-            onClick={() => setMic((v) => !v)}
-            title="Microphone"
-          >
+          <button className="rec-sel-chip" aria-pressed={mic} onClick={() => setMic((v) => !v)} title="Microphone">
             {mic ? <Mic size={14} /> : <MicOff size={14} />} Mic
           </button>
           <button
-            className={`rec-sel-chip${cam ? "" : " rec-sel-chip--off"}`}
-            onPointerDown={(e) => e.stopPropagation()}
+            className="rec-sel-chip"
+            aria-pressed={cam}
             onClick={() => { const next = !cam; setCam(next); if (!next) setCamMovable(false); }}
             title="Webcam"
           >
@@ -324,41 +311,53 @@ export function RegionSelect() {
           </button>
           {cam && (
             <button
-              className={`rec-sel-chip${camMovable ? "" : " rec-sel-chip--off"}`}
-              onPointerDown={(e) => e.stopPropagation()}
+              className="rec-sel-chip"
+              aria-pressed={camMovable}
               onClick={() => setCamMovable((v) => !v)}
-              title="Record the webcam as a separate track so you can move/resize/remove it after recording"
+              title="Record the webcam as its own track, editable in Studio"
             >
-              {camMovable ? <Move size={14} /> : <Lock size={14} />} Movable
+              <Move size={14} /> Movable
             </button>
           )}
           {cam && (
             <button
               className="rec-sel-chip"
-              onPointerDown={(e) => e.stopPropagation()}
+              aria-pressed
               onClick={() => {
                 const next = SHAPE_ORDER[(SHAPE_ORDER.indexOf(camShape) + 1) % SHAPE_ORDER.length];
                 setCamShape(next);
                 setWebcamShape(next).catch(() => {});
               }}
-              title="Webcam shape: Circle → Rounded → Square → Rect"
+              title="Webcam shape"
             >
-              <Shapes size={14} /> {SHAPE_LABEL[camShape]}
+              <ShapeIcon size={14} /> {SHAPE_LABEL[camShape]}
             </button>
           )}
           <button
-            className={`rec-sel-chip${cursorStyle === "normal" ? " rec-sel-chip--off" : ""}`}
-            onPointerDown={(e) => e.stopPropagation()}
+            className="rec-sel-chip"
+            aria-pressed={cursorStyle !== "normal"}
             onClick={cycleCursor}
-            title="Recorded cursor: Normal → Large → XL → Hidden"
+            title="Recorded cursor"
           >
             {/* Icon stays constant so the chip never changes shape as it cycles. */}
             <MousePointer2 size={14} /> {cursorLabel}
           </button>
         </div>
-        <button className="rec-sel-fullbtn" onPointerDown={(e) => e.stopPropagation()} onClick={confirmFullscreen}>
-          <Monitor size={15} strokeWidth={1.5} /> Record Full Screen
-        </button>
+        <span className="rec-sel-sep" aria-hidden="true" />
+        {rect ? (
+          <>
+            <button className="rec-sel-secondary" onClick={confirmFullscreen}>
+              <Monitor size={15} strokeWidth={1.5} /> Full Screen
+            </button>
+            <button className="rec-sel-fullbtn" onClick={confirmRegion} title="Record area (Enter)">
+              <Crop size={15} strokeWidth={1.5} /> Record Area <kbd className="rec-sel-kbd">↵</kbd>
+            </button>
+          </>
+        ) : (
+          <button className="rec-sel-fullbtn" onClick={confirmFullscreen}>
+            <Monitor size={15} strokeWidth={1.5} /> Record Full Screen
+          </button>
+        )}
       </div>
     </div>
   );

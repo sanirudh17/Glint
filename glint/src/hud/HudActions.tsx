@@ -9,14 +9,14 @@
  */
 import {
   Copy,
-  FileSymlink,
+  Link2,
   Save,
   FolderOpen,
   Pencil,
   Pin,
   ScanText,
   type LucideIcon,
-} from "lucide-react";
+} from "../icons";
 
 export type HudAction =
   | "copy"
@@ -45,7 +45,7 @@ export function HudActions({
   const groups: ButtonDef[][] = [
     [
       { id: "copy",      icon: Copy,  tip: "Copy image" },
-      { id: "copy-path", icon: FileSymlink, tip: "Copy path" },
+      { id: "copy-path", icon: Link2, tip: "Copy path" },
     ],
     [
       saved

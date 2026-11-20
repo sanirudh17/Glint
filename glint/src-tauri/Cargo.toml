@@ -27,6 +27,7 @@ tauri-plugin-log = "2.8.0"
 log = "0.4.33"
 tauri-plugin-global-shortcut = "2.3.2"
 xcap = "0.9.6"
+rodio = { version = "0.20.1", default-features = false, features = ["wav"] }
 image = { version = "0.25", default-features = false, features = ["png", "jpeg", "webp", "bmp", "gif"] }
 clipboard-win = "5.4.1"
 base64 = "0.22"

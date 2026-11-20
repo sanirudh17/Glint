@@ -1,6 +1,6 @@
 import {StudioEffectTrack} from "./StudioEffectTrack";
 import {useEffect,useLayoutEffect,useRef,useState,type PointerEvent} from 'react';
-import {Pencil,Highlighter,MoveUpRight,Square, Circle,Type,MousePointer2,Trash2,Copy,Undo2,Redo2} from "lucide-react";
+import {Pencil,Highlighter,MoveUpRight,Square, Circle,Type,MousePointer2,Trash2,Copy,Undo2,Redo2} from "../icons";
 import {Button,ColorControl,NumberInput,ControlDisclosure} from '../components/ui';
 import {ANNOTATION_TOOLS,annotationAt,annotationBounds,resizeAnnotationText,moveAnnotation,paintAnnotation,pickAnnotation,type AnnotationTool,type VideoAnnotation} from './videoAnnotations';
 const icons={pen:Pencil,highlight:Highlighter,arrow:MoveUpRight,rectangle:Square,ellipse:Circle,text:Type};

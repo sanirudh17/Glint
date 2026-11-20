@@ -4,7 +4,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen } from "@tauri-apps/api/event";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { confirm, open } from "@tauri-apps/plugin-dialog";
-import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, ScanText, RotateCcw, ArrowRight, ChevronDown } from "lucide-react";
+import { Crop, AppWindow, Monitor, Video, ImageOff, FolderOpen, ScanText, FileClock, ArrowRight, ChevronDown } from "../icons";
 import { Button, EmptyState } from "../components/ui";
 import { useAppStore } from "../store/useAppStore";
 import { startCapture } from "../lib/captureIpc";
@@ -178,7 +178,7 @@ export default function HomeView() {
                 onClick={() => onOpenRecent(p)}
                 title={p.exists ? p.path : `${p.path} (missing)`}
               >
-                <RotateCcw size={14} strokeWidth={1.5} />
+                <FileClock size={16} strokeWidth={1.5} />
                 <span className="home-resume-name">{p.name}</span>
               </button>
             ))}

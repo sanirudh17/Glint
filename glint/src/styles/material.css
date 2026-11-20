@@ -53,11 +53,12 @@ html[data-glass="true"] .g-content:has(.settings-view) { background: transparent
 html[data-glass="true"] .settings-panel { background: var(--window-canvas); }
 html[data-glass="true"] :is(.g-nav-rail,.settings-nav,.editor-rail) { background: var(--bg-frame); }
 html[data-glass="true"] .cap-card { background: transparent; }
+html[data-glass="true"] .ocr-root { background: var(--window-canvas); border-color: var(--glass-edge); }
 html[data-glass="true"] .cap-meta { background: var(--glass-utility); border-top:1px solid var(--glass-edge); }
 html[data-glass="true"] :is(.cap-meta,.editor-topbar) { backdrop-filter:blur(18px); }
 html[data-glass="true"] :is(.g-titlebar .g-winctl) { background: transparent; }
 @media (prefers-reduced-transparency: reduce) {
-  html[data-glass="true"] :is(.g-shell,.editor-view,.trim-root,.speaker-notes) { background: var(--bg); }
+  html[data-glass="true"] :is(.g-shell,.editor-view,.trim-root,.speaker-notes,.ocr-root) { background: var(--bg); }
 }
 
 html[data-glass="true"] :is(.editor-tool--active,.editor-width--active,.editor-toggle--active) { background:var(--accent-subtle); }

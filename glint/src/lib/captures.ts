@@ -40,6 +40,22 @@ interface CaptureListRow {
  */
 let cachedCaptures: CaptureItem[] | null = null;
 let pendingCaptures: Promise<CaptureItem[]> | null = null;
+/** Keep the previous object for every capture that didn't change (and the previous
+ *  array when nothing did), so a refresh with identical data re-renders nothing —
+ *  memoised cards compare by identity. */
+function shareUnchanged(previous: CaptureItem[] | null, next: CaptureItem[]): CaptureItem[] {
+  if (!previous) return next;
+  const byId = new Map(previous.map((item) => [item.id, item]));
+  const keys = Object.keys(next[0] ?? {}) as (keyof CaptureItem)[];
+  let changed = previous.length !== next.length;
+  const merged = next.map((item, index) => {
+    const old = byId.get(item.id);
+    const same = old !== undefined && keys.every((key) => old[key] === item[key]);
+    if (!same || previous[index] !== old) changed = true;
+    return same ? old : item;
+  });
+  return changed ? merged : previous;
+}
 /** Session snapshot: first navigation paints immediately; refresh reconciles disk. */
 export function captureSnapshot(limit?: number): CaptureItem[] {
   return limit === undefined ? cachedCaptures ?? [] : (cachedCaptures ?? []).slice(0, limit);
@@ -48,7 +64,7 @@ export const listCaptures = async (limit?: number): Promise<CaptureItem[]> => {
   // All callers share one inexpensive metadata request. Home also warms Library.
   const request = pendingCaptures ??= invoke<CaptureListRow[]>("captures_list", { limit: null })
     .then(rows => rows.map(({ thumb_path, ...r }) => ({ ...r, thumb_url: thumb_path ? convertFileSrc(thumb_path) : null })))
-    .then(rows => { cachedCaptures = rows; return rows; })
+    .then(rows => { cachedCaptures = shareUnchanged(cachedCaptures, rows); return cachedCaptures; })
     .finally(() => { pendingCaptures = null; });
   const rows = await request;
   return limit === undefined ? rows : rows.slice(0, limit);

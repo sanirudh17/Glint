@@ -34,7 +34,9 @@
   white-space: nowrap;
   user-select: none;
 }
-.g-btn > span { line-height: normal; display: inline-flex; align-items: center; }
+/* Labels centre on their letters (cap height to baseline), not the font's padded
+   line box — otherwise lowercase-heavy labels sit visibly below their icons. */
+.g-btn > span, .editor-export-btn > span { display: block; line-height: normal; text-box: trim-both cap alphabetic; }
 
 .g-btn:disabled {
   opacity: 0.38;
@@ -251,50 +253,46 @@
   opacity: 0.4;
 }
 
-/* ─── Section ────────────────────────────────────────────────────────── */
-.g-section {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s5);
-}
-
-.g-section-header {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s2);
-  padding-bottom: var(--s4);
-  border-bottom: 1px solid var(--border);
-}
-
+/* ─── Section / Group / Field (settings rows) ─────────────────────────── */
+/* One title, then rows: label left, control right, hairline between rows.
+   Extra content in a Field (progress, status, errors) runs full width below. */
+.g-section { display: flex; flex-direction: column; gap: 24px; min-width: 0; }
 .g-section-title {
+  font-size: 20px;
+  font-weight: var(--fw-semi);
+  color: var(--text);
+  line-height: var(--lh-tight);
+  letter-spacing: -0.01em;
+}
+.g-section-body { display: flex; flex-direction: column; min-width: 0; }
+
+.g-group { display: flex; flex-direction: column; min-width: 0; }
+/* Hierarchy: page title > group heading > row label. One hairline between
+   groups is the only separator; rows are grouped by spacing alone. */
+.g-group + .g-group { margin-top: 24px; padding-top: 24px; border-top: 1px solid var(--border); }
+.g-group-title {
   font-size: var(--fz-md);
   font-weight: var(--fw-semi);
   color: var(--text);
   line-height: var(--lh-tight);
+  padding-bottom: 4px;
 }
 
-.g-section-description {
-  font-size: var(--fz-sm);
-  color: var(--text-dim);
-  line-height: var(--lh-base);
-}
-
-.g-section-body {
-  display: flex;
-  flex-direction: column;
-  gap: var(--s4);
-}
-
-/* ─── Field ──────────────────────────────────────────────────────────── */
 .g-field {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  column-gap: 24px;
+  row-gap: 8px;
+  min-height: 48px;
+  padding: 6px 0;
 }
+.g-field > :nth-child(2) { justify-self: end; min-width: 0; }
+.g-field > :nth-child(n + 3) { grid-column: 1 / -1; }
 
 .g-field-label {
   font-size: var(--fz-md);
-  font-weight: var(--fw-medium);
+  font-weight: var(--fw-normal);
   color: var(--text-dim);
   line-height: var(--lh-tight);
 }
@@ -617,9 +615,5 @@
 }
 
 /* Settings switches sit beside their label; help stays below the label. */
-.g-field:has(> .g-switch-root) { display: grid; grid-template-columns: minmax(0,1fr) auto; gap: 8px 16px; align-items: center; }
-.g-field:has(> .g-switch-root) > .g-field-label { grid-column: 1; grid-row: 1; }
-.g-field:has(> .g-switch-root) > .g-switch-root { grid-column: 2; grid-row: 1; }
-.g-field:has(> .g-switch-root) > .g-field-hint { grid-column: 1; grid-row: 2; max-width: 64ch; }
 .g-btn > svg, .editor-export-btn > svg { flex: none; }
 .g-select-value { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }

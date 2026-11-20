@@ -14,6 +14,16 @@ export type RecordFxKey =
   | "record_cursor_hide"
   | "record_cursor_size";
 
+/** Shutter sounds (ids must match SHUTTER_SOUNDS in settings/sound.rs). */
+export const SHUTTER_SOUNDS = [
+  { value: "click", label: "Click" },
+  { value: "soft-pop", label: "Soft pop" },
+  { value: "chime", label: "Chime" },
+  { value: "ping", label: "Ping" },
+  { value: "classic", label: "Classic" },
+] as const;
+export type ShutterSound = (typeof SHUTTER_SOUNDS)[number]["value"];
+
 export interface Settings {
   theme: Theme;
   glass?: boolean;
@@ -40,6 +50,7 @@ export interface Settings {
   record_cursor_size: "off" | "large" | "xl";
   save_dir: string;
   sound_effects: boolean;
+  shutter_sound: ShutterSound;
   show_in_taskbar: boolean;
   include_cursor: boolean;
   image_format: "png" | "jpeg" | "webp";
@@ -81,6 +92,7 @@ interface AppState {
   resetHotkeys: () => Promise<void>;
   setSaveDir: (path: string) => Promise<void>;
   setSoundEffects: (on: boolean) => Promise<void>;
+  setShutterSound: (id: ShutterSound) => Promise<void>;
   setShowInTaskbar: (on: boolean) => Promise<void>;
   setIncludeCursor: (on: boolean) => Promise<void>;
   setImageFormat: (v: "png" | "jpeg" | "webp") => Promise<void>;
@@ -360,6 +372,9 @@ export const useAppStore = create<AppState>((set, get) => {
 
   setSoundEffects: (on: boolean) =>
     commit("sound_effects", on, "Sound effects"),
+
+  setShutterSound: (id: ShutterSound) =>
+    commit("shutter_sound", id, "Shutter sound"),
 
   setShowInTaskbar: async (on: boolean) => {
     const prev = settings();

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
-import { Section, Field, Select, Switch } from "../../components/ui";
+import { invoke } from "@tauri-apps/api/core";
+import { Section, SettingsGroup, Field, Select, Switch, Button } from "../../components/ui";
 import { useAppStore } from "../../store/useAppStore";
 
 const FPS_OPTIONS = [
@@ -40,9 +41,10 @@ export function Recording() {
   const setRecordResolution = useAppStore((s) => s.setRecordResolution);
   const setRecordQuality = useAppStore((s) => s.setRecordQuality);
   const setWebcamDevice = useAppStore((s) => s.setWebcamDevice);
+  const pushToast = useAppStore((s) => s.pushToast);
 
-  // Enumerate cameras. Browsers only reveal device LABELS after camera permission
-  // has been granted once; until then we show generic names + a hint.
+  // Enumerate cameras. Browsers only reveal device labels after camera permission
+  // has been granted once; until then they read "Camera 1", "Camera 2"….
   const [cams, setCams] = useState<{ deviceId: string; label: string }[]>([]);
   useEffect(() => {
     let alive = true;
@@ -63,7 +65,6 @@ export function Recording() {
     { value: "", label: "System default" },
     ...cams.filter((c) => c.deviceId).map((c) => ({ value: c.deviceId, label: c.label })),
   ];
-  const camsHaveLabels = cams.some((c) => c.label && !c.label.startsWith("Camera "));
 
   const cursorStyle = settings?.record_cursor_hide
     ? "hidden"
@@ -83,100 +84,98 @@ export function Recording() {
   };
 
   return (
-    <Section
-      title="Recording"
-      description="Video recording quality and codec settings."
-    >
-      <Field label="Frame rate" hint="Frames per second for screen recordings.">
-        <Select
-          value={String(settings?.record_fps ?? 60)}
-          options={FPS_OPTIONS}
-          onChange={(v) => void setRecordFps(Number(v) as 30 | 60)}
-        />
-      </Field>
-      <Field label="Resolution" hint="Downscale recordings to shrink file size (e.g. for issue attachments).">
-        <Select
-          value={settings?.record_resolution ?? "original"}
-          options={RESOLUTION_OPTIONS}
-          onChange={(v) => void setRecordResolution(v as "original" | "1080p" | "720p")}
-        />
-      </Field>
-      <Field label="Quality" hint="Compression level. Lower quality means smaller files.">
-        <Select
-          value={settings?.record_quality ?? "high"}
-          options={VIDEO_QUALITY_OPTIONS}
-          onChange={(v) => void setRecordQuality(v as "high" | "medium" | "low")}
-        />
-      </Field>
-      <Field label="Video codec" hint="Encoding format for recorded video.">
-        <span className="settings-static-value">H.264 · MP4 (maximum compatibility)</span>
-      </Field>
-      <Field label="Record system audio" hint="Include speaker/app audio in recordings by default.">
-        <Switch
-          checked={settings?.record_system_audio ?? true}
-          onChange={(v) => setRecordSystemAudio(v)}
-        />
-      </Field>
-      <Field label="Record microphone" hint="Include your microphone in recordings by default.">
-        <Switch
-          checked={settings?.record_microphone ?? false}
-          onChange={(v) => setRecordMicrophone(v)}
-        />
-      </Field>
-      <Field
-        label="Camera"
-        hint={
-          camsHaveLabels
-            ? "Which webcam the bubble uses."
-            : "Which webcam the bubble uses. Names appear after the camera is used once."
-        }
-      >
-        <Select
-          value={settings?.webcam_device_id ?? ""}
-          options={cameraOptions}
-          onChange={(v) => void setWebcamDevice(v)}
-        />
-      </Field>
-      <Field label="Record webcam" hint="Include your webcam in recordings by default.">
-        <Switch
-          checked={settings?.record_webcam ?? false}
-          onChange={(v) => setRecordWebcam(v)}
-        />
-      </Field>
-      <Field
-        label="Movable webcam"
-        hint="Record the webcam as its own track so you can move, resize, or remove it in the trim editor afterward."
-      >
-        <Switch
-          checked={settings?.record_webcam_movable ?? false}
-          onChange={(v) => setRecordWebcamMovable(v)}
-        />
-      </Field>
-      <Field label="Visualize clicks" hint="Show a ripple at each mouse click during recording.">
-        <Switch
-          checked={settings?.record_click_viz ?? false}
-          onChange={(v) => setRecordFx("record_click_viz", v)}
-        />
-      </Field>
-      <Field label="Show keystrokes" hint="Overlay pressed keys at the bottom of the recording.">
-        <Switch
-          checked={settings?.record_keystrokes ?? false}
-          onChange={(v) => setRecordFx("record_keystrokes", v)}
-        />
-      </Field>
-      <Field label="Cursor spotlight" hint="Draw a soft halo that follows the cursor.">
-        <Switch
-          checked={settings?.record_cursor_spotlight ?? false}
-          onChange={(v) => setRecordFx("record_cursor_spotlight", v)}
-        />
-      </Field>
-      <Field label="Recorded cursor" hint="Enlarge or hide the mouse cursor in recordings. Chosen before recording starts (it changes how the screen is captured), so it isn't a live toggle.">
-        <Select
-          value={cursorStyle}
-          options={CURSOR_STYLE_OPTIONS}
-          onChange={setCursorStyle}
-        />
-      </Field>
+    <Section title="Recording">
+      <SettingsGroup title="Video">
+        <Field label="Frame rate">
+          <Select
+            value={String(settings?.record_fps ?? 60)}
+            options={FPS_OPTIONS}
+            onChange={(v) => void setRecordFps(Number(v) as 30 | 60)}
+          />
+        </Field>
+        <Field label="Resolution">
+          <Select
+            value={settings?.record_resolution ?? "original"}
+            options={RESOLUTION_OPTIONS}
+            onChange={(v) => void setRecordResolution(v as "original" | "1080p" | "720p")}
+          />
+        </Field>
+        <Field label="Quality">
+          <Select
+            value={settings?.record_quality ?? "high"}
+            options={VIDEO_QUALITY_OPTIONS}
+            onChange={(v) => void setRecordQuality(v as "high" | "medium" | "low")}
+          />
+        </Field>
+        <Field label="Do Not Disturb">
+          <Button size="sm" variant="subtle" onClick={()=>void invoke('settings_open_notifications').catch(e=>pushToast(String(e)))}>Windows settings</Button>
+        </Field>
+      </SettingsGroup>
+
+      <SettingsGroup title="Audio">
+        <Field label="System audio">
+          <Switch
+            checked={settings?.record_system_audio ?? true}
+            onChange={(v) => setRecordSystemAudio(v)}
+          />
+        </Field>
+        <Field label="Microphone">
+          <Switch
+            checked={settings?.record_microphone ?? false}
+            onChange={(v) => setRecordMicrophone(v)}
+          />
+        </Field>
+      </SettingsGroup>
+
+      <SettingsGroup title="Webcam">
+        <Field label="Record webcam">
+          <Switch
+            checked={settings?.record_webcam ?? false}
+            onChange={(v) => setRecordWebcam(v)}
+          />
+        </Field>
+        <Field label="Camera">
+          <Select
+            value={settings?.webcam_device_id ?? ""}
+            options={cameraOptions}
+            onChange={(v) => void setWebcamDevice(v)}
+          />
+        </Field>
+        <Field label="Editable in Studio">
+          <Switch
+            checked={settings?.record_webcam_movable ?? false}
+            onChange={(v) => setRecordWebcamMovable(v)}
+          />
+        </Field>
+      </SettingsGroup>
+
+      <SettingsGroup title="Cursor & effects">
+        <Field label="Cursor">
+          <Select
+            value={cursorStyle}
+            options={CURSOR_STYLE_OPTIONS}
+            onChange={setCursorStyle}
+          />
+        </Field>
+        <Field label="Show clicks">
+          <Switch
+            checked={settings?.record_click_viz ?? false}
+            onChange={(v) => setRecordFx("record_click_viz", v)}
+          />
+        </Field>
+        <Field label="Show keystrokes">
+          <Switch
+            checked={settings?.record_keystrokes ?? false}
+            onChange={(v) => setRecordFx("record_keystrokes", v)}
+          />
+        </Field>
+        <Field label="Cursor spotlight">
+          <Switch
+            checked={settings?.record_cursor_spotlight ?? false}
+            onChange={(v) => setRecordFx("record_cursor_spotlight", v)}
+          />
+        </Field>
+      </SettingsGroup>
     </Section>
   );
 }

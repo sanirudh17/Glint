@@ -1,4 +1,4 @@
-import { CircleSlash, ArrowLeftRight, Pipette,RectangleHorizontal,Circle,ChevronUp,ChevronDown } from "lucide-react";
+import { CircleSlash, ArrowLeftRight, Pipette,RectangleHorizontal,Circle,ChevronUp,ChevronDown } from "../../icons";
 import {Select,NumberInput} from '../../components/ui';
 import {textPreset,snapArrowBend} from '../../editor/annotationStyles';
 import type {Style} from '../../editor/model';

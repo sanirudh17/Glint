@@ -1,4 +1,4 @@
-import { Check } from "lucide-react";
+import { Check } from "../../icons";
 import { Section, Field, Select, Switch } from "../../components/ui";
 import { useAppStore, ACCENT_PALETTE, type Theme } from "../../store/useAppStore";
 
@@ -19,13 +19,7 @@ export function Appearance() {
   if (!settings) return null;
 
   return (
-    <Section
-      title="Appearance"
-      description="Controls how Glint looks. Theme and accent persist across restarts."
-    >
-      <Field label="Acrylic glass" hint="Let the desktop show softly through Glint. Uses Windows transparency settings; turn off for solid surfaces.">
-        <Switch checked={settings.glass ?? true} onChange={v=>void setGlass(v)} />
-      </Field>
+    <Section title="Appearance">
       <Field label="Theme">
         <Select
           value={settings.theme}
@@ -35,10 +29,7 @@ export function Appearance() {
         />
       </Field>
 
-      <Field
-        label="Accent colour"
-        hint="Used for active states, focus rings, and primary actions."
-      >
+      <Field label="Accent colour">
         <div className="settings-accent-row" role="radiogroup" aria-label="Accent colour">
           {ACCENT_PALETTE.map((entry) => {
             const active =
@@ -71,6 +62,9 @@ export function Appearance() {
             );
           })}
         </div>
+      </Field>
+      <Field label="Acrylic glass">
+        <Switch checked={settings.glass ?? true} onChange={v=>void setGlass(v)} />
       </Field>
     </Section>
   );

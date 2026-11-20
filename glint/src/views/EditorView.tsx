@@ -1,4 +1,5 @@
 import { WindowControls } from "../components/Titlebar";
+import {retireAfterPaint} from '../lib/desktopPresentation';
 import { useCallback, useEffect, useRef, useState } from "react";
 import type Konva from "konva";
 import { listen } from "@tauri-apps/api/event";
@@ -6,7 +7,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { presentEditorFrame } from "../editor/firstFrame";
 import { useAppStore } from "../store/useAppStore";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Frame as FrameIcon, SquareRoundCorner } from "lucide-react";
+import { Frame as FrameIcon, Image as ImageIcon, SquareRoundCorner } from "../icons";
 import { useEditorStore } from "../editor/useEditorStore";
 import type { SerializedDoc } from "../editor/useEditorStore";
 import { getEditorSource } from "../lib/editor";
@@ -227,13 +228,14 @@ export default function EditorView() {
     };
   }, [loadFromSource, reset]);
 
-  // When the editor window is hidden/closed, immediately wipe store state so no image
-  // lingers in the webview canvas buffer while idle.
+  // On close the window is cloaked (still visible): wipe the store, let that empty
+  // frame paint, then native hides it — so no image lingers in the retained surface.
   useEffect(() => {
     const un = listen("editor-close", () => {
       ++loadRevision.current;
       setPresentationId(null);
       reset();
+      retireAfterPaint();
     });
     return () => {
       un.then((f) => f()).catch(() => {});
@@ -245,7 +247,7 @@ export default function EditorView() {
       <div className="editor-topbar" data-tauri-drag-region>
         <ProjectBar />
         <div className="editor-frame-slot">
-          <button className={`editor-export-btn${imagesOpen?' editor-export-btn--primary':''}`} aria-pressed={imagesOpen} onClick={()=>{setPrivacyOpen(false);setCornersOpen(false);setImagesOpen(!imagesOpen);}} disabled={!base}>Images</button>
+          <button className={`editor-export-btn${imagesOpen?' editor-export-btn--primary':''}`} aria-pressed={imagesOpen} onClick={()=>{setPrivacyOpen(false);setCornersOpen(false);setImagesOpen(!imagesOpen);}} disabled={!base}><ImageIcon size={16} strokeWidth={1.5} /><span>Images</span></button>
           <button
             className={`editor-export-btn${frameEnabled&&!imagesOpen&&!privacyOpen ? " editor-export-btn--primary" : ""}`}
             onClick={() => {setPrivacyOpen(false);setCornersOpen(false);setImagesOpen(false);toggleFrame(imagesOpen||privacyOpen?true:undefined);}}
@@ -253,7 +255,7 @@ export default function EditorView() {
             aria-pressed={frameEnabled&&!imagesOpen&&!privacyOpen}
             disabled={!base}
           >
-            <FrameIcon size={16} strokeWidth={1.5} /> Frame
+            <FrameIcon size={16} strokeWidth={1.5} /><span>Frame</span>
           </button>
           {/* Corners is the standalone round-and-trim control; with the decorative
               Frame on, its Radius governs rounding instead, so hide Corners then. */}
@@ -265,7 +267,7 @@ export default function EditorView() {
               aria-pressed={cornersOpen&&!imagesOpen}
               disabled={!base}
             >
-              <SquareRoundCorner size={16} strokeWidth={1.5} /> Corners
+              <SquareRoundCorner size={16} strokeWidth={1.5} /><span>Corners</span>
             </button>
           )}
         </div>

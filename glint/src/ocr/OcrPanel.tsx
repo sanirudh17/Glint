@@ -1,10 +1,12 @@
-/** OcrPanel.tsx — Single small focus window for extracted text: Save as .txt & Copy. */
+/** OcrPanel.tsx — small focus window for extracted text: edit, Save…, Copy. */
 import { useEffect, useRef, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { listen } from "@tauri-apps/api/event";
-import { Check, ScanText, SearchX, X } from "lucide-react";
+import { invoke } from "@tauri-apps/api/core";
+import { nextPaint } from "../overlay/nextPaint";
+import { Check, ScanText, SearchX, X } from "../icons";
 import { ocrResult, ocrCopy, type OcrResult } from "../lib/ocr";
-import { hasText as hasTextOf, countsLabel, copyTarget } from "./ocrPanelModel";
+import { hasText as hasTextOf, copyTarget } from "./ocrPanelModel";
 import "./ocr.css";
 
 export function OcrPanel() {
@@ -13,13 +15,18 @@ export function OcrPanel() {
   const [copied, setCopied] = useState(false);
   const ref = useRef<HTMLTextAreaElement>(null);
 
+  // Load the latest result; once that frame has painted, ask native to reveal the
+  // window (it ignores this unless an open was requested, e.g. a background prewarm).
   const reload = () => {
     ocrResult()
       .then((r) => {
         setText(r?.text ?? "");
         setLoaded(true);
       })
-      .catch(() => setLoaded(true));
+      .catch(() => setLoaded(true))
+      .then(() => nextPaint())
+      .then(() => invoke("ocr_present"))
+      .catch(() => {});
   };
 
   useEffect(() => {
@@ -59,17 +66,21 @@ export function OcrPanel() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const saveTxt = () => {
-    const content = text || ref.current?.value || "";
+  const [saved, setSaved] = useState(false);
+  const [saveError, setSaveError] = useState("");
+  // Native Save dialog + write (a browser-style download does nothing in a WebView).
+  const saveTxt = async () => {
+    const content = ref.current?.value ?? text;
     if (!content) return;
-    const url = URL.createObjectURL(new Blob([content], { type: "text/plain;charset=utf-8" }));
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `glint-text-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.txt`;
-    document.body.appendChild(a);
-    a.click();
-    a.remove();
-    window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+    setSaveError("");
+    try {
+      if (await invoke<boolean>("ocr_save_text", { text: content })) {
+        setSaved(true);
+        setTimeout(() => setSaved(false), 2000);
+      }
+    } catch (e) {
+      setSaveError(String(e));
+    }
   };
 
   const currentRes: OcrResult = {
@@ -82,67 +93,47 @@ export function OcrPanel() {
   return (
     <div className="ocr-root">
       <header className="ocr-header" data-tauri-drag-region>
-        <div className="ocr-meta">
-          <ScanText size={15} strokeWidth={1.5} className="ocr-icon" aria-hidden="true" />
-          <span className="ocr-label">Captured Text</span>
-          {hasText && <span className="ocr-counts">{countsLabel(currentRes)}</span>}
-        </div>
-        <div className="ocr-header-right">
-          {copied && (
-            <div className="ocr-copied-badge" role="status">
-              <Check size={13} strokeWidth={2} aria-hidden="true" />
-              <span>Copied</span>
-            </div>
-          )}
-          <button
-            type="button"
-            className="ocr-close-btn"
-            onClick={closeWindow}
-            aria-label="Close"
-            title="Close (Esc)"
-          >
-            <X size={14} strokeWidth={1.5} />
-          </button>
-        </div>
+        <span className="ocr-title" data-tauri-drag-region>
+          <ScanText size={14} strokeWidth={1.5} aria-hidden="true" />
+          Text
+        </span>
+        <button
+          type="button"
+          className="ocr-close-btn"
+          onClick={closeWindow}
+          aria-label="Close"
+          title="Close (Esc)"
+        >
+          <X size={14} strokeWidth={1.5} />
+        </button>
       </header>
 
       {loaded && !hasText ? (
-        <div className="ocr-empty">
-          <SearchX size={20} strokeWidth={1.5} aria-hidden="true" />
-          <span>No text detected in this capture.</span>
+        <div className="ocr-empty" role="status">
+          <SearchX size={18} strokeWidth={1.5} aria-hidden="true" />
+          <span>No text found</span>
         </div>
       ) : (
-        <div className="ocr-body">
-          <textarea
-            ref={ref}
-            className="ocr-text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            spellCheck={false}
-            aria-label="Extracted text"
-          />
-        </div>
+        <textarea
+          ref={ref}
+          className="ocr-text"
+          value={text}
+          onChange={(e) => setText(e.target.value)}
+          spellCheck={false}
+          aria-label="Extracted text"
+        />
       )}
 
       <footer className="ocr-footer">
-        <div className="ocr-actions">
-          <button
-            type="button"
-            className="ocr-btn"
-            disabled={!hasText}
-            onClick={saveTxt}
-          >
-            Save as .txt
-          </button>
-          <button
-            type="button"
-            className="ocr-btn ocr-btn--primary"
-            disabled={!hasText}
-            onClick={copy}
-          >
-            {copied ? "Copied!" : "Copy"}
-          </button>
-        </div>
+        {saveError && <span className="ocr-error" role="alert">{saveError}</span>}
+        <button type="button" className="ocr-btn" disabled={!hasText} onClick={() => void saveTxt()} aria-live="polite">
+          {saved && <Check size={14} strokeWidth={2} aria-hidden="true" />}
+          {saved ? "Saved" : "Save…"}
+        </button>
+        <button type="button" className="ocr-btn ocr-btn--primary" disabled={!hasText} onClick={copy} aria-live="polite">
+          {copied && <Check size={14} strokeWidth={2} aria-hidden="true" />}
+          {copied ? "Copied" : "Copy"}
+        </button>
       </footer>
     </div>
   );

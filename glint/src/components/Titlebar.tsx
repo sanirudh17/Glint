@@ -1,7 +1,7 @@
 import { invoke } from "@tauri-apps/api/core";
 import { useEffect, useState } from "react";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Minus, Square, Copy, X } from "lucide-react";
+import { Minus, Square, Copy, X } from "../icons";
 import "./shell.css";
 
 /** Reuses the actual window close path, including the Studio unsaved-change guard. */

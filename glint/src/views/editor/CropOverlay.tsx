@@ -1,5 +1,5 @@
 import {constrainCrop} from '../../editor/cropResize';
-import {Crop as CropIcon} from 'lucide-react';
+import {Crop as CropIcon} from "../../icons";
 import { useEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import type { Layout, Crop } from "../../editor/composition";

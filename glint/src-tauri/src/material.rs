@@ -23,7 +23,7 @@ fn opaque(dark: bool) -> tauri::window::Color {
     }
 }
 fn persistent(label: &str) -> bool {
-    matches!(label, "main" | "editor" | "rec-trim" | "rec-notes")
+    matches!(label, "main" | "editor" | "rec-trim" | "rec-notes" | "ocr")
 }
 pub fn request_paint(window: &WebviewWindow) {
     let _ = window.emit("desktop-present", ());
@@ -76,6 +76,22 @@ pub fn prepare_reveal(window: &WebviewWindow) {
     if window.is_visible().unwrap_or(false) && !window.is_minimized().unwrap_or(false) {
         return;
     }
+    gate_reveal(window);
+}
+/// A taskbar restore of a minimized persistent window. Windows restores it
+/// outside our show path, so the wndproc enters the same gate right before the
+/// restore: cloaked until a fresh frame and an active backdrop are ready.
+/// Returns false (no cloak) if the bookkeeping is busy, leaving a plain restore.
+pub fn gate_taskbar_restore(window: &WebviewWindow) -> bool {
+    if !persistent(window.label()) || SURFACES.try_lock().is_err() {
+        return false;
+    }
+    gate_reveal(window);
+    true
+}
+fn gate_reveal(window: &WebviewWindow) {
+    // Reopening during a close cancels that close's pending fallback hide.
+    RETIRING.lock().unwrap().remove(window.label());
     // Carbon's gate: acquire the physical cloak BEFORE ShowWindow. Keep the
     // native window visible behind it so WebView2 can submit fresh frames.
     let cloaked = set_cloaked(window, true);
@@ -153,6 +169,10 @@ pub fn window_material_prepare(window: WebviewWindow) -> Option<(u64, bool)> {
             opaque(state.dark)
         };
         let _ = window.set_background_color(Some(color));
+        // Activate the non-client state while still cloaked. Windows otherwise
+        // shows the backdrop's inactive fallback until focus lands after the
+        // uncloak, then fades it to live acrylic in front of the user.
+        activate_backdrop(&window);
         state.prepared = true;
     }
     Some((state.token, state.applied))
@@ -193,6 +213,60 @@ pub fn window_material_presented(window: WebviewWindow, token: u64) -> bool {
     if window.label()=="main"{crate::window::prewarm_editors_after_present(window.app_handle());}
     true
 }
+
+/// Close a reused persistent window without leaving its last frame in the
+/// retained surface: cloak now (it vanishes instantly), let the page clear and
+/// paint an empty frame, then hide on `window_retire_done` — or after a short
+/// fallback if the page never answers. A hidden WebView2 never repaints, so
+/// clearing after the hide would leave the old image for the next open.
+pub fn retire(window: &WebviewWindow, event: &str) {
+    if !set_cloaked(window, true) {
+        let _ = window.hide();
+        let _ = window.emit_to(window.label(), event, ());
+        return;
+    }
+    let serial = RETIRE_SERIAL.fetch_add(1, std::sync::atomic::Ordering::SeqCst) + 1;
+    RETIRING.lock().unwrap().insert(window.label().to_string(), serial);
+    let _ = window.emit_to(window.label(), event, ());
+    let win = window.clone();
+    tauri::async_runtime::spawn(async move {
+        tokio::time::sleep(std::time::Duration::from_millis(600)).await;
+        let app = win.app_handle().clone();
+        let _ = app.run_on_main_thread(move || finish_retire(&win, Some(serial)));
+    });
+}
+static RETIRE_SERIAL: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+static RETIRING: LazyLock<Mutex<HashMap<String, u64>>> = LazyLock::new(|| Mutex::new(HashMap::new()));
+fn finish_retire(window: &WebviewWindow, serial: Option<u64>) {
+    let mut retiring = RETIRING.lock().unwrap();
+    match (retiring.get(window.label()), serial) {
+        (None, _) => return,
+        (Some(current), Some(expected)) if *current != expected => return,
+        _ => {}
+    }
+    retiring.remove(window.label());
+    drop(retiring);
+    let _ = window.hide();
+    set_cloaked(window, false);
+}
+/// The page has painted its cleared frame; hide the (still cloaked) window.
+#[tauri::command]
+pub fn window_retire_done(window: WebviewWindow) {
+    finish_retire(&window, None);
+}
+
+#[cfg(windows)]
+fn activate_backdrop(window: &WebviewWindow) {
+    use windows::Win32::{Foundation::{LPARAM, WPARAM}, UI::WindowsAndMessaging::SendMessageW};
+    if let Ok(hwnd) = window.hwnd() {
+        let hwnd = windows::Win32::Foundation::HWND(hwnd.0 as _);
+        unsafe {
+            let _ = SendMessageW(hwnd, 0x0086, Some(WPARAM(1)), Some(LPARAM(0))); // WM_NCACTIVATE
+        }
+    }
+}
+#[cfg(not(windows))]
+fn activate_backdrop(_: &WebviewWindow) {}
 
 #[cfg(windows)]
 fn set_cloaked(window: &WebviewWindow, cloaked: bool) -> bool {

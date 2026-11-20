@@ -67,12 +67,12 @@ try{
  const tabs=await trim.evaluate(`[...document.querySelectorAll('.studio-panel-tabs button')].map(b=>b.textContent)`);assert.deepEqual(tabs,['Look','Edit & draw','Polish']);
  await button(trim,'Edit & draw');assert.ok(await trim.evaluate(`document.querySelector('[aria-label="Cursor smoothing"]').getBoundingClientRect().height>0`));
  const headerBefore=await trim.evaluate(`document.querySelector('.studio-panel-header').getBoundingClientRect().top`);
- await trim.evaluate(`document.querySelector('.studio-panel-controls').scrollTop=900`);
+ await trim.evaluate(`document.querySelector('.studio-panel-scroll').scrollTop=900`);
  assert.equal(await trim.evaluate(`document.querySelector('.studio-panel-header').getBoundingClientRect().top`),headerBefore);
  assert.equal(await trim.evaluate(`[...document.querySelectorAll('[aria-label="Window controls"]')].filter(e=>e.getBoundingClientRect().height>0).length`),1);
  assert.equal(await trim.invoke('plugin:window|is_maximized',{label:'rec-trim'}),true);
- await trim.evaluate(`document.querySelector('.studio-panel-controls').scrollTop=0`);
- assert.equal(await trim.evaluate(`getComputedStyle(document.querySelector('.studio-panel-controls')).paddingLeft`),'24px');
+ await trim.evaluate(`document.querySelector('.studio-panel-scroll').scrollTop=0`);
+ assert.equal(await trim.evaluate(`getComputedStyle(document.querySelector('.studio-panel-scroll')).paddingLeft`),'24px');
  await trim.screenshot(join(root,'studio-edit-controls.png'));
  await button(trim,'Edit & draw');assert.ok(await trim.evaluate(`!![...document.querySelectorAll('button')].find(b=>b.textContent==='Draw crop on video')`));
  await button(trim,'Look');await trim.evaluate(`document.querySelector('[aria-label="Output size preset"]').click()`);await wait(50);await trim.evaluate(`[...document.querySelectorAll('[role="option"]')].find(e=>e.textContent==='Custom size').click()`);await wait(70);

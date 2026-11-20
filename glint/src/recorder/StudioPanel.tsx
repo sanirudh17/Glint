@@ -1,6 +1,6 @@
 import {VideoAnnotationEditor} from "./VideoAnnotationEditor";
 import { useState } from "react";
-import { Check, FileSymlink, Files, FolderOpen, Save } from "lucide-react";
+import { Check, Link2, Copy, FolderOpen, Save } from "../icons";
 import { invoke } from "@tauri-apps/api/core";
 import { Button, ControlDisclosure, NumberInput,Switch,Select } from "../components/ui";
 import { LookControls, LookSlider } from "../look/LookControls";
@@ -36,18 +36,17 @@ export function StudioPanel({ onCrop, project, path, width, height, saveStatus, 
   const [tab,setTab]=useState<'look'|'edit'|'polish'>(project.zoomSegments.length||project.annotations?.length?'edit':'look');
   return <aside className="studio-panel" aria-label="Studio settings">
     <header className="studio-panel-header">
-      <div className="studio-heading-row" data-tauri-drag-region><h1>Studio</h1></div>
-      <p className="studio-project-name" title={path}>{name}</p>
-      {project.importedVideo&&<p className="look-hint">Edits save separately. Your original video is kept.</p>}
+      <div className="studio-heading-row" data-tauri-drag-region><h1 className="studio-project-name" title={path}>{name}</h1></div>
       <div className={`studio-save-status${saved ? " is-saved" : ""}`} role="status">
         {saved && <Check size={11} strokeWidth={1.8} aria-hidden />}
         <span>{saved ? "All changes saved" : saveStatus}</span>
       </div>
     </header>
+    <nav className="studio-panel-tabs" aria-label="Studio panels">{(['look','edit','polish'] as const).map(value=><button type="button" key={value} aria-pressed={tab===value} onClick={()=>setTab(value)}><span>{value==='edit'?'Edit & draw':value[0].toUpperCase()+value.slice(1)}</span></button>)}</nav>
+    <div className="studio-panel-scroll">
     {exportMessage && (exportMessage.startsWith("Exported: ")
       ? <ExportResult path={exportMessage.slice(10)} />
       : <p className="studio-export-error" role="alert">{exportMessage}</p>)}
-    <nav className="studio-panel-tabs" aria-label="Studio panels">{(['look','edit','polish'] as const).map(value=><button type="button" key={value} aria-pressed={tab===value} onClick={()=>setTab(value)}>{value==='edit'?'Edit & draw':value[0].toUpperCase()+value.slice(1)}</button>)}</nav>
     <fieldset className="studio-panel-controls" disabled={exporting}>
       <div hidden={tab!=='look'}>
       <LookControls video look={project.look} dimensions={{width:crop.w,height:crop.h}} onChange={(patch) => onChange({ look: { ...project.look, ...patch } })} />
@@ -62,10 +61,8 @@ export function StudioPanel({ onCrop, project, path, width, height, saveStatus, 
       <ControlDisclosure title="Motion blur" className="studio-effects-controls">
         <div className="look-row"><span className="look-label">Motion blur</span><Switch ariaLabel="Enable motion blur" checked={project.motionBlur?.enabled??false} onChange={enabled=>onChange({motionBlur:{...(project.motionBlur??DEFAULT_MOTION),enabled}})}/></div>
         {project.motionBlur?.enabled&&<LookSlider label="Amount" ariaLabel="Motion blur amount" value={project.motionBlur.intensity*100} unit="%" onChange={value=>onChange({motionBlur:{...project.motionBlur!,intensity:value/100}})}/>}
-        <p className="look-hint">Light blur on fast zoom, pan and cursor movement. More blur adds rendering work.</p>
       </ControlDisclosure>
       <ControlDisclosure title="Crop source video" className="studio-crop"><Button onClick={onCrop}>Draw crop on video</Button>
-        <p className="look-hint">Source: {width} × {height} px. Crop stays inside the source. Press Enter or leave a field to apply.</p>
         <div className="studio-crop-grid">
           {(["x", "y", "w", "h"] as const).map((key) => {
             const label = { x: "Left", y: "Top", w: "Width", h: "Height" }[key];
@@ -85,8 +82,9 @@ export function StudioPanel({ onCrop, project, path, width, height, saveStatus, 
           ariaLabel={`Camera ${key}`} value={cam[key] * 100} unit="%" onChange={(value) => onCamChange(clampPlacement({ ...cam, [key]: value / 100 }))} />)}
       </ControlDisclosure>}
       </div><div hidden={tab!=='polish'}><StudioPolishControls project={project} events={events} path={path} duration={duration} onChange={onChange}/></div>
-      <div className="studio-panel-footer"><Button icon={manualSave==='saved'?Check:Save} disabled={manualSave==='saving'} onClick={()=>{setManualSave('saving');void onSave().then(ok=>{setManualSave(ok?'saved':'idle');if(ok)window.setTimeout(()=>setManualSave('idle'),2200);});}}>{manualSave==='saving'?'Saving...':manualSave==='saved'?'Project saved':'Save project'}</Button><p className="look-hint">Edits are saved beside this recording. The source video is kept.</p></div>
+      <div className="studio-panel-footer"><Button icon={manualSave==='saved'?Check:Save} disabled={manualSave==='saving'} onClick={()=>{setManualSave('saving');void onSave().then(ok=>{setManualSave(ok?'saved':'idle');if(ok)window.setTimeout(()=>setManualSave('idle'),2200);});}}>{manualSave==='saving'?'Saving...':manualSave==='saved'?'Project saved':'Save project'}</Button></div>
     </fieldset>
+    </div>
   </aside>;
 }
 
@@ -101,8 +99,8 @@ function ExportResult({ path }: { path: string }) {
     <p className="studio-export-folder" title={folder}>{folder}</p>
     <div className="studio-export-actions">
       <Button size="sm" variant="ghost" icon={FolderOpen} onClick={() => void invoke("reveal_path", { path }).catch((e) => setError(String(e)))}>Show in folder</Button>
-      <Button size="sm" variant="ghost" icon={FileSymlink} onClick={() => void invoke("clipboard_copy_text", { text: path }).then(() => { setCopied(true); setError(null); }).catch((e) => setError(String(e)))}>{copied ? "Copied" : "Copy path"}</Button>
-      <Button size="sm" variant="ghost" icon={Files} onClick={()=>void invoke('studio_copy_video',{path}).then(()=>setError(null)).catch(e=>setError(String(e)))}>Copy video file</Button>
+      <Button size="sm" variant="ghost" icon={Link2} onClick={() => void invoke("clipboard_copy_text", { text: path }).then(() => { setCopied(true); setError(null); }).catch((e) => setError(String(e)))}>{copied ? "Copied" : "Copy path"}</Button>
+      <Button size="sm" variant="ghost" icon={Copy} onClick={()=>void invoke('studio_copy_video',{path}).then(()=>setError(null)).catch(e=>setError(String(e)))}>Copy video file</Button>
     </div>
     {error && <p className="studio-export-error" role="alert">{error}</p>}
   </section>;
