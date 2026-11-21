@@ -7,7 +7,13 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use tauri::{AppHandle, Manager};
 
-pub const GUIDE_URL: &str = "https://github.com/sanirudh17/Glint#use-glint-with-coding-agents";
+/// The setup page: one heading per agent, so `#<slug of the name>` lands on its section.
+pub const GUIDE_URL: &str = "https://github.com/sanirudh17/Glint/blob/main/docs/agents.md";
+
+/// GitHub's heading anchor for a name: "GitHub Copilot CLI" → "github-copilot-cli".
+fn anchor(name: &str) -> String {
+    name.to_lowercase().chars().filter(|c| c.is_ascii_alphanumeric() || *c == ' ' || *c == '-').collect::<String>().replace(' ', "-")
+}
 
 struct Agent {
     id: &'static str,
@@ -338,7 +344,7 @@ pub fn agents_overview(app: AppHandle) -> Result<Value, String> {
 pub fn agents_open_guide(agent: Option<String>) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
     let url = match agent.as_deref().and_then(|id| AGENTS.iter().find(|a| a.id == id)) {
-        Some(a) => format!("https://github.com/sanirudh17/Glint#setup-{}", a.id),
+        Some(a) => format!("{GUIDE_URL}#{}", anchor(a.name)),
         None => GUIDE_URL.to_string(),
     };
     std::process::Command::new("explorer.exe").arg(url).creation_flags(0x08000000).spawn().map(|_| ()).map_err(|e| e.to_string())
@@ -360,6 +366,16 @@ mod tests {
         let jsonc = "{ // comment\n \"mcp\": { \"servers\": { \"glint\": { \"type\": \"local\", \"command\": [\"C:\\\\G\\\\glint.exe\", \"--mcp\"] /* x */ } } } }";
         let parsed: Value = serde_json::from_str(&strip_jsonc(jsonc)).unwrap();
         assert!(json_servers_use_glint(parsed["mcp"].get("servers")));
+    }
+
+    #[test]
+    fn every_agent_has_a_section_in_the_setup_page() {
+        let page = include_str!("../../../docs/agents.md");
+        let headings: Vec<String> = page.lines().filter_map(|l| l.strip_prefix("## ")).map(anchor).collect();
+        for agent in AGENTS.iter() {
+            assert!(headings.contains(&anchor(agent.name)), "docs/agents.md has no section for {}", agent.name);
+        }
+        assert_eq!(anchor("GitHub Copilot CLI"), "github-copilot-cli");
     }
 
     #[test]

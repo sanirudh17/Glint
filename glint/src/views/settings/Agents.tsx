@@ -17,8 +17,10 @@ import copilot from "../../assets/agents/copilot.svg";
 import grok from "../../assets/agents/grok.svg";
 import cursor from "../../assets/agents/cursor.svg";
 import claudeDesktop from "../../assets/agents/claude-desktop.svg";
+import pi from "../../assets/agents/pi.svg";
+import ohMyPi from "../../assets/agents/oh-my-pi.svg";
 
-/** Real marks (CC0 drawings). `ink` marks are black and invert in the dark theme. */
+/** Real marks (CC0 drawings; Pi and Oh My Pi from Ember). `ink` marks are black and invert in the dark theme. */
 const LOGOS: Record<string, { src: string; ink?: boolean }> = {
   "claude-code": { src: claudeCode },
   codex: { src: codex, ink: true },
@@ -28,6 +30,8 @@ const LOGOS: Record<string, { src: string; ink?: boolean }> = {
   grok: { src: grok, ink: true },
   cursor: { src: cursor, ink: true },
   "claude-desktop": { src: claudeDesktop },
+  pi: { src: pi },
+  "oh-my-pi": { src: ohMyPi, ink: true },
 };
 const REFRESH_MS = 2500;
 
