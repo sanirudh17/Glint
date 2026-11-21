@@ -19,6 +19,7 @@ mod tray;
 mod updater;
 mod window;
 mod material;
+pub mod mcp;
 use tauri::Manager;
 use tauri_plugin_shell::ShellExt;
 use capture::commands::{
