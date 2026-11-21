@@ -162,3 +162,67 @@ fn searches_the_library_read_only() {
     assert_eq!(std::fs::read(&db).unwrap(), before, "the library file must not be written");
     let _ = std::fs::remove_dir_all(dir);
 }
+
+#[test]
+fn edits_editor_documents_without_the_app() {
+    let dir = workspace("editor");
+    let image = dir.join("page.png");
+    image::RgbaImage::from_pixel(300, 200, image::Rgba([250, 250, 250, 255])).save(&image).unwrap();
+    let mut client = Client::start(&dir);
+
+    let (is_error, created) = client.call("editor_create", json!({"image": image}));
+    assert!(!is_error, "{created}");
+    let created: Value = serde_json::from_str(&created).unwrap();
+    let doc = created["path"].as_str().unwrap().to_string();
+    assert!(doc.ends_with("page.glint"));
+
+    let (is_error, edited) = client.call("editor_edit", json!({"path": doc, "edits": [
+        {"op": "add", "annotation": {"type": "arrow", "x1": 10, "y1": 10, "x2": 120, "y2": 90}},
+        {"op": "add", "annotation": {"type": "text", "x": 20, "y": 150, "text": "Hello", "style": {"textPreset": "heading"}}},
+        {"op": "set_frame", "frame": {"enabled": true, "background": {"type": "solid", "color": "#101418"}}}
+    ]}));
+    assert!(!is_error, "{edited}");
+    assert_eq!(serde_json::from_str::<Value>(&edited).unwrap()["added"].as_array().unwrap().len(), 2);
+
+    let (_, read) = client.call("editor_read", json!({"path": doc}));
+    let read: Value = serde_json::from_str(&read).unwrap();
+    assert_eq!(read["annotations"][1]["text"], "Hello");
+    assert_eq!(read["frame"]["background"]["color"], "#101418");
+
+    // A bad batch is rejected whole and leaves the document unchanged.
+    let before = std::fs::read(&doc).unwrap();
+    let (is_error, message) = client.call("editor_edit", json!({"path": doc, "edits": [
+        {"op": "remove", "id": "nope"}
+    ]}));
+    assert!(is_error && message.contains("no annotation"), "{message}");
+    assert_eq!(std::fs::read(&doc).unwrap(), before);
+
+    // Creating again never overwrites the first document.
+    let (_, again) = client.call("editor_create", json!({"image": image}));
+    assert!(serde_json::from_str::<Value>(&again).unwrap()["path"].as_str().unwrap().ends_with("page 2.glint"));
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// Live: renders through a running (or auto-started) Glint. Needs GLINT_APP_ID and
+/// GLINT_EXE for a preview build, e.g. `cargo test --test mcp_stdio -- --ignored`.
+#[test]
+#[ignore]
+fn renders_through_the_running_app() {
+    let dir = workspace("render");
+    let image = dir.join("shape.png");
+    let mut source = image::RgbaImage::from_pixel(200, 120, image::Rgba([0, 0, 0, 0]));
+    for y in 20..100 { for x in 40..160 { source.put_pixel(x, y, image::Rgba([124, 92, 246, 255])); } }
+    source.save(&image).unwrap();
+    let mut client = Client::start(&dir);
+    let (is_error, trimmed) = client.call("image_trim", json!({"path": image}));
+    assert!(!is_error, "{trimmed}");
+    let trimmed = serde_json::from_str::<Value>(&trimmed).unwrap()["output"].as_str().unwrap().to_string();
+    let (is_error, rounded) = client.call("image_round_corners", json!({"path": trimmed, "percent": 40}));
+    assert!(!is_error, "{rounded}");
+    let output = serde_json::from_str::<Value>(&rounded).unwrap()["output"].as_str().unwrap().to_string();
+    let png = image::open(&output).unwrap().to_rgba8();
+    assert_eq!(png.dimensions(), (120, 80));
+    assert_eq!(png.get_pixel(0, 0)[3], 0, "corners are trimmed to transparent");
+    assert_eq!(png.get_pixel(60, 40)[3], 255, "the middle is untouched");
+    let _ = std::fs::remove_dir_all(dir);
+}

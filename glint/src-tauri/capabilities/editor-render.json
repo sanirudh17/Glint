@@ -1,0 +1,7 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "editor-render",
+  "description": "Hidden window that renders .glint documents for the Glint MCP",
+  "windows": ["editor-render"],
+  "permissions": ["core:default", "sql:allow-load", "sql:allow-select"]
+}

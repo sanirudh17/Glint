@@ -33,6 +33,12 @@ pub fn main_present(window: tauri::WebviewWindow) -> Result<(), String> {
     if MAIN_READY.swap(true, Ordering::SeqCst) {
         return Ok(());
     }
+    // Started by an agent (glint-mcp): stay in the tray; the tray icon or any
+    // later open brings the main window up normally.
+    if std::env::args().any(|arg| arg == "--background") {
+        prewarm_editors_after_present(window.app_handle());
+        return Ok(());
+    }
     if window
         .app_handle()
         .get_webview_window("editor")

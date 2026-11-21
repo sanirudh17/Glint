@@ -2,6 +2,7 @@ mod autostart;
 mod attachments;
 mod capture;
 mod clipboard;
+mod control;
 mod countdown;
 mod db;
 mod editor;
@@ -325,6 +326,8 @@ pub fn run() {
                 }
             }
 
+            // Local control channel for the Glint MCP (agents).
+            crate::control::start(app.handle());
             crate::clipboard::init(app.handle())?;
             log::info!("Glint started");
             Ok(())
@@ -394,6 +397,8 @@ pub fn run() {
             settings::sound::sound_warm,
             ocr::window::ocr_present,
             ocr::window::ocr_save_text,
+            control::render_job_next,
+            control::render_job_done,
             material::window_retire_done,
             settings_set_hotkey,
             settings_reset_hotkeys,

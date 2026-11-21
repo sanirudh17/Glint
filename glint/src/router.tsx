@@ -21,6 +21,7 @@ const FxOverlay = lazy(() => import("./recorder/FxOverlay").then((m) => ({ defau
 import "./components/shell.css";
 
 import EditorView from "./views/EditorView";
+const EditorRender = lazy(() => import("./views/EditorRender").then((m) => ({ default: m.EditorRender })));
 import { TrimView } from "./recorder/TrimView";
 import LibraryView from "./views/LibraryView";
 import SettingsView from "./views/SettingsView";
@@ -138,6 +139,11 @@ export const router = createHashRouter([
      */
     path: "/editor",
     element: <EditorView />,
+  },
+  {
+    /** Hidden window that renders .glint documents for the Glint MCP (agents). */
+    path: "/editor-render",
+    element: lazyRoute(<EditorRender />),
   },
   {
     path: "/",
