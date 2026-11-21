@@ -25,6 +25,7 @@ Glint is **local-first by design**. There is no cloud storage, account requireme
 
 ## Table of contents
 
+- [What is new in 0.3.0](#what-is-new-in-030)
 - [Features](#features)
 - [Download & install](#download--install)
 - [Use Glint with coding agents](#use-glint-with-coding-agents)
@@ -34,7 +35,14 @@ Glint is **local-first by design**. There is no cloud storage, account requireme
 - [Privacy](#privacy)
 - [License](#license)
 
-## What is new in 0.2.3
+## What is new in 0.3.0
+
+- **Coding agents can use Glint.** Built-in MCP server (`glint.exe --mcp`) for Claude Code, Codex, OpenCode, Antigravity and others: they can edit images and videos, capture, record, and change settings and hotkeys. See [Use Glint with coding agents](#use-glint-with-coding-agents).
+- **Settings → Agents** shows your installed agents, which are connected, and a log of what they did.
+- **Much faster video exports.** NVIDIA GPUs are used again, frames are composed in parallel, and timelines with many cuts export reliably with exact frame timing.
+- **Polish across the app:** new icon set, refined Settings, editor, Trim/Studio and Library, plus shutter-sound previews. Capture on mouse release, the editor cache and the Studio toolbar come from #1 by @valenxi0.
+
+## Previous release: 0.2.3
 
 - Tray clicks restore Glint once, after the mouse gesture finishes.
 - Open Glint and Settings from the tray defer restoration until the menu callback completes.
@@ -143,6 +151,10 @@ Save any edit as a **versioned, self-contained `.glint` document** that embeds t
 ### Explorer integration
 
 An **"Open in Glint"** entry appears on any image file (png, jpg, jpeg, webp, bmp, gif) through a per-user shell verb — no administrator rights required. Editing is always non-destructive: the original file on disk is never modified unless you explicitly export over it.
+
+### Coding agents (MCP)
+
+Coding agents such as Claude Code, Codex, OpenCode and Antigravity can use Glint through its built-in MCP server. They can trim, round and annotate images; edit and export recordings with cuts, zooms and captions; take screenshots and recordings; and change settings and hotkeys. **Settings → Agents** shows which agents are connected and what they did. See [Use Glint with coding agents](#use-glint-with-coding-agents).
 
 ### Interface
 
