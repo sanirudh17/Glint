@@ -1,4 +1,4 @@
-//! End-to-end: drive the real `glint-mcp` binary over stdio exactly as an agent
+//! End-to-end: drive the real `glint.exe --mcp` over stdio exactly as an agent
 //! does (line-delimited JSON-RPC), against a throwaway library and images.
 use serde_json::{json, Value};
 use std::io::{BufRead, BufReader, Write};
@@ -14,13 +14,14 @@ struct Client {
 
 impl Client {
     fn start(data_dir: &PathBuf) -> Self {
-        let mut child = Command::new(env!("CARGO_BIN_EXE_glint-mcp"))
+        let mut child = Command::new(env!("CARGO_BIN_EXE_glint"))
+            .arg("--mcp")
             .env("GLINT_DATA_DIR", data_dir)
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .stderr(Stdio::inherit())
             .spawn()
-            .expect("start glint-mcp");
+            .expect("start glint --mcp");
         let stdin = child.stdin.take().unwrap();
         let stdout = BufReader::new(child.stdout.take().unwrap());
         let mut client = Self { child, stdin, stdout, next_id: 1 };
@@ -45,7 +46,7 @@ impl Client {
         self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
         loop {
             let mut line = String::new();
-            assert!(self.stdout.read_line(&mut line).unwrap() > 0, "glint-mcp closed stdout");
+            assert!(self.stdout.read_line(&mut line).unwrap() > 0, "glint --mcp closed stdout");
             let message: Value = serde_json::from_str(&line).unwrap_or_else(|e| panic!("non-JSON on stdout ({e}): {line}"));
             if message["id"] == id {
                 return message;
@@ -61,7 +62,7 @@ impl Client {
         let mut notes = Vec::new();
         loop {
             let mut line = String::new();
-            assert!(self.stdout.read_line(&mut line).unwrap() > 0, "glint-mcp closed stdout");
+            assert!(self.stdout.read_line(&mut line).unwrap() > 0, "glint --mcp closed stdout");
             let message: Value = serde_json::from_str(&line).unwrap();
             if message["id"] == id {
                 return (notes, message);
