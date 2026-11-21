@@ -1,6 +1,7 @@
 /** Settings → Agents: the agents' state and their recent actions, in plain words. */
 export interface AgentStatus {
-  id: "claude-code" | "codex" | "opencode" | "cursor" | "claude-desktop";
+  /** A known agent id, or `client:<name>` for any other MCP client. */
+  id: string;
   name: string;
   installed: boolean;
   configured: boolean;
@@ -10,7 +11,7 @@ export interface AgentStatus {
 
 export interface ActivityEntry {
   t: number;
-  agent: AgentStatus["id"] | "other";
+  agent: string;
   client: string;
   tool: string;
   ok: boolean;

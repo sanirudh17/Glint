@@ -357,11 +357,13 @@
 .g-select-value {
   flex: 1;
   min-width: 0;
-  display: block;
-  /* Centre on the capitals, like .g-btn: Manrope's ascent is taller than its
-     descent, so a line box (or a hand-tuned nudge) sits the label low. */
-  line-height: normal;
-  text-box: trim-both cap alphabetic;
+  display: flex;
+  align-items: center;
+  height: 100%;
+  /* The line box keeps room for descenders (overflow is hidden for the
+     ellipsis, so a trimmed box would clip "p", "g"…). No nudge: the old 1px
+     shift down is what made labels sit low. */
+  line-height: 1.2;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -444,9 +446,6 @@
 .g-select-option-label {
   flex: 1;
   min-width: 0;
-  display: block;
-  line-height: normal;
-  text-box: trim-both cap alphabetic;
   overflow: hidden;
   text-overflow: ellipsis;
 }

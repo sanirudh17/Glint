@@ -169,29 +169,46 @@ The installer includes FFmpeg/FFprobe for recording and export. OCR and caption 
 
 ## Use Glint with coding agents
 
-Glint includes an MCP server, so coding agents such as Claude Code, Codex and OpenCode can use it for you: trim and round images, annotate screenshots, edit and export recordings (cuts, zooms, captions), take screenshots and recordings, and change settings, themes and hotkeys. The server is part of Glint itself (`glint.exe --mcp`), so there is nothing extra to install. If Glint isn't running, it starts quietly in the tray.
+Glint includes an MCP server, so coding agents can use it for you: trim and round images, annotate screenshots, edit and export recordings (cuts, zooms, captions), take screenshots and recordings, and change settings, themes and hotkeys. The server is part of Glint itself (`glint.exe --mcp`), so there is nothing extra to install. If Glint isn't running, it starts quietly in the tray.
 
-Run the line for your agent in **PowerShell**. It works for every Windows user, because `$env:LOCALAPPDATA` expands to your own install folder. Keep the quotes around `'--'`: PowerShell otherwise swallows it.
+Run your agent's line in **PowerShell**. It works for every Windows user, because `$env:LOCALAPPDATA` expands to your own install folder. Keep the quotes around `'--'`: PowerShell otherwise swallows it. Restart the agent afterwards. **Settings → Agents** in Glint then shows it as connected, with a log of what it did in Glint.
 
-**Claude Code**
+<a id="setup-claude-code"></a>
+#### Claude Code
 
 ```powershell
 claude mcp add --scope user glint '--' "$env:LOCALAPPDATA\Glint\glint.exe" --mcp
 ```
 
-**Codex**
+<a id="setup-codex"></a>
+#### Codex
 
 ```powershell
 codex mcp add glint '--' "$env:LOCALAPPDATA\Glint\glint.exe" --mcp
 ```
 
-**OpenCode**
+<a id="setup-opencode"></a>
+#### OpenCode
 
 ```powershell
 opencode mcp add glint --global '--' "$env:LOCALAPPDATA\Glint\glint.exe" --mcp
 ```
 
-**Other MCP clients** (Cursor, Claude Desktop and others) use a JSON config. Replace `<you>` with your Windows user name:
+<a id="setup-antigravity"></a>
+#### Antigravity
+
+```powershell
+agy mcp add glint "$env:LOCALAPPDATA\Glint\glint.exe" --mcp
+```
+
+<a id="setup-copilot"></a>
+<a id="setup-oh-my-pi"></a>
+<a id="setup-grok"></a>
+<a id="setup-cursor"></a>
+<a id="setup-claude-desktop"></a>
+#### GitHub Copilot CLI, Oh My Pi, Grok Build, Cursor, Claude Desktop and other MCP clients
+
+Add Glint as a local (stdio) MCP server in the agent's MCP settings. Most use this JSON shape. Replace `<you>` with your Windows user name:
 
 ```json
 {
@@ -204,9 +221,17 @@ opencode mcp add glint --global '--' "$env:LOCALAPPDATA\Glint\glint.exe" --mcp
 }
 ```
 
-Installed with the **MSI** instead? Then Glint is in Program Files: use `"$env:ProgramFiles\Glint\glint.exe"` in the commands above (and `"C:\\Program Files\\Glint\\glint.exe"` in JSON).
+| Agent | Where its MCP settings live |
+| --- | --- |
+| GitHub Copilot CLI | `~\.copilot\mcp-config.json`, or `/mcp add` inside Copilot CLI |
+| Cursor | `~\.cursor\mcp.json` |
+| Claude Desktop | `%APPDATA%\Claude\claude_desktop_config.json` |
+| Oh My Pi, Grok Build and others | the agent's MCP settings; see its docs |
 
-Restart the agent afterwards. **Settings → Agents** in Glint then shows each connected agent (*Active now*, *Last used…*) and a log of what agents did in Glint.
+<a id="setup-pi"></a>
+**Pi** doesn't include MCP support by design. Add an MCP adapter extension first, then point it at the command above.
+
+Installed with the **MSI** instead? Then Glint is in Program Files: use `"$env:ProgramFiles\Glint\glint.exe"` in the commands above (and `"C:\\Program Files\\Glint\\glint.exe"` in JSON).
 
 **Privacy.** Everything stays on your PC. The agent talks to Glint over a local pipe that refuses network connections. The activity log in Settings → Agents keeps only the action and the file *name* (never file contents), and is capped in size. Agents never overwrite your originals: edits and exports are saved as new files.
 

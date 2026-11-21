@@ -1,6 +1,7 @@
-//! Settings → Agents: which coding agents are connected to Glint, and what they
-//! did. Reads the activity log `glint-mcp` writes (see `mcp::activity`) and each
-//! agent's own MCP config, read-only. Setup instructions live in the README.
+//! Settings → Agents: which coding agents are on this PC, whether they're
+//! connected to Glint, and what they did. Reads the activity log `glint-mcp`
+//! writes (see `mcp::activity`) and each agent's own MCP config, read-only.
+//! Setup instructions live in the README.
 use serde_json::{json, Value};
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
@@ -11,16 +12,24 @@ pub const GUIDE_URL: &str = "https://github.com/sanirudh17/Glint#use-glint-with-
 struct Agent {
     id: &'static str,
     name: &'static str,
+    /// Command-line names on PATH that mean it's installed.
+    commands: &'static [&'static str],
 }
-const AGENTS: [Agent; 5] = [
-    Agent { id: "claude-code", name: "Claude Code" },
-    Agent { id: "codex", name: "Codex" },
-    Agent { id: "opencode", name: "OpenCode" },
-    Agent { id: "cursor", name: "Cursor" },
-    Agent { id: "claude-desktop", name: "Claude Desktop" },
+/// Agents Glint knows; any other MCP client that connects is listed by its own name.
+const AGENTS: [Agent; 10] = [
+    Agent { id: "claude-code", name: "Claude Code", commands: &["claude"] },
+    Agent { id: "codex", name: "Codex", commands: &["codex"] },
+    Agent { id: "opencode", name: "OpenCode", commands: &["opencode"] },
+    Agent { id: "antigravity", name: "Antigravity", commands: &["agy"] },
+    Agent { id: "copilot", name: "GitHub Copilot CLI", commands: &["copilot"] },
+    Agent { id: "oh-my-pi", name: "Oh My Pi", commands: &["omp"] },
+    Agent { id: "pi", name: "Pi", commands: &["pi"] },
+    Agent { id: "grok", name: "Grok Build", commands: &["grok"] },
+    Agent { id: "cursor", name: "Cursor", commands: &["cursor-agent"] },
+    Agent { id: "claude-desktop", name: "Claude Desktop", commands: &[] },
 ];
 
-/// Which agent an MCP client name belongs to.
+/// Which agent an MCP client name belongs to ("other" when Glint doesn't know it).
 pub fn agent_of(client: &str) -> &'static str {
     let c = client.to_lowercase();
     if c.contains("claude-code") || c.contains("claude code") {
@@ -29,6 +38,16 @@ pub fn agent_of(client: &str) -> &'static str {
         "codex"
     } else if c.contains("opencode") {
         "opencode"
+    } else if c.contains("antigravity") || c == "agy" {
+        "antigravity"
+    } else if c.contains("copilot") {
+        "copilot"
+    } else if c.contains("oh-my-pi") || c.contains("oh my pi") || c == "omp" {
+        "oh-my-pi"
+    } else if c == "pi" || c.starts_with("pi-") || c.contains("pi coding") {
+        "pi"
+    } else if c.contains("grok") {
+        "grok"
     } else if c.contains("cursor") {
         "cursor"
     } else if c == "claude-ai" || c.contains("claude desktop") || c.contains("claude-desktop") {
@@ -36,6 +55,25 @@ pub fn agent_of(client: &str) -> &'static str {
     } else {
         "other"
     }
+}
+
+/// "acme-agent-cli" → "Acme Agent CLI": a readable name for a client Glint doesn't know.
+pub fn display_name(client: &str) -> String {
+    client
+        .split(['-', '_', ' '])
+        .filter(|w| !w.is_empty())
+        .map(|w| match w.to_lowercase().as_str() {
+            "cli" | "mcp" | "ai" | "ide" | "vs" | "sdk" | "api" => w.to_uppercase(),
+            _ => w[..1].to_uppercase() + &w[1..],
+        })
+        .collect::<Vec<_>>()
+        .join(" ")
+}
+
+/// Is a command on PATH (as .exe, .cmd, .ps1 or .bat)?
+fn on_path(command: &str) -> bool {
+    let Some(path) = std::env::var_os("PATH") else { return false };
+    std::env::split_paths(&path).any(|dir| ["exe", "cmd", "ps1", "bat"].iter().any(|ext| dir.join(format!("{command}.{ext}")).is_file()))
 }
 
 /// Does an MCP server entry launch Glint's server?
@@ -104,35 +142,34 @@ fn read_json(path: &Path) -> Option<Value> {
     serde_json::from_str(&strip_jsonc(&text)).ok()
 }
 
+fn mcp_servers_file(path: &Path) -> bool {
+    read_json(path).is_some_and(|c| json_servers_use_glint(c.get("mcpServers")))
+}
+
 /// Codex's config.toml: any `[mcp_servers.*]` table whose command launches Glint.
 fn codex_uses_glint(text: &str) -> bool {
-    let mut in_server = false;
-    let (mut command, mut args) = (String::new(), Vec::new());
-    let mut found = false;
-    let mut flush = |command: &mut String, args: &mut Vec<String>| {
-        found |= !command.is_empty() && launches_glint(command, args);
-        command.clear();
-        args.clear();
+    let quoted = |s: &str| -> Vec<String> {
+        s.split(['"', '\'']).enumerate().filter(|(i, _)| i % 2 == 1).map(|(_, v)| v.replace("\\\\", "\\")).collect()
     };
-    for line in text.lines().map(str::trim) {
+    let (mut in_server, mut found) = (false, false);
+    let (mut command, mut args) = (String::new(), Vec::new());
+    for line in text.lines().map(str::trim).chain(std::iter::once("[end]")) {
         if line.starts_with('[') {
-            flush(&mut command, &mut args);
+            found |= !command.is_empty() && launches_glint(&command, &args);
+            command.clear();
+            args.clear();
             in_server = line.starts_with("[mcp_servers.") && !line.contains(".env");
             continue;
         }
         if !in_server {
             continue;
         }
-        let quoted = |s: &str| -> Vec<String> {
-            s.split(['"', '\'']).enumerate().filter(|(i, _)| i % 2 == 1).map(|(_, v)| v.replace("\\\\", "\\")).collect()
-        };
         if let Some(value) = line.strip_prefix("command").map(str::trim_start).and_then(|r| r.strip_prefix('=')) {
-            *(&mut command) = quoted(value).into_iter().next().unwrap_or_default();
+            command = quoted(value).into_iter().next().unwrap_or_default();
         } else if let Some(value) = line.strip_prefix("args").map(str::trim_start).and_then(|r| r.strip_prefix('=')) {
             args = quoted(value);
         }
     }
-    flush(&mut command, &mut args);
     found
 }
 
@@ -140,40 +177,58 @@ fn home() -> Option<PathBuf> {
     std::env::var_os("USERPROFILE").map(PathBuf::from)
 }
 
-/// (installed, configured) for each agent, from its own files.
+/// (installed, configured) for each agent: its command or home folder, and its own MCP config.
 fn detect(id: &str) -> (bool, bool) {
     let Some(home) = home() else { return (false, false) };
     let appdata = std::env::var_os("APPDATA").map(PathBuf::from).unwrap_or_default();
+    let local = std::env::var_os("LOCALAPPDATA").map(PathBuf::from).unwrap_or_default();
+    let command = AGENTS.iter().find(|a| a.id == id).is_some_and(|a| a.commands.iter().any(|c| on_path(c)));
     match id {
         "claude-code" => {
             let config = read_json(&home.join(".claude.json"));
             let configured = config.as_ref().is_some_and(|c| {
                 json_servers_use_glint(c.get("mcpServers"))
                     || c["projects"].as_object().is_some_and(|p| p.values().any(|p| json_servers_use_glint(p.get("mcpServers"))))
-            }) || read_json(&home.join(".claude").join("settings.json")).is_some_and(|c| json_servers_use_glint(c.get("mcpServers")));
-            (home.join(".claude").is_dir() || config.is_some(), configured)
+            });
+            (command || home.join(".claude").is_dir(), configured)
         }
         "codex" => {
             let dir = home.join(".codex");
-            (dir.is_dir(), std::fs::read_to_string(dir.join("config.toml")).is_ok_and(|t| codex_uses_glint(&t)))
+            (command || dir.is_dir(), std::fs::read_to_string(dir.join("config.toml")).is_ok_and(|t| codex_uses_glint(&t)))
         }
         "opencode" => {
             let dir = home.join(".config").join("opencode");
             let configured = ["opencode.json", "opencode.jsonc"].iter().filter_map(|f| read_json(&dir.join(f))).any(|c| {
                 json_servers_use_glint(c["mcp"].get("servers")) || json_servers_use_glint(c.get("mcp"))
             });
-            (dir.is_dir(), configured)
+            (command || dir.is_dir(), configured)
         }
+        "antigravity" => {
+            let gemini = home.join(".gemini");
+            let configured = mcp_servers_file(&gemini.join("config").join("mcp_config.json"))
+                || mcp_servers_file(&gemini.join("antigravity").join("mcp_config.json"));
+            (command || gemini.join("antigravity").is_dir() || local.join("Programs").join("Antigravity").is_dir(), configured)
+        }
+        "copilot" => {
+            let dir = home.join(".copilot");
+            (command || dir.is_dir(), mcp_servers_file(&dir.join("mcp-config.json")))
+        }
+        "oh-my-pi" => {
+            let dir = home.join(".omp");
+            (command || dir.is_dir(), mcp_servers_file(&dir.join("agent").join("mcp.json")) || mcp_servers_file(&dir.join("mcp.json")))
+        }
+        "pi" => {
+            let dir = home.join(".pi");
+            (command || dir.is_dir(), mcp_servers_file(&dir.join("agent").join("mcp.json")))
+        }
+        "grok" => (command || home.join(".grok").is_dir(), mcp_servers_file(&home.join(".grok").join("mcp.json"))),
         "cursor" => {
             let dir = home.join(".cursor");
-            (dir.is_dir(), read_json(&dir.join("mcp.json")).is_some_and(|c| json_servers_use_glint(c.get("mcpServers"))))
+            (command || dir.is_dir() || local.join("Programs").join("cursor").is_dir(), mcp_servers_file(&dir.join("mcp.json")))
         }
         "claude-desktop" => {
-            let dir = appdata.join("Claude");
-            (
-                dir.join("claude_desktop_config.json").is_file(),
-                read_json(&dir.join("claude_desktop_config.json")).is_some_and(|c| json_servers_use_glint(c.get("mcpServers"))),
-            )
+            let config = appdata.join("Claude").join("claude_desktop_config.json");
+            (config.is_file() || local.join("AnthropicClaude").is_dir(), mcp_servers_file(&config))
         }
         _ => (false, false),
     }
@@ -184,7 +239,9 @@ fn detect(id: &str) -> (bool, bool) {
 fn alive(pid: u32, exe: &str) -> bool {
     use windows::core::PWSTR;
     use windows::Win32::Foundation::CloseHandle;
-    use windows::Win32::System::Threading::{OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION};
+    use windows::Win32::System::Threading::{
+        GetExitCodeProcess, OpenProcess, QueryFullProcessImageNameW, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+    };
     // SAFETY: plain Win32 calls on a handle we close before returning.
     unsafe {
         let Ok(handle) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) else { return false };
@@ -192,7 +249,7 @@ fn alive(pid: u32, exe: &str) -> bool {
         let mut len = buffer.len() as u32;
         let named = QueryFullProcessImageNameW(handle, PROCESS_NAME_WIN32, PWSTR(buffer.as_mut_ptr()), &mut len).is_ok();
         let mut code = 0u32;
-        let running = windows::Win32::System::Threading::GetExitCodeProcess(handle, &mut code).is_ok() && code == 259; // STILL_ACTIVE
+        let running = GetExitCodeProcess(handle, &mut code).is_ok() && code == 259; // STILL_ACTIVE
         let _ = CloseHandle(handle);
         let image = String::from_utf16_lossy(&buffer[..len as usize]).to_lowercase();
         named && running && image.ends_with(&exe.to_lowercase())
@@ -208,34 +265,52 @@ fn read_log(path: &Path) -> Vec<Value> {
     text.lines().filter_map(|l| serde_json::from_str::<Value>(l).ok()).collect()
 }
 
+/// The row id an activity entry belongs to: a known agent, or `client:<name>`.
+fn row_of(client: &str) -> String {
+    match agent_of(client) {
+        "other" => format!("client:{client}"),
+        known => known.to_string(),
+    }
+}
+
 pub fn overview_from(entries: &[Value], detected: impl Fn(&str) -> (bool, bool), live: impl Fn(u32, &str) -> bool) -> Value {
-    let mut last_used: HashMap<&str, u64> = HashMap::new();
-    let mut active: HashMap<&str, bool> = HashMap::new();
+    let mut last_used: HashMap<String, u64> = HashMap::new();
+    let mut active: HashMap<String, bool> = HashMap::new();
     let mut seen_sessions = std::collections::HashSet::new();
+    let mut other_names: Vec<String> = Vec::new();
     for e in entries.iter().rev() {
-        let agent = agent_of(e["client"].as_str().unwrap_or_default());
+        let client = e["client"].as_str().unwrap_or_default();
+        if client.is_empty() || client == "unknown" {
+            continue;
+        }
+        let row = row_of(client);
+        if row.starts_with("client:") && !other_names.contains(&client.to_string()) {
+            other_names.push(client.to_string());
+        }
         let t = e["t"].as_u64().unwrap_or(0);
-        let entry = last_used.entry(agent).or_insert(0);
-        *entry = (*entry).max(t);
+        let used = last_used.entry(row.clone()).or_insert(0);
+        *used = (*used).max(t);
         if e["kind"] == "session" && seen_sessions.insert(e["s"].as_str().unwrap_or_default().to_string()) {
-            let running = e["pid"].as_u64().is_some_and(|pid| live(pid as u32, e["exe"].as_str().unwrap_or("glint")));
-            if running {
-                active.insert(agent, true);
+            if e["pid"].as_u64().is_some_and(|pid| live(pid as u32, e["exe"].as_str().unwrap_or("glint"))) {
+                active.insert(row, true);
             }
         }
     }
-    let agents: Vec<Value> = AGENTS
+    let status = |row: &str| (active.get(row).copied().unwrap_or(false), last_used.get(row).copied());
+    let mut agents: Vec<Value> = AGENTS
         .iter()
         .map(|a| {
             let (installed, configured) = detected(a.id);
-            json!({
-                "id": a.id, "name": a.name, "installed": installed,
-                "configured": configured || last_used.contains_key(a.id),
-                "active": active.get(a.id).copied().unwrap_or(false),
-                "last_used": last_used.get(a.id).copied(),
-            })
+            let (is_active, used) = status(a.id);
+            json!({"id": a.id, "name": a.name, "installed": installed || used.is_some(), "configured": configured || used.is_some(), "active": is_active, "last_used": used})
         })
         .collect();
+    // Any other MCP client that has used Glint gets its own row, under its own name.
+    agents.extend(other_names.iter().map(|client| {
+        let row = format!("client:{client}");
+        let (is_active, used) = status(&row);
+        json!({"id": row, "name": display_name(client), "installed": true, "configured": true, "active": is_active, "last_used": used})
+    }));
     let activity: Vec<Value> = entries
         .iter()
         .rev()
@@ -243,7 +318,7 @@ pub fn overview_from(entries: &[Value], detected: impl Fn(&str) -> (bool, bool),
         .take(12)
         .map(|e| {
             let mut e = e.clone();
-            e["agent"] = json!(agent_of(e["client"].as_str().unwrap_or_default()));
+            e["agent"] = json!(row_of(e["client"].as_str().unwrap_or_default()));
             e
         })
         .collect();
@@ -257,11 +332,16 @@ pub fn agents_overview(app: AppHandle) -> Result<Value, String> {
     Ok(overview_from(&entries, detect, alive))
 }
 
-/// Open the setup guide (a fixed URL) in the default browser.
+/// Open the setup guide in the default browser, at one agent's section when given.
+/// Only Glint's own README is ever opened; the anchor comes from the fixed list.
 #[tauri::command]
-pub fn agents_open_guide() -> Result<(), String> {
+pub fn agents_open_guide(agent: Option<String>) -> Result<(), String> {
     use std::os::windows::process::CommandExt;
-    std::process::Command::new("explorer.exe").arg(GUIDE_URL).creation_flags(0x08000000).spawn().map(|_| ()).map_err(|e| e.to_string())
+    let url = match agent.as_deref().and_then(|id| AGENTS.iter().find(|a| a.id == id)) {
+        Some(a) => format!("https://github.com/sanirudh17/Glint#setup-{}", a.id),
+        None => GUIDE_URL.to_string(),
+    };
+    std::process::Command::new("explorer.exe").arg(url).creation_flags(0x08000000).spawn().map(|_| ()).map_err(|e| e.to_string())
 }
 
 #[cfg(test)]
@@ -280,10 +360,19 @@ mod tests {
         let jsonc = "{ // comment\n \"mcp\": { \"servers\": { \"glint\": { \"type\": \"local\", \"command\": [\"C:\\\\G\\\\glint.exe\", \"--mcp\"] /* x */ } } } }";
         let parsed: Value = serde_json::from_str(&strip_jsonc(jsonc)).unwrap();
         assert!(json_servers_use_glint(parsed["mcp"].get("servers")));
+    }
+
+    #[test]
+    fn client_names_map_to_agents_and_unknown_ones_keep_their_own_name() {
         assert_eq!(agent_of("claude-code"), "claude-code");
         assert_eq!(agent_of("codex-mcp-client"), "codex");
         assert_eq!(agent_of("claude-ai"), "claude-desktop");
         assert_eq!(agent_of("claude"), "other", "an unknown client is never guessed into a product");
+        assert_eq!(agent_of("antigravity-cli"), "antigravity");
+        assert_eq!(agent_of("oh-my-pi"), "oh-my-pi");
+        assert_eq!(agent_of("pi"), "pi");
+        assert_eq!(agent_of("pilot"), "other");
+        assert_eq!(display_name("acme-agent-cli"), "Acme Agent CLI");
     }
 
     #[test]
@@ -293,14 +382,20 @@ mod tests {
             json!({"t": 2000, "kind": "tool", "s": "1-1", "client": "claude-code", "tool": "settings_set", "read": false, "ok": true}),
             json!({"t": 3000, "kind": "session", "s": "2-1", "pid": 22, "exe": "glint.exe", "client": "codex-mcp-client"}),
             json!({"t": 3500, "kind": "tool", "s": "2-1", "client": "codex-mcp-client", "tool": "settings_get", "read": true, "ok": true}),
+            json!({"t": 4000, "kind": "session", "s": "3-1", "pid": 33, "exe": "glint.exe", "client": "acme-agent"}),
+            json!({"t": 4100, "kind": "tool", "s": "3-1", "client": "acme-agent", "tool": "image_trim", "read": false, "ok": true}),
         ];
-        let view = overview_from(&entries, |id| (id != "cursor", false), |pid, _| pid == 22);
-        let agent = |id: &str| view["agents"].as_array().unwrap().iter().find(|a| a["id"] == id).unwrap().clone();
+        let view = overview_from(&entries, |id| (id != "cursor", false), |pid, _| pid == 22 || pid == 33);
+        let agent = |id: &str| view["agents"].as_array().unwrap().iter().find(|a| a["id"] == id).cloned().unwrap();
         assert_eq!(agent("claude-code")["active"], false);
         assert_eq!(agent("claude-code")["last_used"], 2000);
         assert_eq!(agent("claude-code")["configured"], true, "having been used means it is set up");
         assert_eq!(agent("codex")["active"], true);
         assert_eq!(agent("cursor")["installed"], false);
-        assert_eq!(view["activity"].as_array().unwrap().len(), 1, "reads are not listed as actions");
+        let other = agent("client:acme-agent");
+        assert_eq!((other["name"].as_str(), other["active"].as_bool()), (Some("Acme Agent"), Some(true)));
+        let activity = view["activity"].as_array().unwrap();
+        assert_eq!(activity.len(), 2, "reads are not listed as actions");
+        assert_eq!(activity[0]["agent"], "client:acme-agent");
     }
 }
