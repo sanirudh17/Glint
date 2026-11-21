@@ -4,6 +4,7 @@ mod capture;
 mod clipboard;
 mod control;
 mod control_video;
+mod control_app;
 mod countdown;
 mod db;
 mod editor;
@@ -400,6 +401,9 @@ pub fn run() {
             ocr::window::ocr_save_text,
             control::render_job_next,
             control::render_job_done,
+            control_app::agent_next,
+            control_app::agent_done,
+            control_app::mcp_setup,
             material::window_retire_done,
             settings_set_hotkey,
             settings_reset_hotkeys,

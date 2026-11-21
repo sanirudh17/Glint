@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { SlidersHorizontal, Crop, Video, Save, Keyboard, Palette, HardDrive, RefreshCw } from "../icons";
+import { SlidersHorizontal, Crop, Video, Save, Keyboard, Palette, HardDrive, RefreshCw, Terminal } from "../icons";
 import { General }    from "./settings/General";
 import { Capture }    from "./settings/Capture";
 import { Recording }  from "./settings/Recording";
@@ -8,6 +8,7 @@ import { Hotkeys }    from "./settings/Hotkeys";
 import { Appearance } from "./settings/Appearance";
 import { Storage }    from "./settings/Storage";
 import { Updates }    from "./settings/Updates";
+import { Agents }     from "./settings/Agents";
 import "./settings.css";
 
 
@@ -21,6 +22,7 @@ type SectionId =
   | "hotkeys"
   | "appearance"
   | "storage"
+  | "agents"
   | "updates";
 
 interface NavItem {
@@ -37,6 +39,7 @@ const NAV_ITEMS: NavItem[] = [
   { id: "hotkeys",    label: "Hotkeys",    icon: Keyboard },
   { id: "appearance", label: "Appearance", icon: Palette },
   { id: "storage",    label: "Storage",    icon: HardDrive },
+  { id: "agents",     label: "Agents",     icon: Terminal },
   { id: "updates",    label: "Updates",    icon: RefreshCw },
 ];
 
@@ -50,6 +53,7 @@ const PANELS: Record<SectionId, React.ReactNode> = {
   hotkeys:    <Hotkeys />,
   appearance: <Appearance />,
   storage:    <Storage />,
+  agents:     <Agents />,
   updates:    <Updates />,
 };
 

@@ -47,8 +47,15 @@ you can look at the footage; video_analyze finds silence, idle stretches and typ
 or speed up; video_captions transcribes speech on this device. video_export renders a new MP4 or \
 GIF in the background: it waits up to wait_seconds while reporting progress, then returns a task \
 id — keep calling task_status until state is \"done\" (or task_cancel). Exports never overwrite \
-files. All paths are absolute Windows paths. Rendering, video work and opening need Glint, which \
-is started in the tray if it isn't running.";
+files. \
+The whole app is controllable: settings_get/settings_set change any setting exactly as the \
+Settings page does (theme, accent, glass, capture, recording, storage, sounds, startup); \
+hotkey_set/hotkeys_reset rebind global shortcuts; capture_screenshot takes a screenshot \
+(fullscreen needs no user input; area/window wait for the user) and returns the file; \
+recording_start/recording_stop record the screen or a region and return the video; show_glint \
+brings up a page. Prefer asking the user before recording or changing their settings unless \
+they asked. All paths are absolute Windows paths. Everything except pure file edits needs \
+Glint, which is started in the tray if it isn't running.";
 
 const RENDER_TIMEOUT: Duration = Duration::from_secs(120);
 const DEFAULT_WAIT: u64 = 45;
@@ -199,6 +206,104 @@ pub struct TaskArgs {
     pub task: u64,
     /// task_status only: seconds to wait for it to finish (default 45, max 300).
     pub wait_seconds: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct SettingsSetArgs {
+    /// Settings to change, e.g. {"theme": "light", "accent": "#2BAAAD", "auto_copy": false}.
+    /// Keys and allowed values: theme dark|light|system; accent "#RRGGBB"; glass; auto_save;
+    /// auto_copy; open_in_editor; capture_on_release; hide_desktop_icons; quick_access_auto_close;
+    /// index_screenshot_text; ocr_engine tesseract|ppocrv6-small|ppocrv6-medium;
+    /// explorer_menu_enabled; include_cursor; image_format png|jpeg|webp; jpeg_quality
+    /// high|medium|low; capture_delay_secs 3|5|10; sound_effects; shutter_sound
+    /// click|soft-pop|chime|ping|classic; show_in_taskbar; launch_at_startup; save_dir (folder path,
+    /// "" = default); record_system_audio; record_microphone; record_webcam; record_webcam_movable;
+    /// record_click_viz; record_keystrokes; record_cursor_spotlight; record_cursor_hide;
+    /// record_cursor_size off|large|xl; record_fps 30|60; record_resolution original|1080p|720p;
+    /// record_quality high|medium|low; webcam_device_id; webcam_shape circle|rounded|square|rect.
+    /// Unmarked keys are true/false. Changes apply in order; the first rejected one stops the rest.
+    pub changes: serde_json::Map<String, Value>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct HotkeySetArgs {
+    /// capture_area, capture_window, capture_fullscreen, capture_scroll, record, copy_path,
+    /// open_latest, capture_area_delayed, capture_window_delayed or capture_fullscreen_delayed.
+    pub action: String,
+    /// Shortcut like "Ctrl+Shift+2" or "Alt+PrintScreen" (needs Ctrl, Alt or Win). "" clears it.
+    pub accelerator: String,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum Page {
+    Home,
+    Library,
+    Settings,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct ShowArgs {
+    /// Which page of Glint's main window to bring up.
+    pub page: Page,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CaptureKind {
+    /// The whole screen, immediately (no user input needed).
+    Fullscreen,
+    /// The user drags an area.
+    Area,
+    /// The user picks a window.
+    Window,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct CaptureArgs {
+    pub mode: CaptureKind,
+    /// Count down first (the "capture delay" setting, 3–10 s).
+    pub delayed: Option<bool>,
+    /// Fullscreen only: which display (from list_monitors, default 0 = primary).
+    pub monitor: Option<u32>,
+    /// How long to wait for the capture (default 20 s fullscreen, 90 s when the user must select; max 300).
+    pub wait_seconds: Option<u64>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct Region {
+    pub x: i64,
+    pub y: i64,
+    pub w: i64,
+    pub h: i64,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct RecordStartArgs {
+    /// Screen pixels to record; omit for the whole screen.
+    pub region: Option<Region>,
+    /// Each of these defaults to the user's recording settings.
+    pub system_audio: Option<bool>,
+    pub microphone: Option<bool>,
+    pub webcam: Option<bool>,
+    pub click_effects: Option<bool>,
+    pub keystrokes: Option<bool>,
+    pub spotlight: Option<bool>,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum RecordAction {
+    Status,
+    Pause,
+    Resume,
+    /// Stop and discard the recording.
+    Cancel,
+}
+
+#[derive(Debug, Deserialize, schemars::JsonSchema)]
+pub struct RecordControlArgs {
+    pub action: RecordAction,
 }
 
 /// Poll a task in the app, reporting progress to the client, until it finishes
@@ -522,6 +627,105 @@ impl GlintMcp {
     #[tool(annotations(title = "Cancel task", read_only_hint = false, destructive_hint = false, open_world_hint = false))]
     async fn task_cancel(&self, Parameters(args): Parameters<TaskArgs>) -> Result<CallToolResult, ErrorData> {
         respond(bridge::call("task_cancel", json!({"task": args.task}), Duration::from_secs(20)).await)
+    }
+
+    /// Glint's current settings (theme, accent, capture, recording, storage…) and hotkeys.
+    #[tool(annotations(title = "Get Glint settings", read_only_hint = true, open_world_hint = false))]
+    async fn settings_get(&self) -> Result<CallToolResult, ErrorData> {
+        respond(bridge::call("settings_get", json!({}), Duration::from_secs(40)).await)
+    }
+
+    /// Change Glint settings exactly as the Settings page does (saved, applied live to every window).
+    #[tool(annotations(title = "Change Glint settings", read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false))]
+    async fn settings_set(&self, Parameters(args): Parameters<SettingsSetArgs>) -> Result<CallToolResult, ErrorData> {
+        respond(bridge::call("settings_set", json!({"changes": args.changes}), Duration::from_secs(60)).await)
+    }
+
+    /// Rebind (or clear) one global shortcut. Conflicts with other shortcuts or apps are reported.
+    #[tool(annotations(title = "Set a hotkey", read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false))]
+    async fn hotkey_set(&self, Parameters(args): Parameters<HotkeySetArgs>) -> Result<CallToolResult, ErrorData> {
+        respond(bridge::call("hotkey_set", json!({"action": args.action, "accelerator": args.accelerator}), Duration::from_secs(40)).await)
+    }
+
+    /// Restore every global shortcut to Glint's defaults.
+    #[tool(annotations(title = "Reset hotkeys", read_only_hint = false, destructive_hint = false, idempotent_hint = true, open_world_hint = false))]
+    async fn hotkeys_reset(&self) -> Result<CallToolResult, ErrorData> {
+        respond(bridge::call("hotkeys_reset", json!({}), Duration::from_secs(40)).await)
+    }
+
+    /// Bring Glint's window up on a page (home, library or settings).
+    #[tool(annotations(title = "Show Glint", read_only_hint = true, open_world_hint = false))]
+    async fn show_glint(&self, Parameters(args): Parameters<ShowArgs>) -> Result<CallToolResult, ErrorData> {
+        let page = match args.page {
+            Page::Home => "home",
+            Page::Library => "library",
+            Page::Settings => "settings",
+        };
+        respond(bridge::call("show", json!({"page": page}), Duration::from_secs(30)).await)
+    }
+
+    /// Displays and their pixel bounds, for capture_screenshot's monitor and recording_start's region.
+    #[tool(annotations(title = "List displays", read_only_hint = true, open_world_hint = false))]
+    async fn list_monitors(&self) -> Result<CallToolResult, ErrorData> {
+        respond(bridge::call("monitors", json!({}), Duration::from_secs(20)).await)
+    }
+
+    /// Take a screenshot as Glint's hotkey does (saved, copied and shown per the user's settings) and
+    /// return its file. Fullscreen needs no input; area and window wait for the user to select.
+    #[tool(annotations(title = "Take screenshot", read_only_hint = false, destructive_hint = false, open_world_hint = false))]
+    async fn capture_screenshot(&self, Parameters(args): Parameters<CaptureArgs>) -> Result<CallToolResult, ErrorData> {
+        let mode = match args.mode {
+            CaptureKind::Fullscreen => "fullscreen",
+            CaptureKind::Area => "area",
+            CaptureKind::Window => "window",
+        };
+        let wait = args.wait_seconds.unwrap_or(if mode == "fullscreen" { 20 } else { 90 }).min(MAX_WAIT);
+        respond(
+            bridge::call(
+                "capture",
+                json!({"mode": mode, "delayed": args.delayed.unwrap_or(false), "monitor": args.monitor.unwrap_or(0), "wait_seconds": wait}),
+                Duration::from_secs(wait + 20),
+            )
+            .await,
+        )
+    }
+
+    /// Start a scrolling capture; the user scrolls the page and finishes it in Glint.
+    #[tool(annotations(title = "Start scrolling capture", read_only_hint = false, destructive_hint = false, open_world_hint = false))]
+    async fn capture_scrolling(&self) -> Result<CallToolResult, ErrorData> {
+        respond(bridge::call("capture_scroll", json!({}), Duration::from_secs(30)).await)
+    }
+
+    /// Start a screen recording of the whole screen or a region (Glint shows its recording bar).
+    /// Stop it with recording_stop.
+    #[tool(annotations(title = "Start recording", read_only_hint = false, destructive_hint = false, open_world_hint = false))]
+    async fn recording_start(&self, Parameters(args): Parameters<RecordStartArgs>) -> Result<CallToolResult, ErrorData> {
+        let mut params = json!({
+            "system_audio": args.system_audio, "microphone": args.microphone, "webcam": args.webcam,
+            "click_effects": args.click_effects, "keystrokes": args.keystrokes, "spotlight": args.spotlight,
+        });
+        if let Some(r) = args.region {
+            params["region"] = json!({"x": r.x, "y": r.y, "w": r.w, "h": r.h});
+        }
+        respond(bridge::call("record_start", params, Duration::from_secs(60)).await)
+    }
+
+    /// Stop the recording and return the saved video (ready for video_open / video_export).
+    #[tool(annotations(title = "Stop recording", read_only_hint = false, destructive_hint = false, open_world_hint = false))]
+    async fn recording_stop(&self) -> Result<CallToolResult, ErrorData> {
+        respond(bridge::call("record_stop", json!({}), Duration::from_secs(180)).await)
+    }
+
+    /// Recording status, or pause / resume / cancel (discard) the current recording.
+    #[tool(annotations(title = "Control recording", read_only_hint = false, destructive_hint = true, open_world_hint = false))]
+    async fn recording_control(&self, Parameters(args): Parameters<RecordControlArgs>) -> Result<CallToolResult, ErrorData> {
+        let method = match args.action {
+            RecordAction::Status => "record_status",
+            RecordAction::Pause => "record_pause",
+            RecordAction::Resume => "record_resume",
+            RecordAction::Cancel => "record_cancel",
+        };
+        respond(bridge::call(method, json!({}), Duration::from_secs(60)).await)
     }
 
     /// The editor's vocabulary: annotation types, edit ops, aspect ratios and the named gradient backgrounds.

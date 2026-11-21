@@ -98,10 +98,15 @@ async fn dispatch(app: &AppHandle, method: &str, params: Value) -> Result<Value,
             open_path(app, &path)?;
             Ok(json!({"opened": path}))
         }
-        other => match crate::control_video::dispatch(app, other, params).await {
-            Some(result) => result,
-            None => Err(format!("Unknown method \"{other}\"")),
-        },
+        other => {
+            if let Some(result) = crate::control_video::dispatch(app, other, params.clone()).await {
+                return result;
+            }
+            match crate::control_app::dispatch(app, other, params).await {
+                Some(result) => result,
+                None => Err(format!("Unknown method \"{other}\"")),
+            }
+        }
     }
 }
 

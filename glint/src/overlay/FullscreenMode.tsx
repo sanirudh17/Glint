@@ -11,6 +11,7 @@
  */
 
 import { useCallback, useEffect } from "react";
+import { listen } from "@tauri-apps/api/event";
 import { commitCapture } from "../lib/captureIpc";
 
 interface FullscreenModeProps {
@@ -34,7 +35,12 @@ export function FullscreenMode({ monitorId, width, height, scale }: FullscreenMo
       if (e.key === "Enter") confirm();
     };
     window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
+    // Glint MCP: an agent's fullscreen screenshot confirms exactly as a click does.
+    const un = "__TAURI_INTERNALS__" in window ? listen("capture-agent-confirm", () => confirm()) : null;
+    return () => {
+      window.removeEventListener("keydown", onKey);
+      void un?.then((f) => f());
+    };
   }, [confirm]);
 
   return (

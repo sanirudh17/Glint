@@ -346,3 +346,63 @@ fn edits_and_exports_video_through_the_running_app() {
     client.call("task_status", json!({"task": again["task"], "wait_seconds": 60}));
     let _ = std::fs::remove_dir_all(dir);
 }
+
+/// Live: settings, hotkeys, screenshot and recording through the running app.
+/// Changes are restored afterwards. Needs GLINT_APP_ID and GLINT_EXE for a preview build.
+#[test]
+#[ignore]
+fn controls_the_whole_app() {
+    let dir = workspace("app");
+    let mut client = Client::start(&dir);
+    let (is_error, original) = client.call("settings_get", json!({}));
+    assert!(!is_error, "{original}");
+    let original = json_text(&original);
+
+    let theme = if original["theme"] == "light" { "dark" } else { "light" };
+    let (is_error, changed) = client.call("settings_set", json!({"changes": {"theme": theme, "accent": "#2BAAAD", "record_fps": 60}}));
+    assert!(!is_error, "{changed}");
+    let changed = json_text(&changed);
+    assert_eq!((changed["theme"].as_str(), changed["accent"].as_str(), changed["record_fps"].as_u64()), (Some(theme), Some("#2BAAAD"), Some(60)));
+    assert_eq!(json_text(&client.call("settings_get", json!({})).1)["theme"], theme, "the change is live");
+
+    let (is_error, message) = client.call("settings_set", json!({"changes": {"record_fps": 45}}));
+    assert!(is_error, "an invalid value is refused: {message}");
+    let (is_error, message) = client.call("settings_set", json!({"changes": {"warp_drive": true}}));
+    assert!(is_error && message.contains("Unknown setting"), "{message}");
+
+    let old_hotkey = original["hotkeys"]["capture_area"].as_str().unwrap().to_string();
+    let (is_error, hotkeys) = client.call("hotkey_set", json!({"action": "capture_area", "accelerator": "Ctrl+Alt+Shift+F9"}));
+    assert!(!is_error, "{hotkeys}");
+    assert_eq!(json_text(&hotkeys)["capture_area"], "Ctrl+Alt+Shift+F9");
+    let (is_error, message) = client.call("hotkey_set", json!({"action": "capture_area", "accelerator": "F9"}));
+    assert!(is_error && message.contains("Ctrl, Alt, or Win"), "{message}");
+
+    // Restore everything we changed.
+    let (is_error, restored) = client.call("settings_set", json!({"changes": {
+        "theme": original["theme"], "accent": original["accent"], "record_fps": original["record_fps"]
+    }}));
+    assert!(!is_error, "{restored}");
+    let (is_error, hotkeys) = client.call("hotkey_set", json!({"action": "capture_area", "accelerator": old_hotkey}));
+    assert!(!is_error && json_text(&hotkeys)["capture_area"] == old_hotkey.as_str(), "{hotkeys}");
+
+    // A fullscreen screenshot needs no input and returns its file.
+    let (is_error, shot) = client.call("capture_screenshot", json!({"mode": "fullscreen"}));
+    assert!(!is_error, "{shot}");
+    let shot = json_text(&shot);
+    let png = image::open(shot["path"].as_str().unwrap()).expect("the screenshot file");
+    assert!(png.width() > 100 && png.height() > 100);
+
+    // A short silent recording returns its saved video.
+    let (is_error, started) = client.call("recording_start", json!({"system_audio": false, "microphone": false, "webcam": false}));
+    assert!(!is_error, "{started}");
+    std::thread::sleep(std::time::Duration::from_secs(6));
+    let (_, status) = client.call("recording_control", json!({"action": "status"}));
+    assert_eq!(json_text(&status)["recording"], true, "{status}");
+    let (is_error, stopped) = client.call("recording_stop", json!({}));
+    assert!(!is_error, "{stopped}");
+    let video = PathBuf::from(json_text(&stopped)["path"].as_str().unwrap());
+    assert!(video.is_file() && std::fs::metadata(&video).unwrap().len() > 1024, "{stopped}");
+    let (is_error, opened) = client.call("video_open", json!({"path": video}));
+    assert!(!is_error && json_text(&opened)["duration"].as_f64().unwrap() > 1., "{opened}");
+    let _ = std::fs::remove_dir_all(dir);
+}

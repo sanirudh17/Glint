@@ -109,6 +109,7 @@ export const Shapes = make(H.ShapesIcon, "Shapes");
 export const Share2 = make(H.Share08Icon, "Share2");
 export const SkipBack = make(H.PreviousIcon, "SkipBack");
 export const SlidersHorizontal = make(H.SlidersHorizontalIcon, "SlidersHorizontal");
+export const Terminal = make(H.CommandLineIcon, "Terminal");
 export const Square = make(H.StopIcon, "Square");
 export const SquareRoundCorner = make(H.SquareIcon, "SquareRoundCorner");
 export const Sun = make(H.Sun03Icon, "Sun");

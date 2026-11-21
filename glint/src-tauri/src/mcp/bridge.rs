@@ -17,7 +17,12 @@ fn glint_exe() -> Option<PathBuf> {
     if let Some(path) = std::env::var_os("GLINT_EXE").map(PathBuf::from) {
         return path.is_file().then_some(path);
     }
-    let sibling = std::env::current_exe().ok()?.parent()?.join("glint.exe");
+    let me = std::env::current_exe().ok()?;
+    // Served as `glint.exe --mcp`: the app is this very executable.
+    if me.file_stem().is_some_and(|stem| stem != "glint-mcp") {
+        return Some(me);
+    }
+    let sibling = me.parent()?.join("glint.exe");
     if sibling.is_file() {
         return Some(sibling);
     }
@@ -25,18 +30,45 @@ fn glint_exe() -> Option<PathBuf> {
     installed.is_file().then_some(installed)
 }
 
-/// Mark this process's stdin/stdout/stderr non-inheritable, so a child (the
-/// long-lived Glint app) can't keep the agent's pipes open.
+/// Start Glint in the tray, inheriting NO handles from this process.
+///
+/// Glint outlives this process. If it inherited any handle, it would keep the
+/// agent's pipes open (or a parent's — e.g. a terminal's output pipe that was
+/// passed down to us without our knowledge), and whoever reads them would never
+/// see end-of-file. `std::process::Command` always inherits every inheritable
+/// handle, so the process is created directly with `bInheritHandles = FALSE`.
 #[cfg(windows)]
-fn stop_std_handle_inheritance() {
-    use std::os::windows::io::AsRawHandle;
-    use windows::Win32::Foundation::{SetHandleInformation, HANDLE, HANDLE_FLAGS, HANDLE_FLAG_INHERIT};
-    for raw in [std::io::stdin().as_raw_handle(), std::io::stdout().as_raw_handle(), std::io::stderr().as_raw_handle()] {
-        if !raw.is_null() {
-            // SAFETY: a valid (or null-checked) std handle owned by this process.
-            let _ = unsafe { SetHandleInformation(HANDLE(raw), HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(0)) };
-        }
+fn launch_detached(exe: &std::path::Path) -> Result<(), String> {
+    use std::os::windows::ffi::OsStrExt;
+    use windows::core::{PCWSTR, PWSTR};
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        CreateProcessW, CREATE_NEW_PROCESS_GROUP, DETACHED_PROCESS, PROCESS_INFORMATION, STARTUPINFOW,
+    };
+    let wide = |s: &std::ffi::OsStr| s.encode_wide().chain(Some(0)).collect::<Vec<u16>>();
+    let application = wide(exe.as_os_str());
+    let mut command_line = wide(std::ffi::OsStr::new(&format!("\"{}\" --background", exe.display())));
+    let startup = STARTUPINFOW { cb: std::mem::size_of::<STARTUPINFOW>() as u32, ..Default::default() };
+    let mut info = PROCESS_INFORMATION::default();
+    // SAFETY: valid NUL-terminated buffers that outlive the call; handles closed below.
+    unsafe {
+        CreateProcessW(
+            PCWSTR(application.as_ptr()),
+            Some(PWSTR(command_line.as_mut_ptr())),
+            None,
+            None,
+            false,
+            DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+            None,
+            PCWSTR::null(),
+            &startup,
+            &mut info,
+        )
+        .map_err(|e| format!("Couldn't start Glint ({}): {e}", exe.display()))?;
+        let _ = CloseHandle(info.hThread);
+        let _ = CloseHandle(info.hProcess);
     }
+    Ok(())
 }
 
 #[cfg(windows)]
@@ -53,23 +85,7 @@ async fn connect(pipe: &str) -> Result<tokio::net::windows::named_pipe::NamedPip
                 if !launched {
                     launched = true;
                     let exe = glint_exe().ok_or("Glint isn't running and glint.exe wasn't found. Start Glint, or set GLINT_EXE.")?;
-                    // Fully detached: Glint must not inherit this process's stdio
-                    // pipes, or it would hold the agent's MCP pipes open after
-                    // glint-mcp exits (the client then waits forever for EOF).
-                    // Null stdio alone isn't enough: CreateProcess hands the child
-                    // every *inheritable* handle, and ours are inherited pipes.
-                    stop_std_handle_inheritance();
-                    use std::os::windows::process::CommandExt;
-                    const DETACHED_PROCESS: u32 = 0x0000_0008;
-                    const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;
-                    std::process::Command::new(&exe)
-                        .arg("--background")
-                        .stdin(std::process::Stdio::null())
-                        .stdout(std::process::Stdio::null())
-                        .stderr(std::process::Stdio::null())
-                        .creation_flags(DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP)
-                        .spawn()
-                        .map_err(|e| format!("Couldn't start Glint ({}): {e}", exe.display()))?;
+                    launch_detached(&exe)?;
                 }
             }
             Err(e) => return Err(format!("Couldn't reach Glint: {e}")),

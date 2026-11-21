@@ -14,6 +14,7 @@ import {
 } from "./store/useAppStore";
 import { ToastHost } from "./components/ui";
 import { UpdateGate } from "./update/UpdateGate";
+import { startAgentBridge } from "./lib/agentBridge";
 
 /** Payload of the `capture-complete` event emitted by tray-core after a crop. */
 type CaptureComplete = {
@@ -31,6 +32,13 @@ export default function App() {
   useEffect(()=>{ if(theme) void applyMaterial(glass ?? true); },[glass,theme]);
   const loadSettings = useAppStore((s) => s.loadSettings);
   const pushToast = useAppStore((s) => s.pushToast);
+
+  // Glint MCP: the main window runs agents' settings/hotkey changes with the
+  // Settings page's own actions (see lib/agentBridge.ts).
+  useEffect(() => {
+    if (!("__TAURI_INTERNALS__" in window) || getCurrentWindow().label !== "main") return;
+    return startAgentBridge();
+  }, []);
 
   useEffect(() => {
     // Hydrate settings from the DB (single async invoke, ~10ms).
