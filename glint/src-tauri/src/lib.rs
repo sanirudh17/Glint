@@ -1,3 +1,4 @@
+mod agents;
 mod autostart;
 mod attachments;
 mod capture;
@@ -403,7 +404,8 @@ pub fn run() {
             control::render_job_done,
             control_app::agent_next,
             control_app::agent_done,
-            control_app::mcp_setup,
+            agents::agents_overview,
+            agents::agents_open_guide,
             material::window_retire_done,
             settings_set_hotkey,
             settings_reset_hotkeys,

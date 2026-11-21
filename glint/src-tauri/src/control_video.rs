@@ -87,7 +87,9 @@ fn task_status(id: u64) -> Result<Value, String> {
         }
         State::Done(result) => json!({"task": id, "label": task.label, "state": "done", "progress": 100, "elapsed_seconds": elapsed.round(), "result": result}),
         State::Failed(error) => {
-            let cancelled = error.to_lowercase().contains("cancel");
+            // A cancelled export can surface as a broken-pipe error from ffmpeg.
+            let flagged = task.cancel.as_ref().is_some_and(|flag| flag.load(Ordering::Relaxed));
+            let cancelled = flagged || error.to_lowercase().contains("cancel");
             json!({"task": id, "label": task.label, "state": if cancelled { "cancelled" } else { "failed" }, "error": error, "elapsed_seconds": elapsed.round()})
         }
     })

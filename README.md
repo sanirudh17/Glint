@@ -27,6 +27,7 @@ Glint is **local-first by design**. There is no cloud storage, account requireme
 
 - [Features](#features)
 - [Download & install](#download--install)
+- [Use Glint with coding agents](#use-glint-with-coding-agents)
 - [Building from source](#building-from-source)
 - [Tech stack](#tech-stack)
 - [Project structure](#project-structure)
@@ -166,6 +167,51 @@ The installer includes FFmpeg/FFprobe for recording and export. OCR and caption 
 
 ---
 
+## Use Glint with coding agents
+
+Glint includes an MCP server, so coding agents such as Claude Code, Codex and OpenCode can use it for you: trim and round images, annotate screenshots, edit and export recordings (cuts, zooms, captions), take screenshots and recordings, and change settings, themes and hotkeys. The server is part of Glint itself (`glint.exe --mcp`), so there is nothing extra to install. If Glint isn't running, it starts quietly in the tray.
+
+Run the line for your agent in **PowerShell**. It works for every Windows user, because `$env:LOCALAPPDATA` expands to your own install folder. Keep the quotes around `'--'`: PowerShell otherwise swallows it.
+
+**Claude Code**
+
+```powershell
+claude mcp add --scope user glint '--' "$env:LOCALAPPDATA\Glint\glint.exe" --mcp
+```
+
+**Codex**
+
+```powershell
+codex mcp add glint '--' "$env:LOCALAPPDATA\Glint\glint.exe" --mcp
+```
+
+**OpenCode**
+
+```powershell
+opencode mcp add glint --global '--' "$env:LOCALAPPDATA\Glint\glint.exe" --mcp
+```
+
+**Other MCP clients** (Cursor, Claude Desktop and others) use a JSON config. Replace `<you>` with your Windows user name:
+
+```json
+{
+  "mcpServers": {
+    "glint": {
+      "command": "C:\\Users\\<you>\\AppData\\Local\\Glint\\glint.exe",
+      "args": ["--mcp"]
+    }
+  }
+}
+```
+
+Installed with the **MSI** instead? Then Glint is in Program Files: use `"$env:ProgramFiles\Glint\glint.exe"` in the commands above (and `"C:\\Program Files\\Glint\\glint.exe"` in JSON).
+
+Restart the agent afterwards. **Settings → Agents** in Glint then shows each connected agent (*Active now*, *Last used…*) and a log of what agents did in Glint.
+
+**Privacy.** Everything stays on your PC. The agent talks to Glint over a local pipe that refuses network connections. The activity log in Settings → Agents keeps only the action and the file *name* (never file contents), and is capped in size. Agents never overwrite your originals: edits and exports are saved as new files.
+
+---
+
 ## Building from source
 
 ### Prerequisites
@@ -253,3 +299,5 @@ FFmpeg/FFprobe and optional OCR/caption runtimes are third-party software under 
 ## Acknowledgements
 
 Built with [Tauri](https://v2.tauri.app/), [FFmpeg](https://ffmpeg.org/), and [Tesseract OCR](https://github.com/tesseract-ocr/tesseract). Inspired by [CleanShot X](https://cleanshot.com/).
+
+Agent logos in Settings → Agents come from [gilbarbara/logos](https://github.com/gilbarbara/logos) (CC0). Product names and logos are trademarks of their owners; their use does not imply endorsement.

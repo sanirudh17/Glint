@@ -255,16 +255,3 @@ async fn settings_set(app: &AppHandle, params: Value) -> Result<Value, String> {
     result["launch_at_startup"] = json!(crate::settings::commands::autostart_get());
     Ok(result)
 }
-
-/// How agents launch this install's MCP server: `<exe> --mcp`, plus the app id
-/// when it isn't the default (preview builds), for Settings → Agents.
-#[tauri::command]
-pub fn mcp_setup(app: AppHandle) -> Result<Value, String> {
-    let exe = std::env::current_exe().map_err(|e| e.to_string())?;
-    let identifier = app.config().identifier.clone();
-    Ok(json!({
-        "exe": exe.to_string_lossy(),
-        "args": ["--mcp"],
-        "app_id": (identifier != "com.glint.app").then_some(identifier),
-    }))
-}

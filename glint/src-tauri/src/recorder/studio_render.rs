@@ -1013,6 +1013,27 @@ impl Renderer {
         }
     }
 }
+/// Give every kept span an exact frame count. A variable-rate screen recording
+/// ends each trimmed span on its last real frame, not at the cut, so every cut
+/// lost part of a frame. With many cuts the timeline came up frames short (the
+/// export failed and retried in software) and the picture drifted ahead of the
+/// audio. Each span `i` now covers output frames [round(Tᵢ·fps), round(Tᵢ₊₁·fps)),
+/// where Tᵢ is its start on the output timeline, so frame n is always at n/fps.
+pub(crate) fn exact_segment_frames(graph: &str, segments: &[KeepSegment], fps: f64) -> String {
+    let mut graph = graph.to_string();
+    let mut t = 0.;
+    for (i, s) in segments.iter().enumerate() {
+        let first = (t * fps).round();
+        t += (s.end - s.start) / s.speed;
+        let frames = ((t * fps).round() - first).max(1.) as u64;
+        let label = format!("[v{i}];");
+        if let Some(at) = graph.find(&label) {
+            graph.insert_str(at, &format!(",fps={fps},tpad=stop_mode=clone:stop=2,trim=end_frame={frames},setpts=PTS-STARTPTS"));
+        }
+    }
+    graph
+}
+
 pub fn source_time(segments: &[KeepSegment], t: f64) -> f64 {
     let mut elapsed = 0.;
     for s in segments {
@@ -1114,7 +1135,10 @@ pub fn detect_encoder(binary: &Path, cancel: &AtomicBool) -> VideoEncoder {
             "-f",
             "lavfi",
             "-i",
-            "color=size=128x128:rate=30",
+            // 256x256: NVENC rejects frames below its minimum size (e.g. 145x49
+            // on RTX 40-series), so a smaller probe wrongly skips the NVIDIA GPU
+            // and every export falls back to a slower encoder.
+            "color=size=256x256:rate=30",
             "-frames:v",
             "3",
         ]
@@ -1236,7 +1260,8 @@ fn encode_native_cut(spec:&ExportSpec,segments:&[KeepSegment],cancel:Arc<AtomicB
  args[graph]=args[graph].replace("[0:v]trim=","[0:v]tpad=stop_mode=clone:stop_duration=1,trim=");
  let start=args.iter().position(|v|v=="-c:v").unwrap();let end=args.iter().position(|v|v=="-pix_fmt").unwrap();
  args.splice(start..end,ffmpeg::encoder_args(encoder,"high"));
- args.splice(0..0,["-filter_complex_threads".into(),"2".into(),"-threads".into(),"2".into()]);
+ let threads=std::thread::available_parallelism().map(|n|n.get()).unwrap_or(4).clamp(2,6).to_string();
+ args.splice(0..0,["-filter_complex_threads".into(),threads.clone(),"-threads".into(),threads]);
  let output=args.pop().unwrap();args.extend(["-r".into(),spec.fps.clamp(1.,120.).to_string(),output]);
  let mut child=command(spec.binary).args(args).stdin(Stdio::null()).stdout(Stdio::piped()).stderr(Stdio::piped()).spawn().map_err(|e|e.to_string())?;
  let stdout=child.stdout.take().unwrap();let errors=stderr(&mut child);let mut children=Children::new();let process=children.push(child);children.watch(cancel.clone());
@@ -1284,6 +1309,7 @@ fn encode(
     // after the final video frame. Pad each source span BEFORE trim/reorder so
     // every requested span has its exact duration, including a moved tail clip.
     args[graph_idx]=args[graph_idx].replace("[0:v]trim=","[0:v]tpad=stop_mode=clone:stop_duration=1,trim=");
+    args[graph_idx]=exact_segment_frames(&args[graph_idx],&segments,fps);
     let source_mode = camera_only || !spec.project.zoom_segments.is_empty()
         || !spec.project.masks.is_empty()
         || spec
@@ -1291,6 +1317,7 @@ fn encode(
             .motion_blur
             .as_ref()
             .is_some_and(|m| m.enabled && m.intensity > 0.);
+    let decode_threads = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).clamp(2, 6);
     args[graph_idx] = if camera_only {
         format!("{};[edited]scale={}:{}:force_original_aspect_ratio=increase,crop={}:{},fps={},format=rgb24[outv]",args[graph_idx].replace("[outv]","[edited]"),spec.width,spec.height,spec.width,spec.height,fps)
     }else if source_mode {
@@ -1313,10 +1340,12 @@ fn encode(
         )
     };
     args.extend([
+        // Decoding (and, without zooms, crop+scale) runs in this process; with
+        // composing now parallel it is the bottleneck at 2 threads.
         "-filter_complex_threads".into(),
-        "2".into(),
+        decode_threads.to_string(),
         "-threads".into(),
-        "2".into(),
+        decode_threads.to_string(),
         "-an".into(),
         "-frames:v".into(),
         (total*fps).ceil().max(1.).to_string(),
@@ -1388,49 +1417,118 @@ fn encode(
     let encode_errors = stderr(&mut encode);
     let encode = children.push(encode);
     children.watch(cancel.clone());
-    let mut input = vec![
-        0u8;
-        if source_mode {
-            spec.width as usize * spec.height as usize * 3
-        } else {
-            l.content_w as usize * l.content_h as usize * 3
-        }
-    ];
-    let mut content = vec![0u8; l.content_w as usize * l.content_h as usize * 3];
-    let mut frame = RgbImage::new(l.width, l.height);
+    // Pipelined and parallel: a reader thread pulls decoded frames, a batch is
+    // composed across cores (every frame is a pure function of its own pixels and
+    // timestamp; `Renderer` is read-only and Sync), and a writer thread feeds the
+    // encoder in order. Decode, compose and encode overlap instead of taking
+    // turns, and the output is identical to composing one frame at a time.
+    let input_len = if source_mode {
+        spec.width as usize * spec.height as usize * 3
+    } else {
+        l.content_w as usize * l.content_h as usize * 3
+    };
+    let workers = std::thread::available_parallelism().map(|n| n.get()).unwrap_or(4).saturating_sub(2).clamp(1, 8);
     let still=if !trim::is_video_path(spec.source){Some(image::imageops::resize(&image::open(spec.source).map_err(|e|e.to_string())?.to_rgba8(),l.content_w,l.content_h,image::imageops::FilterType::Triangle))}else{None};
+    let (free_in_tx, free_in_rx) = std::sync::mpsc::channel::<Vec<u8>>();
+    let (decoded_tx, decoded_rx) = std::sync::mpsc::sync_channel::<Vec<u8>>(workers * 2);
+    let (free_out_tx, free_out_rx) = std::sync::mpsc::channel::<RgbImage>();
+    let (composed_tx, composed_rx) = std::sync::mpsc::sync_channel::<RgbImage>(workers * 2);
+    for _ in 0..workers * 3 {
+        let _ = free_in_tx.send(vec![0u8; input_len]);
+        let _ = free_out_tx.send(RgbImage::new(l.width, l.height));
+    }
+    let reader_cancel = cancel.clone();
+    let reader = std::thread::spawn(move || -> Result<(), String> {
+        let mut raw = raw;
+        while let Ok(mut buffer) = free_in_rx.recv() {
+            if reader_cancel.load(Ordering::Relaxed) {
+                return Ok(());
+            }
+            match raw.read_exact(&mut buffer) {
+                Ok(()) => {
+                    if decoded_tx.send(buffer).is_err() {
+                        return Ok(());
+                    }
+                }
+                Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => return Ok(()),
+                Err(e) => return Err(e.to_string()),
+            }
+        }
+        Ok(())
+    });
+    let writer_pool = free_out_tx.clone();
+    let writer = std::thread::spawn(move || -> std::io::Result<()> {
+        let mut output = output;
+        while let Ok(frame) = composed_rx.recv() {
+            output.write_all(frame.as_raw())?;
+            let _ = writer_pool.send(frame);
+        }
+        drop(output);
+        Ok(())
+    });
+    let mut content: Vec<Vec<u8>> = (0..workers).map(|_| vec![0u8; l.content_w as usize * l.content_h as usize * 3]).collect();
     let mut n = 0u64;
-    loop {
+    let mut writer_stopped = false;
+    'frames: loop {
         if cancel.load(Ordering::Relaxed) {
-            return Err("Export cancelled".into());
+            break;
         }
-        match raw.read_exact(&mut input) {
-            Ok(()) => {}
-            Err(e) if e.kind() == std::io::ErrorKind::UnexpectedEof => break,
-            Err(e) => return Err(e.to_string()),
+        let mut batch: Vec<(Vec<u8>, RgbImage)> = Vec::with_capacity(workers);
+        while batch.len() < workers {
+            match decoded_rx.recv() {
+                Ok(input) => batch.push((input, free_out_rx.recv().unwrap_or_else(|_| RgbImage::new(l.width, l.height)))),
+                Err(_) => break,
+            }
         }
-        let time = source_time(&segments, n as f64 / fps);
-        if let Some(image)=&still{
-            frame=renderer.still_frame_at(image,time);
-        }else if source_mode {
-            renderer.source_frame(&input, time, &mut content, &mut frame);
-        } else {
-            renderer.frame(&input, time, &mut frame);
+        if batch.is_empty() {
+            break;
         }
-        if let Err(error)=output.write_all(frame.as_raw()) {
-            drop(output);
-            let _=decode.lock().unwrap().kill();
-            let _=wait(&decode);let _=wait(&encode);
-            let detail=encode_errors.join().unwrap_or_default();
-            let _=decode_errors.join();
-            return Err(format!("Video export failed: {}",if detail.trim().is_empty(){error.to_string()}else{detail.trim().to_string()}));
-        }
-        n += 1;
-        if n % 15 == 0 {
-            progress((n as f64 / fps / total * 100.).min(99.));
+        let base = n;
+        let (renderer, segments, still) = (&renderer, &segments, &still);
+        std::thread::scope(|scope| {
+            for (i, ((input, frame), content)) in batch.iter_mut().zip(content.iter_mut()).enumerate() {
+                scope.spawn(move || {
+                    let time = source_time(segments, (base + i as u64) as f64 / fps);
+                    if let Some(image) = still {
+                        *frame = renderer.still_frame_at(image, time);
+                    } else if source_mode {
+                        renderer.source_frame(input, time, content, frame);
+                    } else {
+                        renderer.frame(input, time, frame);
+                    }
+                });
+            }
+        });
+        for (input, frame) in batch {
+            let _ = free_in_tx.send(input);
+            if composed_tx.send(frame).is_err() {
+                writer_stopped = true;
+                break 'frames;
+            }
+            n += 1;
+            if n % 15 == 0 {
+                progress((n as f64 / fps / total * 100.).min(99.));
+            }
         }
     }
-    drop(output);
+    drop(composed_tx);
+    drop(free_in_tx);
+    drop(decoded_rx);
+    let written = writer.join().unwrap_or_else(|_| Err(std::io::Error::other("the export writer stopped")));
+    let read = reader.join().unwrap_or_else(|_| Err("the export reader stopped".into()));
+    if let Err(error) = written {
+        let _=decode.lock().unwrap().kill();
+        let _=wait(&decode);let _=wait(&encode);
+        let detail=encode_errors.join().unwrap_or_default();
+        let _=decode_errors.join();
+        return Err(format!("Video export failed: {}",if detail.trim().is_empty(){error.to_string()}else{detail.trim().to_string()}));
+    }
+    debug_assert!(!writer_stopped);
+    if cancel.load(Ordering::Relaxed) {
+        let _=decode.lock().unwrap().kill();
+        return Err("Export cancelled".into());
+    }
+    read?;
     let decode_ok = wait(&decode)?;
     let encode_ok = wait(&encode)?;
     let de = decode_errors.join().unwrap_or_default();
@@ -1673,6 +1771,23 @@ mod tests {
         )
         .is_err());
     }
+    #[test]
+    fn every_span_gets_an_exact_frame_count_that_sums_to_the_timeline() {
+        let segments = [
+            KeepSegment { start: 0.0, end: 1.013, speed: 1.0 },
+            KeepSegment { start: 2.5, end: 3.3, speed: 2.0 },
+            KeepSegment { start: 5.0, end: 7.77, speed: 1.0 },
+        ];
+        let graph = "[0:v]trim=0:1.013,setpts=PTS-STARTPTS[v0];[0:v]trim=2.5:3.3,setpts=(PTS-STARTPTS)/2[v1];[0:v]trim=5:7.77,setpts=PTS-STARTPTS[v2];[v0][v1][v2]concat=n=3:v=1:a=0[outv]";
+        let fps = 39.45;
+        let out = exact_segment_frames(graph, &segments, fps);
+        let counts: Vec<u64> = out.match_indices("end_frame=").map(|(i, _)| out[i + 10..].split(|c: char| !c.is_ascii_digit()).next().unwrap().parse().unwrap()).collect();
+        let total: f64 = segments.iter().map(|s| (s.end - s.start) / s.speed).sum();
+        assert_eq!(counts.len(), 3);
+        assert_eq!(counts.iter().sum::<u64>(), (total * fps).round() as u64);
+        assert!(out.ends_with("[v0][v1][v2]concat=n=3:v=1:a=0[outv]"), "the concat is untouched: {out}");
+    }
+
     #[test]
     fn timeline_time_follows_reorder_and_speed() {
         let s = [

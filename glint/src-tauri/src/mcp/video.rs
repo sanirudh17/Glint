@@ -263,7 +263,21 @@ fn split_spans(clips: &[Value], spans: &[(f64, f64)], affects: impl Fn(&Value) -
         }
         edges.retain(|t| *t >= start && *t <= end);
         edges.sort_by(f64::total_cmp);
-        edges.dedup();
+        // Never leave a sliver: a piece shorter than MIN_CLIP renders zero frames,
+        // and the exporter then reports the timeline as incomplete.
+        let mut snapped: Vec<f64> = Vec::new();
+        for t in edges {
+            if snapped.last().is_none_or(|last| t - last >= MIN_CLIP) {
+                snapped.push(t);
+            }
+        }
+        if let Some(last) = snapped.last_mut() {
+            *last = end;
+        }
+        if snapped.len() == 1 {
+            snapped.push(end);
+        }
+        let edges = snapped;
         let pieces = edges.len() + 1;
         for (i, pair) in edges.windows(2).enumerate() {
             let (a, b) = (pair[0], pair[1]);
@@ -405,11 +419,17 @@ pub fn activity_spans(events: &Value, duration: f64, typing: bool) -> Vec<(f64, 
     out
 }
 
+/// Shortest clip the exporter can render (about two frames at 60 fps).
+const MIN_CLIP: f64 = 0.05;
+
 fn span(start: f64, end: f64, source: Source) -> Result<(f64, f64), String> {
     if !start.is_finite() || !end.is_finite() || start < 0. || end <= start || start >= source.duration {
         return Err(format!("{start}–{end}s isn't a span of this {:.2}s video.", source.duration));
     }
-    Ok((start, end.min(source.duration)))
+    // Snap to the ends of the video, so rounding can't leave a sliver there.
+    let start = if start < MIN_CLIP { 0. } else { start };
+    let end = if end > source.duration - MIN_CLIP { source.duration } else { end };
+    Ok((start, end))
 }
 
 fn merge(target: &mut Value, patch: &Map<String, Value>) {
@@ -638,6 +658,9 @@ pub fn validate(project: &Value, source: Source) -> Result<(), String> {
             return Err("The timeline is invalid.".into());
         }
     }
+    if clips.iter().any(|c| c["kept"] == true && f(c, "end") - f(c, "start") < MIN_CLIP) {
+        return Err("That would leave a clip too short to render; widen or merge the cut.".into());
+    }
     if !clips.iter().any(|c| c["kept"] == true) {
         return Err("That would remove the whole video; keep at least one part.".into());
     }
@@ -733,6 +756,23 @@ mod tests {
         assert!(run(&mut p, json!([{"op": "add_zoom", "start": 1, "end": 3, "scale": 9}])).is_err(), "native zoom validation applies");
         let mut p = project();
         assert!(run(&mut p, json!([{"op": "add_mask", "start": 1, "end": 3, "x": 1200, "y": 10, "w": 200, "h": 50}])).is_err(), "masks must fit the frame");
+    }
+
+    #[test]
+    fn cuts_never_leave_slivers_that_break_export() {
+        // Ends 0.3 ms before the video does: the tail must be cut, not left as a 0.3 ms clip.
+        let mut p = project();
+        run(&mut p, json!([{"op": "cut", "start": 9.2, "end": 9.9997}])).unwrap();
+        assert!(clips(&p).iter().all(|c| f(c, "end") - f(c, "start") >= MIN_CLIP), "{:?}", clips(&p));
+        assert!((output_duration(&p) - 9.2).abs() < 1e-9);
+        // Two cuts 10 ms apart merge instead of leaving a 10 ms clip between them.
+        let mut p = project();
+        run(&mut p, json!([{"op": "cut", "start": 2, "end": 3}, {"op": "cut", "start": 3.01, "end": 4}])).unwrap();
+        assert!(clips(&p).iter().all(|c| f(c, "end") - f(c, "start") >= MIN_CLIP), "{:?}", clips(&p));
+        // A cut starting 20 ms in snaps to the very start.
+        let mut p = project();
+        run(&mut p, json!([{"op": "cut", "start": 0.02, "end": 1}])).unwrap();
+        assert!(clips(&p).iter().filter(|c| c["kept"] == true).all(|c| f(c, "start") >= 1.));
     }
 
     #[test]

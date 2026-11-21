@@ -13,6 +13,7 @@ pub mod editor;
 pub mod image;
 pub mod library;
 pub mod video;
+pub mod activity;
 
 use rmcp::{
     handler::server::{router::tool::ToolRouter, wrapper::Parameters},
@@ -349,7 +350,6 @@ async fn video_source(path: &str) -> Result<video::Source, String> {
 
 #[derive(Clone)]
 pub struct GlintMcp {
-    #[expect(dead_code, reason = "read by the #[tool_handler] macro")]
     tool_router: ToolRouter<Self>,
 }
 
@@ -752,6 +752,36 @@ impl ServerHandler for GlintMcp {
         ServerConfig::new(ServerCapabilities::builder().enable_tools().build())
             .with_server_info(Implementation::new("glint", env!("CARGO_PKG_VERSION")))
             .with_instructions(INSTRUCTIONS)
+    }
+
+    async fn on_initialized(&self, context: rmcp::service::NotificationContext<RoleServer>) {
+        if let Some(info) = context.peer.peer_info() {
+            activity::session_started(&info.client_info.name, &info.client_info.version);
+        }
+    }
+
+    /// The router's call, recorded for Settings → Agents (see `activity`).
+    async fn call_tool(
+        &self,
+        request: rmcp::model::CallToolRequestParams,
+        context: RequestContext<RoleServer>,
+    ) -> Result<rmcp::model::CallToolResponse, ErrorData> {
+        // The client names itself in the initialize handshake, or (newer protocol
+        // revisions, which may skip the handshake) in each request's `_meta`.
+        let (client, version) = match context.peer.peer_info() {
+            Some(info) => (info.client_info.name.clone(), info.client_info.version.clone()),
+            None => context.meta.client_info().map(|c| (c.name, c.version)).unwrap_or_else(|| ("unknown".into(), String::new())),
+        };
+        activity::session_started(&client, &version);
+        let tool = request.name.to_string();
+        let args = request.arguments.clone().unwrap_or_default();
+        let tcc = rmcp::handler::server::tool::ToolCallContext::new(self, request, context);
+        let result = self.tool_router.call(tcc).await;
+        if let Ok(rmcp::model::CallToolResponse::Complete(done)) = &result {
+            let reply = done.content.iter().find_map(|c| c.as_text()).and_then(|t| serde_json::from_str::<Value>(&t.text).ok());
+            activity::tool_called(&tool, &args, !done.is_error.unwrap_or(false), reply.as_ref());
+        }
+        result
     }
 }
 
