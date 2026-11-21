@@ -25,6 +25,20 @@ fn glint_exe() -> Option<PathBuf> {
     installed.is_file().then_some(installed)
 }
 
+/// Mark this process's stdin/stdout/stderr non-inheritable, so a child (the
+/// long-lived Glint app) can't keep the agent's pipes open.
+#[cfg(windows)]
+fn stop_std_handle_inheritance() {
+    use std::os::windows::io::AsRawHandle;
+    use windows::Win32::Foundation::{SetHandleInformation, HANDLE, HANDLE_FLAGS, HANDLE_FLAG_INHERIT};
+    for raw in [std::io::stdin().as_raw_handle(), std::io::stdout().as_raw_handle(), std::io::stderr().as_raw_handle()] {
+        if !raw.is_null() {
+            // SAFETY: a valid (or null-checked) std handle owned by this process.
+            let _ = unsafe { SetHandleInformation(HANDLE(raw), HANDLE_FLAG_INHERIT.0, HANDLE_FLAGS(0)) };
+        }
+    }
+}
+
 #[cfg(windows)]
 async fn connect(pipe: &str) -> Result<tokio::net::windows::named_pipe::NamedPipeClient, String> {
     use tokio::net::windows::named_pipe::ClientOptions;
@@ -42,6 +56,9 @@ async fn connect(pipe: &str) -> Result<tokio::net::windows::named_pipe::NamedPip
                     // Fully detached: Glint must not inherit this process's stdio
                     // pipes, or it would hold the agent's MCP pipes open after
                     // glint-mcp exits (the client then waits forever for EOF).
+                    // Null stdio alone isn't enough: CreateProcess hands the child
+                    // every *inheritable* handle, and ours are inherited pipes.
+                    stop_std_handle_inheritance();
                     use std::os::windows::process::CommandExt;
                     const DETACHED_PROCESS: u32 = 0x0000_0008;
                     const CREATE_NEW_PROCESS_GROUP: u32 = 0x0000_0200;

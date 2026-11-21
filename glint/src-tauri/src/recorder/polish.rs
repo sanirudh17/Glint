@@ -33,7 +33,10 @@ pub fn run(mut cmd:Command,cancel:&AtomicBool,limit:std::time::Duration)->Result
  if let Some(status)=child.try_wait().map_err(|e|e.to_string())? {return if status.success(){Ok(())}else{Err(format!("Local media operation failed ({status})."))};}std::thread::sleep(std::time::Duration::from_millis(40));}
 }
 pub fn ffmpeg(app:&tauri::AppHandle)->Result<PathBuf,String>{let exe=std::env::current_exe().map_err(|e|e.to_string())?;let local=exe.parent().unwrap().join("ffmpeg.exe");if local.exists(){return Ok(local);}let dev=PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries/ffmpeg-x86_64-pc-windows-msvc.exe");if dev.exists(){return Ok(dev);}let _=app;Err("FFmpeg was not found.".into())}
-pub fn notify(app:&tauri::AppHandle,stage:&str,percent:f64){let _=app.emit("studio-polish-progress",serde_json::json!({"stage":stage,"percent":percent}));}
+/// Progress (0–100) of the one polish job (analysis, download, transcription) that can run at a time.
+pub static PROGRESS:std::sync::atomic::AtomicU64=std::sync::atomic::AtomicU64::new(0);
+pub fn progress()->f64{f64::from_bits(PROGRESS.load(Ordering::Relaxed))}
+pub fn notify(app:&tauri::AppHandle,stage:&str,percent:f64){PROGRESS.store(percent.clamp(0.,100.).to_bits(),Ordering::Relaxed);let _=app.emit("studio-polish-progress",serde_json::json!({"stage":stage,"percent":percent}));}
 #[derive(Serialize,Debug)]pub struct Span {pub start:f64,pub end:f64}
 pub fn silence_spans(samples:&[i16],rate:usize,threshold:f64,min_seconds:f64)->Vec<Span>{
  let chunk=(rate/20).max(1);let mut out=Vec::new();let mut began=None;

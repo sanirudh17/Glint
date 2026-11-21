@@ -98,7 +98,10 @@ async fn dispatch(app: &AppHandle, method: &str, params: Value) -> Result<Value,
             open_path(app, &path)?;
             Ok(json!({"opened": path}))
         }
-        other => Err(format!("Unknown method \"{other}\"")),
+        other => match crate::control_video::dispatch(app, other, params).await {
+            Some(result) => result,
+            None => Err(format!("Unknown method \"{other}\"")),
+        },
     }
 }
 
@@ -122,14 +125,13 @@ fn open_path(app: &AppHandle, path: &str) -> Result<(), String> {
 
 // ─── Rendering .glint documents ─────────────────────────────────────────────
 
+/// A job for the hidden renderer window: `{"kind": "image", …}` renders a `.glint`,
+/// `{"kind": "prepare-video", …}` rasterizes a Studio project's captions and marks.
 struct RenderJob {
     id: u64,
-    image_data_url: String,
-    width: u32,
-    height: u32,
-    doc: Value,
+    payload: Value,
 }
-type Done = tokio::sync::oneshot::Sender<Result<Vec<u8>, String>>;
+type Done = tokio::sync::oneshot::Sender<Result<Value, String>>;
 
 #[derive(Default)]
 struct Jobs {
@@ -155,6 +157,36 @@ fn ensure_render_window(app: &AppHandle) -> Result<(), String> {
         .map_err(|e| format!("Couldn't start the renderer: {e}"))
 }
 
+/// Queue a job for the renderer window and wait for its answer.
+pub(crate) async fn run_render_job(app: &AppHandle, payload: Value) -> Result<Value, String> {
+    let (tx, rx) = tokio::sync::oneshot::channel();
+    let id = {
+        let mut jobs = JOBS.lock().unwrap();
+        jobs.next_id += 1;
+        let id = jobs.next_id;
+        jobs.queue.push_back(RenderJob { id, payload });
+        jobs.waiting.insert(id, tx);
+        id
+    };
+    if let Err(error) = ensure_render_window(app) {
+        let mut jobs = JOBS.lock().unwrap();
+        jobs.queue.retain(|job| job.id != id);
+        jobs.waiting.remove(&id);
+        return Err(error);
+    }
+    let _ = app.emit_to(RENDER_LABEL, "render-job", ());
+    match tokio::time::timeout(RENDER_TIMEOUT, rx).await {
+        Ok(Ok(result)) => result,
+        Ok(Err(_)) => Err("The renderer stopped before finishing.".into()),
+        Err(_) => {
+            let mut jobs = JOBS.lock().unwrap();
+            jobs.queue.retain(|job| job.id != id);
+            jobs.waiting.remove(&id);
+            Err("Rendering timed out.".into())
+        }
+    }
+}
+
 /// Render a `.glint` with the editor's own stage and write the PNG to `output`
 /// (which must not exist — nothing is ever overwritten).
 async fn render_glint(app: &AppHandle, path: &str, output: &str) -> Result<Value, String> {
@@ -163,27 +195,20 @@ async fn render_glint(app: &AppHandle, path: &str, output: &str) -> Result<Value
     }
     let text = tokio::fs::read_to_string(path).await.map_err(|_| format!("Couldn't read {path}"))?;
     let parsed = crate::editor::document::parse(&text)?;
-    let (tx, rx) = tokio::sync::oneshot::channel();
-    {
-        let mut jobs = JOBS.lock().unwrap();
-        jobs.next_id += 1;
-        let id = jobs.next_id;
-        jobs.queue.push_back(RenderJob {
-            id,
-            image_data_url: format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&parsed.png)),
-            width: parsed.width,
-            height: parsed.height,
-            doc: parsed.doc,
-        });
-        jobs.waiting.insert(id, tx);
-    }
-    ensure_render_window(app)?;
-    let _ = app.emit_to(RENDER_LABEL, "render-job", ());
-    let png = match tokio::time::timeout(RENDER_TIMEOUT, rx).await {
-        Ok(Ok(result)) => result?,
-        Ok(Err(_)) => return Err("The renderer stopped before finishing.".into()),
-        Err(_) => return Err("Rendering timed out.".into()),
-    };
+    let reply = run_render_job(
+        app,
+        json!({
+            "kind": "image",
+            "image_data_url": format!("data:image/png;base64,{}", base64::engine::general_purpose::STANDARD.encode(&parsed.png)),
+            "width": parsed.width,
+            "height": parsed.height,
+            "doc": parsed.doc,
+        }),
+    )
+    .await?;
+    let png = base64::engine::general_purpose::STANDARD
+        .decode(reply.as_str().ok_or("The renderer returned no image.")?)
+        .map_err(|e| e.to_string())?;
     let decoded = image::load_from_memory(&png).map_err(|e| format!("The renderer produced an unreadable image: {e}"))?;
     tokio::fs::write(output, &png).await.map_err(|e| format!("Couldn't write {output}: {e}"))?;
     Ok(json!({"output": output, "width": decoded.width(), "height": decoded.height()}))
@@ -196,23 +221,32 @@ pub fn render_job_next(window: tauri::WebviewWindow) -> Result<Option<Value>, St
         return Err("Only the renderer can take render jobs".into());
     }
     Ok(JOBS.lock().unwrap().queue.pop_front().map(|job| {
-        json!({"id": job.id, "image_data_url": job.image_data_url, "width": job.width, "height": job.height, "doc": job.doc})
+        let mut payload = job.payload;
+        payload["id"] = json!(job.id);
+        payload
     }))
 }
 
-/// The render window reports a finished job: base64 PNG, or an error message.
+/// The render window reports a finished job: a base64 PNG, a JSON result, or an error.
 #[tauri::command(async)]
-pub fn render_job_done(window: tauri::WebviewWindow, id: u64, png: Option<String>, error: Option<String>) -> Result<(), String> {
+pub fn render_job_done(
+    window: tauri::WebviewWindow,
+    id: u64,
+    png: Option<String>,
+    result: Option<Value>,
+    error: Option<String>,
+) -> Result<(), String> {
     if window.label() != RENDER_LABEL {
         return Err("Only the renderer can finish render jobs".into());
     }
     let Some(done) = JOBS.lock().unwrap().waiting.remove(&id) else { return Ok(()) };
-    let result = match (png, error) {
-        (Some(png), _) => base64::engine::general_purpose::STANDARD.decode(png).map_err(|e| e.to_string()),
-        (None, Some(error)) => Err(error),
-        (None, None) => Err("The renderer returned nothing.".into()),
+    let reply = match (png, result, error) {
+        (Some(png), _, _) => Ok(Value::String(png)),
+        (None, Some(result), _) => Ok(result),
+        (None, None, Some(error)) => Err(error),
+        (None, None, None) => Err("The renderer returned nothing.".into()),
     };
-    let _ = done.send(result);
+    let _ = done.send(reply);
     Ok(())
 }
 

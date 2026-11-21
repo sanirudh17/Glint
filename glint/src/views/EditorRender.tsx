@@ -13,13 +13,35 @@ import { EditorStage } from "./editor/EditorStage";
 import { useEditorStore, type SerializedDoc } from "../editor/useEditorStore";
 import { flatten } from "../editor/flatten";
 import { nextPaint } from "../overlay/nextPaint";
+import { prepareCaptions } from "../recorder/studioPolish";
+import { prepareAnnotations } from "../recorder/videoAnnotations";
+import { studioLayout } from "../recorder/studioLayout";
+import { hydrateLook } from "../look/model";
+import type { StudioProject } from "../recorder/studioModel";
 
-interface RenderJob {
+interface ImageJob {
   id: number;
+  kind: "image";
   image_data_url: string;
   width: number;
   height: number;
   doc: SerializedDoc | null;
+}
+/** Rasterize a Studio project's captions and marks for the native exporter —
+ *  the same preparation the Trim window does before exporting. */
+interface PrepareVideoJob {
+  id: number;
+  kind: "prepare-video";
+  project: StudioProject;
+  width: number;
+  height: number;
+}
+type RenderJob = ImageJob | PrepareVideoJob;
+
+async function prepareVideo(job: PrepareVideoJob): Promise<StudioProject> {
+  const layout = studioLayout(job.width, job.height, job.project.crop ?? null, hydrateLook(job.project.look));
+  const captioned = await prepareCaptions(job.project);
+  return { ...captioned, annotations: await prepareAnnotations(job.project.annotations, layout.width / layout.height) };
 }
 
 const READY_TIMEOUT_MS = 15_000;
@@ -69,6 +91,14 @@ export function EditorRender() {
         for (;;) {
           const job = await invoke<RenderJob | null>("render_job_next");
           if (!job || !alive) break;
+          if (job.kind === "prepare-video") {
+            try {
+              await invoke("render_job_done", { id: job.id, png: null, result: await prepareVideo(job), error: null });
+            } catch (error) {
+              await invoke("render_job_done", { id: job.id, png: null, result: null, error: String(error) }).catch(() => {});
+            }
+            continue;
+          }
           try {
             const image = await decode(job.image_data_url);
             useEditorStore.getState().loadDoc(
@@ -79,9 +109,9 @@ export function EditorRender() {
             const stage = await settled(() => stageRef.current);
             const png = flatten(stage);
             if (!png) throw new Error("The rendered image was empty.");
-            await invoke("render_job_done", { id: job.id, png, error: null });
+            await invoke("render_job_done", { id: job.id, png, result: null, error: null });
           } catch (error) {
-            await invoke("render_job_done", { id: job.id, png: null, error: String(error) }).catch(() => {});
+            await invoke("render_job_done", { id: job.id, png: null, result: null, error: String(error) }).catch(() => {});
           } finally {
             useEditorStore.getState().reset();
           }

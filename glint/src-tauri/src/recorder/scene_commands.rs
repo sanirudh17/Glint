@@ -120,9 +120,9 @@ fn nonce() -> u128 {
         .unwrap_or_default()
         .as_nanos()
 }
-pub(super) struct Workspace(pub PathBuf);
+pub(crate) struct Workspace(pub PathBuf);
 impl Workspace {
-    pub(super) fn temporary() -> Result<Self,String> {Self::create(&std::env::temp_dir())}
+    pub(crate) fn temporary() -> Result<Self,String> {Self::create(&std::env::temp_dir())}
     fn create(parent: &Path) -> Result<Self, String> {
         let p = parent.join(format!(".glint-scenes-{}-{}", std::process::id(), nonce()));
         fs::create_dir(&p).map_err(|e| e.to_string())?;

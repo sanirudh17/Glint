@@ -16,6 +16,17 @@ use tauri_plugin_shell::ShellExt;
 #[derive(Default)]
 pub struct ExportState(pub Mutex<Option<Arc<AtomicBool>>>);
 
+/// Progress (0–100) of the one export that can run at a time, for agents
+/// polling an export they started (the trim window gets the same value as an event).
+pub static PROGRESS: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(0);
+pub fn report_progress(app: &tauri::AppHandle, pct: f64) {
+    PROGRESS.store(pct.clamp(0., 100.).to_bits(), Ordering::Relaxed);
+    let _ = app.emit_to(super::windows::TRIM_LABEL, "rec-trim-progress", pct);
+}
+pub fn progress() -> f64 {
+    f64::from_bits(PROGRESS.load(Ordering::Relaxed))
+}
+
 #[tauri::command(async)]
 pub fn studio_discard_source(
     app: tauri::AppHandle,
@@ -131,7 +142,7 @@ pub async fn studio_export(
     *app.state::<ExportState>().0.lock().unwrap() = None;
     result
 }
-pub(super) async fn perform(
+pub(crate) async fn perform(
     app: &tauri::AppHandle,
     path: &str,
     project: serde_json::Value,
@@ -219,7 +230,7 @@ pub(super) async fn perform(
             cam_overlay: cam,
         };
         studio_render::export(&spec, worker_cancel, |pct| {
-            let _ = app_progress.emit_to(super::windows::TRIM_LABEL, "rec-trim-progress", pct*progress_scale);
+            report_progress(&app_progress, pct*progress_scale);
         })
     })
     .await

@@ -3,6 +3,7 @@ mod attachments;
 mod capture;
 mod clipboard;
 mod control;
+mod control_video;
 mod countdown;
 mod db;
 mod editor;

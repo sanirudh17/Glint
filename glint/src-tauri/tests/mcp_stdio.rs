@@ -53,6 +53,23 @@ impl Client {
         }
     }
 
+    /// Like `request`, also returning the notifications received before the reply.
+    fn request_collecting(&mut self, method: &str, params: Value) -> (Vec<Value>, Value) {
+        let id = self.next_id;
+        self.next_id += 1;
+        self.send(json!({"jsonrpc": "2.0", "id": id, "method": method, "params": params}));
+        let mut notes = Vec::new();
+        loop {
+            let mut line = String::new();
+            assert!(self.stdout.read_line(&mut line).unwrap() > 0, "glint-mcp closed stdout");
+            let message: Value = serde_json::from_str(&line).unwrap();
+            if message["id"] == id {
+                return (notes, message);
+            }
+            notes.push(message);
+        }
+    }
+
     /// Call a tool; returns (is_error, first text content).
     fn call(&mut self, name: &str, arguments: Value) -> (bool, String) {
         let response = self.request("tools/call", json!({"name": name, "arguments": arguments}));
@@ -224,5 +241,108 @@ fn renders_through_the_running_app() {
     assert_eq!(png.dimensions(), (120, 80));
     assert_eq!(png.get_pixel(0, 0)[3], 0, "corners are trimmed to transparent");
     assert_eq!(png.get_pixel(60, 40)[3], 255, "the middle is untouched");
+    let _ = std::fs::remove_dir_all(dir);
+}
+
+/// A real MP4: a moving test pattern with a tone that goes silent from 3 s to 6 s.
+fn sample_video(dir: &std::path::Path, name: &str, seconds: u32) -> PathBuf {
+    let ffmpeg = PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("binaries/ffmpeg-x86_64-pc-windows-msvc.exe");
+    let out = dir.join(name);
+    let status = Command::new(ffmpeg)
+        .args(["-y", "-v", "error", "-f", "lavfi", "-i", &format!("testsrc2=size=1280x720:rate=30:duration={seconds}")])
+        .args(["-f", "lavfi", "-i", &format!("sine=frequency=440:duration={seconds}")])
+        .args(["-af", "volume='if(between(t,3,6),0,1)':eval=frame", "-c:v", "libx264", "-preset", "ultrafast", "-pix_fmt", "yuv420p", "-c:a", "aac", "-shortest"])
+        .arg(&out)
+        .status()
+        .expect("run ffmpeg");
+    assert!(status.success(), "sample video");
+    out
+}
+
+fn json_text(text: &str) -> Value {
+    serde_json::from_str(text).unwrap_or_else(|e| panic!("not JSON ({e}): {text}"))
+}
+
+/// Live: the whole video flow through a running (or auto-started) Glint.
+/// Needs GLINT_APP_ID and GLINT_EXE for a preview build (see renders_through_the_running_app).
+#[test]
+#[ignore]
+fn edits_and_exports_video_through_the_running_app() {
+    let dir = workspace("video");
+    let video = sample_video(&dir, "demo.mp4", 10);
+    let original = std::fs::read(&video).unwrap();
+    let mut client = Client::start(&dir);
+
+    let (is_error, opened) = client.call("video_open", json!({"path": video}));
+    assert!(!is_error, "{opened}");
+    let opened = json_text(&opened);
+    assert!((opened["duration"].as_f64().unwrap() - 10.).abs() < 0.2, "{opened}");
+    assert_eq!(opened["width"], 1280);
+
+    // Silence 3–6 s is found by the app's own analysis.
+    let (is_error, analysis) = client.call("video_analyze", json!({"path": video}));
+    assert!(!is_error, "{analysis}");
+    let silence = json_text(&analysis)["silence"].clone();
+    let span = &silence.as_array().unwrap_or_else(|| panic!("{analysis}"))[0];
+    assert!((span["start"].as_f64().unwrap() - 3.15).abs() < 0.2 && (span["end"].as_f64().unwrap() - 5.85).abs() < 0.2, "{analysis}");
+
+    let (is_error, edited) = client.call("video_edit", json!({"path": video, "edits": [
+        {"op": "cut", "start": span["start"], "end": span["end"]},
+        {"op": "set_speed", "start": 7, "end": 9, "speed": 2},
+        {"op": "add_zoom", "start": 1, "end": 2.5, "focus": {"x": 0.3, "y": 0.3}, "scale": 1.8},
+        {"op": "add_mask", "start": 0, "end": 10, "type": "pixelate", "x": 40, "y": 40, "w": 300, "h": 80},
+        {"op": "add_annotation", "kind": "arrow", "start": 0.5, "end": 2.5, "points": [{"x": 0.6, "y": 0.6}, {"x": 0.4, "y": 0.4}]},
+        {"op": "add_caption", "start": 0.2, "end": 2.8, "text": "Hello from an agent"},
+        {"op": "set_look", "look": {"enabled": true, "background": {"type": "gradient", "gradientId": "dusk"}, "padding": 48}},
+        {"op": "set_fades", "fade_in": 0.3, "fade_out": 0.3}
+    ]}));
+    assert!(!is_error, "{edited}");
+    let seconds = json_text(&edited)["output_seconds"].as_f64().unwrap();
+    assert!((seconds - (10. - 2.7 - 1.)).abs() < 0.3, "{edited}");
+
+    // Frames come back as images.
+    let frames = client.request("tools/call", json!({"name": "video_frames", "arguments": {"path": video, "times": [1, 8], "width": 320}}));
+    let content = frames["result"]["content"].as_array().unwrap();
+    assert_eq!(content.iter().filter(|c| c["type"] == "image").count(), 2, "{frames}");
+
+    // Export with progress notifications, waiting to completion.
+    let (notes, reply) = client.request_collecting(
+        "tools/call",
+        json!({"name": "video_export", "arguments": {"path": video, "wait_seconds": 240}, "_meta": {"progressToken": "export-1"}}),
+    );
+    let status = json_text(reply["result"]["content"][0]["text"].as_str().unwrap());
+    assert_eq!(status["state"], "done", "{status}");
+    let output = PathBuf::from(status["result"]["output"].as_str().unwrap());
+    assert!(output.is_file() && output != video, "{status}");
+    assert!(notes.iter().any(|n| n["method"] == "notifications/progress" && n["params"]["progressToken"] == "export-1"), "progress was reported");
+    assert_eq!(std::fs::read(&video).unwrap(), original, "the source video is never modified");
+
+    // A long export can be started without waiting, refuses a second export, and cancels cleanly.
+    let long = sample_video(&dir, "long.mp4", 60);
+    assert!(!client.call("video_open", json!({"path": long})).0);
+    // A Look makes every frame go through the compositor, so the export is still running when cancelled.
+    let (is_error, styled) = client.call("video_edit", json!({"path": long, "edits": [
+        {"op": "set_look", "look": {"enabled": true, "background": {"type": "gradient", "gradientId": "dusk"}, "padding": 48}}
+    ]}));
+    assert!(!is_error, "{styled}");
+    let (_, started) = client.call("video_export", json!({"path": long, "wait_seconds": 0}));
+    let started = json_text(&started);
+    assert_eq!(started["state"], "running", "{started}");
+    let task = started["task"].as_u64().unwrap();
+    let (is_error, clash) = client.call("video_export", json!({"path": video, "wait_seconds": 0}));
+    assert!(is_error && clash.contains("already running"), "{clash}");
+    let (_, cancelled) = client.call("task_cancel", json!({"task": task}));
+    assert_eq!(json_text(&cancelled)["cancelled"], true);
+    let (_, finished) = client.call("task_status", json!({"task": task, "wait_seconds": 60}));
+    assert_eq!(json_text(&finished)["state"], "cancelled", "{finished}");
+    let leftovers: Vec<_> = std::fs::read_dir(&dir).unwrap().flatten().map(|e| e.file_name().to_string_lossy().to_string()).filter(|n| n.starts_with("long (")).collect();
+    assert!(leftovers.is_empty(), "a cancelled export leaves no file: {leftovers:?}");
+
+    // The slot is free again afterwards.
+    let (_, again) = client.call("video_export", json!({"path": long, "wait_seconds": 0}));
+    let again = json_text(&again);
+    assert_eq!(again["state"], "running", "{again}");
+    client.call("task_cancel", json!({"task": again["task"]}));
+    client.call("task_status", json!({"task": again["task"], "wait_seconds": 60}));
     let _ = std::fs::remove_dir_all(dir);
 }

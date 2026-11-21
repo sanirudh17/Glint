@@ -137,7 +137,7 @@ pub async fn recorder_gif_export(
     *app.state::<ExportState>().0.lock().unwrap() = None;
     result
 }
-async fn perform(
+pub(crate) async fn perform(
     app: &tauri::AppHandle,
     path: &str,
     project: Option<serde_json::Value>,
@@ -218,7 +218,7 @@ async fn perform(
             let a = app.clone();
             tauri::async_runtime::spawn_blocking(move || {
                 run(&b, &args, c, None, duration, move |pct| {
-                    let _ = a.emit_to(super::windows::TRIM_LABEL, "rec-trim-progress", pct * 0.4);
+                    super::studio_export::report_progress(&a, pct * 0.4);
                 })
             })
             .await
@@ -256,11 +256,7 @@ async fn perform(
         let a = app.clone();
         tauri::async_runtime::spawn_blocking(move || {
             run(&b, &args, c, None, duration, move |pct| {
-                let _ = a.emit_to(
-                    super::windows::TRIM_LABEL,
-                    "rec-trim-progress",
-                    40. + pct * 0.2,
-                );
+                super::studio_export::report_progress(&a, 40. + pct * 0.2);
             })
         })
         .await
@@ -295,11 +291,7 @@ async fn perform(
         let a = app.clone();
         tauri::async_runtime::spawn_blocking(move || {
             run(&b, &args, c, Some(&guard), duration, move |pct| {
-                let _ = a.emit_to(
-                    super::windows::TRIM_LABEL,
-                    "rec-trim-progress",
-                    60. + pct * 0.4,
-                );
+                super::studio_export::report_progress(&a, 60. + pct * 0.4);
             })
         })
         .await
